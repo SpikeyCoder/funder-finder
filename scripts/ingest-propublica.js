@@ -28,14 +28,10 @@ if (!SUPABASE_SERVICE_ROLE_KEY) {
   process.exit(1);
 }
 
-// ── NTEE sub-codes we care about (Philanthropy / Grantmaking) ──────────────
-// T20 = Private Grantmaking Foundations
-// T21 = Corporate Foundations
-// T22 = Private Independent Foundations
-// T30 = Public Foundations
-// T31 = Community Foundations
-// T50 = Philanthropy, Charity & Voluntarism Promotion
-const NTEE_CODES = ['T20', 'T21', 'T22', 'T30', 'T31', 'T50'];
+// ProPublica API uses numeric major-category IDs, not letter codes.
+// 7 = "Public, Societal Benefit" — covers all T-coded orgs (foundations, grantmakers, DAFs, community foundations).
+// We fetch this category and filter to T* NTEE codes in post-processing.
+const NTEE_NUMERIC_IDS = [7];
 
 // ── Focus area keyword map ─────────────────────────────────────────────────
 const FOCUS_KEYWORDS = {
@@ -99,23 +95,24 @@ async function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
 }
 
-async function fetchAllForNtee(nteeCode) {
+async function fetchAllForCategory(nteeNumericId) {
   const orgs = [];
   let page = 0;
   while (true) {
-    const url = `${PROPUBLICA_BASE}/search.json?q=&ntee[id]=${encodeURIComponent(nteeCode)}&page=${page}`;
+    // ProPublica API uses numeric IDs for major NTEE categories (7 = Public/Societal Benefit = T-codes)
+    const url = `${PROPUBLICA_BASE}/search.json?q=foundation&ntee[id]=${nteeNumericId}&page=${page}`;
     let data;
     try {
       data = await fetchJson(url);
     } catch (e) {
-      console.warn(`  Warning: failed page ${page} for ${nteeCode}: ${e.message}`);
+      console.warn(`  Warning: failed page ${page} for ntee[id]=${nteeNumericId}: ${e.message}`);
       break;
     }
 
     const batch = data.organizations || [];
     if (batch.length === 0) break;
     orgs.push(...batch);
-    console.log(`  ${nteeCode} page ${page}: ${batch.length} orgs (total: ${orgs.length})`);
+    console.log(`  ntee[id]=${nteeNumericId} page ${page}: ${batch.length} orgs (total: ${orgs.length})`);
 
     if (batch.length < 100) break; // last page
     page++;
@@ -174,17 +171,21 @@ async function main() {
   console.log('🔍 Starting ProPublica → Supabase ingestion\n');
   let grandTotal = 0;
 
-  for (const ntee of NTEE_CODES) {
-    console.log(`\n📂 Fetching NTEE ${ntee}...`);
-    const orgs = await fetchAllForNtee(ntee);
-    if (orgs.length === 0) { console.log('  No results.'); continue; }
+  for (const nteeId of NTEE_NUMERIC_IDS) {
+    console.log(`\n📂 Fetching NTEE category ${nteeId} (Public/Societal Benefit = foundations)...`);
+    const allOrgs = await fetchAllForCategory(nteeId);
+    if (allOrgs.length === 0) { console.log('  No results.'); continue; }
+
+    // Keep only T-coded orgs (grantmaking foundations, community foundations, DAFs)
+    const tOrgs = allOrgs.filter(o => o.ntee_code && o.ntee_code.startsWith('T'));
+    console.log(`  T-category orgs: ${tOrgs.length} of ${allOrgs.length} total`);
 
     // Filter: only include orgs with meaningful grant activity
-    const significant = orgs.filter(o =>
+    const significant = tOrgs.filter(o =>
       (o.total_giving && o.total_giving > 10000) ||
       (o.asset_amount  && o.asset_amount  > 100000)
     );
-    console.log(`  Filtered to ${significant.length} significant funders (of ${orgs.length})`);
+    console.log(`  Filtered to ${significant.length} significant funders (of ${tOrgs.length})`);
 
     // Upsert in batches of 200
     const BATCH = 200;
