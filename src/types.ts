@@ -1,15 +1,23 @@
+// Matches the Supabase `funders` table schema (snake_case from DB)
 export interface Funder {
   id: string;
   name: string;
-  type: 'Foundation' | 'Community Foundation' | 'DAF' | 'Corporate Giving' | 'Government Grant' | 'Family Foundation';
-  description: string;
-  focusAreas: string[];
-  contact: string;
-  title: string;
-  email: string;
-  phone: string;
-  location: string;
-  website: string;
-  nextStep: string;
-  grantRange?: string;
+  type: string; // 'foundation' | 'corporate' | 'daf'
+  description: string | null;
+  focus_areas: string[];
+  ntee_code: string | null;
+  city: string | null;
+  state: string | null;
+  website: string | null;
+  total_giving: number | null;
+  asset_amount: number | null;
+  grant_range_min: number | null;
+  grant_range_max: number | null;
+  contact_name: string | null;
+  contact_title: string | null;
+  contact_email: string | null;
+  next_step: string | null;
+  // Added by the Edge Function (Claude ranking)
+  score?: number;
+  reason?: string;
 }

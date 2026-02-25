@@ -1,41 +1,45 @@
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Bookmark, BookmarkCheck, Copy, Phone, Globe, MapPin, User, Mail } from 'lucide-react';
-import { funders } from '../data/funders';
-import { issaved, saveFunder, unsaveFunder } from '../utils/storage';
+import { ArrowLeft, Bookmark, BookmarkCheck, Copy, Globe, MapPin, User, Mail, TrendingUp } from 'lucide-react';
+import { Funder } from '../types';
+import { isSaved, saveFunder, unsaveFunder } from '../utils/storage';
+import { formatGrantRange, formatTotalGiving } from '../utils/matching';
 
 export default function FunderDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const { mission = '', keywords = [] } = location.state || {};
-  const funder = funders.find(f => f.id === id);
+  const { funder: funderFromState, mission = '', keywords = [] } = location.state || {};
+
+  // Use funder passed in navigation state (avoids extra DB call)
+  const [funder, setFunder] = useState<Funder | null>(funderFromState || null);
   const [saved, setSaved] = useState(false);
   const [copiedEmail, setCopiedEmail] = useState(false);
-  const [copiedPhone, setCopiedPhone] = useState(false);
 
   useEffect(() => {
-    if (id) setSaved(issaved(id));
+    if (id) setSaved(isSaved(id));
   }, [id]);
 
   if (!funder) return (
     <div className="min-h-screen bg-[#0d1117] text-white flex items-center justify-center">
       <div className="text-center">
         <p className="text-2xl font-bold mb-4">Funder not found</p>
-        <button onClick={() => navigate('/')} className="text-blue-400 hover:underline">Go home</button>
+        <p className="text-gray-400 text-sm mb-6">Please search for funders first.</p>
+        <button onClick={() => navigate('/mission')} className="text-blue-400 hover:underline">Start a search</button>
       </div>
     </div>
   );
 
   const toggleSave = () => {
     if (saved) { unsaveFunder(funder.id); setSaved(false); }
-    else { saveFunder(funder.id); setSaved(true); }
+    else { saveFunder(funder); setSaved(true); }
   };
 
-  const copy = (text: string, type: 'email' | 'phone') => {
-    navigator.clipboard.writeText(text);
-    if (type === 'email') { setCopiedEmail(true); setTimeout(() => setCopiedEmail(false), 2000); }
-    else { setCopiedPhone(true); setTimeout(() => setCopiedPhone(false), 2000); }
+  const copyEmail = () => {
+    if (!funder.contact_email) return;
+    navigator.clipboard.writeText(funder.contact_email);
+    setCopiedEmail(true);
+    setTimeout(() => setCopiedEmail(false), 2000);
   };
 
   return (
@@ -62,94 +66,149 @@ export default function FunderDetail() {
             </button>
           </div>
 
-          <span className="inline-block bg-[#21262d] border border-[#30363d] text-gray-300 text-sm px-3 py-1 rounded-full mb-4">
-            {funder.type}
-          </span>
+          <div className="flex flex-wrap gap-2 mb-4">
+            <span className="inline-block bg-[#21262d] border border-[#30363d] text-gray-300 text-sm px-3 py-1 rounded-full capitalize">
+              {funder.type}
+            </span>
+            {funder.ntee_code && (
+              <span className="inline-block bg-[#21262d] border border-[#30363d] text-gray-400 text-sm px-3 py-1 rounded-full">
+                NTEE {funder.ntee_code}
+              </span>
+            )}
+          </div>
 
-          <p className="text-gray-300 mb-6">{funder.description}</p>
+          {/* AI match reason */}
+          {funder.reason && (
+            <div className="mb-6 bg-[#0d1117] border border-blue-900/50 rounded-xl px-4 py-3">
+              <p className="text-xs text-blue-400 font-semibold mb-1">Why this funder matches your mission</p>
+              <p className="text-gray-300 text-sm">{funder.reason}</p>
+              {funder.score && (
+                <p className="text-xs text-gray-500 mt-2">Match score: {Math.round(funder.score * 100)}%</p>
+              )}
+            </div>
+          )}
 
           <hr className="border-[#30363d] mb-6" />
 
           {/* Focus Areas */}
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold mb-3">Focus Areas</h2>
-            <div className="flex flex-wrap gap-2">
-              {funder.focusAreas.map(area => (
-                <span key={area} className="bg-[#21262d] border border-[#30363d] text-gray-300 text-sm px-3 py-1 rounded-full">
-                  {area}
-                </span>
-              ))}
-            </div>
-          </div>
+          {funder.focus_areas && funder.focus_areas.length > 0 && (
+            <>
+              <div className="mb-6">
+                <h2 className="text-lg font-semibold mb-3">Focus Areas</h2>
+                <div className="flex flex-wrap gap-2">
+                  {funder.focus_areas.map(area => (
+                    <span key={area} className="bg-[#21262d] border border-[#30363d] text-gray-300 text-sm px-3 py-1 rounded-full capitalize">
+                      {area.replace(/_/g, ' ')}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <hr className="border-[#30363d] mb-6" />
+            </>
+          )}
 
-          <hr className="border-[#30363d] mb-6" />
+          {/* Giving Stats */}
+          {(funder.total_giving || funder.grant_range_min || funder.grant_range_max) && (
+            <>
+              <div className="mb-6">
+                <h2 className="text-lg font-semibold mb-3">Giving Overview</h2>
+                <div className="grid grid-cols-2 gap-4">
+                  {funder.total_giving && (
+                    <div className="bg-[#0d1117] border border-[#30363d] rounded-xl p-4">
+                      <div className="flex items-center gap-2 mb-1">
+                        <TrendingUp size={14} className="text-green-400" />
+                        <p className="text-xs text-gray-400">Annual Giving</p>
+                      </div>
+                      <p className="text-white font-semibold">{formatTotalGiving(funder.total_giving)}</p>
+                    </div>
+                  )}
+                  {(funder.grant_range_min || funder.grant_range_max) && (
+                    <div className="bg-[#0d1117] border border-[#30363d] rounded-xl p-4">
+                      <p className="text-xs text-gray-400 mb-1">Typical Grant</p>
+                      <p className="text-white font-semibold">{formatGrantRange(funder)}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <hr className="border-[#30363d] mb-6" />
+            </>
+          )}
 
           {/* Recommended Next Step */}
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold mb-3">Recommended Next Step</h2>
-            <div className="bg-[#0d1117] border border-blue-800 rounded-xl px-5 py-4 text-blue-300">
-              {funder.nextStep}
-            </div>
-          </div>
-
-          <hr className="border-[#30363d] mb-6" />
+          {funder.next_step && (
+            <>
+              <div className="mb-6">
+                <h2 className="text-lg font-semibold mb-3">Recommended Next Step</h2>
+                <div className="bg-[#0d1117] border border-blue-800 rounded-xl px-5 py-4 text-blue-300">
+                  {funder.next_step}
+                </div>
+              </div>
+              <hr className="border-[#30363d] mb-6" />
+            </>
+          )}
 
           {/* Contact Information */}
-          <div className="mb-6">
+          <div className="mb-2">
             <h2 className="text-lg font-semibold mb-4">Contact Information</h2>
             <div className="space-y-5">
-              <div className="flex items-start gap-3">
-                <User size={18} className="text-gray-500 mt-0.5" />
-                <div>
-                  <p className="font-medium">{funder.contact}</p>
-                  <p className="text-sm text-gray-400">{funder.title}</p>
+              {(funder.contact_name || funder.contact_title) && (
+                <div className="flex items-start gap-3">
+                  <User size={18} className="text-gray-500 mt-0.5" />
+                  <div>
+                    {funder.contact_name && <p className="font-medium">{funder.contact_name}</p>}
+                    {funder.contact_title && <p className="text-sm text-gray-400">{funder.contact_title}</p>}
+                  </div>
                 </div>
-              </div>
+              )}
 
-              <div className="flex items-start gap-3">
-                <Mail size={18} className="text-gray-500 mt-0.5" />
-                <div>
-                  <p className="text-gray-300">{funder.email}</p>
-                  <button
-                    onClick={() => copy(funder.email, 'email')}
-                    className="flex items-center gap-1 text-sm border border-[#30363d] rounded-lg px-3 py-1 mt-2 hover:bg-[#21262d] transition-colors"
+              {funder.contact_email ? (
+                <div className="flex items-start gap-3">
+                  <Mail size={18} className="text-gray-500 mt-0.5" />
+                  <div>
+                    <p className="text-gray-300">{funder.contact_email}</p>
+                    <button
+                      onClick={copyEmail}
+                      className="flex items-center gap-1 text-sm border border-[#30363d] rounded-lg px-3 py-1 mt-2 hover:bg-[#21262d] transition-colors"
+                    >
+                      <Copy size={13} />
+                      {copiedEmail ? 'Copied!' : 'Copy Email'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3 text-gray-500">
+                  <Mail size={18} />
+                  <p className="text-sm">No direct email available — check their website</p>
+                </div>
+              )}
+
+              {(funder.city || funder.state) && (
+                <div className="flex items-center gap-3">
+                  <MapPin size={18} className="text-gray-500" />
+                  <p className="text-gray-300">
+                    {[funder.city, funder.state].filter(Boolean).join(', ')}
+                  </p>
+                </div>
+              )}
+
+              {funder.website ? (
+                <div className="flex items-center gap-3">
+                  <Globe size={18} className="text-gray-500" />
+                  <a
+                    href={funder.website.startsWith('http') ? funder.website : `https://${funder.website}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-400 hover:underline break-all"
                   >
-                    <Copy size={13} />
-                    {copiedEmail ? 'Copied!' : 'Copy Email'}
-                  </button>
+                    {funder.website} ↗
+                  </a>
                 </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <Phone size={18} className="text-gray-500 mt-0.5" />
-                <div>
-                  <p className="text-gray-300">{funder.phone}</p>
-                  <button
-                    onClick={() => copy(funder.phone, 'phone')}
-                    className="flex items-center gap-1 text-sm border border-[#30363d] rounded-lg px-3 py-1 mt-2 hover:bg-[#21262d] transition-colors"
-                  >
-                    <Copy size={13} />
-                    {copiedPhone ? 'Copied!' : 'Copy Phone'}
-                  </button>
+              ) : (
+                <div className="flex items-center gap-3 text-gray-500">
+                  <Globe size={18} />
+                  <p className="text-sm">Search "{funder.name}" to find their website</p>
                 </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <MapPin size={18} className="text-gray-500" />
-                <p className="text-gray-300">{funder.location}</p>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <Globe size={18} className="text-gray-500" />
-                <a
-                  href={`https://${funder.website}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-400 hover:underline"
-                >
-                  {funder.website} ↗
-                </a>
-              </div>
+              )}
             </div>
           </div>
         </div>

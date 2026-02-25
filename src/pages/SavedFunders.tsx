@@ -1,17 +1,16 @@
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { ArrowLeft, BookmarkX, Download, ChevronRight } from 'lucide-react';
-import { funders } from '../data/funders';
 import { Funder } from '../types';
-import { getSavedIds, unsaveFunder } from '../utils/storage';
+import { getSavedFunders, unsaveFunder } from '../utils/storage';
+import { formatTotalGiving } from '../utils/matching';
 
 export default function SavedFunders() {
   const navigate = useNavigate();
   const [saved, setSaved] = useState<Funder[]>([]);
 
   useEffect(() => {
-    const ids = getSavedIds();
-    setSaved(funders.filter(f => ids.includes(f.id)));
+    setSaved(getSavedFunders());
   }, []);
 
   const remove = (id: string) => {
@@ -21,10 +20,19 @@ export default function SavedFunders() {
 
   const exportCSV = () => {
     const rows = [
-      ['Name', 'Type', 'Contact', 'Email', 'Phone', 'Location', 'Website', 'Next Step'],
-      ...saved.map(f => [f.name, f.type, `${f.contact} (${f.title})`, f.email, f.phone, f.location, f.website, f.nextStep]),
+      ['Name', 'Type', 'State', 'Total Giving', 'Contact', 'Email', 'Website', 'Next Step'],
+      ...saved.map(f => [
+        f.name,
+        f.type,
+        f.state || '',
+        formatTotalGiving(f.total_giving),
+        `${f.contact_name || ''} ${f.contact_title ? `(${f.contact_title})` : ''}`.trim(),
+        f.contact_email || '',
+        f.website || '',
+        f.next_step || '',
+      ]),
     ];
-    const csv = rows.map(r => r.join(',')).join('\n');
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -78,13 +86,26 @@ export default function SavedFunders() {
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <h2 className="text-xl font-bold">{funder.name}</h2>
-                    <span className="inline-block mt-1 bg-[#21262d] border border-[#30363d] text-gray-300 text-xs px-3 py-1 rounded-full">
-                      {funder.type}
-                    </span>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      <span className="inline-block bg-[#21262d] border border-[#30363d] text-gray-300 text-xs px-3 py-1 rounded-full capitalize">
+                        {funder.type}
+                      </span>
+                      {funder.state && (
+                        <span className="inline-block bg-[#21262d] border border-[#30363d] text-gray-300 text-xs px-3 py-1 rounded-full">
+                          {funder.city ? `${funder.city}, ${funder.state}` : funder.state}
+                        </span>
+                      )}
+                    </div>
                     <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-400 mt-3">
-                      <span>{funder.contact}, {funder.title}</span>
-                      <span>{funder.location}</span>
-                      <span className="text-blue-400">{funder.email}</span>
+                      {funder.contact_name && (
+                        <span>{funder.contact_name}{funder.contact_title ? `, ${funder.contact_title}` : ''}</span>
+                      )}
+                      {funder.total_giving && (
+                        <span className="text-green-400">{formatTotalGiving(funder.total_giving)} in grants</span>
+                      )}
+                      {funder.contact_email && (
+                        <span className="text-blue-400">{funder.contact_email}</span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -97,7 +118,7 @@ export default function SavedFunders() {
                     Remove
                   </button>
                   <button
-                    onClick={() => navigate(`/funder/${funder.id}`)}
+                    onClick={() => navigate(`/funder/${funder.id}`, { state: { funder } })}
                     className="flex items-center gap-2 border border-[#30363d] rounded-xl px-4 py-2 text-sm hover:bg-[#21262d] transition-colors ml-auto"
                   >
                     View Details

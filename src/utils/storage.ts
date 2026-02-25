@@ -1,6 +1,8 @@
-const SAVED_KEY = 'savedFunders';
+import { Funder } from '../types';
 
-export function getSavedIds(): string[] {
+const SAVED_KEY = 'savedFunders_v2'; // v2 stores full objects
+
+export function getSavedFunders(): Funder[] {
   try {
     return JSON.parse(localStorage.getItem(SAVED_KEY) || '[]');
   } catch {
@@ -8,18 +10,22 @@ export function getSavedIds(): string[] {
   }
 }
 
-export function saveFunder(id: string): void {
-  const ids = getSavedIds();
-  if (!ids.includes(id)) {
-    localStorage.setItem(SAVED_KEY, JSON.stringify([...ids, id]));
+export function getSavedIds(): string[] {
+  return getSavedFunders().map(f => f.id);
+}
+
+export function saveFunder(funder: Funder): void {
+  const saved = getSavedFunders();
+  if (!saved.find(f => f.id === funder.id)) {
+    localStorage.setItem(SAVED_KEY, JSON.stringify([...saved, funder]));
   }
 }
 
 export function unsaveFunder(id: string): void {
-  const ids = getSavedIds();
-  localStorage.setItem(SAVED_KEY, JSON.stringify(ids.filter(i => i !== id)));
+  const saved = getSavedFunders();
+  localStorage.setItem(SAVED_KEY, JSON.stringify(saved.filter(f => f.id !== id)));
 }
 
-export function issaved(id: string): boolean {
+export function isSaved(id: string): boolean {
   return getSavedIds().includes(id);
 }

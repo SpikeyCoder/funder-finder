@@ -1,7 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Bookmark, BookmarkCheck, ChevronRight, Copy, Download } from 'lucide-react';
-import { findMatches, getMatchingTags } from '../utils/matching';
+import { ArrowLeft, Bookmark, BookmarkCheck, ChevronRight, Copy, Download, RefreshCw, Loader2 } from 'lucide-react';
+import { findMatches, formatGrantRange, formatTotalGiving } from '../utils/matching';
 import { Funder } from '../types';
 import { getSavedIds, saveFunder, unsaveFunder } from '../utils/storage';
 
@@ -9,22 +9,41 @@ export default function Results() {
   const location = useLocation();
   const navigate = useNavigate();
   const { mission = '', keywords = [] } = location.state || {};
+
   const [matches, setMatches] = useState<Funder[]>([]);
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [copied, setCopied] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [cached, setCached] = useState(false);
+
+  const loadMatches = async (forceRefresh = false) => {
+    if (!mission) { navigate('/mission'); return; }
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await findMatches(mission, undefined, forceRefresh);
+      setMatches(response.results || []);
+      setCached(response.cached);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load matches');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    setMatches(findMatches(mission, keywords));
+    loadMatches();
     setSavedIds(getSavedIds());
-  }, [mission, keywords]);
+  }, [mission]);
 
-  const toggleSave = (id: string) => {
-    if (savedIds.includes(id)) {
-      unsaveFunder(id);
-      setSavedIds(prev => prev.filter(i => i !== id));
+  const toggleSave = (funder: Funder) => {
+    if (savedIds.includes(funder.id)) {
+      unsaveFunder(funder.id);
+      setSavedIds(prev => prev.filter(i => i !== funder.id));
     } else {
-      saveFunder(id);
-      setSavedIds(prev => [...prev, id]);
+      saveFunder(funder);
+      setSavedIds(prev => [...prev, funder.id]);
     }
   };
 
@@ -36,12 +55,23 @@ export default function Results() {
 
   const exportCSV = () => {
     const rows = [
-      ['Rank', 'Name', 'Type', 'Contact', 'Email', 'Phone', 'Location', 'Website', 'Next Step'],
+      ['Rank', 'Score', 'Name', 'Type', 'State', 'Total Giving', 'Grant Range', 'Contact', 'Email', 'Website', 'Next Step', 'Why It Matches'],
       ...matches.map((f, i) => [
-        i + 1, f.name, f.type, `${f.contact} (${f.title})`, f.email, f.phone, f.location, f.website, f.nextStep,
+        i + 1,
+        f.score ? Math.round(f.score * 100) + '%' : '',
+        f.name,
+        f.type,
+        f.state || '',
+        formatTotalGiving(f.total_giving),
+        formatGrantRange(f),
+        `${f.contact_name || ''} ${f.contact_title ? `(${f.contact_title})` : ''}`.trim(),
+        f.contact_email || '',
+        f.website || '',
+        f.next_step || '',
+        f.reason || '',
       ]),
     ];
-    const csv = rows.map(r => r.join(',')).join('\n');
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -57,7 +87,12 @@ export default function Results() {
         <div className="flex items-start justify-between mb-4">
           <div>
             <h1 className="text-3xl font-bold">Your Funder Matches</h1>
-            <p className="text-gray-400 mt-1">Found {matches.length} funders aligned with your mission</p>
+            {!loading && (
+              <p className="text-gray-400 mt-1">
+                Found {matches.length} funders aligned with your mission
+                {cached && <span className="ml-2 text-xs text-gray-500">(cached)</span>}
+              </p>
+            )}
           </div>
           <div className="flex gap-3">
             <button
@@ -67,13 +102,15 @@ export default function Results() {
               <Bookmark size={16} />
               Saved ({savedIds.length})
             </button>
-            <button
-              onClick={exportCSV}
-              className="flex items-center gap-2 border border-[#30363d] rounded-xl px-4 py-2 text-sm hover:bg-[#161b22] transition-colors"
-            >
-              <Download size={16} />
-              Export
-            </button>
+            {!loading && matches.length > 0 && (
+              <button
+                onClick={exportCSV}
+                className="flex items-center gap-2 border border-[#30363d] rounded-xl px-4 py-2 text-sm hover:bg-[#161b22] transition-colors"
+              >
+                <Download size={16} />
+                Export
+              </button>
+            )}
           </div>
         </div>
 
@@ -85,75 +122,158 @@ export default function Results() {
           Update Search
         </button>
 
+        {/* Loading state */}
+        {loading && (
+          <div className="flex flex-col items-center justify-center py-24 text-gray-400">
+            <Loader2 size={40} className="animate-spin mb-4 text-blue-400" />
+            <p className="text-lg font-medium">Analyzing your mission with AI...</p>
+            <p className="text-sm mt-2">Claude is matching funders to your mission statement</p>
+          </div>
+        )}
+
+        {/* Error state */}
+        {!loading && error && (
+          <div className="bg-red-900/20 border border-red-800 rounded-2xl p-8 text-center">
+            <p className="text-red-400 font-semibold mb-2">Something went wrong</p>
+            <p className="text-gray-400 text-sm mb-4">{error}</p>
+            <button
+              onClick={() => loadMatches()}
+              className="flex items-center gap-2 mx-auto border border-red-800 text-red-400 rounded-xl px-4 py-2 text-sm hover:bg-red-900/30 transition-colors"
+            >
+              <RefreshCw size={14} />
+              Try Again
+            </button>
+          </div>
+        )}
+
+        {/* No results */}
+        {!loading && !error && matches.length === 0 && (
+          <div className="text-center py-24 text-gray-500">
+            <p className="text-2xl mb-3">No funders found</p>
+            <p className="mb-4 text-sm">The database may be empty. Run the ingestion script first.</p>
+            <button
+              onClick={() => navigate('/mission')}
+              className="bg-white text-gray-900 font-semibold px-6 py-3 rounded-xl hover:bg-gray-100 transition-colors"
+            >
+              Update Mission
+            </button>
+          </div>
+        )}
+
         {/* Funder Cards */}
-        <div className="space-y-6">
-          {matches.map((funder, index) => {
-            const matchTags = getMatchingTags(funder, keywords, mission);
-            const isSaved = savedIds.includes(funder.id);
-            return (
-              <div key={funder.id} className="bg-[#161b22] border border-[#30363d] rounded-2xl p-6">
-                <div className="flex items-start gap-3 mb-3">
-                  <span className="text-blue-400 font-bold text-lg">#{index + 1}</span>
-                  <div>
-                    <h2 className="text-xl font-bold">{funder.name}</h2>
-                    <span className="inline-block mt-1 bg-[#21262d] border border-[#30363d] text-gray-300 text-xs px-3 py-1 rounded-full">
-                      {funder.type}
-                    </span>
-                  </div>
-                </div>
-
-                <p className="text-gray-300 text-sm mb-4">{funder.description}</p>
-
-                {matchTags.length > 0 && (
-                  <div className="mb-4">
-                    <p className="text-sm font-semibold mb-2">Mission alignment:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {matchTags.map(tag => (
-                        <span key={tag} className="bg-[#21262d] text-gray-300 text-xs px-3 py-1 rounded-full">
-                          {tag}
+        {!loading && !error && matches.length > 0 && (
+          <div className="space-y-6">
+            {matches.map((funder, index) => {
+              const isSaved = savedIds.includes(funder.id);
+              const scorePercent = funder.score ? Math.round(funder.score * 100) : null;
+              return (
+                <div key={funder.id} className="bg-[#161b22] border border-[#30363d] rounded-2xl p-6">
+                  <div className="flex items-start gap-3 mb-3">
+                    <span className="text-blue-400 font-bold text-lg">#{index + 1}</span>
+                    <div className="flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <h2 className="text-xl font-bold">{funder.name}</h2>
+                        {scorePercent !== null && (
+                          <span className={`text-xs font-semibold px-2 py-1 rounded-full whitespace-nowrap ${scorePercent >= 80 ? 'bg-green-900/40 text-green-400' : scorePercent >= 60 ? 'bg-blue-900/40 text-blue-400' : 'bg-gray-800 text-gray-400'}`}>
+                            {scorePercent}% match
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        <span className="inline-block bg-[#21262d] border border-[#30363d] text-gray-300 text-xs px-3 py-1 rounded-full capitalize">
+                          {funder.type}
                         </span>
-                      ))}
+                        {funder.state && (
+                          <span className="inline-block bg-[#21262d] border border-[#30363d] text-gray-300 text-xs px-3 py-1 rounded-full">
+                            {funder.city ? `${funder.city}, ${funder.state}` : funder.state}
+                          </span>
+                        )}
+                        {funder.total_giving && (
+                          <span className="inline-block bg-[#21262d] border border-[#30363d] text-gray-300 text-xs px-3 py-1 rounded-full">
+                            {formatTotalGiving(funder.total_giving)} in grants
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                )}
 
-                <div className="flex flex-wrap gap-x-8 gap-y-1 text-sm text-gray-400 mb-4">
-                  <span><strong className="text-white">Contact:</strong> {funder.contact}, {funder.title}</span>
-                  <span><strong className="text-white">Location:</strong> {funder.location}</span>
-                </div>
+                  {/* Claude's reason */}
+                  {funder.reason && (
+                    <div className="mb-4 bg-[#0d1117] border border-blue-900/50 rounded-xl px-4 py-3">
+                      <p className="text-xs text-blue-400 font-semibold mb-1">Why this funder matches</p>
+                      <p className="text-gray-300 text-sm">{funder.reason}</p>
+                    </div>
+                  )}
 
-                <div className="bg-[#0d1117] border border-[#30363d] rounded-xl px-4 py-3 mb-4 text-sm">
-                  <span className="text-gray-400">Best next step: </span>
-                  <span className="text-blue-400">{funder.nextStep}</span>
-                </div>
+                  {/* Focus areas */}
+                  {funder.focus_areas && funder.focus_areas.length > 0 && (
+                    <div className="mb-4">
+                      <div className="flex flex-wrap gap-2">
+                        {funder.focus_areas.map(tag => (
+                          <span key={tag} className="bg-[#21262d] text-gray-400 text-xs px-3 py-1 rounded-full capitalize">
+                            {tag.replace(/_/g, ' ')}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => copyEmail(funder.email, funder.id)}
-                    className="flex items-center gap-2 border border-[#30363d] rounded-xl px-4 py-2 text-sm hover:bg-[#21262d] transition-colors"
-                  >
-                    <Copy size={14} />
-                    {copied === funder.id ? 'Copied!' : 'Copy Email'}
-                  </button>
-                  <button
-                    onClick={() => toggleSave(funder.id)}
-                    className={`flex items-center gap-2 border rounded-xl px-4 py-2 text-sm transition-colors ${isSaved ? 'border-blue-600 text-blue-400 bg-blue-900/20' : 'border-[#30363d] hover:bg-[#21262d]'}`}
-                  >
-                    {isSaved ? <BookmarkCheck size={14} /> : <Bookmark size={14} />}
-                    {isSaved ? 'Saved' : 'Save'}
-                  </button>
-                  <button
-                    onClick={() => navigate(`/funder/${funder.id}`, { state: { mission, keywords } })}
-                    className="flex items-center gap-2 bg-white text-gray-900 font-semibold rounded-xl px-4 py-2 text-sm hover:bg-gray-100 transition-colors ml-auto"
-                  >
-                    View Details
-                    <ChevronRight size={14} />
-                  </button>
+                  {/* Grant range */}
+                  {(funder.grant_range_min || funder.grant_range_max) && (
+                    <p className="text-sm text-gray-400 mb-4">
+                      <strong className="text-white">Typical grant range:</strong> {formatGrantRange(funder)}
+                    </p>
+                  )}
+
+                  {/* Next step */}
+                  {funder.next_step && (
+                    <div className="bg-[#0d1117] border border-[#30363d] rounded-xl px-4 py-3 mb-4 text-sm">
+                      <span className="text-gray-400">Best next step: </span>
+                      <span className="text-blue-400">{funder.next_step}</span>
+                    </div>
+                  )}
+
+                  <div className="flex gap-3">
+                    {funder.contact_email && (
+                      <button
+                        onClick={() => copyEmail(funder.contact_email!, funder.id)}
+                        className="flex items-center gap-2 border border-[#30363d] rounded-xl px-4 py-2 text-sm hover:bg-[#21262d] transition-colors"
+                      >
+                        <Copy size={14} />
+                        {copied === funder.id ? 'Copied!' : 'Copy Email'}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => toggleSave(funder)}
+                      className={`flex items-center gap-2 border rounded-xl px-4 py-2 text-sm transition-colors ${isSaved ? 'border-blue-600 text-blue-400 bg-blue-900/20' : 'border-[#30363d] hover:bg-[#21262d]'}`}
+                    >
+                      {isSaved ? <BookmarkCheck size={14} /> : <Bookmark size={14} />}
+                      {isSaved ? 'Saved' : 'Save'}
+                    </button>
+                    <button
+                      onClick={() => navigate(`/funder/${funder.id}`, { state: { funder, mission, keywords } })}
+                      className="flex items-center gap-2 bg-white text-gray-900 font-semibold rounded-xl px-4 py-2 text-sm hover:bg-gray-100 transition-colors ml-auto"
+                    >
+                      View Details
+                      <ChevronRight size={14} />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+
+            {/* Refresh button at bottom */}
+            <div className="flex justify-center pt-4">
+              <button
+                onClick={() => loadMatches(true)}
+                className="flex items-center gap-2 text-gray-500 hover:text-gray-300 text-sm transition-colors"
+              >
+                <RefreshCw size={14} />
+                Refresh results (re-run AI matching)
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
