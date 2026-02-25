@@ -28,10 +28,43 @@ if (!SUPABASE_SERVICE_ROLE_KEY) {
   process.exit(1);
 }
 
-// ProPublica API uses numeric major-category IDs, not letter codes.
-// 7 = "Public, Societal Benefit" — covers all T-coded orgs (foundations, grantmakers, DAFs, community foundations).
-// We fetch this category and filter to T* NTEE codes in post-processing.
-const NTEE_NUMERIC_IDS = [7];
+// Search terms to pull foundation data from ProPublica.
+// Each query pulls up to ~25 results/page across multiple pages.
+const SEARCH_QUERIES = [
+  // Generic foundation types
+  'foundation',
+  'community foundation',
+  'family foundation',
+  'private foundation',
+  'public foundation',
+  'grantmaking foundation',
+  'charitable foundation',
+  'philanthropic fund',
+  'charitable trust',
+  'endowment fund',
+
+  // Issue-area foundations (high-volume categories)
+  'education foundation',
+  'health foundation',
+  'arts foundation',
+  'environment foundation',
+  'housing foundation',
+  'youth foundation',
+  'community development foundation',
+  'women foundation',
+  'racial equity foundation',
+  'social justice fund',
+  'medical research foundation',
+  'science foundation',
+  'technology foundation',
+  'economic development foundation',
+
+  // Named foundation patterns (major philanthropies)
+  'community trust',
+  'charitable fund',
+  'giving foundation',
+  'philanthropy',
+];
 
 // ── Focus area keyword map ─────────────────────────────────────────────────
 const FOCUS_KEYWORDS = {
@@ -95,29 +128,45 @@ async function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
 }
 
-async function fetchAllForCategory(nteeNumericId) {
+const MAX_PAGES_PER_QUERY = 10; // 10 pages × 25 orgs = 250 max per query
+
+async function fetchAllForQuery(query, debug = false) {
   const orgs = [];
   let page = 0;
-  while (true) {
-    // ProPublica API uses numeric IDs for major NTEE categories (7 = Public/Societal Benefit = T-codes)
-    const url = `${PROPUBLICA_BASE}/search.json?q=foundation&ntee[id]=${nteeNumericId}&page=${page}`;
+  while (page < MAX_PAGES_PER_QUERY) {
+    const url = `${PROPUBLICA_BASE}/search.json?q=${encodeURIComponent(query)}&page=${page}`;
     let data;
     try {
       data = await fetchJson(url);
     } catch (e) {
-      console.warn(`  Warning: failed page ${page} for ntee[id]=${nteeNumericId}: ${e.message}`);
+      console.warn(`  Warning: failed page ${page} for "${query}": ${e.message}`);
       break;
+    }
+
+    if (debug && page === 0) {
+      console.log('\n  🔍 DEBUG — raw API response keys:', Object.keys(data));
+      console.log('  🔍 DEBUG — total_results:', data.total_results);
+      const sample = (data.organizations || [])[0];
+      if (sample) {
+        console.log('  🔍 DEBUG — first org keys:', Object.keys(sample));
+        console.log('  🔍 DEBUG — first org:', JSON.stringify(sample, null, 2));
+      } else {
+        console.log('  🔍 DEBUG — organizations array is empty or missing');
+        console.log('  🔍 DEBUG — full response:', JSON.stringify(data, null, 2).slice(0, 500));
+      }
     }
 
     const batch = data.organizations || [];
     if (batch.length === 0) break;
     orgs.push(...batch);
-    console.log(`  ntee[id]=${nteeNumericId} page ${page}: ${batch.length} orgs (total: ${orgs.length})`);
+    process.stdout.write(`  "${query}" page ${page}: ${orgs.length} orgs so far...\r`);
 
-    if (batch.length < 100) break; // last page
+    // ProPublica returns up to 25 orgs per page; keep going until we get nothing back
+    if (batch.length === 0) break;
     page++;
-    await sleep(500); // be polite to ProPublica
+    await sleep(400);
   }
+  console.log(`  "${query}": fetched ${orgs.length} orgs total`);
   return orgs;
 }
 
@@ -145,57 +194,93 @@ function transformOrg(org) {
     grant_range_min: grantRange.min,
     grant_range_max: grantRange.max,
     next_step:       buildNextStep(org),
-    raw_data:        org,
+    raw_data:        null,  // omit raw payload to keep upsert batches small
     last_synced:     new Date().toISOString(),
   };
 }
 
-async function upsertBatch(rows) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/funders`, {
-    method: 'POST',
-    headers: {
-      'Content-Type':  'application/json',
-      'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-      'apikey':        SUPABASE_SERVICE_ROLE_KEY,
-      'Prefer':        'resolution=merge-duplicates',
-    },
-    body: JSON.stringify(rows),
-  });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Supabase upsert failed (${res.status}): ${body}`);
+async function upsertBatch(rows, attempt = 1) {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/funders`, {
+      method: 'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        'apikey':        SUPABASE_SERVICE_ROLE_KEY,
+        'Prefer':        'resolution=merge-duplicates',
+      },
+      body: JSON.stringify(rows),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`Supabase upsert failed (${res.status}): ${body}`);
+    }
+  } catch (err) {
+    if (attempt < 3) {
+      console.warn(`  Batch failed (attempt ${attempt}), retrying in 2s...`);
+      await sleep(2000);
+      return upsertBatch(rows, attempt + 1);
+    }
+    throw err;
   }
 }
 
 async function main() {
+  const debug = process.argv.includes('--debug');
   console.log('🔍 Starting ProPublica → Supabase ingestion\n');
+  if (debug) console.log('⚠️  Debug mode ON — will print raw API response for first query\n');
   let grandTotal = 0;
 
-  for (const nteeId of NTEE_NUMERIC_IDS) {
-    console.log(`\n📂 Fetching NTEE category ${nteeId} (Public/Societal Benefit = foundations)...`);
-    const allOrgs = await fetchAllForCategory(nteeId);
-    if (allOrgs.length === 0) { console.log('  No results.'); continue; }
+  // Collect all orgs across queries, deduplicating by EIN
+  const seen = new Set();
+  const allSignificant = [];
 
-    // Keep only T-coded orgs (grantmaking foundations, community foundations, DAFs)
-    const tOrgs = allOrgs.filter(o => o.ntee_code && o.ntee_code.startsWith('T'));
-    console.log(`  T-category orgs: ${tOrgs.length} of ${allOrgs.length} total`);
+  for (const query of SEARCH_QUERIES) {
+    console.log(`\n📂 Searching "${query}"...`);
+    const orgs = await fetchAllForQuery(query, debug && query === SEARCH_QUERIES[0]);
+    if (orgs.length === 0) { console.log('  No results.'); continue; }
 
-    // Filter: only include orgs with meaningful grant activity
-    const significant = tOrgs.filter(o =>
-      (o.total_giving && o.total_giving > 10000) ||
-      (o.asset_amount  && o.asset_amount  > 100000)
-    );
-    console.log(`  Filtered to ${significant.length} significant funders (of ${tOrgs.length})`);
+    // Keep grantmaking orgs, deduplicated.
+    // NOTE: ProPublica search results often omit ntee_code, so we accept orgs that
+    // either (a) have a T-coded NTEE, OR (b) have a foundation/grantmaking name.
+    const FOUNDATION_TERMS = ['foundation', 'fund', 'trust', 'endowment', 'grant', 'philanthropi', 'charitable', 'giving'];
+    let added = 0;
+    for (const org of orgs) {
+      const ntee    = (org.ntee_code || '').toUpperCase();
+      const nameLow = (org.name || '').toLowerCase();
+      const ein     = String(org.ein || org.id || '');
 
-    // Upsert in batches of 200
-    const BATCH = 200;
-    for (let i = 0; i < significant.length; i += BATCH) {
-      const batch = significant.slice(i, i + BATCH).map(transformOrg);
-      await upsertBatch(batch);
-      process.stdout.write(`  Upserted ${Math.min(i + BATCH, significant.length)}/${significant.length}\r`);
+      const looksLikeFoundation = ntee.startsWith('T') ||
+        FOUNDATION_TERMS.some(t => nameLow.includes(t));
+      if (!looksLikeFoundation) continue;         // skip non-grantmaking orgs
+
+      if (seen.has(ein)) continue;                // deduplicate
+      // Note: ProPublica search results don't include financial figures —
+      // those only appear in individual org lookups. Skip money filter here.
+      seen.add(ein);
+      allSignificant.push(org);
+      added++;
     }
-    console.log(`  ✓ Done with ntee[id]=${nteeId}: ${significant.length} funders upserted`);
-    grandTotal += significant.length;
+    console.log(`  Added ${added} new funders (running total: ${allSignificant.length})`);
+  }
+
+  if (allSignificant.length === 0) {
+    console.log('\n❌ No funders found across all queries.');
+    console.log('   Possible causes:');
+    console.log('   1. Network issue — check your internet connection');
+    console.log('   2. ProPublica API may be down — try again in a few minutes');
+    return;
+  }
+
+  // Upsert in small batches with pauses to avoid overwhelming Supabase
+  console.log(`\n💾 Upserting ${allSignificant.length} funders to Supabase...`);
+  const BATCH = 25;
+  for (let i = 0; i < allSignificant.length; i += BATCH) {
+    const batch = allSignificant.slice(i, i + BATCH).map(transformOrg);
+    await upsertBatch(batch);
+    grandTotal += batch.length;
+    process.stdout.write(`  Upserted ${grandTotal}/${allSignificant.length}\r`);
+    if (i + BATCH < allSignificant.length) await sleep(300);
   }
 
   console.log(`\n✅ Ingestion complete! Total funders upserted: ${grandTotal}`);
