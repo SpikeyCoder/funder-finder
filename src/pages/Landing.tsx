@@ -77,10 +77,7 @@ export default function Landing() {
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="text-center text-gray-500 text-sm pb-10 px-6">
-        This is a prototype tool to help nonprofits discover potential funders. Always verify contact information and follow each funder's application guidelines.
-      </div>
+
     </div>
   );
 }
