@@ -194,7 +194,7 @@ async function main() {
       await upsertBatch(batch);
       process.stdout.write(`  Upserted ${Math.min(i + BATCH, significant.length)}/${significant.length}\r`);
     }
-    console.log(`  ✓ Done with ${ntee}: ${significant.length} funders upserted`);
+    console.log(`  ✓ Done with ntee[id]=${nteeId}: ${significant.length} funders upserted`);
     grandTotal += significant.length;
   }
 
