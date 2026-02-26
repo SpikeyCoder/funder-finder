@@ -1,0 +1,1 @@
+{"root":["./src/App.tsx","./src/main.tsx","./src/types.ts","./src/pages/FunderDetail.tsx","./src/pages/Landing.tsx","./src/pages/MissionInput.tsx","./src/pages/NotFound.tsx","./src/pages/Results.tsx","./src/pages/SavedFunders.tsx","./src/utils/matching.ts","./src/utils/storage.ts"],"errors":true,"version":"5.9.3"}
