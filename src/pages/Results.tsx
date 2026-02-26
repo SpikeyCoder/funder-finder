@@ -237,7 +237,18 @@ export default function Results() {
                   {funder.next_step && (
                     <div className="bg-[#0d1117] border border-[#30363d] rounded-xl px-4 py-3 mb-4 text-sm">
                       <span className="text-gray-400">Best next step: </span>
-                      <span className="text-blue-400">{funder.next_step}</span>
+                      {funder.next_step_url ? (
+                        <a
+                          href={funder.next_step_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-400 hover:text-blue-300 underline underline-offset-2 transition-colors"
+                        >
+                          {funder.next_step}
+                        </a>
+                      ) : (
+                        <span className="text-blue-400">{funder.next_step}</span>
+                      )}
                     </div>
                   )}
 

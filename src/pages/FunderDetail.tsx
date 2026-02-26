@@ -140,7 +140,18 @@ export default function FunderDetail() {
               <div className="mb-6">
                 <h2 className="text-lg font-semibold mb-3">Recommended Next Step</h2>
                 <div className="bg-[#0d1117] border border-blue-800 rounded-xl px-5 py-4 text-blue-300">
-                  {funder.next_step}
+                  {funder.next_step_url ? (
+                    <a
+                      href={funder.next_step_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:text-blue-200 underline underline-offset-2 transition-colors"
+                    >
+                      {funder.next_step}
+                    </a>
+                  ) : (
+                    funder.next_step
+                  )}
                 </div>
               </div>
               <hr className="border-[#30363d] mb-6" />

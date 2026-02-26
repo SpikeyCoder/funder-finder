@@ -20,4 +20,5 @@ export interface Funder {
   // Added by the Edge Function (Claude ranking)
   score?: number;
   reason?: string;
+  next_step_url?: string;
 }
