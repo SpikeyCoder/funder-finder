@@ -12,7 +12,7 @@ export default function FunderDetail() {
   const { funder: funderFromState, mission = '', keywords = [] } = location.state || {};
 
   // Use funder passed in navigation state (avoids extra DB call)
-  const [funder, setFunder] = useState<Funder | null>(funderFromState || null);
+  const [funder] = useState<Funder | null>(funderFromState || null);
   const [saved, setSaved] = useState(false);
   const [copiedEmail, setCopiedEmail] = useState(false);
 
