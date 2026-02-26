@@ -8,7 +8,10 @@ import { getSavedIds, saveFunder, unsaveFunder } from '../utils/storage';
 export default function Results() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { mission = '', keywords = [] } = location.state || {};
+  // Use router state if available, fall back to sessionStorage (survives page reloads)
+  const state = location.state || {};
+  const mission: string = state.mission || sessionStorage.getItem('ff_mission') || '';
+  const keywords: string[] = state.keywords ?? JSON.parse(sessionStorage.getItem('ff_keywords') || '[]');
 
   const [matches, setMatches] = useState<Funder[]>([]);
   const [savedIds, setSavedIds] = useState<string[]>([]);
@@ -18,7 +21,11 @@ export default function Results() {
   const [cached, setCached] = useState(false);
 
   const loadMatches = async (forceRefresh = false) => {
-    if (!mission) { navigate('/mission'); return; }
+    if (!mission) {
+      setError('No mission found — please go back and enter your mission statement.');
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {

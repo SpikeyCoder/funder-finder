@@ -45,6 +45,9 @@ export default function MissionInput() {
       setError('Please enter your mission statement to continue.');
       return;
     }
+    // Persist to sessionStorage so Results page survives reloads
+    sessionStorage.setItem('ff_mission', mission.trim());
+    sessionStorage.setItem('ff_keywords', JSON.stringify(keywords));
     navigate('/results', { state: { mission, keywords } });
   };
 
