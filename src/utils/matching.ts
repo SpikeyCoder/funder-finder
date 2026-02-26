@@ -11,13 +11,13 @@ export interface MatchResponse {
 
 export async function findMatches(
   mission: string,
-  state?: string,
+  locationServed?: string,
   forceRefresh = false
 ): Promise<MatchResponse> {
   const res = await fetch(EDGE_FUNCTION_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mission, state, forceRefresh }),
+    body: JSON.stringify({ mission, locationServed, forceRefresh }),
   });
 
   if (!res.ok) {

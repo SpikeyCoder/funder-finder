@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, Sparkles, X, Plus } from 'lucide-react';
+import { ArrowRight, Sparkles, X, Plus, MapPin } from 'lucide-react';
 
 const SUGGESTED_KEYWORDS = [
   'education', 'health', 'equity', 'environment', 'climate', 'children',
@@ -14,13 +14,27 @@ const EXAMPLES = [
   'We protect and restore natural ecosystems by engaging local communities in environmental stewardship and advocacy.',
 ];
 
+const LOCATION_SUGGESTIONS = [
+  'National (United States)',
+  'International / Global',
+  'New York, NY',
+  'Los Angeles, CA',
+  'Chicago, IL',
+  'Texas',
+  'California',
+  'Northeast United States',
+  'Rural communities',
+];
+
 export default function MissionInput() {
   const navigate = useNavigate();
   const [mission, setMission] = useState('');
+  const [locationServed, setLocationServed] = useState('');
   const [keywords, setKeywords] = useState<string[]>([]);
   const [keywordInput, setKeywordInput] = useState('');
-  const [error, setError] = useState('');
+  const [errors, setErrors] = useState<{ mission?: string; location?: string }>({});
   const [showExamples, setShowExamples] = useState(false);
+  const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
 
   const addKeyword = (kw: string) => {
     const trimmed = kw.trim().toLowerCase();
@@ -41,14 +55,16 @@ export default function MissionInput() {
   };
 
   const handleSubmit = () => {
-    if (!mission.trim()) {
-      setError('Please enter your mission statement to continue.');
-      return;
-    }
+    const newErrors: { mission?: string; location?: string } = {};
+    if (!mission.trim()) newErrors.mission = 'Please enter your mission statement to continue.';
+    if (!locationServed.trim()) newErrors.location = 'Please enter the location your nonprofit serves.';
+    if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
+
     // Persist to sessionStorage so Results page survives reloads
     sessionStorage.setItem('ff_mission', mission.trim());
+    sessionStorage.setItem('ff_location', locationServed.trim());
     sessionStorage.setItem('ff_keywords', JSON.stringify(keywords));
-    navigate('/results', { state: { mission, keywords } });
+    navigate('/results', { state: { mission, locationServed, keywords } });
   };
 
   return (
@@ -57,6 +73,7 @@ export default function MissionInput() {
       <p className="text-gray-400 mb-10 text-center">We'll match you with funders who share your vision</p>
 
       <div className="w-full max-w-2xl bg-[#161b22] border border-[#30363d] rounded-2xl p-8 space-y-8">
+
         {/* Mission Statement */}
         <div>
           <label className="block text-base font-semibold mb-1">
@@ -65,15 +82,15 @@ export default function MissionInput() {
           <p className="text-sm text-gray-400 mb-3">Describe what your nonprofit does and who you serve</p>
           <textarea
             value={mission}
-            onChange={e => { setMission(e.target.value); setError(''); }}
+            onChange={e => { setMission(e.target.value); setErrors(prev => ({ ...prev, mission: undefined })); }}
             placeholder="Example: We empower underserved youth through accessible education programs and mentorship opportunities that build skills for future success."
             rows={4}
-            className={`w-full bg-[#0d1117] border rounded-xl px-4 py-3 text-white placeholder-gray-600 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 ${error ? 'border-red-500' : 'border-[#30363d]'}`}
+            className={`w-full bg-[#0d1117] border rounded-xl px-4 py-3 text-white placeholder-gray-600 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.mission ? 'border-red-500' : 'border-[#30363d]'}`}
           />
           <div className="flex items-center justify-between mt-2">
             <span className="text-xs text-gray-500">{mission.length} characters</span>
           </div>
-          {error && <p className="text-red-400 text-sm mt-1">{error}</p>}
+          {errors.mission && <p className="text-red-400 text-sm mt-1">{errors.mission}</p>}
 
           <button
             onClick={() => setShowExamples(!showExamples)}
@@ -88,7 +105,7 @@ export default function MissionInput() {
               {EXAMPLES.map(ex => (
                 <button
                   key={ex}
-                  onClick={() => { setMission(ex); setShowExamples(false); setError(''); }}
+                  onClick={() => { setMission(ex); setShowExamples(false); setErrors(prev => ({ ...prev, mission: undefined })); }}
                   className="block w-full text-left text-sm text-gray-300 bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] rounded-lg p-3 transition-colors"
                 >
                   {ex}
@@ -98,9 +115,56 @@ export default function MissionInput() {
           )}
         </div>
 
+        {/* Location Served */}
+        <div>
+          <label className="block text-base font-semibold mb-1">
+            <span className="flex items-center gap-2">
+              <MapPin size={16} className="text-blue-400" />
+              Location Served <span className="text-red-400">*</span>
+            </span>
+          </label>
+          <p className="text-sm text-gray-400 mb-3">
+            Where does your nonprofit primarily operate or serve communities?
+            Funders with geographic alignment will be ranked higher.
+          </p>
+          <div className="relative">
+            <input
+              value={locationServed}
+              onChange={e => {
+                setLocationServed(e.target.value);
+                setErrors(prev => ({ ...prev, location: undefined }));
+                setShowLocationSuggestions(true);
+              }}
+              onFocus={() => setShowLocationSuggestions(true)}
+              onBlur={() => setTimeout(() => setShowLocationSuggestions(false), 150)}
+              placeholder="e.g. Chicago, IL · Rural Appalachia · National · International"
+              className={`w-full bg-[#0d1117] border rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.location ? 'border-red-500' : 'border-[#30363d]'}`}
+            />
+            {showLocationSuggestions && !locationServed && (
+              <div className="absolute z-10 w-full mt-1 bg-[#21262d] border border-[#30363d] rounded-xl overflow-hidden shadow-lg">
+                {LOCATION_SUGGESTIONS.map(suggestion => (
+                  <button
+                    key={suggestion}
+                    onMouseDown={() => {
+                      setLocationServed(suggestion);
+                      setShowLocationSuggestions(false);
+                      setErrors(prev => ({ ...prev, location: undefined }));
+                    }}
+                    className="flex items-center gap-2 w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-[#30363d] transition-colors"
+                  >
+                    <MapPin size={12} className="text-gray-500 shrink-0" />
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          {errors.location && <p className="text-red-400 text-sm mt-1">{errors.location}</p>}
+        </div>
+
         {/* Keywords */}
         <div>
-          <label className="block text-base font-semibold mb-1">Keywords (Optional)</label>
+          <label className="block text-base font-semibold mb-1">Keywords <span className="text-gray-500 font-normal">(Optional)</span></label>
           <p className="text-sm text-gray-400 mb-3">Add specific focus areas to refine your matches</p>
 
           <div className="flex gap-2">

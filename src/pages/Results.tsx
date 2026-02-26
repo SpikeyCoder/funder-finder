@@ -11,6 +11,7 @@ export default function Results() {
   // Use router state if available, fall back to sessionStorage (survives page reloads)
   const state = location.state || {};
   const mission: string = state.mission || sessionStorage.getItem('ff_mission') || '';
+  const locationServed: string = state.locationServed || sessionStorage.getItem('ff_location') || '';
   const keywords: string[] = state.keywords ?? JSON.parse(sessionStorage.getItem('ff_keywords') || '[]');
 
   const [matches, setMatches] = useState<Funder[]>([]);
@@ -29,7 +30,7 @@ export default function Results() {
     setLoading(true);
     setError(null);
     try {
-      const response = await findMatches(mission, undefined, forceRefresh);
+      const response = await findMatches(mission, locationServed, forceRefresh);
       setMatches(response.results || []);
       setCached(response.cached);
     } catch (e) {
