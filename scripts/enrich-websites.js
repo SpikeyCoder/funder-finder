@@ -170,20 +170,33 @@ async function lookupGoogle(name) {
   if (!GOOGLE_API_KEY || !GOOGLE_CX) return null;
   try {
     const query = encodeURIComponent(`${name} nonprofit foundation`);
-    const res = await fetch(
-      `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${GOOGLE_CX}&q=${query}&num=1`
-    );
+    const apiUrl = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${GOOGLE_CX}&q=${query}&num=1`;
+    const res = await fetch(apiUrl);
+
     if (!res.ok) {
-      if (VERBOSE) {
-        const err = await res.text();
-        console.warn(`  [Google] API error ${res.status}: ${err.slice(0, 200)}`);
-      }
+      const err = await res.text();
+      console.warn(`  [Google] API error ${res.status}: ${err.slice(0, 300)}`);
       return null;
     }
+
     const data = await res.json();
+
+    if (VERBOSE) {
+      console.log('\n── Google raw response (first funder) ──');
+      console.log(JSON.stringify(data, null, 2).slice(0, 2000));
+      console.log('─────────────────────────────────────────\n');
+    }
+
+    // Warn if the engine is still restricted to a single site (misconfigured)
+    if (data?.queries?.request?.[0]?.totalResults === '0') {
+      if (VERBOSE) console.warn(`  [Google] 0 results returned — check PSE "Search entire web" setting`);
+      return null;
+    }
+
     const url = data?.items?.[0]?.link;
     return looksLikeUrl(url) ? url : null;
-  } catch {
+  } catch (e) {
+    console.warn(`  [Google] Exception: ${e.message}`);
     return null;
   }
 }
@@ -292,7 +305,7 @@ async function main() {
     stats.notFound++;
   }
 
-  const totalFound = stats.propublica + stats.bing + stats.ddg;
+  const totalFound = stats.propublica + stats.google + stats.ddg;
 
   console.log('\n── Summary ─────────────────────────────────────');
   console.log(`  ProPublica hits : ${stats.propublica}`);

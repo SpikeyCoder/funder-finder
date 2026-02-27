@@ -199,7 +199,7 @@ export default function FunderDetail() {
               ) : (
                 <div className="flex items-center gap-3 text-gray-500">
                   <Mail size={18} />
-                  <p className="text-sm">No direct email available — check their website</p>
+                  <p className="text-sm">No direct email available</p>
                 </div>
               )}
 
@@ -227,7 +227,7 @@ export default function FunderDetail() {
               ) : (
                 <div className="flex items-center gap-3 text-gray-500">
                   <Globe size={18} />
-                  <p className="text-sm">Search "{funder.name}" to find their website</p>
+                  <p className="text-sm">No website available</p>
                 </div>
               )}
             </div>
