@@ -1,4 +1,4 @@
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Bookmark, BookmarkCheck, Copy, Globe, MapPin, User, Mail, TrendingUp } from 'lucide-react';
 import { Funder } from '../types';
@@ -93,7 +93,7 @@ export default function FunderDetail() {
           {/* Focus Areas */}
           {funder.focus_areas && funder.focus_areas.length > 0 && (
             <>
-              <div className="mb-6">
+              <div id="focus-areas" className="mb-6">
                 <h2 className="text-lg font-semibold mb-3">Focus Areas</h2>
                 <div className="flex flex-wrap gap-2">
                   {funder.focus_areas.map(area => (
@@ -110,7 +110,7 @@ export default function FunderDetail() {
           {/* Giving Stats */}
           {(funder.total_giving || funder.grant_range_min || funder.grant_range_max) && (
             <>
-              <div className="mb-6">
+              <div id="giving" className="mb-6">
                 <h2 className="text-lg font-semibold mb-3">Giving Overview</h2>
                 <div className="grid grid-cols-2 gap-4">
                   {funder.total_giving && (
@@ -141,14 +141,24 @@ export default function FunderDetail() {
                 <h2 className="text-lg font-semibold mb-3">Recommended Next Step</h2>
                 <div className="bg-[#0d1117] border border-blue-800 rounded-xl px-5 py-4 text-blue-300">
                   {funder.next_step_url ? (
-                    <a
-                      href={funder.next_step_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="hover:text-blue-200 underline underline-offset-2 transition-colors"
-                    >
-                      {funder.next_step}
-                    </a>
+                    funder.next_step_url.startsWith('/') ? (
+                      <Link
+                        to={funder.next_step_url}
+                        state={{ funder, mission, keywords }}
+                        className="hover:text-blue-200 underline underline-offset-2 transition-colors"
+                      >
+                        {funder.next_step}
+                      </Link>
+                    ) : (
+                      <a
+                        href={funder.next_step_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hover:text-blue-200 underline underline-offset-2 transition-colors"
+                      >
+                        {funder.next_step}
+                      </a>
+                    )
                   ) : (
                     funder.next_step
                   )}
@@ -159,7 +169,7 @@ export default function FunderDetail() {
           )}
 
           {/* Contact Information */}
-          <div className="mb-2">
+          <div id="contact" className="mb-2">
             <h2 className="text-lg font-semibold mb-4">Contact Information</h2>
             <div className="space-y-5">
               {(funder.contact_name || funder.contact_title) && (

@@ -1,6 +1,11 @@
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Bookmark, BookmarkCheck, ChevronRight, Copy, Download, RefreshCw, Loader2 } from 'lucide-react';
+
+/** Returns true if the URL is an internal app path (starts with '/') */
+function isInternalPath(url: string): boolean {
+  return url.startsWith('/');
+}
 import { findMatches, formatGrantRange, formatTotalGiving } from '../utils/matching';
 import { Funder } from '../types';
 import { getSavedIds, saveFunder, unsaveFunder } from '../utils/storage';
@@ -238,14 +243,24 @@ export default function Results() {
                     <div className="bg-[#0d1117] border border-[#30363d] rounded-xl px-4 py-3 mb-4 text-sm">
                       <span className="text-gray-400">Best next step: </span>
                       {funder.next_step_url ? (
-                        <a
-                          href={funder.next_step_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-400 hover:text-blue-300 underline underline-offset-2 transition-colors"
-                        >
-                          {funder.next_step}
-                        </a>
+                        isInternalPath(funder.next_step_url) ? (
+                          <Link
+                            to={funder.next_step_url}
+                            state={{ funder, mission, keywords }}
+                            className="text-blue-400 hover:text-blue-300 underline underline-offset-2 transition-colors"
+                          >
+                            {funder.next_step}
+                          </Link>
+                        ) : (
+                          <a
+                            href={funder.next_step_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-400 hover:text-blue-300 underline underline-offset-2 transition-colors"
+                          >
+                            {funder.next_step}
+                          </a>
+                        )
                       ) : (
                         <span className="text-blue-400">{funder.next_step}</span>
                       )}
