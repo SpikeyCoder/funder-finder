@@ -7,18 +7,21 @@
  * Lookup strategy (in order, stops at first hit):
  *   1. ProPublica organization.website  (direct from org record)
  *   2. ProPublica filings_with_data[*].websiteaddress  (IRS 990 field)
- *   3. Bing Web Search API  (if BING_API_KEY env is set)
+ *   3. Google Custom Search API  (requires GOOGLE_API_KEY + GOOGLE_CX env vars)
  *   4. DuckDuckGo Instant Answer API  (free, no key required)
  *
  * Usage:
  *   node scripts/enrich-websites.js
  *
+ * Required env vars:
+ *   SUPABASE_SERVICE_ROLE_KEY  – Supabase service role key
+ *
  * Optional env vars:
- *   SUPABASE_SERVICE_ROLE_KEY  – required
- *   BING_API_KEY               – optional; enables Bing Web Search fallback
- *   LIMIT                      – max funders to process per run (default 200)
- *   DRY_RUN=1                  – log but don't write to DB
- *   VERBOSE=1                  – print raw ProPublica response for first funder
+ *   GOOGLE_API_KEY  – Google Custom Search API key (enables layer 3)
+ *   GOOGLE_CX       – Google Programmable Search Engine ID (enables layer 3)
+ *   LIMIT           – max funders to process per run (default 200)
+ *   DRY_RUN=1       – log but don't write to DB
+ *   VERBOSE=1       – print raw ProPublica response for first funder
  *
  * Run as many times as needed; it skips funders that already have a website.
  *
@@ -27,12 +30,13 @@
  *   node scripts/clear-cache.js
  */
 
-const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const BING_API_KEY = process.env.BING_API_KEY || '';
-const LIMIT       = parseInt(process.env.LIMIT   || '200', 10);
-const DRY_RUN     = process.env.DRY_RUN  === '1';
-const VERBOSE     = process.env.VERBOSE  === '1';
+const SUPABASE_URL  = 'https://tgtotjvdubhjxzybmdex.supabase.co';
+const SUPABASE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY || 'REDACTED_ROTATE_IN_GOOGLE_CLOUD_CONSOLE';
+const GOOGLE_CX     = process.env.GOOGLE_CX      || '32a112ff11dc64e78';
+const LIMIT         = parseInt(process.env.LIMIT  || '200', 10);
+const DRY_RUN       = process.env.DRY_RUN  === '1';
+const VERBOSE       = process.env.VERBOSE  === '1';
 
 // Polite delays (ms) between external API calls
 const PROPUBLICA_DELAY_MS = 350;
@@ -152,24 +156,32 @@ async function lookupProPublica(ein) {
   }
 }
 
-// ─── Source 3: Bing Web Search API ───────────────────────────────────────────
+// ─── Source 3: Google Custom Search API ──────────────────────────────────────
 
 /**
- * Use the Bing Web Search API to find the most likely homepage.
- * Requires BING_API_KEY env var (free tier: 1 000 calls/month at $0, 3 calls/sec).
- * Returns first result URL, or null.
+ * Use the Google Custom Search JSON API to find the most likely homepage.
+ * Requires GOOGLE_API_KEY and GOOGLE_CX env vars (or the defaults baked in).
+ * Free tier: 100 queries/day. Returns first result URL, or null.
+ *
+ * Search engine is configured to search the entire web
+ * (cx: 32a112ff11dc64e78 — "Funder Finder - Nonprofit Website Lookup").
  */
-async function lookupBing(name) {
-  if (!BING_API_KEY) return null;
+async function lookupGoogle(name) {
+  if (!GOOGLE_API_KEY || !GOOGLE_CX) return null;
   try {
-    const query = encodeURIComponent(`${name} nonprofit foundation official site`);
+    const query = encodeURIComponent(`${name} nonprofit foundation`);
     const res = await fetch(
-      `https://api.bing.microsoft.com/v7.0/search?q=${query}&count=1&responseFilter=Webpages`,
-      { headers: { 'Ocp-Apim-Subscription-Key': BING_API_KEY } }
+      `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${GOOGLE_CX}&q=${query}&num=1`
     );
-    if (!res.ok) return null;
+    if (!res.ok) {
+      if (VERBOSE) {
+        const err = await res.text();
+        console.warn(`  [Google] API error ${res.status}: ${err.slice(0, 200)}`);
+      }
+      return null;
+    }
     const data = await res.json();
-    const url = data?.webPages?.value?.[0]?.url;
+    const url = data?.items?.[0]?.link;
     return looksLikeUrl(url) ? url : null;
   } catch {
     return null;
@@ -217,18 +229,19 @@ async function lookupDuckDuckGo(name) {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
+  const googleEnabled = !!(GOOGLE_API_KEY && GOOGLE_CX);
   console.log(
     `Enriching up to ${LIMIT} funders without websites…` +
-    (DRY_RUN  ? ' [DRY RUN]'  : '') +
-    (VERBOSE  ? ' [VERBOSE]'  : '') +
-    (BING_API_KEY ? ' [Bing enabled]' : ' [Bing disabled — set BING_API_KEY to enable]') +
+    (DRY_RUN       ? ' [DRY RUN]'  : '') +
+    (VERBOSE       ? ' [VERBOSE]'  : '') +
+    (googleEnabled ? ' [Google Custom Search enabled]' : ' [Google disabled — set GOOGLE_API_KEY + GOOGLE_CX]') +
     '\n'
   );
 
   const funders = await getFundersWithoutWebsite();
   console.log(`Found ${funders.length} funders to process.\n`);
 
-  const stats = { propublica: 0, bing: 0, ddg: 0, notFound: 0 };
+  const stats = { propublica: 0, google: 0, ddg: 0, notFound: 0 };
   let verboseDone = false;
 
   for (const { id, name } of funders) {
@@ -251,17 +264,17 @@ async function main() {
 
     await sleep(PROPUBLICA_DELAY_MS);
 
-    // ── Layer 3: Bing ──
-    const bingUrl = await lookupBing(name);
-    if (bingUrl) {
-      console.log(`✅  [Bing]       ${name} (${id}) → ${bingUrl}`);
-      if (!DRY_RUN) await updateWebsite(id, bingUrl);
-      stats.bing++;
+    // ── Layer 3: Google Custom Search ──
+    const googleUrl = await lookupGoogle(name);
+    if (googleUrl) {
+      console.log(`✅  [Google]     ${name} (${id}) → ${googleUrl}`);
+      if (!DRY_RUN) await updateWebsite(id, googleUrl);
+      stats.google++;
       await sleep(SEARCH_DELAY_MS);
       continue;
     }
 
-    if (BING_API_KEY) await sleep(SEARCH_DELAY_MS);
+    if (googleEnabled) await sleep(SEARCH_DELAY_MS);
 
     // ── Layer 4: DuckDuckGo ──
     const ddgUrl = await lookupDuckDuckGo(name);
@@ -283,7 +296,7 @@ async function main() {
 
   console.log('\n── Summary ─────────────────────────────────────');
   console.log(`  ProPublica hits : ${stats.propublica}`);
-  console.log(`  Bing hits       : ${stats.bing}`);
+  console.log(`  Google hits     : ${stats.google}`);
   console.log(`  DuckDuckGo hits : ${stats.ddg}`);
   console.log(`  Not found       : ${stats.notFound}`);
   console.log(`  Total updated   : ${totalFound}`);
