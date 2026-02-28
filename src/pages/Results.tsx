@@ -2,15 +2,23 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Bookmark, BookmarkCheck, ChevronRight, Copy, Download, RefreshCw, Loader2 } from 'lucide-react';
 
-/** Returns the best external link URL for a funder's next step, or null if none available.
- *  - Uses next_step_url only if it's a real external http(s) URL (not an internal app route)
- *  - Falls back to funder.website
- *  - Returns null when neither is available (text shown without a link)
+/** Normalise a URL string to a fully-qualified external URL, or null.
+ *  - Already http(s): returned as-is
+ *  - Starts with '/': internal app route → rejected (returns null)
+ *  - Bare domain like "cct.org": https:// prepended
+ *  - Empty / null: returns null
  */
+function toExternalUrl(url: string | null | undefined): string | null {
+  const s = url?.trim();
+  if (!s) return null;
+  if (s.startsWith('/')) return null;          // internal route — never use
+  if (s.startsWith('http')) return s;          // already absolute
+  return `https://${s}`;                        // bare domain e.g. cct.org
+}
+
+/** Best external link for a funder's next step: prefers next_step_url, falls back to website. */
 function resolveNextStepUrl(nextStepUrl: string | undefined, website: string | null): string | null {
-  if (nextStepUrl?.startsWith('http')) return nextStepUrl;
-  if (website?.startsWith('http')) return website;
-  return null;
+  return toExternalUrl(nextStepUrl) ?? toExternalUrl(website);
 }
 import { findMatches, formatGrantRange, formatTotalGiving } from '../utils/matching';
 import { Funder } from '../types';
