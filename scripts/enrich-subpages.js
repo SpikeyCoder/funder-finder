@@ -20,7 +20,7 @@
  *   LIMIT=20 node scripts/enrich-subpages.js     # only first 20
  *   DRY_RUN=1 node scripts/enrich-subpages.js    # print without writing
  *   VERBOSE=1 node scripts/enrich-subpages.js    # detailed logging
- *   EIN=362170941 node scripts/enrich-subpages.js # single funder by EIN
+ *   ID=<funder-id> node scripts/enrich-subpages.js # single funder by id
  */
 
 const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
@@ -28,7 +28,7 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const DRY_RUN = process.env.DRY_RUN === '1';
 const VERBOSE = process.env.VERBOSE === '1';
 const LIMIT = parseInt(process.env.LIMIT || '500', 10);
-const EIN_FILTER = process.env.EIN || null;
+const ID_FILTER = process.env.ID || null;  // filter to a single funder by id
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error('❌  Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in .env');
@@ -173,15 +173,15 @@ async function findSubpageUrl(funder, subpageType) {
 
 async function fetchFunders() {
   let url;
-  if (EIN_FILTER) {
-    url = `${SUPABASE_URL}/rest/v1/funders?ein=eq.${EIN_FILTER}&select=id,name,ein,website,contact_url,programs_url,apply_url,news_url`;
+  if (ID_FILTER) {
+    url = `${SUPABASE_URL}/rest/v1/funders?id=eq.${ID_FILTER}&select=id,name,website,contact_url,programs_url,apply_url,news_url`;
   } else {
     // Fetch funders that have a website but are missing at least one subpage URL
     url =
       `${SUPABASE_URL}/rest/v1/funders` +
       `?website=not.is.null` +
       `&or=(contact_url.is.null,programs_url.is.null,apply_url.is.null,news_url.is.null)` +
-      `&select=id,name,ein,website,contact_url,programs_url,apply_url,news_url` +
+      `&select=id,name,website,contact_url,programs_url,apply_url,news_url` +
       `&order=total_giving.desc.nullslast` +
       `&limit=${LIMIT}`;
   }
