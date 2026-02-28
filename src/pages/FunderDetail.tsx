@@ -141,11 +141,14 @@ export default function FunderDetail() {
                 <h2 className="text-lg font-semibold mb-3">Recommended Next Step</h2>
                 <div className="bg-[#0d1117] border border-blue-800 rounded-xl px-5 py-4 text-blue-300">
                   {(() => {
-                    // Only use next_step_url if it's a real external URL; fall back to funder.website
-                    const linkUrl =
-                      (funder.next_step_url?.startsWith('http') ? funder.next_step_url : null) ??
-                      funder.website ??
-                      null;
+                    // Normalise to a fully-qualified external URL (prepend https:// for bare domains;
+                    // reject internal routes starting with '/').
+                    const toExtUrl = (u: string | null | undefined) => {
+                      const s = u?.trim();
+                      if (!s || s.startsWith('/')) return null;
+                      return s.startsWith('http') ? s : `https://${s}`;
+                    };
+                    const linkUrl = toExtUrl(funder.next_step_url) ?? toExtUrl(funder.website);
                     return linkUrl ? (
                       <a
                         href={linkUrl}
