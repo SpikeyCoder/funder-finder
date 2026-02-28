@@ -1,21 +1,57 @@
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { ArrowLeft, BookmarkX, Download, ChevronRight } from 'lucide-react';
+import { ArrowLeft, BookmarkX, Download, ChevronRight, Loader2, LogOut, User as UserIcon } from 'lucide-react';
 import { Funder } from '../types';
 import { getSavedFunders, unsaveFunder } from '../utils/storage';
 import { formatTotalGiving } from '../utils/matching';
+import { useAuth } from '../contexts/AuthContext';
+import LoginModal from '../components/LoginModal';
 
 export default function SavedFunders() {
   const navigate = useNavigate();
+  const { user, signOut, fetchSavedFunders, unsaveFunderFromDB } = useAuth();
+
   const [saved, setSaved] = useState<Funder[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showLoginModal, setShowLoginModal] = useState(false);
 
   useEffect(() => {
-    setSaved(getSavedFunders());
-  }, []);
+    loadSaved();
+  }, [user]);
 
-  const remove = (id: string) => {
-    unsaveFunder(id);
+  const loadSaved = async () => {
+    setLoading(true);
+    if (user) {
+      try {
+        const funders = await fetchSavedFunders();
+        setSaved(funders);
+      } catch (e) {
+        console.error('Failed to load saved funders from DB:', e);
+        // Fall back to localStorage
+        setSaved(getSavedFunders());
+      }
+    } else {
+      setSaved(getSavedFunders());
+    }
+    setLoading(false);
+  };
+
+  const remove = async (id: string) => {
+    if (user) {
+      try {
+        await unsaveFunderFromDB(id);
+      } catch (e) {
+        console.error('Failed to remove from DB:', e);
+      }
+    } else {
+      unsaveFunder(id);
+    }
     setSaved(prev => prev.filter(f => f.id !== id));
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    setSaved(getSavedFunders()); // switch to local view
   };
 
   const exportCSV = () => {
@@ -55,20 +91,65 @@ export default function SavedFunders() {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold">Saved Funders</h1>
-            <p className="text-gray-400 mt-1">{saved.length} funder{saved.length !== 1 ? 's' : ''} saved</p>
+            {!loading && (
+              <p className="text-gray-400 mt-1">{saved.length} funder{saved.length !== 1 ? 's' : ''} saved</p>
+            )}
           </div>
-          {saved.length > 0 && (
-            <button
-              onClick={exportCSV}
-              className="flex items-center gap-2 border border-[#30363d] rounded-xl px-4 py-2 text-sm hover:bg-[#161b22] transition-colors"
-            >
-              <Download size={16} />
-              Export CSV
-            </button>
-          )}
+          <div className="flex items-center gap-3">
+            {saved.length > 0 && (
+              <button
+                onClick={exportCSV}
+                className="flex items-center gap-2 border border-[#30363d] rounded-xl px-4 py-2 text-sm hover:bg-[#161b22] transition-colors"
+              >
+                <Download size={16} />
+                Export CSV
+              </button>
+            )}
+            {user ? (
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 text-sm text-gray-400 border border-[#30363d] rounded-xl px-3 py-2">
+                  <UserIcon size={14} />
+                  <span className="max-w-[140px] truncate">{user.email}</span>
+                </div>
+                <button
+                  onClick={handleSignOut}
+                  className="flex items-center gap-2 border border-[#30363d] rounded-xl px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-[#161b22] transition-colors"
+                  title="Sign out"
+                >
+                  <LogOut size={14} />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowLoginModal(true)}
+                className="flex items-center gap-2 border border-blue-700 text-blue-400 rounded-xl px-4 py-2 text-sm hover:bg-blue-900/20 transition-colors"
+              >
+                Log in to sync
+              </button>
+            )}
+          </div>
         </div>
 
-        {saved.length === 0 ? (
+        {/* Auth callout for anonymous users who have saved funders */}
+        {!user && saved.length > 0 && (
+          <div className="mb-6 bg-blue-900/10 border border-blue-800/40 rounded-xl px-5 py-4 flex items-center justify-between gap-4">
+            <p className="text-sm text-blue-300">
+              Log in to sync your saved funders across all your devices.
+            </p>
+            <button
+              onClick={() => setShowLoginModal(true)}
+              className="shrink-0 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-xl px-4 py-2 transition-colors"
+            >
+              Log in
+            </button>
+          </div>
+        )}
+
+        {loading ? (
+          <div className="flex justify-center py-24">
+            <Loader2 size={32} className="animate-spin text-blue-400" />
+          </div>
+        ) : saved.length === 0 ? (
           <div className="text-center py-24 text-gray-500">
             <p className="text-2xl mb-3">No saved funders yet</p>
             <p className="mb-6">Save funders from your search results to keep track of them here.</p>
@@ -130,6 +211,11 @@ export default function SavedFunders() {
           </div>
         )}
       </div>
+
+      {/* Login modal */}
+      {showLoginModal && (
+        <LoginModal onClose={() => setShowLoginModal(false)} />
+      )}
     </div>
   );
 }

@@ -4,21 +4,34 @@ import { ArrowLeft, Bookmark, BookmarkCheck, Copy, Globe, MapPin, User, Mail, Tr
 import { Funder } from '../types';
 import { isSaved, saveFunder, unsaveFunder } from '../utils/storage';
 import { formatGrantRange, formatTotalGiving } from '../utils/matching';
+import { useAuth } from '../contexts/AuthContext';
+import LoginModal from '../components/LoginModal';
 
 export default function FunderDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
   const { funder: funderFromState, mission = '', keywords = [] } = location.state || {};
+  const { user, saveFunderToDB, unsaveFunderFromDB } = useAuth();
 
   // Use funder passed in navigation state (avoids extra DB call)
   const [funder] = useState<Funder | null>(funderFromState || null);
   const [saved, setSaved] = useState(false);
   const [copiedEmail, setCopiedEmail] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
 
   useEffect(() => {
-    if (id) setSaved(isSaved(id));
-  }, [id]);
+    if (id) {
+      if (user) {
+        // For logged-in users, we check the DB; but a quick sync from the
+        // Results page has already loaded savedIds. For simplicity here
+        // we fall back to localStorage state which is synced in Results.
+        setSaved(isSaved(id));
+      } else {
+        setSaved(isSaved(id));
+      }
+    }
+  }, [id, user]);
 
   if (!funder) return (
     <div className="min-h-screen bg-[#0d1117] text-white flex items-center justify-center">
@@ -30,9 +43,36 @@ export default function FunderDetail() {
     </div>
   );
 
-  const toggleSave = () => {
-    if (saved) { unsaveFunder(funder.id); setSaved(false); }
-    else { saveFunder(funder); setSaved(true); }
+  const toggleSave = async () => {
+    if (user) {
+      // Authenticated path — use DB
+      if (saved) {
+        try {
+          await unsaveFunderFromDB(funder.id);
+          unsaveFunder(funder.id); // keep localStorage in sync
+          setSaved(false);
+        } catch (e) {
+          console.error('Failed to unsave from DB:', e);
+        }
+      } else {
+        try {
+          await saveFunderToDB(funder);
+          saveFunder(funder); // keep localStorage in sync
+          setSaved(true);
+        } catch (e) {
+          console.error('Failed to save to DB:', e);
+        }
+      }
+    } else {
+      // Anonymous path
+      if (saved) {
+        unsaveFunder(funder.id);
+        setSaved(false);
+      } else {
+        // Show login modal; funder will be auto-saved after OAuth redirect
+        setShowLoginModal(true);
+      }
+    }
   };
 
   const copyEmail = () => {
@@ -255,6 +295,14 @@ export default function FunderDetail() {
           </button>
         </div>
       </div>
+
+      {/* Login modal — shown when anonymous user tries to save */}
+      {showLoginModal && (
+        <LoginModal
+          pendingFunder={funder}
+          onClose={() => setShowLoginModal(false)}
+        />
+      )}
     </div>
   );
 }
