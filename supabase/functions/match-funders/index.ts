@@ -188,6 +188,7 @@ Respond with ONLY the JSON array, no markdown, no explanation.`;
       headers: { Prefer: 'resolution=merge-duplicates' },
       body: JSON.stringify({
         mission_hash: cacheKey,
+        mission_text: mission,
         results,
         created_at: new Date().toISOString(),
       }),
