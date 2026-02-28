@@ -141,10 +141,15 @@ export default function FunderDetail() {
                 <h2 className="text-lg font-semibold mb-3">Recommended Next Step</h2>
                 <div className="bg-[#0d1117] border border-blue-800 rounded-xl px-5 py-4 text-blue-300">
                   {(() => {
-                    // Normalise to a fully-qualified external URL (prepend https:// for bare domains;
-                    // reject internal routes starting with '/').
+                    // Normalise to a fully-qualified external URL:
+                    //  - Strip stale cached GitHub Pages funder paths (e.g. https://...github.io/.../funder/cct.org)
+                    //  - Reject internal routes starting with '/'
+                    //  - Prepend https:// for bare domains (e.g. cct.org)
+                    const STALE_RE = /^https?:\/\/[^/]*\.github\.io\/[^/]+\/funder\//;
                     const toExtUrl = (u: string | null | undefined) => {
-                      const s = u?.trim();
+                      let s = u?.trim();
+                      if (!s) return null;
+                      s = s.replace(STALE_RE, '');
                       if (!s || s.startsWith('/')) return null;
                       return s.startsWith('http') ? s : `https://${s}`;
                     };
