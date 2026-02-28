@@ -1,10 +1,16 @@
-import { useLocation, useNavigate, Link } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Bookmark, BookmarkCheck, ChevronRight, Copy, Download, RefreshCw, Loader2 } from 'lucide-react';
 
-/** Returns true if the URL is an internal app path (starts with '/') */
-function isInternalPath(url: string): boolean {
-  return url.startsWith('/');
+/** Returns the best external link URL for a funder's next step, or null if none available.
+ *  - Uses next_step_url only if it's a real external http(s) URL (not an internal app route)
+ *  - Falls back to funder.website
+ *  - Returns null when neither is available (text shown without a link)
+ */
+function resolveNextStepUrl(nextStepUrl: string | undefined, website: string | null): string | null {
+  if (nextStepUrl?.startsWith('http')) return nextStepUrl;
+  if (website?.startsWith('http')) return website;
+  return null;
 }
 import { findMatches, formatGrantRange, formatTotalGiving } from '../utils/matching';
 import { Funder } from '../types';
@@ -242,28 +248,21 @@ export default function Results() {
                   {funder.next_step && (
                     <div className="bg-[#0d1117] border border-[#30363d] rounded-xl px-4 py-3 mb-4 text-sm">
                       <span className="text-gray-400">Best next step: </span>
-                      {funder.next_step_url ? (
-                        isInternalPath(funder.next_step_url) ? (
-                          <Link
-                            to={funder.next_step_url}
-                            state={{ funder, mission, keywords }}
-                            className="text-blue-400 hover:text-blue-300 underline underline-offset-2 transition-colors"
-                          >
-                            {funder.next_step}
-                          </Link>
-                        ) : (
+                      {(() => {
+                        const linkUrl = resolveNextStepUrl(funder.next_step_url, funder.website);
+                        return linkUrl ? (
                           <a
-                            href={funder.next_step_url}
+                            href={linkUrl}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-blue-400 hover:text-blue-300 underline underline-offset-2 transition-colors"
                           >
                             {funder.next_step}
                           </a>
-                        )
-                      ) : (
-                        <span className="text-blue-400">{funder.next_step}</span>
-                      )}
+                        ) : (
+                          <span className="text-blue-400">{funder.next_step}</span>
+                        );
+                      })()}
                     </div>
                   )}
 

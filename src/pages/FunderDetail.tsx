@@ -1,4 +1,4 @@
-import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Bookmark, BookmarkCheck, Copy, Globe, MapPin, User, Mail, TrendingUp } from 'lucide-react';
 import { Funder } from '../types';
@@ -140,28 +140,25 @@ export default function FunderDetail() {
               <div className="mb-6">
                 <h2 className="text-lg font-semibold mb-3">Recommended Next Step</h2>
                 <div className="bg-[#0d1117] border border-blue-800 rounded-xl px-5 py-4 text-blue-300">
-                  {funder.next_step_url ? (
-                    funder.next_step_url.startsWith('/') ? (
-                      <Link
-                        to={funder.next_step_url}
-                        state={{ funder, mission, keywords }}
-                        className="hover:text-blue-200 underline underline-offset-2 transition-colors"
-                      >
-                        {funder.next_step}
-                      </Link>
-                    ) : (
+                  {(() => {
+                    // Only use next_step_url if it's a real external URL; fall back to funder.website
+                    const linkUrl =
+                      (funder.next_step_url?.startsWith('http') ? funder.next_step_url : null) ??
+                      funder.website ??
+                      null;
+                    return linkUrl ? (
                       <a
-                        href={funder.next_step_url}
+                        href={linkUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="hover:text-blue-200 underline underline-offset-2 transition-colors"
                       >
                         {funder.next_step}
                       </a>
-                    )
-                  ) : (
-                    funder.next_step
-                  )}
+                    ) : (
+                      funder.next_step
+                    );
+                  })()}
                 </div>
               </div>
               <hr className="border-[#30363d] mb-6" />
