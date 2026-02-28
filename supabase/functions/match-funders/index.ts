@@ -79,7 +79,7 @@ Deno.serve(async (req) => {
     // ── 1. Cache check ────────────────────────────────────────────────────────
     if (!forceRefresh) {
       const cacheRes = await sbFetch(
-        `search_cache?cache_key=eq.${encodeURIComponent(cacheKey)}&select=results,created_at&limit=1`,
+        `search_cache?mission_hash=eq.${encodeURIComponent(cacheKey)}&select=results,created_at&limit=1`,
       );
       const cached = await cacheRes.json();
       if (cached?.length) {
@@ -187,7 +187,7 @@ Respond with ONLY the JSON array, no markdown, no explanation.`;
       method: 'POST',
       headers: { Prefer: 'resolution=merge-duplicates' },
       body: JSON.stringify({
-        cache_key: cacheKey,
+        mission_hash: cacheKey,
         results,
         created_at: new Date().toISOString(),
       }),
