@@ -29,7 +29,7 @@ function resolveNextStepUrl(nextStepUrl: string | undefined, website: string | n
 }
 import { findMatches, formatGrantRange, formatTotalGiving } from '../utils/matching';
 import { Funder } from '../types';
-import { getSavedIds, saveFunder, unsaveFunder } from '../utils/storage';
+import { getSavedIds, unsaveFunder } from '../utils/storage';
 import { useAuth } from '../contexts/AuthContext';
 import LoginModal from '../components/LoginModal';
 
