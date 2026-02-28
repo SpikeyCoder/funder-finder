@@ -21,4 +21,10 @@ export interface Funder {
   score?: number;
   reason?: string;
   next_step_url?: string;
+  next_step_type?: string;
+  // Subpage URLs (populated by enrich-subpages.js)
+  contact_url?: string | null;
+  programs_url?: string | null;
+  apply_url?: string | null;
+  news_url?: string | null;
 }

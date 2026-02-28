@@ -30,10 +30,14 @@ function resolveNextStepUrl(nextStepUrl: string | undefined, website: string | n
 import { findMatches, formatGrantRange, formatTotalGiving } from '../utils/matching';
 import { Funder } from '../types';
 import { getSavedIds, saveFunder, unsaveFunder } from '../utils/storage';
+import { useAuth } from '../contexts/AuthContext';
+import LoginModal from '../components/LoginModal';
 
 export default function Results() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, saveFunderToDB, unsaveFunderFromDB, fetchSavedIds } = useAuth();
+
   // Use router state if available, fall back to sessionStorage (survives page reloads)
   const state = location.state || {};
   const mission: string = state.mission || sessionStorage.getItem('ff_mission') || '';
@@ -46,6 +50,9 @@ export default function Results() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cached, setCached] = useState(false);
+
+  // Login modal state
+  const [loginModalFunder, setLoginModalFunder] = useState<Funder | null>(null);
 
   const loadMatches = async (forceRefresh = false) => {
     if (!mission) {
@@ -66,18 +73,54 @@ export default function Results() {
     }
   };
 
+  // Load saved IDs — from DB if logged in, from localStorage if not
+  const loadSavedIds = async () => {
+    if (user) {
+      try {
+        const ids = await fetchSavedIds();
+        setSavedIds(ids);
+        return;
+      } catch {
+        // fall through to localStorage
+      }
+    }
+    setSavedIds(getSavedIds());
+  };
+
   useEffect(() => {
     loadMatches();
-    setSavedIds(getSavedIds());
-  }, [mission]);
+    loadSavedIds();
+  }, [mission, user]);
 
-  const toggleSave = (funder: Funder) => {
-    if (savedIds.includes(funder.id)) {
-      unsaveFunder(funder.id);
-      setSavedIds(prev => prev.filter(i => i !== funder.id));
+  const toggleSave = async (funder: Funder) => {
+    const alreadySaved = savedIds.includes(funder.id);
+
+    if (user) {
+      // Authenticated path — use DB
+      if (alreadySaved) {
+        try {
+          await unsaveFunderFromDB(funder.id);
+          setSavedIds(prev => prev.filter(i => i !== funder.id));
+        } catch (e) {
+          console.error('Failed to unsave from DB:', e);
+        }
+      } else {
+        try {
+          await saveFunderToDB(funder);
+          setSavedIds(prev => [...prev, funder.id]);
+        } catch (e) {
+          console.error('Failed to save to DB:', e);
+        }
+      }
     } else {
-      saveFunder(funder);
-      setSavedIds(prev => [...prev, funder.id]);
+      // Anonymous path — show login modal (if saving), or unsave from localStorage
+      if (alreadySaved) {
+        unsaveFunder(funder.id);
+        setSavedIds(prev => prev.filter(i => i !== funder.id));
+      } else {
+        // Prompt login; the funder will be auto-saved after OAuth redirect
+        setLoginModalFunder(funder);
+      }
     }
   };
 
@@ -323,6 +366,14 @@ export default function Results() {
           </div>
         )}
       </div>
+
+      {/* Login modal — shown when anonymous user tries to save */}
+      {loginModalFunder && (
+        <LoginModal
+          pendingFunder={loginModalFunder}
+          onClose={() => setLoginModalFunder(null)}
+        />
+      )}
     </div>
   );
 }
