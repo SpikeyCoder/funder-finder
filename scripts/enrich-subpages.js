@@ -23,10 +23,7 @@
  *   EIN=362170941 node scripts/enrich-subpages.js # single funder by EIN
  */
 
-import 'dotenv/config';
-import fetch from 'node-fetch';
-
-const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const DRY_RUN = process.env.DRY_RUN === '1';
 const VERBOSE = process.env.VERBOSE === '1';
