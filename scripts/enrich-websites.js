@@ -7,7 +7,7 @@
  * Lookup strategy (in order, stops at first hit):
  *   1. ProPublica organization.website  (direct from org record)
  *   2. ProPublica filings_with_data[*].websiteaddress  (IRS 990 field)
- *   3. Google Custom Search API  (requires GOOGLE_API_KEY + GOOGLE_CX env vars)
+ *   3. Google Knowledge Graph Search API  (free, 100k/day — requires GOOGLE_API_KEY)
  *   4. DuckDuckGo Instant Answer API  (free, no key required)
  *
  * Usage:
@@ -17,8 +17,7 @@
  *   SUPABASE_SERVICE_ROLE_KEY  – Supabase service role key
  *
  * Optional env vars:
- *   GOOGLE_API_KEY  – Google Custom Search API key (enables layer 3)
- *   GOOGLE_CX       – Google Programmable Search Engine ID (enables layer 3)
+ *   GOOGLE_API_KEY  – Google API key (enables Knowledge Graph layer, 100k/day free)
  *   LIMIT           – max funders to process per run (default 200)
  *   DRY_RUN=1       – log but don't write to DB
  *   VERBOSE=1       – print raw ProPublica response for first funder
@@ -33,7 +32,6 @@
 const SUPABASE_URL  = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const SUPABASE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY || 'REDACTED_ROTATE_IN_GOOGLE_CLOUD_CONSOLE';
-const GOOGLE_CX     = process.env.GOOGLE_CX      || '32a112ff11dc64e78';
 const LIMIT         = parseInt(process.env.LIMIT  || '200', 10);
 const DRY_RUN       = process.env.DRY_RUN  === '1';
 const VERBOSE       = process.env.VERBOSE  === '1';
@@ -156,47 +154,48 @@ async function lookupProPublica(ein) {
   }
 }
 
-// ─── Source 3: Google Custom Search API ──────────────────────────────────────
+// ─── Source 3: Google Knowledge Graph Search API ─────────────────────────────
 
 /**
- * Use the Google Custom Search JSON API to find the most likely homepage.
- * Requires GOOGLE_API_KEY and GOOGLE_CX env vars (or the defaults baked in).
- * Free tier: 100 queries/day. Returns first result URL, or null.
+ * Use the Google Knowledge Graph Search API to find the official website.
+ * Requires only GOOGLE_API_KEY (same key used elsewhere — no separate PSE setup).
+ * Free tier: 100,000 queries/day (vs 100/day for PSE).
  *
- * Search engine is configured to search the entire web
- * (cx: 32a112ff11dc64e78 — "Funder Finder - Nonprofit Website Lookup").
+ * The Knowledge Graph returns authoritative entity data for organisations,
+ * including their official URL. Much more reliable than web-search scraping
+ * for well-known foundations and nonprofits.
  */
-async function lookupGoogle(name) {
-  if (!GOOGLE_API_KEY || !GOOGLE_CX) return null;
+async function lookupKnowledgeGraph(name) {
+  if (!GOOGLE_API_KEY) return null;
   try {
-    const query = encodeURIComponent(`${name} nonprofit foundation`);
-    const apiUrl = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${GOOGLE_CX}&q=${query}&num=1`;
+    const query = encodeURIComponent(name);
+    const apiUrl = `https://kgsearch.googleapis.com/v1/entities:search?query=${query}&key=${GOOGLE_API_KEY}&limit=3&types=Organization`;
     const res = await fetch(apiUrl);
 
     if (!res.ok) {
       const err = await res.text();
-      console.warn(`  [Google] API error ${res.status}: ${err.slice(0, 300)}`);
+      console.warn(`  [KG] API error ${res.status}: ${err.slice(0, 300)}`);
       return null;
     }
 
     const data = await res.json();
 
     if (VERBOSE) {
-      console.log('\n── Google raw response (first funder) ──');
+      console.log('\n── Knowledge Graph raw response ──');
       console.log(JSON.stringify(data, null, 2).slice(0, 2000));
-      console.log('─────────────────────────────────────────\n');
+      console.log('──────────────────────────────────\n');
     }
 
-    // Warn if the engine is still restricted to a single site (misconfigured)
-    if (data?.queries?.request?.[0]?.totalResults === '0') {
-      if (VERBOSE) console.warn(`  [Google] 0 results returned — check PSE "Search entire web" setting`);
-      return null;
+    const items = data?.itemListElement || [];
+    for (const item of items) {
+      // Only use results with a reasonable confidence score
+      if ((item.resultScore || 0) < 5) continue;
+      const url = normalizeUrl(item?.result?.url || '');
+      if (url && looksLikeUrl(url)) return url;
     }
-
-    const url = data?.items?.[0]?.link;
-    return looksLikeUrl(url) ? url : null;
+    return null;
   } catch (e) {
-    console.warn(`  [Google] Exception: ${e.message}`);
+    console.warn(`  [KG] Exception: ${e.message}`);
     return null;
   }
 }
@@ -242,19 +241,19 @@ async function lookupDuckDuckGo(name) {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const googleEnabled = !!(GOOGLE_API_KEY && GOOGLE_CX);
+  const kgEnabled = !!GOOGLE_API_KEY;
   console.log(
     `Enriching up to ${LIMIT} funders without websites…` +
-    (DRY_RUN       ? ' [DRY RUN]'  : '') +
-    (VERBOSE       ? ' [VERBOSE]'  : '') +
-    (googleEnabled ? ' [Google Custom Search enabled]' : ' [Google disabled — set GOOGLE_API_KEY + GOOGLE_CX]') +
+    (DRY_RUN  ? ' [DRY RUN]'  : '') +
+    (VERBOSE  ? ' [VERBOSE]'  : '') +
+    (kgEnabled ? ' [Knowledge Graph enabled]' : ' [Knowledge Graph disabled — set GOOGLE_API_KEY]') +
     '\n'
   );
 
   const funders = await getFundersWithoutWebsite();
   console.log(`Found ${funders.length} funders to process.\n`);
 
-  const stats = { propublica: 0, google: 0, ddg: 0, notFound: 0 };
+  const stats = { propublica: 0, kg: 0, ddg: 0, notFound: 0 };
   let verboseDone = false;
 
   for (const { id, name } of funders) {
@@ -277,17 +276,17 @@ async function main() {
 
     await sleep(PROPUBLICA_DELAY_MS);
 
-    // ── Layer 3: Google Custom Search ──
-    const googleUrl = await lookupGoogle(name);
-    if (googleUrl) {
-      console.log(`✅  [Google]     ${name} (${id}) → ${googleUrl}`);
-      if (!DRY_RUN) await updateWebsite(id, googleUrl);
-      stats.google++;
+    // ── Layer 3: Google Knowledge Graph ──
+    const kgUrl = await lookupKnowledgeGraph(name);
+    if (kgUrl) {
+      console.log(`✅  [KnowledgeGraph] ${name} (${id}) → ${kgUrl}`);
+      if (!DRY_RUN) await updateWebsite(id, kgUrl);
+      stats.kg++;
       await sleep(SEARCH_DELAY_MS);
       continue;
     }
 
-    if (googleEnabled) await sleep(SEARCH_DELAY_MS);
+    if (kgEnabled) await sleep(SEARCH_DELAY_MS);
 
     // ── Layer 4: DuckDuckGo ──
     const ddgUrl = await lookupDuckDuckGo(name);
@@ -305,11 +304,11 @@ async function main() {
     stats.notFound++;
   }
 
-  const totalFound = stats.propublica + stats.google + stats.ddg;
+  const totalFound = stats.propublica + stats.kg + stats.ddg;
 
   console.log('\n── Summary ─────────────────────────────────────');
   console.log(`  ProPublica hits : ${stats.propublica}`);
-  console.log(`  Google hits     : ${stats.google}`);
+  console.log(`  Knowledge Graph : ${stats.kg}`);
   console.log(`  DuckDuckGo hits : ${stats.ddg}`);
   console.log(`  Not found       : ${stats.notFound}`);
   console.log(`  Total updated   : ${totalFound}`);
