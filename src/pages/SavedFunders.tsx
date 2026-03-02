@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { useEffect, useState, useRef } from 'react';
 import {
   ArrowLeft, BookmarkX, Download, ChevronRight, Loader2,
-  LogOut, User as UserIcon, StickyNote, ChevronDown, ChevronUp,
+  LogOut, PenLine, User as UserIcon, StickyNote, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { SavedFunderEntry, FunderStatus } from '../types';
 import { getSavedEntries, unsaveFunder, setFunderMeta } from '../utils/storage';
@@ -378,7 +378,7 @@ export default function SavedFunders() {
                       )}
 
                       {/* Actions row */}
-                      <div className="flex gap-3 mt-4">
+                      <div className="flex gap-3 mt-4 flex-wrap">
                         <button
                           onClick={() => remove(f.id)}
                           className="flex items-center gap-2 border border-red-900 text-red-400 rounded-xl px-4 py-2 text-sm hover:bg-red-900/20 transition-colors"
@@ -386,6 +386,15 @@ export default function SavedFunders() {
                           <BookmarkX size={14} />
                           Remove
                         </button>
+                        {user && (
+                          <button
+                            onClick={() => navigate('/grant-writer', { state: { funder: f } })}
+                            className="flex items-center gap-2 border border-purple-700 text-purple-400 rounded-xl px-4 py-2 text-sm hover:bg-purple-900/20 transition-colors"
+                          >
+                            <PenLine size={14} />
+                            Write Grant
+                          </button>
+                        )}
                         <button
                           onClick={() => navigate(`/funder/${f.id}`, { state: { funder: f } })}
                           className="flex items-center gap-2 border border-[#30363d] rounded-xl px-4 py-2 text-sm hover:bg-[#21262d] transition-colors ml-auto"
