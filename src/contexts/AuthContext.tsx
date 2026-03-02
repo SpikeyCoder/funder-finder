@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
-import { Funder } from '../types';
+import { Funder, FunderStatus, SavedFunderEntry } from '../types';
 
 // The OAuth redirect URL must match what is registered in Supabase dashboard
 // and in each OAuth provider's allowed redirect URIs.
@@ -34,6 +34,10 @@ interface AuthContextValue {
   fetchSavedFunders: () => Promise<Funder[]>;
   /** Fetch saved funder IDs only (lightweight, used for badge indicators). */
   fetchSavedIds: () => Promise<string[]>;
+  /** Fetch saved funders with status and notes. */
+  fetchSavedEntries: () => Promise<SavedFunderEntry[]>;
+  /** Update status and/or notes for a saved funder. */
+  updateSavedFunder: (funderId: string, updates: { status?: FunderStatus; notes?: string }) => Promise<void>;
 }
 
 // ── Context ───────────────────────────────────────────────────────────────────
@@ -131,6 +135,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return (data ?? []).map((row: any) => row.funder_id as string);
   }, []);
 
+  const fetchSavedEntries = useCallback(async (): Promise<SavedFunderEntry[]> => {
+    const { data, error } = await supabase
+      .from('saved_funders')
+      .select('funder_data, status, notes, saved_at')
+      .order('saved_at', { ascending: false });
+    if (error) throw error;
+    return (data ?? []).map((row: any) => ({
+      funder: row.funder_data as Funder,
+      status: (row.status ?? 'researching') as FunderStatus,
+      notes: row.notes ?? '',
+      savedAt: row.saved_at ?? '',
+    }));
+  }, []);
+
+  const updateSavedFunder = useCallback(async (
+    funderId: string,
+    updates: { status?: FunderStatus; notes?: string }
+  ) => {
+    const userId = (await supabase.auth.getUser()).data.user?.id;
+    if (!userId) throw new Error('Not authenticated');
+    const { error } = await supabase
+      .from('saved_funders')
+      .update(updates)
+      .eq('user_id', userId)
+      .eq('funder_id', funderId);
+    if (error) throw error;
+  }, []);
+
   // ── OAuth sign-in ────────────────────────────────────────────────────────────
 
   const signInWith = async (
@@ -214,6 +246,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         unsaveFunderFromDB,
         fetchSavedFunders,
         fetchSavedIds,
+        fetchSavedEntries,
+        updateSavedFunder,
       }}
     >
       {children}
