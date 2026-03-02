@@ -50,6 +50,7 @@ export default function Results() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cached, setCached] = useState(false);
+  const [grantSizeFilter, setGrantSizeFilter] = useState<'any' | 'small' | 'medium' | 'large'>('any');
 
   // Login modal state
   const [loginModalFunder, setLoginModalFunder] = useState<Funder | null>(null);
@@ -157,6 +158,24 @@ export default function Results() {
     a.click();
   };
 
+  // Grant size filter — uses grant_range_max as primary signal, falls back to grant_range_min
+  const filteredMatches = matches.filter(f => {
+    if (grantSizeFilter === 'any') return true;
+    const effectiveMax = f.grant_range_max ?? f.grant_range_min;
+    if (effectiveMax === null) return grantSizeFilter === 'any'; // no data → only show under "Any"
+    if (grantSizeFilter === 'small')  return effectiveMax <= 25_000;
+    if (grantSizeFilter === 'medium') return effectiveMax > 25_000 && effectiveMax <= 250_000;
+    if (grantSizeFilter === 'large')  return effectiveMax > 250_000;
+    return true;
+  });
+
+  const GRANT_SIZE_FILTERS: { key: 'any' | 'small' | 'medium' | 'large'; label: string }[] = [
+    { key: 'any',    label: 'Any size' },
+    { key: 'small',  label: '< $25K' },
+    { key: 'medium', label: '$25K – $250K' },
+    { key: 'large',  label: '$250K+' },
+  ];
+
   return (
     <div className="min-h-screen bg-[#0d1117] text-white py-12 px-6">
       <div className="max-w-3xl mx-auto">
@@ -166,7 +185,7 @@ export default function Results() {
             <h1 className="text-3xl font-bold">Your Funder Matches</h1>
             {!loading && (
               <p className="text-gray-400 mt-1">
-                Found {matches.length} funders aligned with your mission
+                Found {filteredMatches.length} funders aligned with your mission
                 {cached && <span className="ml-2 text-xs text-gray-500">(cached)</span>}
               </p>
             )}
@@ -193,11 +212,36 @@ export default function Results() {
 
         <button
           onClick={() => navigate('/mission')}
-          className="flex items-center gap-1 text-gray-400 hover:text-white text-sm mb-8 transition-colors"
+          className="flex items-center gap-1 text-gray-400 hover:text-white text-sm transition-colors"
         >
           <ArrowLeft size={16} />
           Update Search
         </button>
+
+        {/* Grant size filter pills */}
+        {!loading && !error && matches.length > 0 && (
+          <div className="flex items-center gap-2 mt-4 mb-8 flex-wrap">
+            <span className="text-xs text-gray-500 mr-1">Grant size:</span>
+            {GRANT_SIZE_FILTERS.map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setGrantSizeFilter(key)}
+                className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                  grantSizeFilter === key
+                    ? 'bg-blue-600 border-blue-500 text-white font-semibold'
+                    : 'border-[#30363d] text-gray-400 hover:border-gray-500 hover:text-gray-200'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+            {grantSizeFilter !== 'any' && (
+              <span className="text-xs text-gray-500 ml-1">
+                — showing {filteredMatches.length} of {matches.length}
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Loading state */}
         {loading && (
@@ -224,23 +268,38 @@ export default function Results() {
         )}
 
         {/* No results */}
-        {!loading && !error && matches.length === 0 && (
+        {!loading && !error && filteredMatches.length === 0 && (
           <div className="text-center py-24 text-gray-500">
-            <p className="text-2xl mb-3">No funders found</p>
-            <p className="mb-4 text-sm">The database may be empty. Run the ingestion script first.</p>
-            <button
-              onClick={() => navigate('/mission')}
-              className="bg-white text-gray-900 font-semibold px-6 py-3 rounded-xl hover:bg-gray-100 transition-colors"
-            >
-              Update Mission
-            </button>
+            {grantSizeFilter !== 'any' && matches.length > 0 ? (
+              <>
+                <p className="text-2xl mb-3">No funders in this size range</p>
+                <p className="mb-4 text-sm">Try a different grant size filter or view all results.</p>
+                <button
+                  onClick={() => setGrantSizeFilter('any')}
+                  className="bg-white text-gray-900 font-semibold px-6 py-3 rounded-xl hover:bg-gray-100 transition-colors"
+                >
+                  Show All Sizes
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-2xl mb-3">No funders found</p>
+                <p className="mb-4 text-sm">The database may be empty. Run the ingestion script first.</p>
+                <button
+                  onClick={() => navigate('/mission')}
+                  className="bg-white text-gray-900 font-semibold px-6 py-3 rounded-xl hover:bg-gray-100 transition-colors"
+                >
+                  Update Mission
+                </button>
+              </>
+            )}
           </div>
         )}
 
         {/* Funder Cards */}
-        {!loading && !error && matches.length > 0 && (
+        {!loading && !error && filteredMatches.length > 0 && (
           <div className="space-y-6">
-            {matches.map((funder, index) => {
+            {filteredMatches.map((funder, index) => {
               const isSaved = savedIds.includes(funder.id);
               const scorePercent = funder.score ? Math.round(funder.score * 100) : null;
               return (
