@@ -123,7 +123,7 @@ export default function FunderDetail() {
               <p className="text-xs text-blue-400 font-semibold mb-1">Why this funder matches your mission</p>
               <p className="text-gray-300 text-sm">{funder.reason}</p>
               {funder.score && (
-                <p className="text-xs text-gray-500 mt-2">Match score: {Math.round(funder.score * 100)}%</p>
+                <p className="text-xs text-gray-300 mt-2">Match score: {Math.round(funder.score * 100)}%</p>
               )}
             </div>
           )}
@@ -219,7 +219,7 @@ export default function FunderDetail() {
             <div className="space-y-5">
               {(funder.contact_name || funder.contact_title) && (
                 <div className="flex items-start gap-3">
-                  <User size={18} className="text-gray-500 mt-0.5" />
+                  <User size={18} className="text-gray-400 mt-0.5" />
                   <div>
                     {funder.contact_name && <p className="font-medium">{funder.contact_name}</p>}
                     {funder.contact_title && <p className="text-sm text-gray-400">{funder.contact_title}</p>}
@@ -229,7 +229,7 @@ export default function FunderDetail() {
 
               {funder.contact_email ? (
                 <div className="flex items-start gap-3">
-                  <Mail size={18} className="text-gray-500 mt-0.5" />
+                  <Mail size={18} className="text-gray-400 mt-0.5" />
                   <div>
                     <p className="text-gray-300">{funder.contact_email}</p>
                     <button
@@ -242,7 +242,7 @@ export default function FunderDetail() {
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center gap-3 text-gray-500">
+                <div className="flex items-center gap-3 text-gray-400">
                   <Mail size={18} />
                   <p className="text-sm">No direct email available</p>
                 </div>
@@ -250,7 +250,7 @@ export default function FunderDetail() {
 
               {(funder.city || funder.state) && (
                 <div className="flex items-center gap-3">
-                  <MapPin size={18} className="text-gray-500" />
+                  <MapPin size={18} className="text-gray-400" />
                   <p className="text-gray-300">
                     {[funder.city, funder.state].filter(Boolean).join(', ')}
                   </p>
@@ -259,7 +259,7 @@ export default function FunderDetail() {
 
               {funder.website ? (
                 <div className="flex items-center gap-3">
-                  <Globe size={18} className="text-gray-500" />
+                  <Globe size={18} className="text-gray-400" />
                   <a
                     href={funder.website.startsWith('http') ? funder.website : `https://${funder.website}`}
                     target="_blank"
@@ -270,7 +270,7 @@ export default function FunderDetail() {
                   </a>
                 </div>
               ) : (
-                <div className="flex items-center gap-3 text-gray-500">
+                <div className="flex items-center gap-3 text-gray-400">
                   <Globe size={18} />
                   <p className="text-sm">No website available</p>
                 </div>

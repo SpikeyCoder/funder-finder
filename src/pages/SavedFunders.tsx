@@ -238,7 +238,7 @@ export default function SavedFunders() {
             <Loader2 size={32} className="animate-spin text-blue-400" />
           </div>
         ) : entries.length === 0 ? (
-          <div className="text-center py-24 text-gray-500">
+          <div className="text-center py-24 text-gray-400">
             <p className="text-2xl mb-3">No saved funders yet</p>
             <p className="mb-6">Save funders from your search results to track them here.</p>
             <button
@@ -290,7 +290,7 @@ export default function SavedFunders() {
 
             {/* Funder cards */}
             {filteredEntries.length === 0 ? (
-              <div className="text-center py-16 text-gray-500">
+              <div className="text-center py-16 text-gray-400">
                 <p>No funders with status "{statusFilter}".</p>
                 <button
                   onClick={() => setStatusFilter('all')}
@@ -336,7 +336,7 @@ export default function SavedFunders() {
 
                       {/* Status pills */}
                       <div className="flex items-center gap-2 mt-4 flex-wrap">
-                        <span className="text-xs text-gray-500 mr-1">Status:</span>
+                        <span className="text-xs text-gray-300 mr-1">Status:</span>
                         {STATUSES.map(s => (
                           <button
                             key={s.key}
@@ -344,7 +344,7 @@ export default function SavedFunders() {
                             className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
                               status === s.key
                                 ? `${s.bg} ${s.border} ${s.color} font-semibold`
-                                : 'border-[#30363d] text-gray-500 hover:border-gray-500 hover:text-gray-300'
+                                : 'border-[#30363d] text-gray-400 hover:border-gray-400 hover:text-gray-200'
                             }`}
                           >
                             {s.label}
@@ -355,7 +355,7 @@ export default function SavedFunders() {
                       {/* Notes toggle + textarea */}
                       <button
                         onClick={() => toggleNotes(f.id)}
-                        className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-300 mt-4 transition-colors"
+                        className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white mt-4 transition-colors"
                       >
                         <StickyNote size={13} />
                         {notes && !notesOpen ? 'Edit note' : 'Notes'}
@@ -374,7 +374,7 @@ export default function SavedFunders() {
 
                       {/* Show note preview when collapsed and has content */}
                       {!notesOpen && notes && (
-                        <p className="mt-2 text-xs text-gray-500 italic line-clamp-1">{notes}</p>
+                        <p className="mt-2 text-xs text-gray-400 italic line-clamp-1">{notes}</p>
                       )}
 
                       {/* Actions row */}

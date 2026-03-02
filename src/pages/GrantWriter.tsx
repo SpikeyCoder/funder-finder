@@ -64,20 +64,20 @@ function renderMarkdown(text: string): string {
     } else if (rawLine.startsWith('- [ ] ')) {
       parts.push(
         `<div class="flex items-start gap-2 my-1.5 text-sm">` +
-          `<span class="text-gray-500 shrink-0 mt-0.5">○</span>` +
+          `<span class="text-gray-400 shrink-0 mt-0.5">○</span>` +
           `<span class="text-gray-300">${inl.slice(6)}</span></div>`,
       );
     } else if (rawLine.startsWith('  - ')) {
       // Indented bullet (sub-objective)
       parts.push(
         `<div class="flex items-start gap-2 ml-5 my-1 text-sm">` +
-          `<span class="text-gray-600 shrink-0 mt-0.5">–</span>` +
+          `<span class="text-gray-400 shrink-0 mt-0.5">–</span>` +
           `<span class="text-gray-400">${inl.slice(4)}</span></div>`,
       );
     } else if (rawLine.startsWith('- ')) {
       parts.push(
         `<div class="flex items-start gap-2 my-1.5 text-sm">` +
-          `<span class="text-gray-500 shrink-0 mt-0.5">•</span>` +
+          `<span class="text-gray-400 shrink-0 mt-0.5">•</span>` +
           `<span class="text-gray-300">${inl.slice(2)}</span></div>`,
       );
     } else if (rawLine === '') {
@@ -223,7 +223,7 @@ export default function GrantWriter() {
   const inputClass =
     'w-full bg-[#161b22] border border-[#30363d] rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-600';
 
-  const labelClass = 'block text-xs text-gray-500 mb-1';
+  const labelClass = 'block text-xs text-gray-400 mb-1';
 
   if (!funder) return null;
 
@@ -250,7 +250,7 @@ export default function GrantWriter() {
 
         {/* Funder context card */}
         <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-5 mb-7">
-          <p className="text-xs text-gray-500 mb-1">Writing grant for</p>
+          <p className="text-xs text-gray-400 mb-1">Writing grant for</p>
           <h2 className="text-xl font-bold">{funder.name}</h2>
           <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-gray-400 mt-2">
             <span className="capitalize">{funder.type}</span>
@@ -304,7 +304,7 @@ export default function GrantWriter() {
               >
                 <span className="text-gray-300">
                   Organization Details{' '}
-                  <span className="text-gray-500 font-normal">(optional — improves quality)</span>
+                  <span className="text-gray-400 font-normal">(optional — improves quality)</span>
                 </span>
                 {showOrg
                   ? <ChevronUp size={16} className="text-gray-400 shrink-0" />
@@ -375,7 +375,7 @@ export default function GrantWriter() {
               >
                 <span className="text-gray-300">
                   Program / Project Details{' '}
-                  <span className="text-gray-500 font-normal">(optional — improves specificity)</span>
+                  <span className="text-gray-400 font-normal">(optional — improves specificity)</span>
                 </span>
                 {showProgram
                   ? <ChevronUp size={16} className="text-gray-400 shrink-0" />
@@ -455,7 +455,7 @@ export default function GrantWriter() {
               Generate Grant Draft
             </button>
 
-            <p className="text-xs text-gray-600 text-center">
+            <p className="text-xs text-gray-400 text-center">
               More details = better output. The draft uses [BRACKETS] where specific data is needed.
             </p>
           </div>
@@ -511,7 +511,7 @@ export default function GrantWriter() {
             <div ref={outputEndRef} />
 
             {done && (
-              <p className="text-xs text-gray-500 text-center mt-4">
+              <p className="text-xs text-gray-300 text-center mt-4">
                 Replace all [BRACKETS] with your organization's real data before submitting.
               </p>
             )}

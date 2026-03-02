@@ -90,7 +90,7 @@ export default function LoginModal({ pendingFunder, onClose }: LoginModalProps) 
         {/* Close button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-gray-500 hover:text-gray-300 transition-colors"
+          className="absolute top-4 right-4 text-gray-300 hover:text-white transition-colors"
           aria-label="Close"
         >
           <X size={20} />
@@ -140,7 +140,7 @@ export default function LoginModal({ pendingFunder, onClose }: LoginModalProps) 
         {/* Not now */}
         <button
           onClick={onClose}
-          className="mt-5 w-full text-sm text-gray-500 hover:text-gray-300 transition-colors"
+          className="mt-5 w-full text-sm text-gray-300 hover:text-white transition-colors"
         >
           Not now
         </button>
