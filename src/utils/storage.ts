@@ -13,7 +13,7 @@
  * save without caring about auth state (they pass the user down from useAuth).
  */
 
-import { Funder } from '../types';
+import { Funder, FunderStatus, SavedFunderEntry } from '../types';
 
 const SAVED_KEY = 'savedFunders_v2'; // v2 stores full objects
 
@@ -50,4 +50,39 @@ export function isSaved(id: string): boolean {
 /** Clear all locally saved funders (e.g. after sign-out). */
 export function clearLocalSaved(): void {
   localStorage.removeItem(SAVED_KEY);
+}
+
+// ── Status & notes helpers (anonymous / fallback) ─────────────────────────────
+
+const META_KEY = 'ff_funder_meta_v1';
+
+type FunderMeta = { status: FunderStatus; notes: string };
+
+function getAllMeta(): Record<string, FunderMeta> {
+  try {
+    return JSON.parse(localStorage.getItem(META_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+export function getFunderMeta(id: string): FunderMeta {
+  return getAllMeta()[id] ?? { status: 'researching', notes: '' };
+}
+
+export function setFunderMeta(id: string, updates: Partial<FunderMeta>): void {
+  try {
+    const meta = getAllMeta();
+    meta[id] = { ...getFunderMeta(id), ...updates };
+    localStorage.setItem(META_KEY, JSON.stringify(meta));
+  } catch { /* ignore */ }
+}
+
+/** Returns saved funders with status/notes for anonymous users. */
+export function getSavedEntries(): SavedFunderEntry[] {
+  return getSavedFunders().map(funder => ({
+    funder,
+    ...getFunderMeta(funder.id),
+    savedAt: new Date().toISOString(),
+  }));
 }

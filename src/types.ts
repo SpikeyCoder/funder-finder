@@ -1,3 +1,12 @@
+export type FunderStatus = 'researching' | 'applied' | 'awarded' | 'passed';
+
+export interface SavedFunderEntry {
+  funder: Funder;
+  status: FunderStatus;
+  notes: string;
+  savedAt: string;
+}
+
 // Matches the Supabase `funders` table schema (snake_case from DB)
 export interface Funder {
   id: string;
