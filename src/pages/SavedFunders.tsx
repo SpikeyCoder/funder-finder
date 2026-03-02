@@ -27,10 +27,6 @@ const STATUS_FILTERS: { key: FunderStatus | 'all'; label: string }[] = [
   { key: 'passed',      label: 'Passed' },
 ];
 
-function statusConfig(key: FunderStatus) {
-  return STATUSES.find(s => s.key === key) ?? STATUSES[0];
-}
-
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export default function SavedFunders() {
@@ -306,7 +302,6 @@ export default function SavedFunders() {
             ) : (
               <div className="space-y-4">
                 {filteredEntries.map(({ funder: f, status, notes }) => {
-                  const cfg = statusConfig(status);
                   const notesOpen = expandedNotes.has(f.id);
                   return (
                     <div key={f.id} className="bg-[#161b22] border border-[#30363d] rounded-2xl p-6">
