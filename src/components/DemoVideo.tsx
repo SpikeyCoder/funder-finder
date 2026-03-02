@@ -1,81 +1,116 @@
 import { useEffect, useState } from 'react';
-import { Bookmark, BookmarkCheck, PenLine, Wand2, CheckCircle2 } from 'lucide-react';
+import { Bookmark, BookmarkCheck, PenLine, Wand2, CheckCircle2, Search, MapPin } from 'lucide-react';
 
 /**
  * DemoVideo – CSS/React animated product demo for the Landing page.
  *
- * 5-step cycle (~9 s total):
- *   0: Results page — user saves a funder  (0–1.8 s)
- *   1: Saved Funders page — list appears   (1.8–3.6 s)
- *   2: Click "Write Grant"                 (3.6–5.0 s)
- *   3: AI generates draft (streaming)      (5.0–7.2 s)
- *   4: Score & completion shown            (7.2–9.0 s)
+ * 8-step cycle (20.0 s total):
+ *   0: Landing — "Get Started" button pulses then clicks     (0–2.0 s)
+ *   1: Mission Input — typing mission + location             (2.0–7.0 s)
+ *   2: Form complete — "Find Matching Funders" button click  (7.0–8.5 s)
+ *   3: Results page — user saves a funder                   (8.5–10.5 s)
+ *   4: Saved Funders list appears                           (10.5–12.5 s)
+ *   5: Click "Write Grant" highlighted                      (12.5–14.0 s)
+ *   6: AI generates draft (streaming)                       (14.0–17.0 s)
+ *   7: Score & completion shown                             (17.0–20.0 s)
  *   → loops back to step 0
  */
 
-const STEP_DURATION = [1800, 1800, 1400, 2200, 1800]; // ms per step
-const TOTAL = STEP_DURATION.reduce((a, b) => a + b, 0);
+const STEP_DURATION = [2000, 5000, 1500, 2000, 2000, 1500, 3000, 3000]; // ms — total: 20 000 ms
+const TOTAL = STEP_DURATION.reduce((a, b) => a + b, 0); // 20 000
+
+const MISSION_TEXT = 'Provide after-school STEM programs for middle school students';
+const LOCATION_TEXT = 'Chicago, IL';
+
+// Typing speeds (ms per character)
+const MISSION_CHAR_MS = 55;   // 61 chars × 55 ms ≈ 3 355 ms
+const LOCATION_PAUSE_MS = 300; // pause after mission before location
+const LOCATION_CHAR_MS = 80;  // 11 chars × 80 ms = 880 ms
 
 const STREAMING_LINES = [
   '## 📊 Funder-Fit Summary',
   'Strong alignment with youth education focus areas...',
   '## ✅ Compliance Checklist',
   '✓ 501(c)(3) status required',
-  '✓ Geographic match: Northeast US',
+  '✓ Geographic match: Chicago, IL',
   '## 📝 Grant Application Draft',
   '### 1. Executive Summary',
   'The Community Youth Alliance requests $50,000...',
 ];
 
+const STEP_LABELS = ['Start', 'Mission', 'Search', 'Save', 'Pipeline', 'Write Grant', 'Generating', 'Done ✓'];
+
 export default function DemoVideo() {
   const [step, setStep] = useState(0);
+  const [getStartedClicked, setGetStartedClicked] = useState(false);
+  const [missionChars, setMissionChars] = useState(0);
+  const [locationChars, setLocationChars] = useState(0);
+  const [searchClicked, setSearchClicked] = useState(false);
   const [saved, setSaved] = useState(false);
   const [streamIdx, setStreamIdx] = useState(0);
   const [score, setScore] = useState(0);
 
   // Advance steps on a timer
   useEffect(() => {
-    let elapsed = 0;
     const timers: ReturnType<typeof setTimeout>[] = [];
 
-    const schedule = (s: number, delay: number) => {
+    const scheduleSteps = () => {
+      let elapsed = 0;
+
+      // ── Step 0: Landing ──────────────────────────────────────
       timers.push(
         setTimeout(() => {
-          setStep(s);
-          if (s === 0) { setSaved(false); setStreamIdx(0); setScore(0); }
-          if (s === 1) { setSaved(true); }
-          if (s === 3) { setStreamIdx(0); }
-        }, delay),
+          setStep(0);
+          setGetStartedClicked(false);
+          setMissionChars(0);
+          setLocationChars(0);
+          setSearchClicked(false);
+          setSaved(false);
+          setStreamIdx(0);
+          setScore(0);
+        }, elapsed),
       );
+      // Animate the button click 1 200 ms into step 0
+      timers.push(setTimeout(() => setGetStartedClicked(true), elapsed + 1200));
+      elapsed += STEP_DURATION[0];
+
+      // ── Step 1: Mission input (typing) ───────────────────────
+      timers.push(
+        setTimeout(() => {
+          setStep(1);
+          setMissionChars(0);
+          setLocationChars(0);
+        }, elapsed),
+      );
+      elapsed += STEP_DURATION[1];
+
+      // ── Step 2: Form submit ──────────────────────────────────
+      timers.push(setTimeout(() => { setStep(2); setSearchClicked(false); }, elapsed));
+      timers.push(setTimeout(() => setSearchClicked(true), elapsed + 700));
+      elapsed += STEP_DURATION[2];
+
+      // ── Step 3: Results ──────────────────────────────────────
+      timers.push(setTimeout(() => { setStep(3); setSaved(false); }, elapsed));
+      elapsed += STEP_DURATION[3];
+
+      // ── Step 4: Saved Funders list ───────────────────────────
+      timers.push(setTimeout(() => { setStep(4); setSaved(true); }, elapsed));
+      elapsed += STEP_DURATION[4];
+
+      // ── Step 5: Write Grant highlighted ──────────────────────
+      timers.push(setTimeout(() => setStep(5), elapsed));
+      elapsed += STEP_DURATION[5];
+
+      // ── Step 6: AI streaming ──────────────────────────────────
+      timers.push(setTimeout(() => { setStep(6); setStreamIdx(0); }, elapsed));
+      elapsed += STEP_DURATION[6];
+
+      // ── Step 7: Score + done ──────────────────────────────────
+      timers.push(setTimeout(() => setStep(7), elapsed));
     };
 
-    schedule(0, 0);
-    elapsed += STEP_DURATION[0];
-    schedule(1, elapsed);
-    elapsed += STEP_DURATION[1];
-    schedule(2, elapsed);
-    elapsed += STEP_DURATION[2];
-    schedule(3, elapsed);
-    elapsed += STEP_DURATION[3];
-    schedule(4, elapsed);
-    elapsed += STEP_DURATION[4];
-
-    // Loop
-    const loop = setInterval(() => {
-      setStep(0);
-      setSaved(false);
-      setStreamIdx(0);
-      setScore(0);
-      let e = 0;
-      STEP_DURATION.forEach((dur, i) => {
-        timers.push(setTimeout(() => {
-          setStep(i);
-          if (i === 1) setSaved(true);
-          if (i === 3) setStreamIdx(0);
-        }, e));
-        e += dur;
-      });
-    }, TOTAL);
+    scheduleSteps();
+    const loop = setInterval(scheduleSteps, TOTAL);
 
     return () => {
       timers.forEach(clearTimeout);
@@ -83,17 +118,35 @@ export default function DemoVideo() {
     };
   }, []);
 
-  // Stream text line-by-line during step 3
+  // Mission typing during step 1
   useEffect(() => {
-    if (step !== 3) return;
+    if (step !== 1) return;
+    if (missionChars >= MISSION_TEXT.length) return;
+    const t = setTimeout(() => setMissionChars(c => c + 1), MISSION_CHAR_MS);
+    return () => clearTimeout(t);
+  }, [step, missionChars]);
+
+  // Location typing during step 1, after mission is done
+  useEffect(() => {
+    if (step !== 1) return;
+    if (missionChars < MISSION_TEXT.length) return;
+    if (locationChars >= LOCATION_TEXT.length) return;
+    const delay = locationChars === 0 ? LOCATION_PAUSE_MS : LOCATION_CHAR_MS;
+    const t = setTimeout(() => setLocationChars(c => c + 1), delay);
+    return () => clearTimeout(t);
+  }, [step, missionChars, locationChars]);
+
+  // Stream text line-by-line during step 6
+  useEffect(() => {
+    if (step !== 6) return;
     if (streamIdx >= STREAMING_LINES.length) return;
-    const t = setTimeout(() => setStreamIdx(i => i + 1), 260);
+    const t = setTimeout(() => setStreamIdx(i => i + 1), 350);
     return () => clearTimeout(t);
   }, [step, streamIdx]);
 
-  // Animate score counter during step 4
+  // Animate score counter during step 7
   useEffect(() => {
-    if (step !== 4) return;
+    if (step !== 7) return;
     let v = 0;
     const t = setInterval(() => {
       v += 3;
@@ -102,6 +155,8 @@ export default function DemoVideo() {
     }, 25);
     return () => clearInterval(t);
   }, [step]);
+
+  const missionDone = missionChars >= MISSION_TEXT.length;
 
   return (
     <div className="w-full flex justify-center px-4 py-8">
@@ -117,15 +172,102 @@ export default function DemoVideo() {
               <span className="w-3 h-3 rounded-full bg-green-500/70" />
             </div>
             <div className="flex-1 bg-[#0d1117] rounded-md px-3 py-1 text-xs text-gray-400 truncate">
-              funder-finder.app
+              fundermatch.org
             </div>
           </div>
 
           {/* Screen content */}
           <div className="bg-[#0d1117] h-72 sm:h-80 relative overflow-hidden">
 
-            {/* ── Step 0: Results card with Save button ── */}
+            {/* ── Step 0: Landing page with Get Started ── */}
             <ScreenSlide visible={step === 0}>
+              <div className="flex flex-col items-center justify-center h-full gap-6 px-6 text-center">
+                <div>
+                  <p className="text-2xl font-bold tracking-tight">FunderMatch</p>
+                  <p className="text-sm text-gray-400 mt-1">AI-powered grant discovery for nonprofits</p>
+                </div>
+                <button
+                  className={`px-6 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 ${
+                    getStartedClicked
+                      ? 'bg-blue-700 text-white scale-95 opacity-70'
+                      : 'bg-blue-600 text-white animate-pulse'
+                  }`}
+                >
+                  Get Started →
+                </button>
+              </div>
+            </ScreenSlide>
+
+            {/* ── Step 1: Mission input form, typing ── */}
+            <ScreenSlide visible={step === 1}>
+              <div className="p-5 space-y-3">
+                <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">Tell us about your mission</p>
+
+                <div className="space-y-1">
+                  <label className="text-xs text-gray-400">Your Mission</label>
+                  <div className="bg-[#161b22] border border-blue-700/60 rounded-xl px-3 py-2 text-sm leading-snug min-h-[56px]">
+                    {MISSION_TEXT.slice(0, missionChars)}
+                    {!missionDone && (
+                      <span className="inline-block w-0.5 h-3.5 bg-blue-400 animate-pulse ml-px align-middle" />
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs text-gray-400 flex items-center gap-1">
+                    <MapPin size={11} /> Location
+                  </label>
+                  <div className={`bg-[#161b22] border rounded-xl px-3 py-2 text-sm transition-colors duration-300 ${
+                    missionDone ? 'border-blue-700/60' : 'border-[#30363d]'
+                  }`}>
+                    {locationChars > 0
+                      ? LOCATION_TEXT.slice(0, locationChars)
+                      : <span className="text-gray-600">City, State</span>
+                    }
+                    {missionDone && locationChars < LOCATION_TEXT.length && (
+                      <span className="inline-block w-0.5 h-3.5 bg-blue-400 animate-pulse ml-px align-middle" />
+                    )}
+                  </div>
+                </div>
+              </div>
+            </ScreenSlide>
+
+            {/* ── Step 2: Form complete + Find Matching Funders ── */}
+            <ScreenSlide visible={step === 2}>
+              <div className="p-5 space-y-3">
+                <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">Tell us about your mission</p>
+
+                <div className="space-y-1">
+                  <label className="text-xs text-gray-400">Your Mission</label>
+                  <div className="bg-[#161b22] border border-[#30363d] rounded-xl px-3 py-2 text-sm leading-snug">
+                    {MISSION_TEXT}
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs text-gray-400 flex items-center gap-1">
+                    <MapPin size={11} /> Location
+                  </label>
+                  <div className="bg-[#161b22] border border-[#30363d] rounded-xl px-3 py-2 text-sm">
+                    {LOCATION_TEXT}
+                  </div>
+                </div>
+
+                <button
+                  className={`w-full py-2 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all duration-300 ${
+                    searchClicked
+                      ? 'bg-blue-700 scale-95 text-white opacity-70'
+                      : 'bg-blue-600 text-white'
+                  }`}
+                >
+                  <Search size={14} />
+                  Find Matching Funders
+                </button>
+              </div>
+            </ScreenSlide>
+
+            {/* ── Step 3: Results card with Save button ── */}
+            <ScreenSlide visible={step === 3}>
               <div className="p-5 space-y-3">
                 <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">Funder Matches</p>
                 <FunderCard
@@ -140,8 +282,8 @@ export default function DemoVideo() {
               </div>
             </ScreenSlide>
 
-            {/* ── Step 1: Saved Funders list ── */}
-            <ScreenSlide visible={step === 1}>
+            {/* ── Step 4: Saved Funders list ── */}
+            <ScreenSlide visible={step === 4}>
               <div className="p-5 space-y-3">
                 <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">Saved Funders</p>
                 <SavedCard name="Gates Foundation" status="researching" showWriteButton={false} />
@@ -149,8 +291,8 @@ export default function DemoVideo() {
               </div>
             </ScreenSlide>
 
-            {/* ── Step 2: Write Grant highlighted ── */}
-            <ScreenSlide visible={step === 2}>
+            {/* ── Step 5: Write Grant highlighted ── */}
+            <ScreenSlide visible={step === 5}>
               <div className="p-5 space-y-3">
                 <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">Saved Funders</p>
                 <SavedCard name="Gates Foundation" status="researching" showWriteButton highlight />
@@ -158,8 +300,8 @@ export default function DemoVideo() {
               </div>
             </ScreenSlide>
 
-            {/* ── Step 3: AI streaming output ── */}
-            <ScreenSlide visible={step === 3}>
+            {/* ── Step 6: AI streaming output ── */}
+            <ScreenSlide visible={step === 6}>
               <div className="p-5">
                 <div className="flex items-center gap-2 mb-3">
                   <Wand2 size={14} className="text-blue-400" />
@@ -193,8 +335,8 @@ export default function DemoVideo() {
               </div>
             </ScreenSlide>
 
-            {/* ── Step 4: Score + done ── */}
-            <ScreenSlide visible={step === 4}>
+            {/* ── Step 7: Score + done ── */}
+            <ScreenSlide visible={step === 7}>
               <div className="p-5 flex flex-col items-center justify-center h-full gap-4">
                 <div className="flex items-center gap-3">
                   <CheckCircle2 size={28} className="text-green-400" />
@@ -222,13 +364,13 @@ export default function DemoVideo() {
 
           {/* Progress bar */}
           <div className="h-0.5 bg-[#21262d]">
-            <ProgressBar step={step} />
+            <ProgressBar step={step} total={STEP_LABELS.length} />
           </div>
         </div>
 
         {/* Step labels */}
         <div className="flex justify-between mt-3 px-1">
-          {['Save Funder', 'My Pipeline', 'Write Grant', 'AI Generates', 'Done ✓'].map((label, i) => (
+          {STEP_LABELS.map((label, i) => (
             <span
               key={label}
               className={`text-xs transition-colors duration-300 ${
@@ -337,9 +479,8 @@ function SavedCard({
   );
 }
 
-function ProgressBar({ step }: { step: number }) {
-  // Each step occupies an equal slice; fill up to current step
-  const pct = ((step + 1) / 5) * 100;
+function ProgressBar({ step, total }: { step: number; total: number }) {
+  const pct = ((step + 1) / total) * 100;
   return (
     <div
       className="h-full bg-blue-500 transition-all duration-700 ease-in-out"
