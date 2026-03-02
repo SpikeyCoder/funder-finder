@@ -5,6 +5,7 @@ import MissionInput from './pages/MissionInput';
 import Results from './pages/Results';
 import FunderDetail from './pages/FunderDetail';
 import SavedFunders from './pages/SavedFunders';
+import GrantWriter from './pages/GrantWriter';
 import NotFound from './pages/NotFound';
 
 function App() {
@@ -19,6 +20,7 @@ function App() {
           <Route path="/results" element={<Results />} />
           <Route path="/funder/:id" element={<FunderDetail />} />
           <Route path="/saved" element={<SavedFunders />} />
+          <Route path="/grant-writer" element={<GrantWriter />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </AuthProvider>
