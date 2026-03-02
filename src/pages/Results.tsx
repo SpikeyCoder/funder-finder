@@ -186,7 +186,7 @@ export default function Results() {
             {!loading && (
               <p className="text-gray-400 mt-1">
                 Found {filteredMatches.length} funders aligned with your mission
-                {cached && <span className="ml-2 text-xs text-gray-500">(cached)</span>}
+                {cached && <span className="ml-2 text-xs text-gray-300">(cached)</span>}
               </p>
             )}
           </div>
@@ -221,7 +221,7 @@ export default function Results() {
         {/* Grant size filter pills */}
         {!loading && !error && matches.length > 0 && (
           <div className="flex items-center gap-2 mt-4 mb-8 flex-wrap">
-            <span className="text-xs text-gray-500 mr-1">Grant size:</span>
+            <span className="text-xs text-gray-300 mr-1">Grant size:</span>
             {GRANT_SIZE_FILTERS.map(({ key, label }) => (
               <button
                 key={key}
@@ -236,7 +236,7 @@ export default function Results() {
               </button>
             ))}
             {grantSizeFilter !== 'any' && (
-              <span className="text-xs text-gray-500 ml-1">
+              <span className="text-xs text-gray-300 ml-1">
                 — showing {filteredMatches.length} of {matches.length}
               </span>
             )}
@@ -269,7 +269,7 @@ export default function Results() {
 
         {/* No results */}
         {!loading && !error && filteredMatches.length === 0 && (
-          <div className="text-center py-24 text-gray-500">
+          <div className="text-center py-24 text-gray-400">
             {grantSizeFilter !== 'any' && matches.length > 0 ? (
               <>
                 <p className="text-2xl mb-3">No funders in this size range</p>
@@ -416,7 +416,7 @@ export default function Results() {
             <div className="flex justify-center pt-4">
               <button
                 onClick={() => loadMatches(true)}
-                className="flex items-center gap-2 text-gray-500 hover:text-gray-300 text-sm transition-colors"
+                className="flex items-center gap-2 text-gray-300 hover:text-white text-sm transition-colors"
               >
                 <RefreshCw size={14} />
                 Refresh results (re-run AI matching)

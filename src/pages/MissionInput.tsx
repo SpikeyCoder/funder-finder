@@ -88,7 +88,7 @@ export default function MissionInput() {
             className={`w-full bg-[#0d1117] border rounded-xl px-4 py-3 text-white placeholder-gray-600 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.mission ? 'border-red-500' : 'border-[#30363d]'}`}
           />
           <div className="flex items-center justify-between mt-2">
-            <span className="text-xs text-gray-500">{mission.length} characters</span>
+            <span className="text-xs text-gray-300">{mission.length} characters</span>
           </div>
           {errors.mission && <p className="text-red-400 text-sm mt-1">{errors.mission}</p>}
 
@@ -152,7 +152,7 @@ export default function MissionInput() {
                     }}
                     className="flex items-center gap-2 w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-[#30363d] transition-colors"
                   >
-                    <MapPin size={12} className="text-gray-500 shrink-0" />
+                    <MapPin size={12} className="text-gray-400 shrink-0" />
                     {suggestion}
                   </button>
                 ))}
@@ -164,7 +164,7 @@ export default function MissionInput() {
 
         {/* Keywords */}
         <div>
-          <label className="block text-base font-semibold mb-1">Keywords <span className="text-gray-500 font-normal">(Optional)</span></label>
+          <label className="block text-base font-semibold mb-1">Keywords <span className="text-gray-400 font-normal">(Optional)</span></label>
           <p className="text-sm text-gray-400 mb-3">Add specific focus areas to refine your matches</p>
 
           <div className="flex gap-2">
@@ -197,7 +197,7 @@ export default function MissionInput() {
           )}
 
           <div className="mt-4">
-            <p className="text-xs text-gray-500 mb-2">Suggested keywords:</p>
+            <p className="text-xs text-gray-300 mb-2">Suggested keywords:</p>
             <div className="flex flex-wrap gap-2">
               {SUGGESTED_KEYWORDS.filter(k => !keywords.includes(k)).map(kw => (
                 <button

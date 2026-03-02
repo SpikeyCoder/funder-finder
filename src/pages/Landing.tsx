@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { Search, Target, Zap, Bookmark } from 'lucide-react';
+import DemoVideo from '../components/DemoVideo';
 
 export default function Landing() {
   const navigate = useNavigate();
@@ -21,9 +22,15 @@ export default function Landing() {
           <Search size={20} />
           Get Started
         </button>
-        <p className="text-sm text-gray-500 mt-4">
+        <p className="text-sm text-gray-400 mt-4">
           No account required &middot; No credit card &middot; Results in 30 seconds
         </p>
+      </div>
+
+      {/* Demo animation */}
+      <div className="max-w-5xl mx-auto px-4 pb-6">
+        <p className="text-center text-gray-400 text-sm mb-2 tracking-wide uppercase font-medium">See it in action</p>
+        <DemoVideo />
       </div>
 
       {/* How It Works */}
