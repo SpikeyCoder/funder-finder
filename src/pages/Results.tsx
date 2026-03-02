@@ -162,7 +162,7 @@ export default function Results() {
   const filteredMatches = matches.filter(f => {
     if (grantSizeFilter === 'any') return true;
     const effectiveMax = f.grant_range_max ?? f.grant_range_min;
-    if (effectiveMax === null) return grantSizeFilter === 'any'; // no data → only show under "Any"
+    if (effectiveMax === null) return false; // no grant range data → exclude from size-specific filters
     if (grantSizeFilter === 'small')  return effectiveMax <= 25_000;
     if (grantSizeFilter === 'medium') return effectiveMax > 25_000 && effectiveMax <= 250_000;
     if (grantSizeFilter === 'large')  return effectiveMax > 250_000;
