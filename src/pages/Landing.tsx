@@ -21,6 +21,9 @@ export default function Landing() {
           <Search size={20} />
           Get Started
         </button>
+        <p className="text-sm text-gray-500 mt-4">
+          No account required &middot; No credit card &middot; Results in 30 seconds
+        </p>
       </div>
 
       {/* How It Works */}
