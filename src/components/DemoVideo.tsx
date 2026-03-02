@@ -181,20 +181,29 @@ export default function DemoVideo() {
 
             {/* ── Step 0: Landing page with Get Started ── */}
             <ScreenSlide visible={step === 0}>
-              <div className="flex flex-col items-center justify-center h-full gap-6 px-6 text-center">
-                <div>
-                  <p className="text-2xl font-bold tracking-tight">FunderMatch</p>
-                  <p className="text-sm text-gray-400 mt-1">AI-powered grant discovery for nonprofits</p>
-                </div>
+              <div className="flex flex-col items-center justify-center h-full px-6 sm:px-8 text-center bg-gradient-to-b from-[#020916] via-[#030913] to-[#020712]">
+                <h2 className="text-[30px] sm:text-[44px] font-bold leading-[1.08] tracking-[-0.02em] text-white max-w-[760px]">
+                  Find Funders Aligned to Your
+                  <br />
+                  Mission
+                </h2>
+                <p className="mt-5 text-[15px] sm:text-[18px] leading-relaxed text-gray-400 max-w-[680px]">
+                  Connect with foundations, DAFs, and corporate giving programs
+                  that match your nonprofit's mission in seconds.
+                </p>
                 <button
-                  className={`px-6 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 ${
+                  className={`mt-6 inline-flex items-center gap-3 rounded-2xl px-7 sm:px-9 py-3 sm:py-4 text-lg font-semibold border transition-all duration-300 ${
                     getStartedClicked
-                      ? 'bg-blue-700 text-white scale-95 opacity-70'
-                      : 'bg-blue-600 text-white animate-pulse'
+                      ? 'bg-gray-200 text-gray-900 scale-95 opacity-80 border-white/20'
+                      : 'bg-white text-gray-900 border-white shadow-[0_12px_30px_rgba(255,255,255,0.14)] animate-pulse'
                   }`}
                 >
-                  Get Started →
+                  <Search size={20} className="shrink-0" />
+                  Get Started
                 </button>
+                <p className="mt-5 text-sm sm:text-base text-gray-400">
+                  No account required &middot; No credit card &middot; Results in 30 seconds
+                </p>
               </div>
             </ScreenSlide>
 
