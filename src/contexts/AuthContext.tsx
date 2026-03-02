@@ -5,7 +5,7 @@ import { Funder, FunderStatus, SavedFunderEntry } from '../types';
 
 // The OAuth redirect URL must match what is registered in Supabase dashboard
 // and in each OAuth provider's allowed redirect URIs.
-const REDIRECT_URL = 'https://spikeycoder.github.io/funder-finder/';
+const REDIRECT_URL = 'https://fundermatch.org/';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 

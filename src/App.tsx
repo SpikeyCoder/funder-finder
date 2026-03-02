@@ -12,7 +12,7 @@ function App() {
   return (
     // AuthProvider must be inside BrowserRouter so it can use router hooks if needed,
     // but outside all Routes so every page has access to the auth context.
-    <BrowserRouter basename="/funder-finder">
+    <BrowserRouter>
       <AuthProvider>
         <Routes>
           <Route path="/" element={<Landing />} />
