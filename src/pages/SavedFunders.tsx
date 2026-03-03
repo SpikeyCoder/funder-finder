@@ -45,6 +45,13 @@ export default function SavedFunders() {
 
   // ── Load ──────────────────────────────────────────────────────────────────────
 
+  // Page title
+  useEffect(() => {
+    document.title = 'My Saved Funders | FunderMatch';
+    const desc = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    if (desc) desc.content = 'Track your funder pipeline, update statuses, take notes, and generate grant applications for each saved funder.';
+  }, []);
+
   useEffect(() => { loadEntries(); }, [user]);
 
   const loadEntries = async () => {

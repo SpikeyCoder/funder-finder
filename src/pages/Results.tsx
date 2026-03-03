@@ -55,6 +55,13 @@ export default function Results() {
   // Login modal state
   const [loginModalFunder, setLoginModalFunder] = useState<Funder | null>(null);
 
+  // Page title
+  useEffect(() => {
+    document.title = 'Funder Matches | FunderMatch';
+    const desc = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    if (desc) desc.content = 'Your AI-ranked list of foundations, DAFs, and corporate giving programs matched to your nonprofit\u2019s mission.';
+  }, []);
+
   const loadMatches = async (forceRefresh = false) => {
     if (!mission) {
       setError('No mission found — please go back and enter your mission statement.');
