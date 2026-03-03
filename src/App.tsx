@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
+import AnalyticsTracker from './components/AnalyticsTracker';
 import Landing from './pages/Landing';
 import MissionInput from './pages/MissionInput';
 import Results from './pages/Results';
@@ -13,6 +14,7 @@ function App() {
     // AuthProvider must be inside BrowserRouter so it can use router hooks if needed,
     // but outside all Routes so every page has access to the auth context.
     <BrowserRouter>
+      <AnalyticsTracker />
       <AuthProvider>
         <Routes>
           <Route path="/" element={<Landing />} />
