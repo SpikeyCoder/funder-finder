@@ -27,10 +27,9 @@ function AnimatedRoutes() {
     if (postLoginRedirect) {
       sessionStorage.removeItem(REDIRECT_AFTER_LOGIN_KEY); // keep in sync with backup
       clearPostLoginRedirect();
-      // replace: true avoids a spurious extra history entry and also makes this
-      // idempotent if the backup path already navigated here.
+      // pathname guard prevents a double push if the backup path already navigated here.
       if (location.pathname !== postLoginRedirect) {
-        navigate(postLoginRedirect, { replace: true });
+        navigate(postLoginRedirect);
       }
     }
   }, [postLoginRedirect, clearPostLoginRedirect, navigate, location.pathname]);
@@ -48,8 +47,9 @@ function AnimatedRoutes() {
       const redirectPath = sessionStorage.getItem(REDIRECT_AFTER_LOGIN_KEY);
       if (redirectPath) {
         sessionStorage.removeItem(REDIRECT_AFTER_LOGIN_KEY);
+        // Push so the user can press Back and return to the landing page.
         if (location.pathname !== redirectPath) {
-          navigate(redirectPath, { replace: true });
+          navigate(redirectPath);
         }
       }
     }
