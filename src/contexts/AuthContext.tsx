@@ -26,6 +26,11 @@ interface AuthContextValue {
   pendingFunder: Funder | null;
   clearPendingFunder: () => void;
 
+  /** Set to a path (e.g. '/saved') after a pending funder is auto-saved
+   *  post-login. Consumed by AnimatedRoutes to trigger navigation. */
+  postLoginRedirect: string | null;
+  clearPostLoginRedirect: () => void;
+
   /** Persist a funder to the database for the current user. */
   saveFunderToDB: (funder: Funder) => Promise<void>;
   /** Remove a funder from the database for the current user. */
@@ -59,6 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [pendingFunder, setPendingFunder] = useState<Funder | null>(null);
+  const [postLoginRedirect, setPostLoginRedirect] = useState<string | null>(null);
 
   // Ref so callbacks inside onAuthStateChange can read latest values
   const pendingFunderRef = useRef<Funder | null>(null);
@@ -85,6 +91,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     sessionStorage.removeItem(PENDING_FUNDER_KEY);
     setPendingFunder(null);
     pendingFunderRef.current = null;
+  }, []);
+
+  const clearPostLoginRedirect = useCallback(() => {
+    setPostLoginRedirect(null);
   }, []);
 
   // ── DB operations ────────────────────────────────────────────────────────────
@@ -215,6 +225,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (pending) {
             try {
               await saveFunderToDBWithUser(pending, newSession.user.id);
+              // Signal to the router (AnimatedRoutes) to navigate to /saved
+              setPostLoginRedirect('/saved');
             } catch (e) {
               console.warn('Failed to auto-save pending funder after login:', e);
             } finally {
@@ -242,6 +254,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signOut,
         pendingFunder,
         clearPendingFunder,
+        postLoginRedirect,
+        clearPostLoginRedirect,
         saveFunderToDB,
         unsaveFunderFromDB,
         fetchSavedFunders,

@@ -1,5 +1,6 @@
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
+import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import AnalyticsTracker from './components/AnalyticsTracker';
 import Landing from './pages/Landing';
 import MissionInput from './pages/MissionInput';
@@ -11,8 +12,19 @@ import NotFound from './pages/NotFound';
 
 // Wrap Routes in a component that reads location so we can key on pathname.
 // Changing the key forces a remount, which re-triggers the CSS fade-in animation.
+// Also handles post-login redirects (e.g. to /saved after a pending funder is auto-saved).
 function AnimatedRoutes() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { postLoginRedirect, clearPostLoginRedirect } = useAuth();
+
+  useEffect(() => {
+    if (postLoginRedirect) {
+      clearPostLoginRedirect();
+      navigate(postLoginRedirect);
+    }
+  }, [postLoginRedirect, clearPostLoginRedirect, navigate]);
+
   return (
     <div key={location.pathname} className="page-fade-in">
       <Routes location={location}>
