@@ -1,9 +1,16 @@
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Target, Zap, Bookmark } from 'lucide-react';
 import DemoVideo from '../components/DemoVideo';
 
 export default function Landing() {
   const navigate = useNavigate();
+
+  useEffect(() => {
+    document.title = 'Non-Profit Funder Finder — Free AI Funder Matching for 501(c)(3)s';
+    const desc = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    if (desc) desc.content = 'Find foundations, DAFs, and corporate giving programs aligned to your nonprofit\u2019s mission in seconds. Free AI-powered funder matching \u2014 no account required.';
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#0d1117] text-white">

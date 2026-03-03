@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Sparkles, X, Plus, MapPin } from 'lucide-react';
 
@@ -28,6 +28,13 @@ const LOCATION_SUGGESTIONS = [
 
 export default function MissionInput() {
   const navigate = useNavigate();
+
+  useEffect(() => {
+    document.title = 'Find Funders for Your Nonprofit | FunderMatch';
+    const desc = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    if (desc) desc.content = 'Describe your nonprofit\u2019s mission and get an instant AI-ranked list of foundations, DAFs, and corporate giving programs aligned to your work.';
+  }, []);
+
   const [mission, setMission] = useState('');
   const [locationServed, setLocationServed] = useState('');
   const [keywords, setKeywords] = useState<string[]>([]);

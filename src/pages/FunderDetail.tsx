@@ -20,6 +20,16 @@ export default function FunderDetail() {
   const [copiedEmail, setCopiedEmail] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
 
+  // Page title — use funder name when available
+  useEffect(() => {
+    const name = funder?.name ? `${funder.name} | FunderMatch` : 'Funder Details | FunderMatch';
+    document.title = name;
+    const desc = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    if (desc) desc.content = funder?.name
+      ? `View contact info, mission alignment, and grant details for ${funder.name}. Generate a tailored grant application in seconds.`
+      : 'View funder contact info, mission alignment scores, and generate a tailored grant application.';
+  }, [funder]);
+
   useEffect(() => {
     if (id) {
       if (user) {

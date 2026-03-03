@@ -1,5 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
+// Page meta is set via useEffect below
 import {
   ArrowLeft, Check, ChevronDown, ChevronUp, Copy, Loader2, RefreshCw, Wand2,
 } from 'lucide-react';
@@ -97,6 +98,14 @@ export default function GrantWriter() {
   const navigate = useNavigate();
 
   const funder: Funder | null = (location.state as any)?.funder ?? null;
+
+  // Page title
+  useEffect(() => {
+    const name = funder?.name ? `AI Grant Writer \u2014 ${funder.name} | FunderMatch` : 'AI Grant Writer | FunderMatch';
+    document.title = name;
+    const desc = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    if (desc) desc.content = 'Generate a complete, funder-specific grant application draft in seconds using AI. Includes executive summary, compliance checklist, and full narrative.';
+  }, [funder]);
 
   // Redirect if no funder in router state
   useEffect(() => {
