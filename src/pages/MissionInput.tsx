@@ -20,6 +20,7 @@ const LOCATION_SUGGESTIONS = [
   'New York, NY',
   'Los Angeles, CA',
   'Chicago, IL',
+  'Seattle, WA',
   'Texas',
   'California',
   'Northeast United States',
@@ -144,7 +145,7 @@ export default function MissionInput() {
               }}
               onFocus={() => setShowLocationSuggestions(true)}
               onBlur={() => setTimeout(() => setShowLocationSuggestions(false), 150)}
-              placeholder="e.g. Chicago, IL · Rural Appalachia · National · International"
+              placeholder="e.g. Seattle, WA · Chicago, IL · Rural Appalachia · National"
               className={`w-full bg-[#0d1117] border rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.location ? 'border-red-500' : 'border-[#30363d]'}`}
             />
             {showLocationSuggestions && !locationServed && (
