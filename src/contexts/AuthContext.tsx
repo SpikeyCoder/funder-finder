@@ -58,6 +58,9 @@ export function useAuth() {
 // ── Provider ──────────────────────────────────────────────────────────────────
 
 const PENDING_FUNDER_KEY = 'ff_pending_funder';
+// Durable fallback: set before OAuth redirect, read by AnimatedRoutes on mount.
+// Survives the page reload that comes with OAuth without relying on React state timing.
+const REDIRECT_AFTER_LOGIN_KEY = 'ff_redirect_after_login';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -74,6 +77,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const storePendingFunder = (funder?: Funder) => {
     if (!funder) return;
     sessionStorage.setItem(PENDING_FUNDER_KEY, JSON.stringify(funder));
+    // Also write the redirect target so AnimatedRoutes can read it directly
+    // from sessionStorage on mount — this survives the OAuth page reload even
+    // if the SIGNED_IN event fires before any React subscriber is registered.
+    sessionStorage.setItem(REDIRECT_AFTER_LOGIN_KEY, '/saved');
     setPendingFunder(funder);
     pendingFunderRef.current = funder;
   };
@@ -219,18 +226,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(newSession);
         setUser(newSession?.user ?? null);
 
-        // After a successful sign-in, auto-save any pending funder
-        if (event === 'SIGNED_IN' && newSession?.user) {
+        // After a successful sign-in, auto-save any pending funder.
+        //
+        // We check BOTH 'SIGNED_IN' and 'INITIAL_SESSION' because Supabase v2
+        // processes the OAuth auth code during client initialisation (before any
+        // React component has mounted).  That means the SIGNED_IN event fires
+        // with zero subscribers; by the time onAuthStateChange is registered in
+        // useEffect, Supabase replays the session as INITIAL_SESSION instead.
+        // Checking both events ensures we catch the pending funder regardless of
+        // which event arrives first.  The `if (pending)` guard prevents spurious
+        // saves for ordinary page-loads where no pending funder exists.
+        if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && newSession?.user) {
           const pending = pendingFunderRef.current ?? loadPendingFunder();
           if (pending) {
             try {
               await saveFunderToDBWithUser(pending, newSession.user.id);
-              // Signal to the router (AnimatedRoutes) to navigate to /saved
-              setPostLoginRedirect('/saved');
             } catch (e) {
               console.warn('Failed to auto-save pending funder after login:', e);
             } finally {
               clearPendingFunder();
+              // Signal the router to navigate to /saved whether or not the DB
+              // save succeeded — the funder may already be persisted from a
+              // previous attempt, and the user should always land on their list.
+              setPostLoginRedirect('/saved');
             }
           }
         }
