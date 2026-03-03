@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { Funder } from '../types';
@@ -80,10 +81,12 @@ export default function LoginModal({ pendingFunder, onClose }: LoginModalProps) 
     }
   };
 
-  return (
-    // Backdrop
+  return createPortal(
+    // Backdrop — rendered into document.body so CSS transforms on ancestor
+    // elements (e.g. page-fade-in) don't break position: fixed on mobile.
+    // items-start + pt-6 anchors the card to the top of the viewport.
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-sm px-4 pt-6"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div className="relative w-full max-w-sm bg-[#161b22] border border-[#30363d] rounded-2xl p-8 shadow-2xl">
@@ -145,6 +148,7 @@ export default function LoginModal({ pendingFunder, onClose }: LoginModalProps) 
           Not now
         </button>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
