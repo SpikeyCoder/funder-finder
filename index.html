@@ -9,6 +9,28 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
+    <!--
+      Content Security Policy (delivered via meta tag — GitHub Pages cannot set HTTP headers).
+      Limitations of meta-tag CSP: frame-ancestors and report-uri are not supported here.
+      For clickjacking protection see the X-Frame-Options note in SECURITY.md.
+
+      script-src:
+        'self'             – Vite-bundled JS (dist/assets/index-*.js)
+        'sha256-…'         – the inline SPA-routing script below (hash-pinned, no unsafe-inline)
+        gc.zgo.at          – GoatCounter analytics script
+
+      style-src:
+        'self'             – Tailwind CSS bundle
+        'unsafe-inline'    – Tailwind utility classes applied as inline styles by React
+
+      connect-src:
+        *.supabase.co      – Supabase REST API, Auth (OAuth), and Edge Functions
+        accounts.google.com – Google OAuth token exchange
+        fundermatch.goatcounter.com – GoatCounter beacon
+
+      img-src data:        – SVG data URIs used by Lucide icons
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-9Jn/cnXgKbJ7J7q33fTfvOmHEa+5yzYGzkbavQwjgws=' https://gc.zgo.at; style-src 'self' 'unsafe-inline'; connect-src 'self' https://tgtotjvdubhjxzybmdex.supabase.co https://accounts.google.com https://fundermatch.goatcounter.com; img-src 'self' data: https:; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self' https://tgtotjvdubhjxzybmdex.supabase.co; object-src 'none';" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Non-Profit Funder Finder — Free AI Funder Matching for 501(c)(3)s</title>
     <meta name="description" content="Find foundations, DAFs, and corporate giving programs aligned to your nonprofit's mission in seconds. Free AI-powered funder matching — no account required." />

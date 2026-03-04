@@ -31,10 +31,24 @@ const RESULTS_N = 10; // funders returned to frontend
 
 const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+// Restrict CORS to the production origin only.
+// Add 'http://localhost:5173' here during local development if needed.
+const ALLOWED_ORIGINS = new Set([
+  'https://fundermatch.org',
+  'https://www.fundermatch.org',
+]);
+
+function corsHeaders(requestOrigin: string | null): Record<string, string> {
+  const origin =
+    requestOrigin && ALLOWED_ORIGINS.has(requestOrigin)
+      ? requestOrigin
+      : 'https://fundermatch.org'; // safe fallback
+  return {
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Vary': 'Origin',
+  };
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -113,8 +127,11 @@ function resolveNextStepUrl(type: string, funder: any): string | null {
 // ── Main handler ──────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
+  const origin = req.headers.get('origin');
+  const headers = corsHeaders(origin);
+
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { headers });
   }
 
   try {
@@ -123,7 +140,7 @@ Deno.serve(async (req) => {
     if (!mission?.trim()) {
       return new Response(JSON.stringify({ error: 'mission is required' }), {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...headers, 'Content-Type': 'application/json' },
       });
     }
 
@@ -140,7 +157,7 @@ Deno.serve(async (req) => {
         if (age < CACHE_TTL_MS) {
           return new Response(
             JSON.stringify({ results: cached[0].results, cached: true }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            { headers: { ...headers, 'Content-Type': 'application/json' } },
           );
         }
       }
@@ -158,7 +175,7 @@ Deno.serve(async (req) => {
 
     if (!funders?.length) {
       return new Response(JSON.stringify({ results: [], cached: false }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...headers, 'Content-Type': 'application/json' },
       });
     }
 
@@ -225,7 +242,7 @@ Respond with ONLY the JSON array, no markdown, no explanation.`;
     } catch {
       return new Response(JSON.stringify({ error: 'Failed to parse Claude response' }), {
         status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...headers, 'Content-Type': 'application/json' },
       });
     }
 
@@ -262,13 +279,13 @@ Respond with ONLY the JSON array, no markdown, no explanation.`;
     });
 
     return new Response(JSON.stringify({ results, cached: false }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...headers, 'Content-Type': 'application/json' },
     });
   } catch (err: any) {
     console.error('match-funders error:', err);
     return new Response(JSON.stringify({ error: err.message }), {
       status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...headers, 'Content-Type': 'application/json' },
     });
   }
 });
