@@ -1,0 +1,14 @@
+# CODEOWNERS — all changes require review from the repo owner.
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything
+* @SpikeyCoder
+
+# Require explicit sign-off on workflow changes (supply-chain risk)
+.github/workflows/ @SpikeyCoder
+
+# Require explicit sign-off on any script that touches the database
+scripts/ @SpikeyCoder
+
+# Require explicit sign-off on the Edge Function (handles secrets + AI key)
+supabase/functions/ @SpikeyCoder

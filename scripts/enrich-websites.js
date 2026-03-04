@@ -31,7 +31,7 @@
 
 const SUPABASE_URL  = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const SUPABASE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY || 'AIzaSyAIecjROim6JF66oa45DWGJjEi59BBTT94';
+const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY || null; // Set GOOGLE_API_KEY env var to enable Knowledge Graph enrichment
 const LIMIT         = parseInt(process.env.LIMIT  || '200', 10);
 const DRY_RUN       = process.env.DRY_RUN  === '1';
 const VERBOSE       = process.env.VERBOSE  === '1';
