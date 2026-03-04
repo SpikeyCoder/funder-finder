@@ -22,7 +22,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm install
+      # Delete lockfile before install so npm resolves platform-specific optional
+      # deps (e.g. @rollup/rollup-linux-x64-gnu) correctly on the CI runner.
+      # The lockfile is committed for Dependabot scanning but intentionally
+      # skipped here to avoid cross-platform ARM/x64 mismatch issues.
+      - run: rm -f package-lock.json && npm install
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3
         with:
