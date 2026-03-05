@@ -20,6 +20,7 @@ export interface Funder {
   id: string;
   name: string;
   type: string; // 'foundation' | 'corporate' | 'daf'
+  foundation_ein?: string | null;
   description: string | null;
   focus_areas: string[];
   ntee_code: string | null;

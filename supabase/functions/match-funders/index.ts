@@ -24,7 +24,7 @@ const FOUNDATION_SCAN_LIMIT = 250;
 const CANDIDATE_LIMIT = 120;
 const RESULTS_N = 10;
 const MIN_GRANT_YEAR = new Date().getUTCFullYear() - 5;
-const SCORING_VERSION = 'grantee-fit-v2';
+const SCORING_VERSION = 'grantee-fit-v3';
 
 // Tuned on eval/cases.silver.jsonl via scripts/tune-ranker-weights.js.
 const SCORING_WEIGHTS = {
@@ -68,6 +68,7 @@ interface FunderRow {
   id: string;
   name: string;
   type: string;
+  foundation_ein: string | null;
   description: string | null;
   focus_areas: string[] | null;
   ntee_code: string | null;
@@ -89,6 +90,7 @@ interface FunderRow {
 }
 
 interface GrantRow {
+  id: string;
   foundation_id: string;
   grant_year: number;
   grant_amount: number | null;
@@ -227,6 +229,20 @@ function toExternalUrl(url: string | null | undefined): string | null {
   return `https://${s}`;
 }
 
+function normalizedEin(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const digits = value.replace(/\D/g, '');
+  return digits.length === 9 ? digits : null;
+}
+
+function propublicaFoundationUrl(funder: FunderRow): string {
+  const ein = normalizedEin(funder.foundation_ein);
+  if (ein) {
+    return `https://projects.propublica.org/nonprofits/organizations/${ein}`;
+  }
+  return `https://projects.propublica.org/nonprofits/search?utf8=%E2%9C%93&q=${encodeURIComponent(funder.name)}`;
+}
+
 function resolveNextStepUrl(type: string, funder: FunderRow): string | null {
   const chain: (string | null | undefined)[] = (() => {
     switch (type) {
@@ -238,6 +254,8 @@ function resolveNextStepUrl(type: string, funder: FunderRow): string | null {
         return [funder.programs_url, funder.apply_url, funder.website];
       case 'news':
         return [funder.news_url, funder.website];
+      case 'propublica':
+        return [propublicaFoundationUrl(funder)];
       default:
         return [funder.website];
     }
@@ -247,16 +265,24 @@ function resolveNextStepUrl(type: string, funder: FunderRow): string | null {
     const resolved = toExternalUrl(url);
     if (resolved) return resolved;
   }
-  return null;
+  return propublicaFoundationUrl(funder);
 }
 
 function deriveNextStep(funder: FunderRow): { text: string; type: string } {
-  if (funder.next_step?.trim()) {
-    if (funder.apply_url) return { text: funder.next_step.trim(), type: 'apply' };
-    if (funder.contact_url || funder.contact_email) return { text: funder.next_step.trim(), type: 'contact' };
-    if (funder.programs_url) return { text: funder.next_step.trim(), type: 'programs' };
-    if (funder.news_url) return { text: funder.next_step.trim(), type: 'news' };
-    return { text: funder.next_step.trim(), type: 'homepage' };
+  const nextStepText = funder.next_step?.trim();
+  if (nextStepText) {
+    const hasLegacyDirectoryFallback = /\bguidestar\b|\birs tax exempt org search\b/i.test(nextStepText);
+    if (hasLegacyDirectoryFallback) {
+      return {
+        type: 'propublica',
+        text: 'Review this foundation profile on ProPublica Nonprofit Explorer to confirm recent grants and filing details.',
+      };
+    }
+    if (funder.apply_url) return { text: nextStepText, type: 'apply' };
+    if (funder.contact_url || funder.contact_email) return { text: nextStepText, type: 'contact' };
+    if (funder.programs_url) return { text: nextStepText, type: 'programs' };
+    if (funder.news_url) return { text: nextStepText, type: 'news' };
+    return { text: nextStepText, type: 'homepage' };
   }
 
   if (funder.apply_url) {
@@ -288,8 +314,8 @@ function deriveNextStep(funder: FunderRow): { text: string; type: string } {
   }
 
   return {
-    type: 'homepage',
-    text: 'Review eligibility, giving priorities, and deadlines on the funder website before initiating contact.',
+    type: 'propublica',
+    text: 'Review this foundation profile on ProPublica Nonprofit Explorer to confirm recent grants and filing details.',
   };
 }
 
@@ -600,7 +626,7 @@ Deno.serve(async (req) => {
     }
 
     const fundersRes = await sbFetch(
-      `funders?select=id,name,type,description,focus_areas,ntee_code,city,state,` +
+      `funders?select=id,name,type,foundation_ein,description,focus_areas,ntee_code,city,state,` +
       `website,contact_url,programs_url,apply_url,news_url,total_giving,asset_amount,` +
       `grant_range_min,grant_range_max,contact_name,contact_title,contact_email,next_step` +
       `&order=total_giving.desc.nullslast&limit=${FOUNDATION_SCAN_LIMIT}`,
@@ -648,8 +674,8 @@ Deno.serve(async (req) => {
 
     if (candidateIds.length) {
       const selectColumns = userMissionEmbedding
-        ? 'foundation_id,grant_year,grant_amount,grantee_name,grantee_state,grantee_country,purpose_text,ntee_code,mission_signal_text,grantee_budget_band,mission_embedding'
-        : 'foundation_id,grant_year,grant_amount,grantee_name,grantee_state,grantee_country,purpose_text,ntee_code,mission_signal_text,grantee_budget_band';
+        ? 'id,foundation_id,grant_year,grant_amount,grantee_name,grantee_state,grantee_country,purpose_text,ntee_code,mission_signal_text,grantee_budget_band,mission_embedding'
+        : 'id,foundation_id,grant_year,grant_amount,grantee_name,grantee_state,grantee_country,purpose_text,ntee_code,mission_signal_text,grantee_budget_band';
 
       const inFilter = buildInFilter(candidateIds);
 
@@ -678,6 +704,30 @@ Deno.serve(async (req) => {
 
       for (const feature of features) {
         featuresByFoundation.set(feature.foundation_id, feature);
+      }
+
+      const foundationsNeedingFallbackHistory = candidateIds.filter((foundationId) => {
+        const recentCount = grantsByFoundation.get(foundationId)?.length || 0;
+        return recentCount < 3;
+      });
+
+      if (foundationsNeedingFallbackHistory.length) {
+        const fallbackInFilter = buildInFilter(foundationsNeedingFallbackHistory);
+        const fallbackRes = await sbFetch(
+          `foundation_grants?select=${selectColumns}` +
+          `&foundation_id=in.${fallbackInFilter}` +
+          `&grant_year=lt.${MIN_GRANT_YEAR}` +
+          `&order=grant_year.desc,grant_amount.desc` +
+          `&limit=50000`,
+        );
+        const fallbackGrants = await fallbackRes.json() as GrantRow[];
+        for (const row of fallbackGrants) {
+          const arr = grantsByFoundation.get(row.foundation_id) || [];
+          if (!arr.some((existing) => existing.id === row.id)) {
+            arr.push(row);
+          }
+          grantsByFoundation.set(row.foundation_id, arr);
+        }
       }
     }
 
@@ -747,16 +797,16 @@ Deno.serve(async (req) => {
 
         const dataCompleteness = typeof feature?.data_completeness_score === 'number'
           ? clamp01(feature.data_completeness_score)
-          : clamp01(Math.min(scoredGrants.length / 20, 1) * 0.4);
+          : clamp01(Math.min(scoredGrants.length / 8, 1) * 0.8);
 
         const historyCoverage = clamp01((feature?.grants_last_5y_count || scoredGrants.length) / 12);
         const historyWeightRaw =
           SCORING_WEIGHTS.historyWeightMin
           + historyCoverage * SCORING_WEIGHTS.historyCoverageBoost;
 
+        const hasMinimumGrantHistory = scoredGrants.length >= SCORING_WEIGHTS.limitedDataMinGrants;
         const limitedGrantHistoryData =
-          scoredGrants.length < SCORING_WEIGHTS.limitedDataMinGrants
-          || (feature?.grants_last_5y_count || 0) < SCORING_WEIGHTS.limitedDataMinGrants
+          !hasMinimumGrantHistory
           || dataCompleteness < SCORING_WEIGHTS.limitedDataMinCompleteness;
 
         const historyWeight = limitedGrantHistoryData
@@ -828,6 +878,7 @@ Deno.serve(async (req) => {
           next_step_url: nextStepUrl,
         };
       })
+      .filter((row) => (row.similar_past_grantees?.length || 0) >= 3)
       .sort((a, b) => {
         if ((b.fit_score || 0) !== (a.fit_score || 0)) {
           return (b.fit_score || 0) - (a.fit_score || 0);

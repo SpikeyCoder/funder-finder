@@ -7,6 +7,11 @@ import { formatGrantRange, formatTotalGiving } from '../utils/matching';
 import { useAuth } from '../contexts/AuthContext';
 import LoginModal from '../components/LoginModal';
 
+function formatGrantAmount(amount: number | null | undefined): string {
+  if (!amount || !Number.isFinite(amount)) return 'Amount not disclosed';
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(amount);
+}
+
 export default function FunderDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -128,10 +133,10 @@ export default function FunderDetail() {
           </div>
 
           {/* AI match reason */}
-          {funder.reason && (
+          {(funder.fit_explanation || funder.reason) && (
             <div className="mb-6 bg-[#0d1117] border border-blue-900/50 rounded-xl px-4 py-3">
               <p className="text-xs text-blue-400 font-semibold mb-1">Why this funder matches your mission</p>
-              <p className="text-gray-300 text-sm">{funder.reason}</p>
+              <p className="text-gray-300 text-sm">{funder.fit_explanation || funder.reason}</p>
               {funder.score && (
                 <p className="text-xs text-gray-300 mt-2">Match score: {Math.round(funder.score * 100)}%</p>
               )}
@@ -139,6 +144,36 @@ export default function FunderDetail() {
           )}
 
           <hr className="border-[#30363d] mb-6" />
+
+          {/* Similar past grantees */}
+          {funder.similar_past_grantees && funder.similar_past_grantees.length > 0 && (
+            <>
+              <div className="mb-6">
+                <h2 className="text-lg font-semibold mb-3">Similar Past Grantees</h2>
+                <p className="text-xs text-blue-400 font-semibold mb-3">Top 3 related grantees used in your match</p>
+                <div className="space-y-3">
+                  {funder.similar_past_grantees.slice(0, 3).map((grantee, idx) => (
+                    <div key={`${funder.id}-detail-grantee-${idx}`} className="border border-[#30363d] rounded-lg p-3 bg-[#0d1117]">
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                        <p className="text-sm font-semibold text-white">{grantee.name}</p>
+                        <p className="text-xs text-gray-300">
+                          {(grantee.year ? String(grantee.year) : 'Year n/a')} · {formatGrantAmount(grantee.amount)}
+                        </p>
+                      </div>
+                      {grantee.match_reasons.length > 0 && (
+                        <ul className="list-disc ml-4 text-xs text-gray-300 space-y-1">
+                          {grantee.match_reasons.slice(0, 2).map((reason, reasonIdx) => (
+                            <li key={`${funder.id}-detail-grantee-${idx}-reason-${reasonIdx}`}>{reason}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <hr className="border-[#30363d] mb-6" />
+            </>
+          )}
 
           {/* Focus Areas */}
           {funder.focus_areas && funder.focus_areas.length > 0 && (
