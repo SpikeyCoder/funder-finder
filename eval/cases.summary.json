@@ -1,0 +1,28 @@
+{
+  "generated_at": "2026-03-05T03:05:41.784Z",
+  "source": "foundation_grants (silver labels)",
+  "case_count": 60,
+  "grants_rows": 1000,
+  "foundations_in_grants": 11,
+  "avg_confidence": 0.912,
+  "budget_band_distribution": {
+    "250k_1m": 15,
+    "1m_5m": 15,
+    "over_5m": 15,
+    "under_250k": 15
+  },
+  "location_distribution": {
+    "DC": 21,
+    "NY": 14,
+    "RI": 1,
+    "MA": 5,
+    "AZ": 1,
+    "CA": 7,
+    "VA": 2,
+    "IN": 2,
+    "IL": 4,
+    "PA": 1,
+    "NJ": 1,
+    "International / Global": 1
+  }
+}

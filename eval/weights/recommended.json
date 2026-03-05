@@ -1,0 +1,22 @@
+{
+  "foundationScanLimit": 250,
+  "candidateLimit": 120,
+  "topGrantAverageN": 6,
+  "recencySlope": 0.0429,
+  "recencyFloor": 0.5096,
+  "baselineMission": 0.5564,
+  "baselineLocation": 0.4436,
+  "grantMission": 0.4967,
+  "grantLocation": 0.1222,
+  "grantSize": 0.3811,
+  "historyWeightMin": 0.534,
+  "historyCoverageBoost": 0.1599,
+  "historyWeightMax": 0.6744,
+  "historyWeightMaxLimited": 0.5871,
+  "sizePenaltyMultiplier": 0.1721,
+  "medianBandPenalty": 0.0464,
+  "dataCompletenessBonus": 0.0263,
+  "fallbackBaselineMultiplier": 0.9489,
+  "limitedDataMinGrants": 3,
+  "limitedDataMinCompleteness": 0.1882
+}

@@ -20,11 +20,33 @@ const SUPABASE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || '';
 
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-const FOUNDATION_SCAN_LIMIT = 180;
-const CANDIDATE_LIMIT = 90;
+const FOUNDATION_SCAN_LIMIT = 250;
+const CANDIDATE_LIMIT = 120;
 const RESULTS_N = 10;
 const MIN_GRANT_YEAR = new Date().getUTCFullYear() - 5;
-const SCORING_VERSION = 'grantee-fit-v1';
+const SCORING_VERSION = 'grantee-fit-v2';
+
+// Tuned on eval/cases.silver.jsonl via scripts/tune-ranker-weights.js.
+const SCORING_WEIGHTS = {
+  topGrantAverageN: 6,
+  recencySlope: 0.0429,
+  recencyFloor: 0.5096,
+  baselineMission: 0.5564,
+  baselineLocation: 0.4436,
+  grantMission: 0.4967,
+  grantLocation: 0.1222,
+  grantSize: 0.3811,
+  historyWeightMin: 0.534,
+  historyCoverageBoost: 0.1599,
+  historyWeightMax: 0.6744,
+  historyWeightMaxLimited: 0.5871,
+  sizePenaltyMultiplier: 0.1721,
+  medianBandPenalty: 0.0464,
+  dataCompletenessBonus: 0.0263,
+  fallbackBaselineMultiplier: 0.9489,
+  limitedDataMinGrants: 3,
+  limitedDataMinCompleteness: 0.1882,
+} as const;
 
 const ALLOWED_ORIGINS = new Set([
   'https://fundermatch.org',
@@ -600,7 +622,10 @@ Deno.serve(async (req) => {
     const prelim = funders.map((funder) => {
       const missionScore = baselineMissionScore(userTokens, funder);
       const locationScore = funderLocationBaseline(userLocation, funder.state);
-      const baseline = clamp01(missionScore * 0.72 + locationScore * 0.28);
+      const baseline = clamp01(
+        missionScore * SCORING_WEIGHTS.baselineMission
+        + locationScore * SCORING_WEIGHTS.baselineLocation,
+      );
       return {
         funder,
         baseline,
@@ -676,9 +701,18 @@ Deno.serve(async (req) => {
           const sizeScore = sizeSimilarity(userBudgetBandNumeric, grant.grantee_budget_band);
 
           const recencyYears = Math.max(0, new Date().getUTCFullYear() - (grant.grant_year || MIN_GRANT_YEAR));
-          const recencyMultiplier = Math.max(0.62, 1 - recencyYears * 0.08);
+          const recencyMultiplier = Math.max(
+            SCORING_WEIGHTS.recencyFloor,
+            1 - recencyYears * SCORING_WEIGHTS.recencySlope,
+          );
 
-          const score = clamp01((missionScore * 0.48 + locScore * 0.22 + sizeScore * 0.30) * recencyMultiplier);
+          const score = clamp01(
+            (
+              missionScore * SCORING_WEIGHTS.grantMission
+              + locScore * SCORING_WEIGHTS.grantLocation
+              + sizeScore * SCORING_WEIGHTS.grantSize
+            ) * recencyMultiplier,
+          );
 
           return {
             grant,
@@ -690,7 +724,7 @@ Deno.serve(async (req) => {
         }).sort((a, b) => b.score - a.score);
 
         const topGrants = scoredGrants.slice(0, 3);
-        const topForAverage = scoredGrants.slice(0, 6);
+        const topForAverage = scoredGrants.slice(0, SCORING_WEIGHTS.topGrantAverageN);
         const historyScore = topForAverage.length
           ? topForAverage.reduce((sum, row) => sum + row.score, 0) / topForAverage.length
           : 0;
@@ -703,10 +737,12 @@ Deno.serve(async (req) => {
         ).length;
 
         const oversizedRate = grantsWithBand.length ? oversizedCount / grantsWithBand.length : 0;
-        let sizePenalty = userBudgetBandNumeric ? oversizedRate * 0.24 : 0;
+        let sizePenalty = userBudgetBandNumeric
+          ? oversizedRate * SCORING_WEIGHTS.sizePenaltyMultiplier
+          : 0;
 
         if (userBudgetBandNumeric && feature?.median_grantee_budget_band && feature.median_grantee_budget_band >= userBudgetBandNumeric + 2) {
-          sizePenalty += 0.06;
+          sizePenalty += SCORING_WEIGHTS.medianBandPenalty;
         }
 
         const dataCompleteness = typeof feature?.data_completeness_score === 'number'
@@ -714,26 +750,28 @@ Deno.serve(async (req) => {
           : clamp01(Math.min(scoredGrants.length / 20, 1) * 0.4);
 
         const historyCoverage = clamp01((feature?.grants_last_5y_count || scoredGrants.length) / 12);
-        const historyWeightRaw = 0.55 + historyCoverage * 0.2;
+        const historyWeightRaw =
+          SCORING_WEIGHTS.historyWeightMin
+          + historyCoverage * SCORING_WEIGHTS.historyCoverageBoost;
 
         const limitedGrantHistoryData =
-          scoredGrants.length < 3
-          || (feature?.grants_last_5y_count || 0) < 3
-          || dataCompleteness < 0.24;
+          scoredGrants.length < SCORING_WEIGHTS.limitedDataMinGrants
+          || (feature?.grants_last_5y_count || 0) < SCORING_WEIGHTS.limitedDataMinGrants
+          || dataCompleteness < SCORING_WEIGHTS.limitedDataMinCompleteness;
 
         const historyWeight = limitedGrantHistoryData
-          ? Math.min(historyWeightRaw, 0.46)
-          : Math.min(historyWeightRaw, 0.78);
+          ? Math.min(historyWeightRaw, SCORING_WEIGHTS.historyWeightMaxLimited)
+          : Math.min(historyWeightRaw, SCORING_WEIGHTS.historyWeightMax);
 
         let fitScore = clamp01(
           baseline * (1 - historyWeight)
           + historyScore * historyWeight
-          + dataCompleteness * 0.06
+          + dataCompleteness * SCORING_WEIGHTS.dataCompletenessBonus
           - sizePenalty,
         );
 
         if (!scoredGrants.length) {
-          fitScore = clamp01(baseline * 0.94);
+          fitScore = clamp01(baseline * SCORING_WEIGHTS.fallbackBaselineMultiplier);
         }
 
         const similaritySummary = topGrants.map((row) => ({

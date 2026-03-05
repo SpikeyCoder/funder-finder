@@ -1,0 +1,1058 @@
+[
+  {
+    "case_id": "silver_015",
+    "confidence": 0.9,
+    "mission": "YOUTH CARE/EDUCATION PROGRAMS",
+    "locationServed": "CA",
+    "budgetBand": "under_250k",
+    "positives": [
+      "311621613"
+    ],
+    "negatives": [
+      "237093598",
+      "131628151",
+      "921508722",
+      "264009689",
+      "221888162",
+      "311580756"
+    ],
+    "comparisons": [
+      {
+        "config": "baseline",
+        "top_result_ids": [
+          "954766599",
+          "475374786",
+          "932444083",
+          "270549307",
+          "812649898"
+        ],
+        "top_result_names": [
+          "California Endowment",
+          "Foundation Foundation",
+          "Springwell Foundationi",
+          "Ujimaa Foundation",
+          "Armanino Foundation"
+        ]
+      },
+      {
+        "config": "candidate_009",
+        "top_result_ids": [
+          "954766599",
+          "475374786",
+          "932444083",
+          "270549307",
+          "812649898"
+        ],
+        "top_result_names": [
+          "California Endowment",
+          "Foundation Foundation",
+          "Springwell Foundationi",
+          "Ujimaa Foundation",
+          "Armanino Foundation"
+        ]
+      },
+      {
+        "config": "candidate_306",
+        "top_result_ids": [
+          "954766599",
+          "475374786",
+          "932444083",
+          "270549307",
+          "812649898"
+        ],
+        "top_result_names": [
+          "California Endowment",
+          "Foundation Foundation",
+          "Springwell Foundationi",
+          "Ujimaa Foundation",
+          "Armanino Foundation"
+        ]
+      },
+      {
+        "config": "candidate_166",
+        "top_result_ids": [
+          "954766599",
+          "475374786",
+          "932444083",
+          "270549307",
+          "812649898"
+        ],
+        "top_result_names": [
+          "California Endowment",
+          "Foundation Foundation",
+          "Springwell Foundationi",
+          "Ujimaa Foundation",
+          "Armanino Foundation"
+        ]
+      }
+    ]
+  },
+  {
+    "case_id": "silver_016",
+    "confidence": 0.9,
+    "mission": "REHOUSING SUPPORT FOR HOMELESS",
+    "locationServed": "CA",
+    "budgetBand": "under_250k",
+    "positives": [
+      "311621613"
+    ],
+    "negatives": [
+      "237093598",
+      "131628151",
+      "921508722",
+      "264009689",
+      "221888162",
+      "311580756"
+    ],
+    "comparisons": [
+      {
+        "config": "baseline",
+        "top_result_ids": [
+          "941655673",
+          "943307699",
+          "454856659",
+          "952942582",
+          "954766599"
+        ],
+        "top_result_names": [
+          "William and Flora Hewlett Foundation",
+          "David & Lucile Packard Foundation",
+          "Emerson Collective",
+          "California Community Foundation",
+          "California Endowment"
+        ]
+      },
+      {
+        "config": "candidate_009",
+        "top_result_ids": [
+          "941655673",
+          "943307699",
+          "454856659",
+          "952942582",
+          "954766599"
+        ],
+        "top_result_names": [
+          "William and Flora Hewlett Foundation",
+          "David & Lucile Packard Foundation",
+          "Emerson Collective",
+          "California Community Foundation",
+          "California Endowment"
+        ]
+      },
+      {
+        "config": "candidate_306",
+        "top_result_ids": [
+          "941655673",
+          "943307699",
+          "454856659",
+          "952942582",
+          "954766599"
+        ],
+        "top_result_names": [
+          "William and Flora Hewlett Foundation",
+          "David & Lucile Packard Foundation",
+          "Emerson Collective",
+          "California Community Foundation",
+          "California Endowment"
+        ]
+      },
+      {
+        "config": "candidate_166",
+        "top_result_ids": [
+          "941655673",
+          "943307699",
+          "454856659",
+          "952942582",
+          "954766599"
+        ],
+        "top_result_names": [
+          "William and Flora Hewlett Foundation",
+          "David & Lucile Packard Foundation",
+          "Emerson Collective",
+          "California Community Foundation",
+          "California Endowment"
+        ]
+      }
+    ]
+  },
+  {
+    "case_id": "silver_017",
+    "confidence": 0.9,
+    "mission": "EDUCATION &amp; HEALTH SERVICES",
+    "locationServed": "DC",
+    "budgetBand": "under_250k",
+    "positives": [
+      "311621613"
+    ],
+    "negatives": [
+      "237093598",
+      "131628151",
+      "921508722",
+      "264009689",
+      "221888162",
+      "311580756"
+    ],
+    "comparisons": [
+      {
+        "config": "baseline",
+        "top_result_ids": [
+          "751534816",
+          "650415977",
+          "956006446",
+          "743158155",
+          "541824272"
+        ],
+        "top_result_names": [
+          "Ch Foundation",
+          "Dunn Foundation",
+          "Ahmanson Foundation",
+          "Peak Grantmaking Inc",
+          "Asmc Foundation"
+        ]
+      },
+      {
+        "config": "candidate_009",
+        "top_result_ids": [
+          "743158155",
+          "541824272",
+          "851080849",
+          "251823874",
+          "520794300"
+        ],
+        "top_result_names": [
+          "Peak Grantmaking Inc",
+          "Asmc Foundation",
+          "Kratom Foundation",
+          "Wyss Foundation",
+          "Aarp Foundation"
+        ]
+      },
+      {
+        "config": "candidate_306",
+        "top_result_ids": [
+          "743158155",
+          "541824272",
+          "851080849",
+          "251823874",
+          "520794300"
+        ],
+        "top_result_names": [
+          "Peak Grantmaking Inc",
+          "Asmc Foundation",
+          "Kratom Foundation",
+          "Wyss Foundation",
+          "Aarp Foundation"
+        ]
+      },
+      {
+        "config": "candidate_166",
+        "top_result_ids": [
+          "743158155",
+          "541824272",
+          "851080849",
+          "251823874",
+          "520794300"
+        ],
+        "top_result_names": [
+          "Peak Grantmaking Inc",
+          "Asmc Foundation",
+          "Kratom Foundation",
+          "Wyss Foundation",
+          "Aarp Foundation"
+        ]
+      }
+    ]
+  },
+  {
+    "case_id": "silver_018",
+    "confidence": 0.9,
+    "mission": "General &amp; Unrestricted",
+    "locationServed": "VA",
+    "budgetBand": "under_250k",
+    "positives": [
+      "650415977"
+    ],
+    "negatives": [
+      "237093598",
+      "131628151",
+      "921508722",
+      "264009689",
+      "221888162",
+      "311580756"
+    ],
+    "comparisons": [
+      {
+        "config": "baseline",
+        "top_result_ids": [
+          "650415977",
+          "751534816",
+          "541734274",
+          "334126921",
+          "541556638"
+        ],
+        "top_result_names": [
+          "Dunn Foundation",
+          "Ch Foundation",
+          "Meat Foundation",
+          "Lifeshift Foundation",
+          "The Layman Family Foundation Foundation"
+        ]
+      },
+      {
+        "config": "candidate_009",
+        "top_result_ids": [
+          "650415977",
+          "541734274",
+          "334126921",
+          "541556638",
+          "201476451"
+        ],
+        "top_result_names": [
+          "Dunn Foundation",
+          "Meat Foundation",
+          "Lifeshift Foundation",
+          "The Layman Family Foundation Foundation",
+          "Pbs Foundation"
+        ]
+      },
+      {
+        "config": "candidate_306",
+        "top_result_ids": [
+          "650415977",
+          "541734274",
+          "334126921",
+          "541556638",
+          "201476451"
+        ],
+        "top_result_names": [
+          "Dunn Foundation",
+          "Meat Foundation",
+          "Lifeshift Foundation",
+          "The Layman Family Foundation Foundation",
+          "Pbs Foundation"
+        ]
+      },
+      {
+        "config": "candidate_166",
+        "top_result_ids": [
+          "650415977",
+          "541734274",
+          "334126921",
+          "541556638",
+          "201476451"
+        ],
+        "top_result_names": [
+          "Dunn Foundation",
+          "Meat Foundation",
+          "Lifeshift Foundation",
+          "The Layman Family Foundation Foundation",
+          "Pbs Foundation"
+        ]
+      }
+    ]
+  },
+  {
+    "case_id": "silver_019",
+    "confidence": 0.9,
+    "mission": "General &amp; Unrestricted",
+    "locationServed": "DC",
+    "budgetBand": "under_250k",
+    "positives": [
+      "650415977"
+    ],
+    "negatives": [
+      "237093598",
+      "131628151",
+      "921508722",
+      "264009689",
+      "221888162",
+      "311580756"
+    ],
+    "comparisons": [
+      {
+        "config": "baseline",
+        "top_result_ids": [
+          "650415977",
+          "751534816",
+          "743158155",
+          "541824272",
+          "851080849"
+        ],
+        "top_result_names": [
+          "Dunn Foundation",
+          "Ch Foundation",
+          "Peak Grantmaking Inc",
+          "Asmc Foundation",
+          "Kratom Foundation"
+        ]
+      },
+      {
+        "config": "candidate_009",
+        "top_result_ids": [
+          "650415977",
+          "743158155",
+          "541824272",
+          "851080849",
+          "251823874"
+        ],
+        "top_result_names": [
+          "Dunn Foundation",
+          "Peak Grantmaking Inc",
+          "Asmc Foundation",
+          "Kratom Foundation",
+          "Wyss Foundation"
+        ]
+      },
+      {
+        "config": "candidate_306",
+        "top_result_ids": [
+          "650415977",
+          "743158155",
+          "541824272",
+          "851080849",
+          "251823874"
+        ],
+        "top_result_names": [
+          "Dunn Foundation",
+          "Peak Grantmaking Inc",
+          "Asmc Foundation",
+          "Kratom Foundation",
+          "Wyss Foundation"
+        ]
+      },
+      {
+        "config": "candidate_166",
+        "top_result_ids": [
+          "650415977",
+          "743158155",
+          "541824272",
+          "851080849",
+          "251823874"
+        ],
+        "top_result_names": [
+          "Dunn Foundation",
+          "Peak Grantmaking Inc",
+          "Asmc Foundation",
+          "Kratom Foundation",
+          "Wyss Foundation"
+        ]
+      }
+    ]
+  },
+  {
+    "case_id": "silver_020",
+    "confidence": 0.9,
+    "mission": "General &amp; Unrestricted",
+    "locationServed": "IN",
+    "budgetBand": "under_250k",
+    "positives": [
+      "650415977"
+    ],
+    "negatives": [
+      "131628151",
+      "921508722",
+      "264009689",
+      "221888162",
+      "941655673",
+      "943307699"
+    ],
+    "comparisons": [
+      {
+        "config": "baseline",
+        "top_result_ids": [
+          "346853245",
+          "346853246",
+          "364118456",
+          "311580756",
+          "351813476"
+        ],
+        "top_result_names": [
+          "Toledo Community Foundation Seneca Foundation",
+          "Toledo Community Foundation Algonquin Foundation",
+          "Greenwood Philanthropic Fund",
+          "Lilly Endowment",
+          "Lumina Foundation"
+        ]
+      },
+      {
+        "config": "candidate_009",
+        "top_result_ids": [
+          "346853245",
+          "346853246",
+          "311580756",
+          "351813476",
+          "346555963"
+        ],
+        "top_result_names": [
+          "Toledo Community Foundation Seneca Foundation",
+          "Toledo Community Foundation Algonquin Foundation",
+          "Lilly Endowment",
+          "Lumina Foundation",
+          "Stanita Foundation"
+        ]
+      },
+      {
+        "config": "candidate_306",
+        "top_result_ids": [
+          "346853245",
+          "346853246",
+          "311580756",
+          "351813476",
+          "346555963"
+        ],
+        "top_result_names": [
+          "Toledo Community Foundation Seneca Foundation",
+          "Toledo Community Foundation Algonquin Foundation",
+          "Lilly Endowment",
+          "Lumina Foundation",
+          "Stanita Foundation"
+        ]
+      },
+      {
+        "config": "candidate_166",
+        "top_result_ids": [
+          "346853245",
+          "346853246",
+          "311580756",
+          "351813476",
+          "346555963"
+        ],
+        "top_result_names": [
+          "Toledo Community Foundation Seneca Foundation",
+          "Toledo Community Foundation Algonquin Foundation",
+          "Lilly Endowment",
+          "Lumina Foundation",
+          "Stanita Foundation"
+        ]
+      }
+    ]
+  },
+  {
+    "case_id": "silver_021",
+    "confidence": 0.9,
+    "mission": "General &amp; Unrestricted",
+    "locationServed": "DC",
+    "budgetBand": "under_250k",
+    "positives": [
+      "650415977"
+    ],
+    "negatives": [
+      "237093598",
+      "131628151",
+      "921508722",
+      "264009689",
+      "221888162",
+      "311580756"
+    ],
+    "comparisons": [
+      {
+        "config": "baseline",
+        "top_result_ids": [
+          "650415977",
+          "751534816",
+          "743158155",
+          "541824272",
+          "851080849"
+        ],
+        "top_result_names": [
+          "Dunn Foundation",
+          "Ch Foundation",
+          "Peak Grantmaking Inc",
+          "Asmc Foundation",
+          "Kratom Foundation"
+        ]
+      },
+      {
+        "config": "candidate_009",
+        "top_result_ids": [
+          "650415977",
+          "743158155",
+          "541824272",
+          "851080849",
+          "251823874"
+        ],
+        "top_result_names": [
+          "Dunn Foundation",
+          "Peak Grantmaking Inc",
+          "Asmc Foundation",
+          "Kratom Foundation",
+          "Wyss Foundation"
+        ]
+      },
+      {
+        "config": "candidate_306",
+        "top_result_ids": [
+          "650415977",
+          "743158155",
+          "541824272",
+          "851080849",
+          "251823874"
+        ],
+        "top_result_names": [
+          "Dunn Foundation",
+          "Peak Grantmaking Inc",
+          "Asmc Foundation",
+          "Kratom Foundation",
+          "Wyss Foundation"
+        ]
+      },
+      {
+        "config": "candidate_166",
+        "top_result_ids": [
+          "650415977",
+          "743158155",
+          "541824272",
+          "851080849",
+          "251823874"
+        ],
+        "top_result_names": [
+          "Dunn Foundation",
+          "Peak Grantmaking Inc",
+          "Asmc Foundation",
+          "Kratom Foundation",
+          "Wyss Foundation"
+        ]
+      }
+    ]
+  },
+  {
+    "case_id": "silver_022",
+    "confidence": 0.9,
+    "mission": "General &amp; Unrestricted",
+    "locationServed": "IL",
+    "budgetBand": "under_250k",
+    "positives": [
+      "650415977"
+    ],
+    "negatives": [
+      "131628151",
+      "921508722",
+      "264009689",
+      "221888162",
+      "941655673",
+      "943307699"
+    ],
+    "comparisons": [
+      {
+        "config": "baseline",
+        "top_result_ids": [
+          "346853245",
+          "346853246",
+          "364118456",
+          "363625046",
+          "366068271"
+        ],
+        "top_result_names": [
+          "Toledo Community Foundation Seneca Foundation",
+          "Toledo Community Foundation Algonquin Foundation",
+          "Greenwood Philanthropic Fund",
+          "Chicago Community Trust",
+          "Greater Chicago Food Depository"
+        ]
+      },
+      {
+        "config": "candidate_009",
+        "top_result_ids": [
+          "346853245",
+          "364118456",
+          "346853246",
+          "363625046",
+          "366068271"
+        ],
+        "top_result_names": [
+          "Toledo Community Foundation Seneca Foundation",
+          "Greenwood Philanthropic Fund",
+          "Toledo Community Foundation Algonquin Foundation",
+          "Chicago Community Trust",
+          "Greater Chicago Food Depository"
+        ]
+      },
+      {
+        "config": "candidate_306",
+        "top_result_ids": [
+          "346853245",
+          "364118456",
+          "346853246",
+          "363625046",
+          "366068271"
+        ],
+        "top_result_names": [
+          "Toledo Community Foundation Seneca Foundation",
+          "Greenwood Philanthropic Fund",
+          "Toledo Community Foundation Algonquin Foundation",
+          "Chicago Community Trust",
+          "Greater Chicago Food Depository"
+        ]
+      },
+      {
+        "config": "candidate_166",
+        "top_result_ids": [
+          "346853245",
+          "364118456",
+          "346853246",
+          "363625046",
+          "366068271"
+        ],
+        "top_result_names": [
+          "Toledo Community Foundation Seneca Foundation",
+          "Greenwood Philanthropic Fund",
+          "Toledo Community Foundation Algonquin Foundation",
+          "Chicago Community Trust",
+          "Greater Chicago Food Depository"
+        ]
+      }
+    ]
+  },
+  {
+    "case_id": "silver_023",
+    "confidence": 0.9,
+    "mission": "General &amp; Unrestricted",
+    "locationServed": "PA",
+    "budgetBand": "under_250k",
+    "positives": [
+      "650415977"
+    ],
+    "negatives": [
+      "237093598",
+      "311580756",
+      "941655673",
+      "381359264",
+      "943307699",
+      "454856659"
+    ],
+    "comparisons": [
+      {
+        "config": "baseline",
+        "top_result_ids": [
+          "813520745",
+          "232288310",
+          "991161539",
+          "871634915",
+          "231390618"
+        ],
+        "top_result_names": [
+          "Hess Philanthropic Fund",
+          "Foundation For Leadership Foundation",
+          "Kcx Foundation",
+          "Peoples Foundation",
+          "Devereux Foundation"
+        ]
+      },
+      {
+        "config": "candidate_009",
+        "top_result_ids": [
+          "232288310",
+          "991161539",
+          "871634915",
+          "231390618",
+          "306192502"
+        ],
+        "top_result_names": [
+          "Foundation For Leadership Foundation",
+          "Kcx Foundation",
+          "Peoples Foundation",
+          "Devereux Foundation",
+          "Cahouet Foundation"
+        ]
+      },
+      {
+        "config": "candidate_306",
+        "top_result_ids": [
+          "232288310",
+          "991161539",
+          "871634915",
+          "231390618",
+          "306192502"
+        ],
+        "top_result_names": [
+          "Foundation For Leadership Foundation",
+          "Kcx Foundation",
+          "Peoples Foundation",
+          "Devereux Foundation",
+          "Cahouet Foundation"
+        ]
+      },
+      {
+        "config": "candidate_166",
+        "top_result_ids": [
+          "232288310",
+          "991161539",
+          "871634915",
+          "231390618",
+          "306192502"
+        ],
+        "top_result_names": [
+          "Foundation For Leadership Foundation",
+          "Kcx Foundation",
+          "Peoples Foundation",
+          "Devereux Foundation",
+          "Cahouet Foundation"
+        ]
+      }
+    ]
+  },
+  {
+    "case_id": "silver_024",
+    "confidence": 0.9,
+    "mission": "General &amp; Unrestricted",
+    "locationServed": "NY",
+    "budgetBand": "under_250k",
+    "positives": [
+      "650415977"
+    ],
+    "negatives": [
+      "237093598",
+      "311580756",
+      "941655673",
+      "381359264",
+      "943307699",
+      "454856659"
+    ],
+    "comparisons": [
+      {
+        "config": "baseline",
+        "top_result_ids": [
+          "813520745",
+          "264009689",
+          "136130659",
+          "222882549",
+          "133193063"
+        ],
+        "top_result_names": [
+          "Hess Philanthropic Fund",
+          "Bloomberg Philanthropies",
+          "New York Community Trust",
+          "Wellspring Philanthropic Fund",
+          "New York Foundation"
+        ]
+      },
+      {
+        "config": "candidate_009",
+        "top_result_ids": [
+          "264009689",
+          "136130659",
+          "222882549",
+          "133193063",
+          "311774905"
+        ],
+        "top_result_names": [
+          "Bloomberg Philanthropies",
+          "New York Community Trust",
+          "Wellspring Philanthropic Fund",
+          "New York Foundation",
+          "Gs Donor Advised Philanthropy Fund For Wealth Management Inc"
+        ]
+      },
+      {
+        "config": "candidate_306",
+        "top_result_ids": [
+          "264009689",
+          "136130659",
+          "222882549",
+          "133193063",
+          "311774905"
+        ],
+        "top_result_names": [
+          "Bloomberg Philanthropies",
+          "New York Community Trust",
+          "Wellspring Philanthropic Fund",
+          "New York Foundation",
+          "Gs Donor Advised Philanthropy Fund For Wealth Management Inc"
+        ]
+      },
+      {
+        "config": "candidate_166",
+        "top_result_ids": [
+          "264009689",
+          "136130659",
+          "222882549",
+          "133193063",
+          "311774905"
+        ],
+        "top_result_names": [
+          "Bloomberg Philanthropies",
+          "New York Community Trust",
+          "Wellspring Philanthropic Fund",
+          "New York Foundation",
+          "Gs Donor Advised Philanthropy Fund For Wealth Management Inc"
+        ]
+      }
+    ]
+  },
+  {
+    "case_id": "silver_025",
+    "confidence": 0.9,
+    "mission": "General &amp; Unrestricted",
+    "locationServed": "IN",
+    "budgetBand": "under_250k",
+    "positives": [
+      "650415977"
+    ],
+    "negatives": [
+      "131628151",
+      "921508722",
+      "264009689",
+      "221888162",
+      "941655673",
+      "943307699"
+    ],
+    "comparisons": [
+      {
+        "config": "baseline",
+        "top_result_ids": [
+          "346853245",
+          "346853246",
+          "364118456",
+          "311580756",
+          "351813476"
+        ],
+        "top_result_names": [
+          "Toledo Community Foundation Seneca Foundation",
+          "Toledo Community Foundation Algonquin Foundation",
+          "Greenwood Philanthropic Fund",
+          "Lilly Endowment",
+          "Lumina Foundation"
+        ]
+      },
+      {
+        "config": "candidate_009",
+        "top_result_ids": [
+          "346853245",
+          "346853246",
+          "311580756",
+          "351813476",
+          "346555963"
+        ],
+        "top_result_names": [
+          "Toledo Community Foundation Seneca Foundation",
+          "Toledo Community Foundation Algonquin Foundation",
+          "Lilly Endowment",
+          "Lumina Foundation",
+          "Stanita Foundation"
+        ]
+      },
+      {
+        "config": "candidate_306",
+        "top_result_ids": [
+          "346853245",
+          "346853246",
+          "311580756",
+          "351813476",
+          "346555963"
+        ],
+        "top_result_names": [
+          "Toledo Community Foundation Seneca Foundation",
+          "Toledo Community Foundation Algonquin Foundation",
+          "Lilly Endowment",
+          "Lumina Foundation",
+          "Stanita Foundation"
+        ]
+      },
+      {
+        "config": "candidate_166",
+        "top_result_ids": [
+          "346853245",
+          "346853246",
+          "311580756",
+          "351813476",
+          "346555963"
+        ],
+        "top_result_names": [
+          "Toledo Community Foundation Seneca Foundation",
+          "Toledo Community Foundation Algonquin Foundation",
+          "Lilly Endowment",
+          "Lumina Foundation",
+          "Stanita Foundation"
+        ]
+      }
+    ]
+  },
+  {
+    "case_id": "silver_026",
+    "confidence": 0.9,
+    "mission": "General &amp; Unrestricted",
+    "locationServed": "CA",
+    "budgetBand": "under_250k",
+    "positives": [
+      "650415977"
+    ],
+    "negatives": [
+      "237093598",
+      "131628151",
+      "921508722",
+      "264009689",
+      "221888162",
+      "311580756"
+    ],
+    "comparisons": [
+      {
+        "config": "baseline",
+        "top_result_ids": [
+          "941655673",
+          "943307699",
+          "454856659",
+          "952942582",
+          "954766599"
+        ],
+        "top_result_names": [
+          "William and Flora Hewlett Foundation",
+          "David & Lucile Packard Foundation",
+          "Emerson Collective",
+          "California Community Foundation",
+          "California Endowment"
+        ]
+      },
+      {
+        "config": "candidate_009",
+        "top_result_ids": [
+          "941655673",
+          "943307699",
+          "454856659",
+          "952942582",
+          "954766599"
+        ],
+        "top_result_names": [
+          "William and Flora Hewlett Foundation",
+          "David & Lucile Packard Foundation",
+          "Emerson Collective",
+          "California Community Foundation",
+          "California Endowment"
+        ]
+      },
+      {
+        "config": "candidate_306",
+        "top_result_ids": [
+          "941655673",
+          "943307699",
+          "454856659",
+          "952942582",
+          "954766599"
+        ],
+        "top_result_names": [
+          "William and Flora Hewlett Foundation",
+          "David & Lucile Packard Foundation",
+          "Emerson Collective",
+          "California Community Foundation",
+          "California Endowment"
+        ]
+      },
+      {
+        "config": "candidate_166",
+        "top_result_ids": [
+          "941655673",
+          "943307699",
+          "454856659",
+          "952942582",
+          "954766599"
+        ],
+        "top_result_names": [
+          "William and Flora Hewlett Foundation",
+          "David & Lucile Packard Foundation",
+          "Emerson Collective",
+          "California Community Foundation",
+          "California Endowment"
+        ]
+      }
+    ]
+  }
+]
