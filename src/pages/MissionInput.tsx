@@ -4,12 +4,20 @@ import { ArrowRight, Sparkles, X, Plus, MapPin } from 'lucide-react';
 import { BudgetBand } from '../types';
 
 const SUGGESTED_KEYWORDS = [
-  'k-12 education',
-  'adult literacy',
   'early childhood education',
+  'pre-k readiness',
+  'kindergarten readiness',
+  'elementary reading intervention',
+  'middle school tutoring',
+  'high school college readiness',
+  'adult literacy',
+  'english language learning',
+  'special education inclusion',
   'college access',
+  'college persistence',
   'after-school stem',
   'workforce development',
+  'career and technical education',
   'mental health counseling',
   'substance use recovery',
   'housing assistance',

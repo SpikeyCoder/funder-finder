@@ -22,7 +22,7 @@ const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || '';
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const FOUNDATION_SCAN_LIMIT = 250;
 const CANDIDATE_LIMIT = 120;
-const RESULTS_N = 10;
+const MIN_RESULT_FIT_SCORE = 0.1;
 const MIN_GRANT_YEAR = new Date().getUTCFullYear() - 5;
 const SCORING_VERSION = 'grantee-fit-v6';
 
@@ -1049,7 +1049,7 @@ Deno.serve(async (req) => {
         }
         return (b.total_giving || 0) - (a.total_giving || 0);
       })
-      .slice(0, RESULTS_N);
+      .filter((row) => (row.fit_score || 0) >= MIN_RESULT_FIT_SCORE);
 
     await sbFetch('search_cache', {
       method: 'POST',

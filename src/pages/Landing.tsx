@@ -48,7 +48,7 @@ export default function Landing() {
               {
                 icon: <Target size={32} className="text-blue-400" />,
                 step: '1. Enter Your Mission',
-                desc: "Describe your mission and add optional exclusion keywords (for example: adult literacy, not broad education).",
+                desc: "Describe your mission and add optional exclusion keywords (for example: early childhood education, adult literacy).",
               },
             {
               icon: <Zap size={32} className="text-green-400" />,
