@@ -24,7 +24,7 @@ const FOUNDATION_SCAN_LIMIT = 250;
 const CANDIDATE_LIMIT = 120;
 const RESULTS_N = 10;
 const MIN_GRANT_YEAR = new Date().getUTCFullYear() - 5;
-const SCORING_VERSION = 'grantee-fit-v3';
+const SCORING_VERSION = 'grantee-fit-v4';
 
 // Tuned on eval/cases.silver.jsonl via scripts/tune-ranker-weights.js.
 const SCORING_WEIGHTS = {
@@ -95,6 +95,7 @@ interface GrantRow {
   grant_year: number;
   grant_amount: number | null;
   grantee_name: string;
+  grantee_ein: string | null;
   grantee_state: string | null;
   grantee_country: string | null;
   purpose_text: string | null;
@@ -543,6 +544,57 @@ function coerceStringArray(input: unknown): string[] {
   return Array.isArray(input) ? input.filter((v) => typeof v === 'string') as string[] : [];
 }
 
+const ORGANIZATION_HINT_WORDS = new Set([
+  'academy', 'agency', 'alliance', 'arts', 'association', 'bank', 'board', 'bureau', 'camp', 'care',
+  'center', 'centre', 'charity', 'children', 'church', 'city', 'clinic', 'coalition', 'college', 'commission',
+  'committee', 'community', 'company', 'corp', 'corporation', 'council', 'county', 'department', 'district',
+  'education', 'enterprise', 'fellowship', 'foundation', 'fund', 'group', 'health', 'hospital', 'institute',
+  'library', 'llc', 'ltd', 'ministries', 'ministry', 'museum', 'network', 'nonprofit', 'office', 'organization',
+  'partners', 'partnership', 'program', 'project', 'relief', 'research', 'school', 'service', 'services',
+  'society', 'systems', 'team', 'theater', 'theatre', 'trust', 'university',
+]);
+
+function missionSignalText(grant: GrantRow): string {
+  return [grant.mission_signal_text || '', grant.purpose_text || '', grant.ntee_code || '']
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function hasMissionEvidence(grant: GrantRow): boolean {
+  const signal = missionSignalText(grant);
+  return signal.length >= 16;
+}
+
+function isLikelyIndividualGrantee(grant: GrantRow): boolean {
+  if (normalizedEin(grant.grantee_ein)) return false;
+
+  const normalized = grant.grantee_name
+    .replace(/[.,]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!normalized) return true;
+
+  const lower = normalized.toLowerCase();
+  const tokens = lower.split(' ').filter(Boolean);
+  if (tokens.length < 2 || tokens.length > 4) return false;
+  if (/[0-9&/]/.test(lower)) return false;
+
+  if (tokens.some((token) => ORGANIZATION_HINT_WORDS.has(token))) return false;
+  if (tokens.some((token) => token.length <= 1 || token.length > 16)) return false;
+  if (!tokens.every((token) => /^[a-z'-]+$/.test(token))) return false;
+
+  // Name-like pattern with no EIN and no mission evidence => likely an individual.
+  if (!hasMissionEvidence(grant)) return true;
+
+  return false;
+}
+
+function isEligibleOrganizationGrant(grant: GrantRow): boolean {
+  if (isLikelyIndividualGrantee(grant)) return false;
+  return hasMissionEvidence(grant);
+}
+
 function grantMatchReasons(
   grant: ScoredGrant,
   userLocation: UserLocation,
@@ -674,8 +726,8 @@ Deno.serve(async (req) => {
 
     if (candidateIds.length) {
       const selectColumns = userMissionEmbedding
-        ? 'id,foundation_id,grant_year,grant_amount,grantee_name,grantee_state,grantee_country,purpose_text,ntee_code,mission_signal_text,grantee_budget_band,mission_embedding'
-        : 'id,foundation_id,grant_year,grant_amount,grantee_name,grantee_state,grantee_country,purpose_text,ntee_code,mission_signal_text,grantee_budget_band';
+        ? 'id,foundation_id,grant_year,grant_amount,grantee_name,grantee_ein,grantee_state,grantee_country,purpose_text,ntee_code,mission_signal_text,grantee_budget_band,mission_embedding'
+        : 'id,foundation_id,grant_year,grant_amount,grantee_name,grantee_ein,grantee_state,grantee_country,purpose_text,ntee_code,mission_signal_text,grantee_budget_band';
 
       const inFilter = buildInFilter(candidateIds);
 
@@ -707,7 +759,9 @@ Deno.serve(async (req) => {
       }
 
       const foundationsNeedingFallbackHistory = candidateIds.filter((foundationId) => {
-        const recentCount = grantsByFoundation.get(foundationId)?.length || 0;
+        const recentCount = (grantsByFoundation.get(foundationId) || [])
+          .filter((grant) => isEligibleOrganizationGrant(grant))
+          .length;
         return recentCount < 3;
       });
 
@@ -736,8 +790,10 @@ Deno.serve(async (req) => {
         const grants = grantsByFoundation.get(funder.id) || [];
         const feature = featuresByFoundation.get(funder.id);
 
-        const scoredGrants: ScoredGrant[] = grants.map((grant) => {
-          const textSignal = [grant.mission_signal_text || '', grant.purpose_text || '', grant.ntee_code || '', grant.grantee_name || ''].join(' ');
+        const eligibleGrants = grants.filter((grant) => isEligibleOrganizationGrant(grant));
+
+        const scoredGrants: ScoredGrant[] = eligibleGrants.map((grant) => {
+          const textSignal = missionSignalText(grant);
           const textTokens = tokenize(textSignal);
           const lexical = lexicalSimilarity(userTokens, textTokens);
 
@@ -746,7 +802,7 @@ Deno.serve(async (req) => {
             ? cosineSimilarity(userMissionEmbedding, grantEmbedding)
             : null;
 
-          const missionScore = embeddingSimilarity ?? (lexical > 0 ? lexical : 0.2);
+          const missionScore = embeddingSimilarity ?? (lexical > 0 ? lexical : 0.12);
           const locScore = locationSimilarity(userLocation, grant.grantee_state, grant.grantee_country);
           const sizeScore = sizeSimilarity(userBudgetBandNumeric, grant.grantee_budget_band);
 
@@ -799,7 +855,7 @@ Deno.serve(async (req) => {
           ? clamp01(feature.data_completeness_score)
           : clamp01(Math.min(scoredGrants.length / 8, 1) * 0.8);
 
-        const historyCoverage = clamp01((feature?.grants_last_5y_count || scoredGrants.length) / 12);
+        const historyCoverage = clamp01(scoredGrants.length / 12);
         const historyWeightRaw =
           SCORING_WEIGHTS.historyWeightMin
           + historyCoverage * SCORING_WEIGHTS.historyCoverageBoost;

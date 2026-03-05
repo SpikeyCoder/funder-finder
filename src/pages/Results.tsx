@@ -474,7 +474,7 @@ export default function Results() {
                   {/* Similar prior grantees */}
                   {funder.similar_past_grantees && funder.similar_past_grantees.length > 0 && (
                     <div className="mb-4 bg-[#0d1117] border border-[#30363d] rounded-xl px-4 py-3">
-                      <p className="text-xs text-blue-400 font-semibold mb-3">Similar past grantees (last 5 years)</p>
+                      <p className="text-xs text-blue-400 font-semibold mb-3">Similar past grantees</p>
                       <div className="space-y-3">
                         {funder.similar_past_grantees.slice(0, 3).map((grantee, idx) => (
                           <div key={`${funder.id}-grantee-${idx}`} className="border border-[#30363d] rounded-lg p-3 bg-[#111723]">
