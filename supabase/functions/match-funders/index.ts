@@ -24,7 +24,7 @@ const FOUNDATION_SCAN_LIMIT = 250;
 const CANDIDATE_LIMIT = 120;
 const MIN_RESULT_FIT_SCORE = 0.1;
 const MIN_GRANT_YEAR = new Date().getUTCFullYear() - 5;
-const SCORING_VERSION = 'grantee-fit-v6';
+const SCORING_VERSION = 'grantee-fit-v7';
 
 // Tuned on eval/cases.silver.jsonl via scripts/tune-ranker-weights.js.
 const SCORING_WEIGHTS = {
@@ -101,6 +101,7 @@ interface GrantRow {
   grant_amount: number | null;
   grantee_name: string;
   grantee_ein: string | null;
+  grantee_city: string | null;
   grantee_state: string | null;
   grantee_country: string | null;
   purpose_text: string | null;
@@ -122,6 +123,7 @@ interface FilingRow {
 }
 
 interface UserLocation {
+  city: string | null;
   state: string | null;
   region: string | null;
   isNationalUS: boolean;
@@ -358,19 +360,33 @@ const STATE_NAME_TO_CODE: Record<string, string> = {
 function parseUserLocation(input: string): UserLocation {
   const raw = input.trim();
   if (!raw) {
-    return { state: null, region: null, isNationalUS: false, isGlobal: false, hasLocationInput: false };
+    return { city: null, state: null, region: null, isNationalUS: false, isGlobal: false, hasLocationInput: false };
   }
 
   const text = raw.toLowerCase();
   const isGlobal = /\b(global|international|worldwide|world)\b/.test(text);
   const isNationalUS = /\b(national|nationwide|united states|u\.s\.|u\.s|usa|us)\b/.test(text);
 
+  let city: string | null = null;
   let state: string | null = null;
 
-  for (const [name, code] of Object.entries(STATE_NAME_TO_CODE)) {
-    if (text.includes(name)) {
-      state = code;
-      break;
+  const cityStateMatch = raw.match(/^([^,]+),\s*([^,]+)$/);
+  if (cityStateMatch) {
+    const cityPart = cityStateMatch[1].trim();
+    const statePart = cityStateMatch[2].trim().toLowerCase();
+    const stateFromPart = STATE_NAME_TO_CODE[statePart] || (REGION_BY_STATE[statePart.toUpperCase()] ? statePart.toUpperCase() : null);
+    if (stateFromPart && cityPart.length >= 2 && !/\b(national|global|international|rural|statewide)\b/i.test(cityPart)) {
+      city = cityPart.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, ' ').trim();
+      state = stateFromPart;
+    }
+  }
+
+  if (!state) {
+    for (const [name, code] of Object.entries(STATE_NAME_TO_CODE)) {
+      if (text.includes(name)) {
+        state = code;
+        break;
+      }
     }
   }
 
@@ -393,6 +409,7 @@ function parseUserLocation(input: string): UserLocation {
   }
 
   return {
+    city,
     state,
     region,
     isNationalUS,
@@ -410,9 +427,36 @@ function normalizeState(value: string | null | undefined): string | null {
   return STATE_NAME_TO_CODE[lower] || null;
 }
 
-function locationSimilarity(userLocation: UserLocation, granteeState: string | null, granteeCountry: string | null): number {
+function normalizeCity(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const normalized = value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return normalized || null;
+}
+
+function grantMatchesCityRequirement(userLocation: UserLocation, granteeCity: string | null, granteeState: string | null): boolean {
+  if (!userLocation.city) return true;
+  const city = normalizeCity(granteeCity);
+  if (!city || city !== userLocation.city) return false;
+  if (userLocation.state) {
+    const state = normalizeState(granteeState);
+    if (!state || state !== userLocation.state) return false;
+  }
+  return true;
+}
+
+function locationSimilarity(userLocation: UserLocation, granteeCity: string | null, granteeState: string | null, granteeCountry: string | null): number {
   if (userLocation.isGlobal) return 1;
   if (!userLocation.hasLocationInput) return 0.5;
+
+  if (userLocation.city) {
+    const city = normalizeCity(granteeCity);
+    if (!city) return 0.05;
+    if (city !== userLocation.city) return 0.05;
+  }
 
   const state = normalizeState(granteeState);
   const country = (granteeCountry || '').trim().toUpperCase();
@@ -648,7 +692,14 @@ function grantMatchReasons(
     reasons.push('Similar program area');
   }
 
-  if (grant.locationScore >= 0.95) {
+  const isSameCity = !!(
+    userLocation.city
+    && normalizeCity(grant.grant.grantee_city)
+    && normalizeCity(grant.grant.grantee_city) === userLocation.city
+  );
+  if (isSameCity) {
+    reasons.push('Same city served');
+  } else if (grant.locationScore >= 0.95) {
     reasons.push('Same state served');
   } else if (grant.locationScore >= 0.72) {
     reasons.push('Same region served');
@@ -783,8 +834,8 @@ Deno.serve(async (req) => {
 
     if (candidateIds.length) {
       const selectColumns = userMissionEmbedding
-        ? 'id,foundation_id,grant_year,grant_amount,grantee_name,grantee_ein,grantee_state,grantee_country,purpose_text,ntee_code,mission_signal_text,grantee_budget_band,mission_embedding'
-        : 'id,foundation_id,grant_year,grant_amount,grantee_name,grantee_ein,grantee_state,grantee_country,purpose_text,ntee_code,mission_signal_text,grantee_budget_band';
+        ? 'id,foundation_id,grant_year,grant_amount,grantee_name,grantee_ein,grantee_city,grantee_state,grantee_country,purpose_text,ntee_code,mission_signal_text,grantee_budget_band,mission_embedding'
+        : 'id,foundation_id,grant_year,grant_amount,grantee_name,grantee_ein,grantee_city,grantee_state,grantee_country,purpose_text,ntee_code,mission_signal_text,grantee_budget_band';
 
       const inFilter = buildInFilter(candidateIds);
 
@@ -828,7 +879,11 @@ Deno.serve(async (req) => {
 
       const foundationsNeedingFallbackHistory = candidateIds.filter((foundationId) => {
         const recentCount = (grantsByFoundation.get(foundationId) || [])
-          .filter((grant) => isEligibleOrganizationGrant(grant) && grantPassesUserCap(grant, userMaxGrantAmount))
+          .filter((grant) =>
+            isEligibleOrganizationGrant(grant)
+            && grantMatchesCityRequirement(userLocation, grant.grantee_city, grant.grantee_state)
+            && grantPassesUserCap(grant, userMaxGrantAmount),
+          )
           .length;
         return recentCount < 3;
       });
@@ -858,7 +913,10 @@ Deno.serve(async (req) => {
         const grants = grantsByFoundation.get(funder.id) || [];
         const feature = featuresByFoundation.get(funder.id);
 
-        const eligibleGrants = grants.filter((grant) => isEligibleOrganizationGrant(grant));
+        const eligibleGrants = grants.filter((grant) =>
+          isEligibleOrganizationGrant(grant)
+          && grantMatchesCityRequirement(userLocation, grant.grantee_city, grant.grantee_state),
+        );
 
         const scoredGrantsAll: ScoredGrant[] = eligibleGrants.map((grant) => {
           const textSignal = missionSignalText(grant);
@@ -872,7 +930,7 @@ Deno.serve(async (req) => {
             : null;
 
           const missionScore = embeddingSimilarity ?? (lexical > 0 ? lexical : 0.12);
-          const locScore = locationSimilarity(userLocation, grant.grantee_state, grant.grantee_country);
+          const locScore = locationSimilarity(userLocation, grant.grantee_city, grant.grantee_state, grant.grantee_country);
           const sizeScore = sizeSimilarity(userBudgetBandNumeric, grant.grantee_budget_band);
 
           const recencyYears = Math.max(0, new Date().getUTCFullYear() - (grant.grant_year || MIN_GRANT_YEAR));
