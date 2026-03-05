@@ -24,7 +24,7 @@ const FOUNDATION_SCAN_LIMIT = 250;
 const CANDIDATE_LIMIT = 120;
 const RESULTS_N = 10;
 const MIN_GRANT_YEAR = new Date().getUTCFullYear() - 5;
-const SCORING_VERSION = 'grantee-fit-v4';
+const SCORING_VERSION = 'grantee-fit-v5';
 
 // Tuned on eval/cases.silver.jsonl via scripts/tune-ranker-weights.js.
 const SCORING_WEIGHTS = {
@@ -42,6 +42,8 @@ const SCORING_WEIGHTS = {
   historyWeightMaxLimited: 0.5871,
   sizePenaltyMultiplier: 0.1721,
   medianBandPenalty: 0.0464,
+  noBudgetFitPenalty: 0.24,
+  lowBudgetFitPenalty: 0.08,
   dataCompletenessBonus: 0.0263,
   fallbackBaselineMultiplier: 0.9489,
   limitedDataMinGrants: 3,
@@ -453,6 +455,37 @@ function toNumericBudgetBand(budgetBand: BudgetBand): number | null {
   }
 }
 
+function maxSingleGrantForBudgetBand(budgetBand: BudgetBand): number | null {
+  switch (budgetBand) {
+    case 'under_250k':
+      return 25_000;
+    case '250k_1m':
+      return 100_000;
+    case '1m_5m':
+      return 500_000;
+    case 'over_5m':
+      return 500_000;
+    default:
+      return null;
+  }
+}
+
+function grantPassesUserCap(grant: GrantRow, maxGrantAmount: number | null): boolean {
+  if (!maxGrantAmount) return true;
+  return typeof grant.grant_amount === 'number'
+    && Number.isFinite(grant.grant_amount)
+    && grant.grant_amount > 0
+    && grant.grant_amount <= maxGrantAmount;
+}
+
+function formatUsd(amount: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
 function sizeSimilarity(userBand: number | null, granteeBand: number | null): number {
   if (!userBand) return 0.55;
   if (!granteeBand) return 0.45;
@@ -599,6 +632,7 @@ function grantMatchReasons(
   grant: ScoredGrant,
   userLocation: UserLocation,
   userBand: number | null,
+  maxGrantAmount: number | null,
 ): string[] {
   const reasons: string[] = [];
 
@@ -618,6 +652,10 @@ function grantMatchReasons(
     reasons.push('Similar budget band');
   } else if (userBand && grant.sizeScore >= 0.65) {
     reasons.push('Adjacent budget band');
+  }
+
+  if (maxGrantAmount && grantPassesUserCap(grant.grant, maxGrantAmount)) {
+    reasons.push('Grant size is <=10% of your budget');
   }
 
   if (reasons.length === 0) {
@@ -695,6 +733,7 @@ Deno.serve(async (req) => {
     const userTokens = tokenize(`${mission} ${keywords.join(' ')}`);
     const userLocation = parseUserLocation(locationServed);
     const userBudgetBandNumeric = toNumericBudgetBand(budgetBand);
+    const userMaxGrantAmount = maxSingleGrantForBudgetBand(budgetBand);
     const userMissionEmbedding = await fetchMissionEmbedding(`${mission} ${keywords.join(' ')}`.trim());
 
     const prelim = funders.map((funder) => {
@@ -760,7 +799,7 @@ Deno.serve(async (req) => {
 
       const foundationsNeedingFallbackHistory = candidateIds.filter((foundationId) => {
         const recentCount = (grantsByFoundation.get(foundationId) || [])
-          .filter((grant) => isEligibleOrganizationGrant(grant))
+          .filter((grant) => isEligibleOrganizationGrant(grant) && grantPassesUserCap(grant, userMaxGrantAmount))
           .length;
         return recentCount < 3;
       });
@@ -792,7 +831,7 @@ Deno.serve(async (req) => {
 
         const eligibleGrants = grants.filter((grant) => isEligibleOrganizationGrant(grant));
 
-        const scoredGrants: ScoredGrant[] = eligibleGrants.map((grant) => {
+        const scoredGrantsAll: ScoredGrant[] = eligibleGrants.map((grant) => {
           const textSignal = missionSignalText(grant);
           const textTokens = tokenize(textSignal);
           const lexical = lexicalSimilarity(userTokens, textTokens);
@@ -829,13 +868,21 @@ Deno.serve(async (req) => {
           };
         }).sort((a, b) => b.score - a.score);
 
-        const topGrants = scoredGrants.slice(0, 3);
-        const topForAverage = scoredGrants.slice(0, SCORING_WEIGHTS.topGrantAverageN);
+        const capQualifiedScoredGrants = userMaxGrantAmount
+          ? scoredGrantsAll.filter((row) => grantPassesUserCap(row.grant, userMaxGrantAmount))
+          : scoredGrantsAll;
+        const scoredGrantsForScoring = capQualifiedScoredGrants.length
+          ? capQualifiedScoredGrants
+          : scoredGrantsAll;
+        const topGrantsForDisplay = userMaxGrantAmount
+          ? capQualifiedScoredGrants.slice(0, 3)
+          : scoredGrantsForScoring.slice(0, 3);
+        const topForAverage = scoredGrantsForScoring.slice(0, SCORING_WEIGHTS.topGrantAverageN);
         const historyScore = topForAverage.length
           ? topForAverage.reduce((sum, row) => sum + row.score, 0) / topForAverage.length
           : 0;
 
-        const grantsWithBand = scoredGrants.filter((g) => Number.isInteger(g.grant.grantee_budget_band));
+        const grantsWithBand = scoredGrantsForScoring.filter((g) => Number.isInteger(g.grant.grantee_budget_band));
         const oversizedCount = grantsWithBand.filter((g) =>
           userBudgetBandNumeric
           && g.grant.grantee_budget_band
@@ -851,16 +898,27 @@ Deno.serve(async (req) => {
           sizePenalty += SCORING_WEIGHTS.medianBandPenalty;
         }
 
+        if (userMaxGrantAmount) {
+          const capQualifiedRatio = scoredGrantsAll.length
+            ? capQualifiedScoredGrants.length / scoredGrantsAll.length
+            : 0;
+          if (capQualifiedScoredGrants.length === 0) {
+            sizePenalty += SCORING_WEIGHTS.noBudgetFitPenalty;
+          } else if (capQualifiedRatio < 0.2) {
+            sizePenalty += SCORING_WEIGHTS.lowBudgetFitPenalty;
+          }
+        }
+
         const dataCompleteness = typeof feature?.data_completeness_score === 'number'
           ? clamp01(feature.data_completeness_score)
-          : clamp01(Math.min(scoredGrants.length / 8, 1) * 0.8);
+          : clamp01(Math.min(scoredGrantsForScoring.length / 8, 1) * 0.8);
 
-        const historyCoverage = clamp01(scoredGrants.length / 12);
+        const historyCoverage = clamp01(scoredGrantsForScoring.length / 12);
         const historyWeightRaw =
           SCORING_WEIGHTS.historyWeightMin
           + historyCoverage * SCORING_WEIGHTS.historyCoverageBoost;
 
-        const hasMinimumGrantHistory = scoredGrants.length >= SCORING_WEIGHTS.limitedDataMinGrants;
+        const hasMinimumGrantHistory = topGrantsForDisplay.length >= SCORING_WEIGHTS.limitedDataMinGrants;
         const limitedGrantHistoryData =
           !hasMinimumGrantHistory
           || dataCompleteness < SCORING_WEIGHTS.limitedDataMinCompleteness;
@@ -876,22 +934,28 @@ Deno.serve(async (req) => {
           - sizePenalty,
         );
 
-        if (!scoredGrants.length) {
+        if (!scoredGrantsForScoring.length) {
           fitScore = clamp01(baseline * SCORING_WEIGHTS.fallbackBaselineMultiplier);
         }
 
-        const similaritySummary = topGrants.map((row) => ({
+        const similaritySummary = topGrantsForDisplay.map((row) => ({
           name: row.grant.grantee_name,
           year: row.grant.grant_year || null,
           amount: row.grant.grant_amount,
-          match_reasons: grantMatchReasons(row, userLocation, userBudgetBandNumeric),
+          match_reasons: grantMatchReasons(row, userLocation, userBudgetBandNumeric, userMaxGrantAmount),
         }));
 
         const factorLines: string[] = [];
 
-        if (historyScore >= 0.72 && topGrants.length > 0) {
-          factorLines.push(`Strong overlap with recent grantees like ${topGrants[0].grant.grantee_name}.`);
-        } else if (historyScore >= 0.56 && topGrants.length > 0) {
+        if (userMaxGrantAmount && topGrantsForDisplay.length >= 3) {
+          factorLines.push(`Includes similar grants at or below ${formatUsd(userMaxGrantAmount)} (<=10% of your budget).`);
+        } else if (userMaxGrantAmount && capQualifiedScoredGrants.length === 0) {
+          factorLines.push(`No similar grants at or below ${formatUsd(userMaxGrantAmount)} (<=10% budget target); this funder was downweighted.`);
+        }
+
+        if (historyScore >= 0.72 && topGrantsForDisplay.length > 0) {
+          factorLines.push(`Strong overlap with recent grantees like ${topGrantsForDisplay[0].grant.grantee_name}.`);
+        } else if (historyScore >= 0.56 && topGrantsForDisplay.length > 0) {
           factorLines.push('Moderate overlap with prior grantees in the last 5 years.');
         }
 
@@ -901,8 +965,8 @@ Deno.serve(async (req) => {
           factorLines.push('Past grantees skew larger than your selected budget band.');
         }
 
-        const bestLocationScore = topGrants.length
-          ? Math.max(...topGrants.map((g) => g.locationScore))
+        const bestLocationScore = topGrantsForDisplay.length
+          ? Math.max(...topGrantsForDisplay.map((g) => g.locationScore))
           : funderLocationBaseline(userLocation, funder.state);
 
         if (bestLocationScore >= 0.9) {
