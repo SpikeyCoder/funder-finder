@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "eval:build-cases": "node scripts/build-eval-cases.js",
     "eval:ranker": "node scripts/eval-ranker.js",
-    "eval:tune": "node scripts/tune-ranker-weights.js"
+    "eval:tune": "node scripts/tune-ranker-weights.js",
+    "eval:export-signals": "node scripts/export-search-signal-labels.js"
   },
   "dependencies": {
     "react": "^18.3.1",

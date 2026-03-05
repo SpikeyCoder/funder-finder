@@ -5,6 +5,7 @@ import {
   ArrowLeft, Check, ChevronDown, ChevronUp, Copy, Loader2, RefreshCw, Wand2,
 } from 'lucide-react';
 import { Funder } from '../types';
+import { getEdgeFunctionHeaders } from '../lib/supabase';
 import { formatGrantRange, formatTotalGiving } from '../utils/matching';
 
 const GRANT_WRITER_URL =
@@ -162,9 +163,10 @@ export default function GrantWriter() {
     setStreaming(true);
 
     try {
+      const headers = await getEdgeFunctionHeaders();
       const response = await fetch(GRANT_WRITER_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ funder, mission, orgDetails }),
       });
 

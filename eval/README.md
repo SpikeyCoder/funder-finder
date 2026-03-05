@@ -13,6 +13,8 @@ This folder contains the offline evaluation harness for funder ranking.
 - `results/top-configs.json`: top candidate weight sets
 - `weights/recommended.json`: selected weight set from tuning
 - `report.md`: markdown summary for decision-making
+- `labels/search-signal-labels.jsonl`: aggregated interaction labels from production logs
+- `labels/search-signal-summary.json`: export summary for signal volume/coverage
 
 ## Run
 
@@ -32,6 +34,12 @@ SUPABASE_SERVICE_ROLE_KEY=... SUPABASE_URL=https://tgtotjvdubhjxzybmdex.supabase
 
 ```bash
 SUPABASE_SERVICE_ROLE_KEY=... SUPABASE_URL=https://tgtotjvdubhjxzybmdex.supabase.co npm run eval:tune -- --iterations 320
+```
+
+4. Export log-only interaction labels for supervised training
+
+```bash
+SUPABASE_SERVICE_ROLE_KEY=... SUPABASE_URL=https://tgtotjvdubhjxzybmdex.supabase.co npm run eval:export-signals -- --days 30
 ```
 
 ## Metrics
