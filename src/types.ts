@@ -1,10 +1,18 @@
 export type FunderStatus = 'researching' | 'applied' | 'awarded' | 'passed';
+export type BudgetBand = 'under_250k' | '250k_1m' | '1m_5m' | 'over_5m' | 'prefer_not_to_say';
 
 export interface SavedFunderEntry {
   funder: Funder;
   status: FunderStatus;
   notes: string;
   savedAt: string;
+}
+
+export interface SimilarPastGrantee {
+  name: string;
+  year: number | null;
+  amount: number | null;
+  match_reasons: string[];
 }
 
 // Matches the Supabase `funders` table schema (snake_case from DB)
@@ -31,6 +39,10 @@ export interface Funder {
   reason?: string;
   next_step_url?: string;
   next_step_type?: string;
+  fit_score?: number;
+  fit_explanation?: string;
+  limited_grant_history_data?: boolean;
+  similar_past_grantees?: SimilarPastGrantee[];
   // Subpage URLs (populated by enrich-subpages.js)
   contact_url?: string | null;
   programs_url?: string | null;

@@ -1,0 +1,55 @@
+name: Sync Foundation Grant History
+
+on:
+  schedule:
+    # Daily at 09:00 UTC (~1:00 AM PT)
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+    inputs:
+      years_back:
+        description: Years of grant history to refresh
+        required: false
+        default: '5'
+      limit:
+        description: Number of foundations to scan
+        required: false
+        default: '50'
+      max_xml_per_run:
+        description: Max filings to parse this run
+        required: false
+        default: '20'
+      enable_embeddings:
+        description: Enable OpenAI embeddings (1 or 0)
+        required: false
+        default: '0'
+
+permissions:
+  contents: read
+
+jobs:
+  sync-grant-history:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Sync grant history
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          YEARS_BACK: ${{ github.event.inputs.years_back || '5' }}
+          LIMIT: ${{ github.event.inputs.limit || '50' }}
+          MAX_XML_PER_RUN: ${{ github.event.inputs.max_xml_per_run || '20' }}
+          ENABLE_EMBEDDINGS: ${{ github.event.inputs.enable_embeddings || '0' }}
+          XML_MIN_INTERVAL_MS: '65000'
+        run: node scripts/sync-grant-history.js

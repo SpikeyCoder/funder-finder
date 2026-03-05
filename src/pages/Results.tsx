@@ -28,10 +28,31 @@ function resolveNextStepUrl(nextStepUrl: string | undefined, website: string | n
   return toExternalUrl(nextStepUrl) ?? toExternalUrl(website);
 }
 import { findMatches, formatGrantRange, formatTotalGiving } from '../utils/matching';
-import { Funder } from '../types';
+import { BudgetBand, Funder } from '../types';
 import { getSavedIds, unsaveFunder } from '../utils/storage';
 import { useAuth } from '../contexts/AuthContext';
 import LoginModal from '../components/LoginModal';
+
+const BUDGET_BAND_LABEL: Record<BudgetBand, string> = {
+  under_250k: 'Under $250K',
+  '250k_1m': '$250K - $1M',
+  '1m_5m': '$1M - $5M',
+  over_5m: '$5M+',
+  prefer_not_to_say: 'Prefer not to say',
+};
+
+function isBudgetBand(value: unknown): value is BudgetBand {
+  return value === 'under_250k'
+    || value === '250k_1m'
+    || value === '1m_5m'
+    || value === 'over_5m'
+    || value === 'prefer_not_to_say';
+}
+
+function formatGrantAmount(amount: number | null | undefined): string {
+  if (!amount || !Number.isFinite(amount)) return 'Amount not disclosed';
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(amount);
+}
 
 export default function Results() {
   const location = useLocation();
@@ -43,6 +64,11 @@ export default function Results() {
   const mission: string = state.mission || sessionStorage.getItem('ff_mission') || '';
   const locationServed: string = state.locationServed || sessionStorage.getItem('ff_location') || '';
   const keywords: string[] = state.keywords ?? JSON.parse(sessionStorage.getItem('ff_keywords') || '[]');
+  const budgetBandFromState = state.budgetBand;
+  const budgetBandFromStorage = sessionStorage.getItem('ff_budget_band');
+  const budgetBand: BudgetBand = isBudgetBand(budgetBandFromState)
+    ? budgetBandFromState
+    : (isBudgetBand(budgetBandFromStorage) ? budgetBandFromStorage : 'prefer_not_to_say');
 
   const [matches, setMatches] = useState<Funder[]>([]);
   const [savedIds, setSavedIds] = useState<string[]>([]);
@@ -54,6 +80,7 @@ export default function Results() {
 
   // Login modal state
   const [loginModalFunder, setLoginModalFunder] = useState<Funder | null>(null);
+  const keywordKey = keywords.join('|');
 
   // Page title
   useEffect(() => {
@@ -71,7 +98,7 @@ export default function Results() {
     setLoading(true);
     setError(null);
     try {
-      const response = await findMatches(mission, locationServed, forceRefresh);
+      const response = await findMatches(mission, locationServed, keywords, budgetBand, forceRefresh);
       setMatches(response.results || []);
       setCached(response.cached);
     } catch (e) {
@@ -98,7 +125,7 @@ export default function Results() {
   useEffect(() => {
     loadMatches();
     loadSavedIds();
-  }, [mission, user]);
+  }, [mission, locationServed, budgetBand, keywordKey, user]);
 
   const toggleSave = async (funder: Funder) => {
     const alreadySaved = savedIds.includes(funder.id);
@@ -191,10 +218,15 @@ export default function Results() {
           <div>
             <h1 className="text-3xl font-bold">Your Funder Matches</h1>
             {!loading && (
-              <p className="text-gray-400 mt-1">
-                Found {filteredMatches.length} funders aligned with your mission
-                {cached && <span className="ml-2 text-xs text-gray-300">(cached)</span>}
-              </p>
+              <>
+                <p className="text-gray-400 mt-1">
+                  Found {filteredMatches.length} funders aligned with your mission
+                  {cached && <span className="ml-2 text-xs text-gray-300">(cached)</span>}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Budget band: {BUDGET_BAND_LABEL[budgetBand]}
+                </p>
+              </>
             )}
           </div>
           <div className="flex gap-3">
@@ -254,8 +286,8 @@ export default function Results() {
         {loading && (
           <div className="flex flex-col items-center justify-center py-24 text-gray-400">
             <Loader2 size={40} className="animate-spin mb-4 text-blue-400" />
-            <p className="text-lg font-medium">Analyzing your mission with AI...</p>
-            <p className="text-sm mt-2">Claude is matching funders to your mission statement</p>
+            <p className="text-lg font-medium">Analyzing your mission and fit signals...</p>
+            <p className="text-sm mt-2">Ranking by mission, geography, and similar prior grantees</p>
           </div>
         )}
 
@@ -308,7 +340,9 @@ export default function Results() {
           <div className="space-y-6">
             {filteredMatches.map((funder, index) => {
               const isSaved = savedIds.includes(funder.id);
-              const scorePercent = funder.score ? Math.round(funder.score * 100) : null;
+              const fitScore = funder.fit_score ?? funder.score;
+              const scorePercent = typeof fitScore === 'number' ? Math.round(fitScore * 100) : null;
+              const fitExplanation = funder.fit_explanation || funder.reason;
               return (
                 <div key={funder.id} className="bg-[#161b22] border border-[#30363d] rounded-2xl p-6">
                   <div className="flex items-start gap-3 mb-3">
@@ -318,7 +352,7 @@ export default function Results() {
                         <h2 className="text-xl font-bold">{funder.name}</h2>
                         {scorePercent !== null && (
                           <span className={`text-xs font-semibold px-2 py-1 rounded-full whitespace-nowrap ${scorePercent >= 80 ? 'bg-green-900/40 text-green-400' : scorePercent >= 60 ? 'bg-blue-900/40 text-blue-400' : 'bg-gray-800 text-gray-400'}`}>
-                            {scorePercent}% match
+                            {scorePercent}% fit score
                           </span>
                         )}
                       </div>
@@ -340,11 +374,44 @@ export default function Results() {
                     </div>
                   </div>
 
-                  {/* Claude's reason */}
-                  {funder.reason && (
+                  {/* Fit explanation */}
+                  {fitExplanation && (
                     <div className="mb-4 bg-[#0d1117] border border-blue-900/50 rounded-xl px-4 py-3">
-                      <p className="text-xs text-blue-400 font-semibold mb-1">Why this funder matches</p>
-                      <p className="text-gray-300 text-sm">{funder.reason}</p>
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <p className="text-xs text-blue-400 font-semibold">Why this foundation fits</p>
+                        {funder.limited_grant_history_data && (
+                          <span className="text-[10px] px-2 py-1 rounded-full bg-amber-900/40 text-amber-300 border border-amber-800">
+                            Limited grant history data
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-gray-300 text-sm">{fitExplanation}</p>
+                    </div>
+                  )}
+
+                  {/* Similar prior grantees */}
+                  {funder.similar_past_grantees && funder.similar_past_grantees.length > 0 && (
+                    <div className="mb-4 bg-[#0d1117] border border-[#30363d] rounded-xl px-4 py-3">
+                      <p className="text-xs text-blue-400 font-semibold mb-3">Similar past grantees (last 5 years)</p>
+                      <div className="space-y-3">
+                        {funder.similar_past_grantees.slice(0, 3).map((grantee, idx) => (
+                          <div key={`${funder.id}-grantee-${idx}`} className="border border-[#30363d] rounded-lg p-3 bg-[#111723]">
+                            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                              <p className="text-sm font-semibold text-white">{grantee.name}</p>
+                              <p className="text-xs text-gray-300">
+                                {(grantee.year ? String(grantee.year) : 'Year n/a')} · {formatGrantAmount(grantee.amount)}
+                              </p>
+                            </div>
+                            {grantee.match_reasons.length > 0 && (
+                              <ul className="list-disc ml-4 text-xs text-gray-300 space-y-1">
+                                {grantee.match_reasons.slice(0, 2).map((reason, reasonIdx) => (
+                                  <li key={`${funder.id}-grantee-${idx}-reason-${reasonIdx}`}>{reason}</li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
 
@@ -408,7 +475,7 @@ export default function Results() {
                       {isSaved ? 'Saved' : 'Save'}
                     </button>
                     <button
-                      onClick={() => navigate(`/funder/${funder.id}`, { state: { funder, mission, keywords } })}
+                      onClick={() => navigate(`/funder/${funder.id}`, { state: { funder, mission, keywords, budgetBand } })}
                       className="flex items-center gap-2 bg-white text-gray-900 font-semibold rounded-xl px-4 py-2 text-sm hover:bg-gray-100 transition-colors ml-auto"
                     >
                       View Details

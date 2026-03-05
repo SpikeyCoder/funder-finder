@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Sparkles, X, Plus, MapPin } from 'lucide-react';
+import { BudgetBand } from '../types';
 
 const SUGGESTED_KEYWORDS = [
   'education', 'health', 'equity', 'environment', 'climate', 'children',
@@ -27,6 +28,14 @@ const LOCATION_SUGGESTIONS = [
   'Rural communities',
 ];
 
+const BUDGET_BANDS: { key: BudgetBand; label: string; hint: string }[] = [
+  { key: 'under_250k', label: 'Under $250K', hint: 'Early-stage and smaller nonprofits' },
+  { key: '250k_1m', label: '$250K - $1M', hint: 'Growing organizations with stable programs' },
+  { key: '1m_5m', label: '$1M - $5M', hint: 'Mid-sized nonprofits with established operations' },
+  { key: 'over_5m', label: '$5M+', hint: 'Large organizations and institutions' },
+  { key: 'prefer_not_to_say', label: 'Prefer not to say', hint: 'We will skip budget-fit weighting' },
+];
+
 export default function MissionInput() {
   const navigate = useNavigate();
 
@@ -38,6 +47,13 @@ export default function MissionInput() {
 
   const [mission, setMission] = useState('');
   const [locationServed, setLocationServed] = useState('');
+  const [budgetBand, setBudgetBand] = useState<BudgetBand>(() => {
+    const saved = sessionStorage.getItem('ff_budget_band') as BudgetBand | null;
+    if (saved && BUDGET_BANDS.some(b => b.key === saved)) {
+      return saved;
+    }
+    return 'prefer_not_to_say';
+  });
   const [keywords, setKeywords] = useState<string[]>([]);
   const [keywordInput, setKeywordInput] = useState('');
   const [errors, setErrors] = useState<{ mission?: string; location?: string }>({});
@@ -71,8 +87,9 @@ export default function MissionInput() {
     // Persist to sessionStorage so Results page survives reloads
     sessionStorage.setItem('ff_mission', mission.trim());
     sessionStorage.setItem('ff_location', locationServed.trim());
+    sessionStorage.setItem('ff_budget_band', budgetBand);
     sessionStorage.setItem('ff_keywords', JSON.stringify(keywords));
-    navigate('/results', { state: { mission, locationServed, keywords } });
+    navigate('/results', { state: { mission, locationServed, keywords, budgetBand } });
   };
 
   return (
@@ -168,6 +185,34 @@ export default function MissionInput() {
             )}
           </div>
           {errors.location && <p className="text-red-400 text-sm mt-1">{errors.location}</p>}
+        </div>
+
+        {/* Budget band */}
+        <div>
+          <label className="block text-base font-semibold mb-1">Annual Operating Budget <span className="text-gray-400 font-normal">(Optional)</span></label>
+          <p className="text-sm text-gray-400 mb-3">
+            We use this to prioritize funders that have supported nonprofits of similar size.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {BUDGET_BANDS.map((band) => {
+              const selected = budgetBand === band.key;
+              return (
+                <button
+                  key={band.key}
+                  type="button"
+                  onClick={() => setBudgetBand(band.key)}
+                  className={`text-left border rounded-xl px-4 py-3 transition-colors ${
+                    selected
+                      ? 'border-blue-500 bg-blue-900/30'
+                      : 'border-[#30363d] bg-[#0d1117] hover:border-gray-500'
+                  }`}
+                >
+                  <p className={`text-sm font-medium ${selected ? 'text-blue-200' : 'text-white'}`}>{band.label}</p>
+                  <p className="text-xs text-gray-400 mt-1">{band.hint}</p>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Keywords */}

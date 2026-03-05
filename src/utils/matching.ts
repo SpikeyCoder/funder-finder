@@ -1,4 +1,4 @@
-import { Funder } from '../types';
+import { BudgetBand, Funder } from '../types';
 
 const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const EDGE_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/match-funders`;
@@ -12,12 +12,14 @@ export interface MatchResponse {
 export async function findMatches(
   mission: string,
   locationServed?: string,
+  keywords: string[] = [],
+  budgetBand: BudgetBand = 'prefer_not_to_say',
   forceRefresh = false
 ): Promise<MatchResponse> {
   const res = await fetch(EDGE_FUNCTION_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mission, locationServed, forceRefresh }),
+    body: JSON.stringify({ mission, locationServed, keywords, budgetBand, forceRefresh }),
   });
 
   if (!res.ok) {

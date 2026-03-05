@@ -1,0 +1,5 @@
+
+ALTER TABLE saved_funders
+  ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'researching',
+  ADD COLUMN IF NOT EXISTS notes TEXT;
+;
