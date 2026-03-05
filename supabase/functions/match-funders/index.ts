@@ -1,7 +1,7 @@
 /**
  * match-funders - Supabase Edge Function
  *
- * Receives { mission, locationServed, keywords, budgetBand, forceRefresh }.
+ * Receives { mission, locationServed, keywords, budgetBand, forceRefresh, peerNonprofits }.
  * Returns ranked funders with prior-grantee fit metadata:
  *   - fit_score (0..1)
  *   - fit_explanation
@@ -24,7 +24,7 @@ const FOUNDATION_SCAN_LIMIT = 250;
 const CANDIDATE_LIMIT = 120;
 const MIN_RESULT_FIT_SCORE = 0.1;
 const MIN_GRANT_YEAR = new Date().getUTCFullYear() - 5;
-const SCORING_VERSION = 'grantee-fit-v7';
+const SCORING_VERSION = 'grantee-fit-v8';
 
 // Tuned on eval/cases.silver.jsonl via scripts/tune-ranker-weights.js.
 const SCORING_WEIGHTS = {
@@ -621,6 +621,31 @@ function normalizeKeywords(input: unknown): string[] {
     .slice(0, 15);
 }
 
+function normalizePeerNonprofits(input: unknown): string[] {
+  if (!Array.isArray(input)) return [];
+  const cleaned = input
+    .map((item) => typeof item === 'string' ? item.trim().toLowerCase() : '')
+    .map((item) => item.replace(/\s+/g, ' ').trim())
+    .filter((item) => item.length >= 3)
+    .slice(0, 20);
+  return uniqueStrings(cleaned);
+}
+
+function ilikeSafeToken(value: string): string {
+  return value
+    .replace(/[%_*(),'"`]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizeNameForMatch(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function uniqueStrings(values: string[]): string[] {
   return [...new Set(values.filter((v) => v.trim().length > 0))];
 }
@@ -750,12 +775,165 @@ Deno.serve(async (req) => {
     const mission = typeof body?.mission === 'string' ? body.mission.trim() : '';
     const locationServed = typeof body?.locationServed === 'string' ? body.locationServed.trim() : '';
     const keywords = normalizeKeywords(body?.keywords); // exclusion keywords
+    const peerNonprofits = normalizePeerNonprofits(body?.peerNonprofits);
+    const isPeerSearch = peerNonprofits.length > 0;
     const budgetBand = normalizeBudgetBand(body?.budgetBand);
     const forceRefresh = !!body?.forceRefresh;
 
-    if (!mission) {
+    if (!mission && !isPeerSearch) {
       return new Response(JSON.stringify({ error: 'mission is required' }), {
         status: 400,
+        headers: { ...headers, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (isPeerSearch) {
+      const peerTokens = peerNonprofits
+        .map((name) => ilikeSafeToken(name))
+        .filter((name) => name.length >= 3);
+
+      if (!peerTokens.length) {
+        return new Response(JSON.stringify({ results: [], cached: false }), {
+          headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const orClause = peerTokens
+        .map((token) => `grantee_name.ilike.*${token}*`)
+        .join(',');
+
+      const grantsRes = await sbFetch(
+        `foundation_grants?select=id,foundation_id,grant_year,grant_amount,grantee_name,grantee_ein,grantee_city,grantee_state,grantee_country,purpose_text,ntee_code,mission_signal_text,grantee_budget_band` +
+        `&grant_year=gte.${MIN_GRANT_YEAR}` +
+        `&or=${encodeURIComponent(`(${orClause})`)}` +
+        `&order=grant_year.desc,grant_amount.desc` +
+        `&limit=50000`,
+      );
+      const matchedGrantsAll = await grantsRes.json() as GrantRow[];
+
+      const peerNorm = peerTokens.map((token) => normalizeNameForMatch(token));
+      const grantsByFoundation = new Map<string, Array<GrantRow & { matchedPeers: string[] }>>();
+      const peerSetByFoundation = new Map<string, Set<string>>();
+
+      for (const grant of matchedGrantsAll) {
+        if (isLikelyIndividualGrantee(grant)) continue;
+        const grantNameNorm = normalizeNameForMatch(grant.grantee_name);
+        const matchedPeers = peerNorm.filter((peer) => grantNameNorm.includes(peer));
+        if (!matchedPeers.length) continue;
+
+        const rows = grantsByFoundation.get(grant.foundation_id) || [];
+        rows.push({ ...grant, matchedPeers });
+        grantsByFoundation.set(grant.foundation_id, rows);
+
+        const peerSet = peerSetByFoundation.get(grant.foundation_id) || new Set<string>();
+        for (const peer of matchedPeers) peerSet.add(peer);
+        peerSetByFoundation.set(grant.foundation_id, peerSet);
+      }
+
+      const foundationIds = [...grantsByFoundation.keys()];
+      if (!foundationIds.length) {
+        return new Response(JSON.stringify({ results: [], cached: false }), {
+          headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const inFilter = buildInFilter(foundationIds);
+      const [fundersRes, filingsRes] = await Promise.all([
+        sbFetch(
+          `funders?select=id,name,type,foundation_ein,description,focus_areas,ntee_code,city,state,` +
+          `website,contact_url,programs_url,apply_url,news_url,total_giving,asset_amount,` +
+          `grant_range_min,grant_range_max,contact_name,contact_title,contact_email,next_step` +
+          `&id=in.${inFilter}` +
+          `&limit=50000`,
+        ),
+        sbFetch(
+          `foundation_filings?select=foundation_id` +
+          `&foundation_id=in.${inFilter}` +
+          `&parse_status=eq.parsed` +
+          `&limit=50000`,
+        ),
+      ]);
+
+      const funders = await fundersRes.json() as FunderRow[];
+      const filings = await filingsRes.json() as FilingRow[];
+      const parsedFoundationIds = new Set(filings.map((row) => row.foundation_id));
+
+      const results = funders
+        .filter((funder) => parsedFoundationIds.has(funder.id))
+        .map((funder) => {
+          const grants = grantsByFoundation.get(funder.id) || [];
+          const peerCoverageCount = (peerSetByFoundation.get(funder.id) || new Set()).size;
+          const coverage = clamp01(peerCoverageCount / Math.max(peerNorm.length, 1));
+          const grantCountSignal = clamp01(grants.length / 8);
+          const fitScore = clamp01(coverage * 0.75 + grantCountSignal * 0.25);
+
+          const granteeBestGrant = new Map<string, GrantRow & { matchedPeers: string[] }>();
+          for (const grant of grants) {
+            const key = normalizeNameForMatch(grant.grantee_name);
+            const existing = granteeBestGrant.get(key);
+            if (!existing) {
+              granteeBestGrant.set(key, grant);
+              continue;
+            }
+            const existingYear = existing.grant_year || 0;
+            const currentYear = grant.grant_year || 0;
+            const existingAmount = existing.grant_amount || 0;
+            const currentAmount = grant.grant_amount || 0;
+            if (
+              currentYear > existingYear
+              || (currentYear === existingYear && currentAmount > existingAmount)
+            ) {
+              granteeBestGrant.set(key, grant);
+            }
+          }
+
+          const topGrantees = [...granteeBestGrant.values()]
+            .sort((a, b) => {
+              if ((b.grant_year || 0) !== (a.grant_year || 0)) return (b.grant_year || 0) - (a.grant_year || 0);
+              return (b.grant_amount || 0) - (a.grant_amount || 0);
+            })
+            .slice(0, 3)
+            .map((grant) => ({
+              name: grant.grantee_name,
+              year: grant.grant_year || null,
+              amount: grant.grant_amount,
+              match_reasons: [
+                grant.matchedPeers.length > 1 ? 'Matches multiple peer nonprofits' : 'Direct peer nonprofit match',
+                grant.mission_signal_text || grant.ntee_code
+                  ? 'Mission/category evidence available'
+                  : 'Matched from 990 grantee history',
+              ],
+            }));
+
+          const next = deriveNextStep(funder);
+          const nextStepUrl = resolveNextStepUrl(next.type, funder);
+          const fitExplanation = `Matched ${grants.length} grant${grants.length === 1 ? '' : 's'} in the last 5 years across ${peerCoverageCount} of ${peerNorm.length} peer nonprofit${peerNorm.length === 1 ? '' : 's'}.`;
+
+          return {
+            ...funder,
+            score: Number(fitScore.toFixed(4)),
+            fit_score: Number(fitScore.toFixed(4)),
+            reason: fitExplanation,
+            fit_explanation: fitExplanation,
+            limited_grant_history_data: false,
+            similar_past_grantees: topGrantees,
+            next_step: next.text,
+            next_step_type: next.type,
+            next_step_url: nextStepUrl,
+            peer_match_count: grants.length,
+            peer_coverage_count: peerCoverageCount,
+          };
+        })
+        .filter((row) => (row.similar_past_grantees?.length || 0) > 0)
+        .sort((a, b) => {
+          const scoreDiff = (b.fit_score || 0) - (a.fit_score || 0);
+          if (scoreDiff !== 0) return scoreDiff;
+          const coverageDiff = (b.peer_coverage_count || 0) - (a.peer_coverage_count || 0);
+          if (coverageDiff !== 0) return coverageDiff;
+          return (b.peer_match_count || 0) - (a.peer_match_count || 0);
+        });
+
+      return new Response(JSON.stringify({ results, cached: false }), {
         headers: { ...headers, 'Content-Type': 'application/json' },
       });
     }
@@ -1109,7 +1287,7 @@ Deno.serve(async (req) => {
       })
       .filter((row) => (row.fit_score || 0) >= MIN_RESULT_FIT_SCORE);
 
-    await sbFetch('search_cache', {
+    await sbFetch('search_cache?on_conflict=mission_hash', {
       method: 'POST',
       headers: { Prefer: 'resolution=merge-duplicates' },
       body: JSON.stringify({

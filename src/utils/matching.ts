@@ -15,13 +15,14 @@ export async function findMatches(
   locationServed?: string,
   keywords: string[] = [],
   budgetBand: BudgetBand = 'prefer_not_to_say',
-  forceRefresh = false
+  forceRefresh = false,
+  peerNonprofits: string[] = []
 ): Promise<MatchResponse> {
   const headers = await getEdgeFunctionHeaders();
   const res = await fetch(EDGE_FUNCTION_URL, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ mission, locationServed, keywords, budgetBand, forceRefresh }),
+    body: JSON.stringify({ mission, locationServed, keywords, budgetBand, forceRefresh, peerNonprofits }),
   });
 
   if (!res.ok) {

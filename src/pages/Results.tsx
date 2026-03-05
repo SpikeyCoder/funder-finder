@@ -71,6 +71,14 @@ function formatGrantAmount(amount: number | null | undefined): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(amount);
 }
 
+function parsePeerNonprofitsInput(input: string): string[] {
+  const values = input
+    .split(/[\n,;]+/)
+    .map((value) => value.trim().replace(/\s+/g, ' '))
+    .filter((value) => value.length >= 3);
+  return [...new Set(values)].slice(0, 20);
+}
+
 export default function Results() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -86,6 +94,9 @@ export default function Results() {
   const budgetBand: BudgetBand = isBudgetBand(budgetBandFromState)
     ? budgetBandFromState
     : (isBudgetBand(budgetBandFromStorage) ? budgetBandFromStorage : 'prefer_not_to_say');
+  const peerNonprofitsFromState: string[] = Array.isArray(state.peerNonprofits)
+    ? state.peerNonprofits.filter((value: unknown) => typeof value === 'string')
+    : [];
 
   const [matches, setMatches] = useState<Funder[]>([]);
   const [savedIds, setSavedIds] = useState<string[]>([]);
@@ -94,12 +105,16 @@ export default function Results() {
   const [error, setError] = useState<string | null>(null);
   const [cached, setCached] = useState(false);
   const [grantSizeFilter, setGrantSizeFilter] = useState<'any' | 'small' | 'medium' | 'large'>('any');
+  const [peerSearchInput, setPeerSearchInput] = useState<string>(peerNonprofitsFromState.join('\n'));
+  const [activePeerNonprofits, setActivePeerNonprofits] = useState<string[]>(peerNonprofitsFromState);
   const searchTelemetryRef = useRef<SearchTelemetryContext | null>(null);
   const searchSessionIdRef = useRef<string>(getOrCreateSearchSessionId());
 
   // Login modal state
   const [loginModalFunder, setLoginModalFunder] = useState<Funder | null>(null);
   const keywordKey = keywords.join('|');
+  const peerKey = activePeerNonprofits.join('|');
+  const isPeerSearchMode = activePeerNonprofits.length > 0;
 
   // Page title
   useEffect(() => {
@@ -131,19 +146,35 @@ export default function Results() {
     });
   };
 
-  const loadMatches = async (forceRefresh = false) => {
-    if (!mission) {
+  const loadMatches = async (forceRefresh = false, peerNonprofitsOverride?: string[]) => {
+    const peerNonprofits = peerNonprofitsOverride ?? activePeerNonprofits;
+    const isPeerSearch = peerNonprofits.length > 0;
+
+    if (!mission && !isPeerSearch) {
       setError('No mission found — please go back and enter your mission statement.');
       setLoading(false);
       return;
     }
+
     setLoading(true);
     setError(null);
     try {
-      const response = await findMatches(mission, locationServed, keywords, budgetBand, forceRefresh);
+      const response = await findMatches(
+        mission,
+        locationServed,
+        keywords,
+        budgetBand,
+        forceRefresh,
+        peerNonprofits,
+      );
       const rankedResults = response.results || [];
       const searchRunId = randomId();
-      const missionHash = computeMissionHash(mission, locationServed, keywords, budgetBand);
+      const telemetryBudgetBand: BudgetBand = isPeerSearch ? 'prefer_not_to_say' : budgetBand;
+      const telemetryLocationServed = isPeerSearch ? '' : locationServed;
+      const telemetryKeywords = isPeerSearch ? [] : keywords;
+      const missionHash = isPeerSearch
+        ? computeMissionHash(`peer:${peerNonprofits.join('|').toLowerCase()}`, '', [], 'prefer_not_to_say')
+        : computeMissionHash(mission, locationServed, keywords, budgetBand);
       const rankByFoundationId: Record<string, { rank: number; fitScore: number | null }> = {};
 
       rankedResults.forEach((funder, idx) => {
@@ -157,9 +188,9 @@ export default function Results() {
         searchRunId,
         sessionId: searchSessionIdRef.current,
         missionHash,
-        locationServed,
-        budgetBand,
-        keywords,
+        locationServed: telemetryLocationServed,
+        budgetBand: telemetryBudgetBand,
+        keywords: telemetryKeywords,
         rankByFoundationId,
       };
 
@@ -168,23 +199,41 @@ export default function Results() {
         searchRunId,
         sessionId: searchSessionIdRef.current,
         missionHash,
-        budgetBand,
-        locationServed,
-        keywords,
+        budgetBand: telemetryBudgetBand,
+        locationServed: telemetryLocationServed,
+        keywords: telemetryKeywords,
         resultCount: rankedResults.length,
         metadata: {
           cached: response.cached,
+          peer_nonprofits: isPeerSearch ? peerNonprofits : [],
+          search_mode: isPeerSearch ? 'peer_nonprofits' : 'mission',
           top_result_ids: rankedResults.slice(0, 10).map((row) => row.id),
         },
       });
 
       setMatches(rankedResults);
-      setCached(response.cached);
+      setCached(isPeerSearch ? false : response.cached);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load matches');
     } finally {
       setLoading(false);
     }
+  };
+
+  const runPeerSearch = () => {
+    const peers = parsePeerNonprofitsInput(peerSearchInput);
+    if (!peers.length) {
+      setError('Enter at least one peer nonprofit (3+ characters) and try again.');
+      return;
+    }
+    setGrantSizeFilter('any');
+    setActivePeerNonprofits(peers);
+  };
+
+  const clearPeerSearch = () => {
+    setGrantSizeFilter('any');
+    setActivePeerNonprofits([]);
+    setPeerSearchInput('');
   };
 
   // Load saved IDs — from DB if logged in, from localStorage if not
@@ -204,7 +253,7 @@ export default function Results() {
   useEffect(() => {
     loadMatches();
     loadSavedIds();
-  }, [mission, locationServed, budgetBand, keywordKey, user]);
+  }, [mission, locationServed, budgetBand, keywordKey, peerKey, user]);
 
   const toggleSave = async (funder: Funder) => {
     const alreadySaved = savedIds.includes(funder.id);
@@ -302,15 +351,24 @@ export default function Results() {
             {!loading && (
               <>
                 <p className="text-gray-400 mt-1">
-                  Found {filteredMatches.length} funders aligned with your mission
-                  {cached && <span className="ml-2 text-xs text-gray-300">(cached)</span>}
+                  {isPeerSearchMode
+                    ? `Found ${filteredMatches.length} foundations with recent grants to your peer nonprofits`
+                    : `Found ${filteredMatches.length} funders aligned with your mission`}
+                  {!isPeerSearchMode && cached && <span className="ml-2 text-xs text-gray-300">(cached)</span>}
                 </p>
-                <p className="text-xs text-gray-400 mt-1">
-                  Budget band: {BUDGET_BAND_LABEL[budgetBand]}
-                </p>
-                {keywords.length > 0 && (
+                {!isPeerSearchMode && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    Budget band: {BUDGET_BAND_LABEL[budgetBand]}
+                  </p>
+                )}
+                {!isPeerSearchMode && keywords.length > 0 && (
                   <p className="text-xs text-gray-400 mt-1">
                     Excluded terms: {keywords.join(', ')}
+                  </p>
+                )}
+                {isPeerSearchMode && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    Peer mode active ({activePeerNonprofits.length} nonprofit{activePeerNonprofits.length === 1 ? '' : 's'}). Mission/location/keyword weights are disabled.
                   </p>
                 )}
               </>
@@ -344,8 +402,37 @@ export default function Results() {
           Update Search
         </button>
 
+        <div className="mt-4 mb-6 bg-[#161b22] border border-[#30363d] rounded-2xl p-4">
+          <p className="text-sm font-semibold text-blue-300">Peer nonprofit lookup (990 grants, last 5 years)</p>
+          <p className="text-xs text-gray-400 mt-1">
+            Enter peer nonprofit names (one per line or comma-separated). This returns fresh results for foundations that funded those peers.
+          </p>
+          <textarea
+            value={peerSearchInput}
+            onChange={(event) => setPeerSearchInput(event.target.value)}
+            placeholder={'Example: Greater Chicago Food Depository\nAustin Bat Cave\nGirls Who Code'}
+            className="mt-3 w-full min-h-[96px] rounded-xl border border-[#30363d] bg-[#0d1117] px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <div className="flex flex-wrap items-center gap-2 mt-3">
+            <button
+              onClick={runPeerSearch}
+              className="bg-blue-600 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-blue-500 transition-colors"
+            >
+              Search by peer nonprofits
+            </button>
+            {isPeerSearchMode && (
+              <button
+                onClick={clearPeerSearch}
+                className="border border-[#30363d] text-gray-300 text-sm px-4 py-2 rounded-xl hover:bg-[#21262d] transition-colors"
+              >
+                Back to mission matching
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* Grant size filter pills */}
-        {!loading && !error && matches.length > 0 && (
+        {!loading && !error && matches.length > 0 && !isPeerSearchMode && (
           <div className="flex items-center gap-2 mt-4 mb-8 flex-wrap">
             <span className="text-xs text-gray-300 mr-1">Grant size:</span>
             {GRANT_SIZE_FILTERS.map(({ key, label }) => (
@@ -373,8 +460,12 @@ export default function Results() {
         {loading && (
           <div className="flex flex-col items-center justify-center py-24 text-gray-400">
             <Loader2 size={40} className="animate-spin mb-4 text-blue-400" />
-            <p className="text-lg font-medium">Analyzing your mission and fit signals...</p>
-            <p className="text-sm mt-2">Ranking by mission, geography, and similar prior grantees</p>
+            <p className="text-lg font-medium">
+              {isPeerSearchMode ? 'Finding foundations based on peer nonprofit grant history...' : 'Analyzing your mission and fit signals...'}
+            </p>
+            <p className="text-sm mt-2">
+              {isPeerSearchMode ? 'Using only 990 grant history from the last 5 years' : 'Ranking by mission, geography, and similar prior grantees'}
+            </p>
           </div>
         )}
 
@@ -384,7 +475,7 @@ export default function Results() {
             <p className="text-red-400 font-semibold mb-2">Something went wrong</p>
             <p className="text-gray-400 text-sm mb-4">{error}</p>
             <button
-              onClick={() => loadMatches()}
+              onClick={() => loadMatches(true)}
               className="flex items-center gap-2 mx-auto border border-red-800 text-red-400 rounded-xl px-4 py-2 text-sm hover:bg-red-900/30 transition-colors"
             >
               <RefreshCw size={14} />
@@ -409,14 +500,23 @@ export default function Results() {
               </>
             ) : (
               <>
-                <p className="text-2xl mb-3">No funders found</p>
-                <p className="mb-4 text-sm">The database may be empty. Run the ingestion script first.</p>
-                <button
-                  onClick={() => navigate('/mission')}
-                  className="bg-white text-gray-900 font-semibold px-6 py-3 rounded-xl hover:bg-gray-100 transition-colors"
-                >
-                  Update Mission
-                </button>
+                {isPeerSearchMode ? (
+                  <>
+                    <p className="text-2xl mb-3">No peer-based matches found</p>
+                    <p className="mb-4 text-sm">Try alternate nonprofit names or abbreviations for your peer list.</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-2xl mb-3">No funders found</p>
+                    <p className="mb-4 text-sm">The database may be empty. Run the ingestion script first.</p>
+                    <button
+                      onClick={() => navigate('/mission')}
+                      className="bg-white text-gray-900 font-semibold px-6 py-3 rounded-xl hover:bg-gray-100 transition-colors"
+                    >
+                      Update Mission
+                    </button>
+                  </>
+                )}
               </>
             )}
           </div>
@@ -584,7 +684,7 @@ export default function Results() {
                 className="flex items-center gap-2 text-gray-300 hover:text-white text-sm transition-colors"
               >
                 <RefreshCw size={14} />
-                Refresh results (re-run AI matching)
+                {isPeerSearchMode ? 'Refresh results (re-run peer lookup)' : 'Refresh results (re-run AI matching)'}
               </button>
             </div>
           </div>
