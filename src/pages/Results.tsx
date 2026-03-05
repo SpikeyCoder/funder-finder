@@ -308,6 +308,11 @@ export default function Results() {
                 <p className="text-xs text-gray-400 mt-1">
                   Budget band: {BUDGET_BAND_LABEL[budgetBand]}
                 </p>
+                {keywords.length > 0 && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    Excluded terms: {keywords.join(', ')}
+                  </p>
+                )}
               </>
             )}
           </div>

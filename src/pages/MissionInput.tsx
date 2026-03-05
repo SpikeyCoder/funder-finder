@@ -4,9 +4,25 @@ import { ArrowRight, Sparkles, X, Plus, MapPin } from 'lucide-react';
 import { BudgetBand } from '../types';
 
 const SUGGESTED_KEYWORDS = [
-  'education', 'health', 'equity', 'environment', 'climate', 'children',
-  'community', 'technology', 'arts', 'justice', 'democracy', 'workforce',
-  'poverty', 'innovation', 'culture',
+  'k-12 education',
+  'adult literacy',
+  'early childhood education',
+  'college access',
+  'after-school stem',
+  'workforce development',
+  'mental health counseling',
+  'substance use recovery',
+  'housing assistance',
+  'homeless services',
+  'food insecurity',
+  'maternal health',
+  'disability services',
+  'domestic violence prevention',
+  'immigrant legal aid',
+  'climate adaptation',
+  'land conservation',
+  'arts education',
+  'criminal legal reform',
 ];
 
 const EXAMPLES = [
@@ -215,17 +231,19 @@ export default function MissionInput() {
           </div>
         </div>
 
-        {/* Keywords */}
+        {/* Exclusion Keywords */}
         <div>
-          <label className="block text-base font-semibold mb-1">Keywords <span className="text-gray-400 font-normal">(Optional)</span></label>
-          <p className="text-sm text-gray-400 mb-3">Add specific focus areas to refine your matches</p>
+          <label className="block text-base font-semibold mb-1">Keywords to Exclude from Search</label>
+          <p className="text-sm text-gray-400 mb-3">
+            Add funding areas you do not want. Funder matches with overlap will be downweighted.
+          </p>
 
           <div className="flex gap-2">
             <input
               value={keywordInput}
               onChange={e => setKeywordInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Type a keyword and press Enter"
+              placeholder="Type an exclusion keyword and press Enter"
               className="flex-1 bg-[#0d1117] border border-[#30363d] rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <button
@@ -250,7 +268,7 @@ export default function MissionInput() {
           )}
 
           <div className="mt-4">
-            <p className="text-xs text-gray-300 mb-2">Suggested keywords:</p>
+            <p className="text-xs text-gray-300 mb-2">Suggested granular exclusions:</p>
             <div className="flex flex-wrap gap-2">
               {SUGGESTED_KEYWORDS.filter(k => !keywords.includes(k)).map(kw => (
                 <button

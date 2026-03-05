@@ -24,7 +24,7 @@ const FOUNDATION_SCAN_LIMIT = 250;
 const CANDIDATE_LIMIT = 120;
 const RESULTS_N = 10;
 const MIN_GRANT_YEAR = new Date().getUTCFullYear() - 5;
-const SCORING_VERSION = 'grantee-fit-v5';
+const SCORING_VERSION = 'grantee-fit-v6';
 
 // Tuned on eval/cases.silver.jsonl via scripts/tune-ranker-weights.js.
 const SCORING_WEIGHTS = {
@@ -44,6 +44,9 @@ const SCORING_WEIGHTS = {
   medianBandPenalty: 0.0464,
   noBudgetFitPenalty: 0.24,
   lowBudgetFitPenalty: 0.08,
+  excludeBaselinePenalty: 0.24,
+  excludeGrantPenalty: 0.28,
+  excludeHistoryPenalty: 0.14,
   dataCompletenessBonus: 0.0263,
   fallbackBaselineMultiplier: 0.9489,
   limitedDataMinGrants: 3,
@@ -114,6 +117,10 @@ interface HistoryFeatureRow {
   median_grantee_budget_band: number | null;
 }
 
+interface FilingRow {
+  foundation_id: string;
+}
+
 interface UserLocation {
   state: string | null;
   region: string | null;
@@ -128,6 +135,7 @@ interface ScoredGrant {
   missionScore: number;
   locationScore: number;
   sizeScore: number;
+  exclusionOverlap: number;
 }
 
 function corsHeaders(requestOrigin: string | null): Record<string, string> {
@@ -665,10 +673,13 @@ function grantMatchReasons(
   return reasons.slice(0, 2);
 }
 
-function baselineMissionScore(userTokens: Set<string>, funder: FunderRow): number {
+function funderCorpusTokens(funder: FunderRow): Set<string> {
   const focus = coerceStringArray(funder.focus_areas).join(' ');
   const corpus = [funder.name, funder.description || '', focus, funder.ntee_code || ''].join(' ');
-  const funderTokens = tokenize(corpus);
+  return tokenize(corpus);
+}
+
+function baselineMissionScore(userTokens: Set<string>, funderTokens: Set<string>): number {
   const score = lexicalSimilarity(userTokens, funderTokens);
   if (score > 0) return score;
   return 0.22;
@@ -687,7 +698,7 @@ Deno.serve(async (req) => {
 
     const mission = typeof body?.mission === 'string' ? body.mission.trim() : '';
     const locationServed = typeof body?.locationServed === 'string' ? body.locationServed.trim() : '';
-    const keywords = normalizeKeywords(body?.keywords);
+    const keywords = normalizeKeywords(body?.keywords); // exclusion keywords
     const budgetBand = normalizeBudgetBand(body?.budgetBand);
     const forceRefresh = !!body?.forceRefresh;
 
@@ -730,22 +741,28 @@ Deno.serve(async (req) => {
       });
     }
 
-    const userTokens = tokenize(`${mission} ${keywords.join(' ')}`);
+    const userTokens = tokenize(mission);
+    const exclusionTokens = tokenize(keywords.join(' '));
     const userLocation = parseUserLocation(locationServed);
     const userBudgetBandNumeric = toNumericBudgetBand(budgetBand);
     const userMaxGrantAmount = maxSingleGrantForBudgetBand(budgetBand);
-    const userMissionEmbedding = await fetchMissionEmbedding(`${mission} ${keywords.join(' ')}`.trim());
+    const userMissionEmbedding = await fetchMissionEmbedding(mission);
 
     const prelim = funders.map((funder) => {
-      const missionScore = baselineMissionScore(userTokens, funder);
+      const funderTokens = funderCorpusTokens(funder);
+      const missionScore = baselineMissionScore(userTokens, funderTokens);
       const locationScore = funderLocationBaseline(userLocation, funder.state);
+      const exclusionOverlap = exclusionTokens.size ? lexicalSimilarity(exclusionTokens, funderTokens) : 0;
+      const exclusionPenalty = exclusionOverlap * SCORING_WEIGHTS.excludeBaselinePenalty;
       const baseline = clamp01(
         missionScore * SCORING_WEIGHTS.baselineMission
-        + locationScore * SCORING_WEIGHTS.baselineLocation,
+        + locationScore * SCORING_WEIGHTS.baselineLocation
+        - exclusionPenalty,
       );
       return {
         funder,
         baseline,
+        exclusionOverlap,
       };
     });
 
@@ -762,6 +779,7 @@ Deno.serve(async (req) => {
 
     const grantsByFoundation = new Map<string, GrantRow[]>();
     const featuresByFoundation = new Map<string, HistoryFeatureRow>();
+    const foundationsWithParsedFilings = new Set<string>();
 
     if (candidateIds.length) {
       const selectColumns = userMissionEmbedding
@@ -770,7 +788,7 @@ Deno.serve(async (req) => {
 
       const inFilter = buildInFilter(candidateIds);
 
-      const [grantsRes, featuresRes] = await Promise.all([
+      const [grantsRes, featuresRes, filingsRes] = await Promise.all([
         sbFetch(
           `foundation_grants?select=${selectColumns}` +
           `&foundation_id=in.${inFilter}` +
@@ -782,10 +800,17 @@ Deno.serve(async (req) => {
           `foundation_history_features?select=foundation_id,grants_last_5y_count,data_completeness_score,median_grantee_budget_band` +
           `&foundation_id=in.${inFilter}`,
         ),
+        sbFetch(
+          `foundation_filings?select=foundation_id` +
+          `&foundation_id=in.${inFilter}` +
+          `&parse_status=eq.parsed` +
+          `&limit=50000`,
+        ),
       ]);
 
       const grants = await grantsRes.json() as GrantRow[];
       const features = await featuresRes.json() as HistoryFeatureRow[];
+      const filings = await filingsRes.json() as FilingRow[];
 
       for (const row of grants) {
         const arr = grantsByFoundation.get(row.foundation_id) || [];
@@ -795,6 +820,10 @@ Deno.serve(async (req) => {
 
       for (const feature of features) {
         featuresByFoundation.set(feature.foundation_id, feature);
+      }
+
+      for (const filing of filings) {
+        foundationsWithParsedFilings.add(filing.foundation_id);
       }
 
       const foundationsNeedingFallbackHistory = candidateIds.filter((foundationId) => {
@@ -825,7 +854,7 @@ Deno.serve(async (req) => {
     }
 
     const results = candidateFunders
-      .map(({ funder, baseline }) => {
+      .map(({ funder, baseline, exclusionOverlap: baselineExclusionOverlap }) => {
         const grants = grantsByFoundation.get(funder.id) || [];
         const feature = featuresByFoundation.get(funder.id);
 
@@ -835,6 +864,7 @@ Deno.serve(async (req) => {
           const textSignal = missionSignalText(grant);
           const textTokens = tokenize(textSignal);
           const lexical = lexicalSimilarity(userTokens, textTokens);
+          const exclusionOverlap = exclusionTokens.size ? lexicalSimilarity(exclusionTokens, textTokens) : 0;
 
           const grantEmbedding = parseVector(grant.mission_embedding);
           const embeddingSimilarity = userMissionEmbedding && grantEmbedding
@@ -856,7 +886,8 @@ Deno.serve(async (req) => {
               missionScore * SCORING_WEIGHTS.grantMission
               + locScore * SCORING_WEIGHTS.grantLocation
               + sizeScore * SCORING_WEIGHTS.grantSize
-            ) * recencyMultiplier,
+            ) * recencyMultiplier
+            - exclusionOverlap * SCORING_WEIGHTS.excludeGrantPenalty,
           );
 
           return {
@@ -865,6 +896,7 @@ Deno.serve(async (req) => {
             missionScore,
             locationScore: locScore,
             sizeScore,
+            exclusionOverlap,
           };
         }).sort((a, b) => b.score - a.score);
 
@@ -909,6 +941,11 @@ Deno.serve(async (req) => {
           }
         }
 
+        const exclusionHistoryOverlap = topForAverage.length
+          ? topForAverage.reduce((sum, row) => sum + row.exclusionOverlap, 0) / topForAverage.length
+          : baselineExclusionOverlap;
+        sizePenalty += exclusionHistoryOverlap * SCORING_WEIGHTS.excludeHistoryPenalty;
+
         const dataCompleteness = typeof feature?.data_completeness_score === 'number'
           ? clamp01(feature.data_completeness_score)
           : clamp01(Math.min(scoredGrantsForScoring.length / 8, 1) * 0.8);
@@ -951,6 +988,10 @@ Deno.serve(async (req) => {
           factorLines.push(`Includes similar grants at or below ${formatUsd(userMaxGrantAmount)} (<=10% of your budget).`);
         } else if (userMaxGrantAmount && capQualifiedScoredGrants.length === 0) {
           factorLines.push(`No similar grants at or below ${formatUsd(userMaxGrantAmount)} (<=10% budget target); this funder was downweighted.`);
+        }
+
+        if (keywords.length && exclusionHistoryOverlap >= 0.2) {
+          factorLines.push(`Downweighted for overlap with excluded terms: ${keywords.slice(0, 3).join(', ')}.`);
         }
 
         if (historyScore >= 0.72 && topGrantsForDisplay.length > 0) {
@@ -998,7 +1039,10 @@ Deno.serve(async (req) => {
           next_step_url: nextStepUrl,
         };
       })
-      .filter((row) => (row.similar_past_grantees?.length || 0) >= 3)
+      .filter((row) =>
+        (row.similar_past_grantees?.length || 0) >= 3
+        && foundationsWithParsedFilings.has(row.id),
+      )
       .sort((a, b) => {
         if ((b.fit_score || 0) !== (a.fit_score || 0)) {
           return (b.fit_score || 0) - (a.fit_score || 0);

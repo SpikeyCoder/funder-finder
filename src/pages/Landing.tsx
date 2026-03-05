@@ -45,11 +45,11 @@ export default function Landing() {
         <h2 className="text-3xl font-bold text-center mb-12">How It Works</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {[
-            {
-              icon: <Target size={32} className="text-blue-400" />,
-              step: '1. Enter Your Mission',
-              desc: "Describe your nonprofit's mission and optionally add keywords to refine your search.",
-            },
+              {
+                icon: <Target size={32} className="text-blue-400" />,
+                step: '1. Enter Your Mission',
+                desc: "Describe your mission and add optional exclusion keywords (for example: adult literacy, not broad education).",
+              },
             {
               icon: <Zap size={32} className="text-green-400" />,
               step: '2. Get Instant Matches',
