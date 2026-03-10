@@ -116,6 +116,7 @@ export default function Results() {
 
   // Login modal state
   const [loginModalFunder, setLoginModalFunder] = useState<Funder | null>(null);
+  const [showPeerEditor, setShowPeerEditor] = useState(false);
   const keywordKey = keywords.join('|');
   const peerKey = activePeerNonprofits.join('|');
   const isPeerSearchMode = activePeerNonprofits.length > 0;
@@ -484,6 +485,14 @@ export default function Results() {
                 </span>
               ))}
             </div>
+            {!showPeerEditor && (
+              <button
+                onClick={() => setShowPeerEditor(true)}
+                className="mt-3 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+              >
+                Edit peers
+              </button>
+            )}
           </div>
         )}
         {suggestedPeersLoading && (
@@ -495,34 +504,43 @@ export default function Results() {
           </div>
         )}
 
-        <div className="mt-4 mb-6 bg-[#161b22] border border-[#30363d] rounded-2xl p-4">
-          <p className="text-sm font-semibold text-blue-300">Peer nonprofit lookup (990 grants, last 5 years)</p>
-          <p className="text-xs text-gray-400 mt-1">
-            Enter peer nonprofit names (one per line or comma-separated). This returns fresh results for foundations that funded those peers.
-          </p>
-          <textarea
-            value={peerSearchInput}
-            onChange={(event) => setPeerSearchInput(event.target.value)}
-            placeholder={'Example: Greater Chicago Food Depository\nAustin Bat Cave\nGirls Who Code'}
-            className="mt-3 w-full min-h-[96px] rounded-xl border border-[#30363d] bg-[#0d1117] px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <div className="flex flex-wrap items-center gap-2 mt-3">
-            <button
-              onClick={runPeerSearch}
-              className="bg-blue-600 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-blue-500 transition-colors"
-            >
-              Search by peer nonprofits
-            </button>
-            {isPeerSearchMode && (
+        {/* Manual peer lookup - hidden by default, toggled via "Edit peers" */}
+        {showPeerEditor && (
+          <div className="mt-4 mb-6 bg-[#161b22] border border-[#30363d] rounded-2xl p-4">
+            <p className="text-sm font-semibold text-blue-300">Edit peer nonprofits</p>
+            <p className="text-xs text-gray-400 mt-1">
+              Adjust the peer list to customize which funders appear. One per line or comma-separated.
+            </p>
+            <textarea
+              value={peerSearchInput}
+              onChange={(event) => setPeerSearchInput(event.target.value)}
+              placeholder={'Example: Greater Chicago Food Depository\nAustin Bat Cave\nGirls Who Code'}
+              className="mt-3 w-full min-h-[96px] rounded-xl border border-[#30363d] bg-[#0d1117] px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <div className="flex flex-wrap items-center gap-2 mt-3">
               <button
-                onClick={clearPeerSearch}
+                onClick={() => { runPeerSearch(); setShowPeerEditor(false); }}
+                className="bg-blue-600 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-blue-500 transition-colors"
+              >
+                Update results
+              </button>
+              <button
+                onClick={() => setShowPeerEditor(false)}
                 className="border border-[#30363d] text-gray-300 text-sm px-4 py-2 rounded-xl hover:bg-[#21262d] transition-colors"
               >
-                Back to mission matching
+                Cancel
               </button>
-            )}
+              {isPeerSearchMode && (
+                <button
+                  onClick={() => { clearPeerSearch(); setShowPeerEditor(false); }}
+                  className="border border-[#30363d] text-gray-300 text-sm px-4 py-2 rounded-xl hover:bg-[#21262d] transition-colors"
+                >
+                  Back to mission matching
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Grant size filter pills */}
         {!loading && !error && matches.length > 0 && !isPeerSearchMode && (
