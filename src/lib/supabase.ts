@@ -7,7 +7,10 @@ export const SUPABASE_ANON_KEY =
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
-    // Store session in localStorage so it persists across page reloads
+    // Use sessionStorage so the session is cleared when the browser is closed.
+    // Users must log in again each new browser session — localStorage is NOT used.
+    storage: window.sessionStorage,
+    // Still persist within the same browser session (across page reloads / navigation)
     persistSession: true,
     // Automatically refresh tokens before they expire
     autoRefreshToken: true,

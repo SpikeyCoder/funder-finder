@@ -1,10 +1,14 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Target, Zap, Bookmark } from 'lucide-react';
 import DemoVideo from '../components/DemoVideo';
+import LoginModal from '../components/LoginModal';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Landing() {
   const navigate = useNavigate();
+  const { user, loading, signOut } = useAuth();
+  const [showLoginModal, setShowLoginModal] = useState(false);
 
   useEffect(() => {
     document.title = 'Non-Profit Funder Finder — Free AI Funder Matching for 501(c)(3)s';
@@ -14,6 +18,41 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen bg-[#0d1117] text-white">
+      {/* Nav */}
+      <div className="flex items-center justify-between px-6 py-4 max-w-5xl mx-auto">
+        <span className="font-semibold text-white tracking-tight">FunderMatch</span>
+        {!loading && (
+          user ? (
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-gray-400 hidden sm:block">{user.email}</span>
+              <button
+                onClick={() => navigate('/saved')}
+                className="text-sm text-gray-300 hover:text-white transition-colors"
+              >
+                Saved Funders
+              </button>
+              <button
+                onClick={signOut}
+                className="text-sm font-medium text-white bg-[#21262d] border border-[#30363d] rounded-lg px-4 py-2 hover:bg-[#30363d] transition-colors"
+              >
+                Sign Out
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowLoginModal(true)}
+              className="text-sm font-medium text-white bg-[#21262d] border border-[#30363d] rounded-lg px-4 py-2 hover:bg-[#30363d] transition-colors"
+            >
+              Log In
+            </button>
+          )
+        )}
+      </div>
+
+      {showLoginModal && (
+        <LoginModal onClose={() => setShowLoginModal(false)} />
+      )}
+
       {/* Hero */}
       <div className="flex flex-col items-center justify-center px-6 py-24 text-center">
         <h1 className="text-5xl font-bold mb-6 leading-tight max-w-3xl">
