@@ -110,6 +110,7 @@ export default function Results() {
   const [suggestedPeers, setSuggestedPeers] = useState<string[]>([]);
   const [suggestedPeersLoading, setSuggestedPeersLoading] = useState(false);
   const suggestedPeersFetchedRef = useRef(false);
+  const autoPeerSearchDoneRef = useRef(false);
   const searchTelemetryRef = useRef<SearchTelemetryContext | null>(null);
   const searchSessionIdRef = useRef<string>(getOrCreateSearchSessionId());
 
@@ -239,35 +240,6 @@ export default function Results() {
     setPeerSearchInput('');
   };
 
-  const useSuggestedPeers = () => {
-    if (!suggestedPeers.length) return;
-    const joined = suggestedPeers.join('\n');
-    setPeerSearchInput(joined);
-    setGrantSizeFilter('any');
-    setActivePeerNonprofits(suggestedPeers);
-  };
-
-  // Auto-suggest peer nonprofits based on mission/location/budget
-  useEffect(() => {
-    if (suggestedPeersFetchedRef.current) return;
-    if (!mission) return;
-    // Only fetch suggestions if we're not already in peer search mode
-    if (peerNonprofitsFromState.length > 0) return;
-
-    suggestedPeersFetchedRef.current = true;
-    setSuggestedPeersLoading(true);
-    suggestPeers(mission, locationServed, budgetBand)
-      .then((res) => {
-        if (res.peers.length > 0) {
-          setSuggestedPeers(res.peers);
-        }
-      })
-      .catch(() => {
-        // silently fail — suggestions are non-critical
-      })
-      .finally(() => setSuggestedPeersLoading(false));
-  }, [mission, locationServed, budgetBand]);
-
   // Load saved IDs — from DB if logged in, from localStorage if not
   const loadSavedIds = async () => {
     if (user) {
@@ -282,9 +254,70 @@ export default function Results() {
     setSavedIds(getSavedIds());
   };
 
+  // Auto-identify peer nonprofits and trigger peer-based funder search.
+  // The pipeline is: suggest peers → set them as active → loadMatches with peers.
+  // Falls back to mission-only search if peer suggestion fails or returns empty.
   useEffect(() => {
-    loadMatches();
     loadSavedIds();
+
+    // Guard: if the auto-peer search just completed and set activePeerNonprofits,
+    // the peerKey dependency will change and re-trigger this effect. Skip that re-run.
+    if (autoPeerSearchDoneRef.current) {
+      autoPeerSearchDoneRef.current = false;
+      return;
+    }
+
+    // If the user already provided peers (from navigation state or manual input), use those directly
+    if (activePeerNonprofits.length > 0) {
+      loadMatches();
+      return;
+    }
+
+    // If no mission, fall back to mission-only search (will show error)
+    if (!mission) {
+      loadMatches();
+      return;
+    }
+
+    // Skip auto-peer-fetch if we already fetched suggestions this session
+    if (suggestedPeersFetchedRef.current) {
+      // If we already have suggested peers, use them; otherwise mission-only
+      if (suggestedPeers.length > 0) {
+        loadMatches(false, suggestedPeers);
+      } else {
+        loadMatches();
+      }
+      return;
+    }
+
+    // First: identify peer nonprofits, then search for their funders
+    suggestedPeersFetchedRef.current = true;
+    setSuggestedPeersLoading(true);
+    setLoading(true);
+
+    suggestPeers(mission, locationServed, budgetBand)
+      .then((res) => {
+        setSuggestedPeersLoading(false);
+        if (res.peers.length > 0) {
+          setSuggestedPeers(res.peers);
+          // Auto-activate peer search with suggested peers
+          const joined = res.peers.join('\n');
+          setPeerSearchInput(joined);
+          // Mark that the next peerKey-triggered re-run should be skipped
+          autoPeerSearchDoneRef.current = true;
+          setActivePeerNonprofits(res.peers);
+          // Trigger peer-based funder search immediately (don't wait for re-render)
+          loadMatches(false, res.peers);
+        } else {
+          // No peers found — fall back to mission-only search
+          loadMatches();
+        }
+      })
+      .catch(() => {
+        setSuggestedPeersLoading(false);
+        // Peer suggestion failed — fall back to mission-only search
+        loadMatches();
+      });
   }, [mission, locationServed, budgetBand, keywordKey, peerKey, user]);
 
   const toggleSave = async (funder: Funder) => {
@@ -434,12 +467,12 @@ export default function Results() {
           Update Search
         </button>
 
-        {/* Auto-suggested peers */}
-        {!isPeerSearchMode && suggestedPeers.length > 0 && (
+        {/* Auto-identified peer nonprofits (shown when peers were auto-detected) */}
+        {isPeerSearchMode && suggestedPeers.length > 0 && (
           <div className="mt-4 mb-4 bg-[#0f1d2e] border border-[#1f3a5f] rounded-2xl p-4">
-            <p className="text-sm font-semibold text-blue-300">Suggested peer nonprofits</p>
+            <p className="text-sm font-semibold text-blue-300">Peer nonprofits identified</p>
             <p className="text-xs text-gray-400 mt-1">
-              Based on your mission, location, and budget, these organizations share a similar profile. Use them to find additional funders via 990 grant history.
+              These organizations share a similar mission, geography, and budget. Results below show funders that have historically supported them.
             </p>
             <div className="flex flex-wrap gap-2 mt-3">
               {suggestedPeers.map((peer) => (
@@ -451,19 +484,13 @@ export default function Results() {
                 </span>
               ))}
             </div>
-            <button
-              onClick={useSuggestedPeers}
-              className="mt-3 bg-blue-600 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-blue-500 transition-colors"
-            >
-              Search funders of these peers
-            </button>
           </div>
         )}
-        {!isPeerSearchMode && suggestedPeersLoading && (
+        {suggestedPeersLoading && (
           <div className="mt-4 mb-4 bg-[#0f1d2e] border border-[#1f3a5f] rounded-2xl p-4">
             <div className="flex items-center gap-2 text-sm text-blue-300">
               <Loader2 size={14} className="animate-spin" />
-              Identifying similar peer nonprofits...
+              Identifying peer nonprofits and their funders...
             </div>
           </div>
         )}
