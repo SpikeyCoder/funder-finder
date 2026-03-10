@@ -25,6 +25,25 @@ const CANDIDATE_LIMIT = 120;
 const MIN_RESULT_FIT_SCORE = 0.1;
 const MIN_GRANT_YEAR = new Date().getUTCFullYear() - 5;
 const SCORING_VERSION = 'grantee-fit-v8';
+const PROPUBLICA_API_BASE = 'https://projects.propublica.org/nonprofits/api/v2';
+const PROPUBLICA_ORG_BASE = 'https://projects.propublica.org/nonprofits/organizations';
+const PROPUBLICA_FULL_TEXT_SEARCH = 'https://projects.propublica.org/nonprofits/full_text_search';
+const PROPUBLICA_FULL_TEXT_BASE = 'https://projects.propublica.org/nonprofits/full_text';
+const PEER_LIVE_QUERY_MIN_RESULTS = 3;
+const PEER_LIVE_QUERY_MAX_FOUNDATIONS = 24;
+const PEER_LIVE_QUERY_MAX_FILINGS_PER_FOUNDATION = 2;
+const PEER_LIVE_QUERY_TIMEOUT_MS = 25000;
+const PEER_FULL_TEXT_MAX_QUERY_TERMS = 8;
+const PEER_FULL_TEXT_MAX_CANDIDATES = 80;
+const PEER_FULL_TEXT_MAX_FETCHES = 40;
+const PEER_FULL_TEXT_MAX_PAGES_PER_QUERY = 3;
+const PEER_DB_MAX_GRANTS = 50000;
+const PEER_DB_EIN_BATCH_SIZE = 20;
+const PEER_DB_EIN_QUERY_LIMIT = 12000;
+const PEER_DB_NAME_QUERY_LIMIT = 3000;
+const PEER_DB_TIMEOUT_FALLBACK_FOUNDER_LIMIT = 220;
+const PEER_DB_TIMEOUT_FALLBACK_BATCH_SIZE = 60;
+const PEER_DB_TIMEOUT_FALLBACK_QUERY_LIMIT = 1000;
 
 // Tuned on eval/cases.silver.jsonl via scripts/tune-ranker-weights.js.
 const SCORING_WEIGHTS = {
@@ -65,6 +84,12 @@ const STOP_WORDS = new Set([
   'are', 'was', 'were', 'have', 'has', 'had', 'into', 'about', 'through', 'within', 'without',
   'over', 'under', 'into', 'onto', 'who', 'whom', 'where', 'when', 'which', 'while', 'there',
   'across', 'program', 'programs', 'organization', 'organizations', 'nonprofit', 'nonprofits',
+]);
+
+const PEER_NAME_SUFFIX_WORDS = new Set([
+  'the', 'inc', 'llc', 'ltd', 'nfp', 'co', 'corp', 'corporation', 'company',
+  'foundation', 'fund', 'trust', 'association', 'society', 'group', 'services',
+  'service', 'organization', 'org',
 ]);
 
 type BudgetBand = 'under_250k' | '250k_1m' | '1m_5m' | 'over_5m' | 'prefer_not_to_say';
@@ -138,6 +163,50 @@ interface ScoredGrant {
   locationScore: number;
   sizeScore: number;
   exclusionOverlap: number;
+}
+
+interface PeerProfile {
+  input: string;
+  canonicalName: string;
+  normalizedName: string;
+  tokenSignature: string[];
+  ein: string | null;
+  city: string | null;
+  state: string | null;
+}
+
+interface PeerFullTextCandidate {
+  foundationEin: string;
+  objectId: string;
+  formName: 'IRS990ScheduleI' | 'IRS990PF';
+}
+
+interface ParsedScheduleIGrant {
+  grantee_name: string;
+  grantee_ein: string | null;
+  grantee_city: string | null;
+  grantee_state: string | null;
+  grantee_country: string | null;
+  grant_amount: number | null;
+  purpose_text: string | null;
+}
+
+interface ParsedScheduleIPage {
+  taxYear: number | null;
+  filerName: string | null;
+  filerCity: string | null;
+  filerState: string | null;
+  grants: ParsedScheduleIGrant[];
+}
+
+interface PeerFullTextMatchSet {
+  foundationEin: string;
+  foundationName: string | null;
+  foundationCity: string | null;
+  foundationState: string | null;
+  foundationCode: number | null;
+  subsectionCode: number | null;
+  grants: GrantRow[];
 }
 
 function corsHeaders(requestOrigin: string | null): Record<string, string> {
@@ -438,29 +507,36 @@ function normalizeCity(value: string | null | undefined): string | null {
 }
 
 function grantMatchesCityRequirement(userLocation: UserLocation, granteeCity: string | null, granteeState: string | null): boolean {
+  // If no city specified, all grants pass
   if (!userLocation.city) return true;
-  const city = normalizeCity(granteeCity);
-  if (!city || city !== userLocation.city) return false;
+  // If the user specified a state, allow all grantees in the same state
+  // (not just the exact city). This prevents excluding valid regional matches.
   if (userLocation.state) {
     const state = normalizeState(granteeState);
-    if (!state || state !== userLocation.state) return false;
+    if (state && state === userLocation.state) return true;
   }
-  return true;
+  // Also allow exact city match regardless
+  const city = normalizeCity(granteeCity);
+  if (city && city === userLocation.city) return true;
+  // Reject grants with no location data or mismatched state/city
+  return false;
 }
 
 function locationSimilarity(userLocation: UserLocation, granteeCity: string | null, granteeState: string | null, granteeCountry: string | null): number {
   if (userLocation.isGlobal) return 1;
   if (!userLocation.hasLocationInput) return 0.5;
 
-  if (userLocation.city) {
-    const city = normalizeCity(granteeCity);
-    if (!city) return 0.05;
-    if (city !== userLocation.city) return 0.05;
-  }
-
   const state = normalizeState(granteeState);
   const country = (granteeCountry || '').trim().toUpperCase();
   const isUS = !country || country === 'US' || country === 'USA' || country === 'UNITED STATES';
+
+  if (userLocation.city) {
+    const city = normalizeCity(granteeCity);
+    // Exact city + state match is the best
+    if (city && city === userLocation.city && (!userLocation.state || (state && state === userLocation.state))) return 1;
+    // Same state but different/unknown city — still a strong regional signal
+    if (userLocation.state && state && state === userLocation.state) return 0.82;
+  }
 
   if (userLocation.state && state && userLocation.state === state) return 1;
 
@@ -646,6 +722,430 @@ function normalizeNameForMatch(value: string): string {
     .trim();
 }
 
+function normalizePeerInput(raw: string): string {
+  const extractedUrl = (raw.match(/https?:\/\/[^\s)]+/i) || [null])[0];
+  const withoutUrls = raw
+    .replace(/\(https?:\/\/[^\s)]+\)/gi, ' ')
+    .replace(/https?:\/\/[^\s)]+/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (withoutUrls) return withoutUrls;
+  if (!extractedUrl) return '';
+
+  try {
+    const hostname = new URL(extractedUrl).hostname.replace(/^www\./i, '');
+    const hostWithoutTld = hostname.split('.').slice(0, -1).join('.') || hostname;
+    return hostWithoutTld.replace(/[._-]+/g, ' ').trim();
+  } catch {
+    return '';
+  }
+}
+
+function peerNameTokens(value: string): string[] {
+  const normalized = normalizeNameForMatch(value);
+  if (!normalized) return [];
+  const tokens = normalized.split(' ').filter((token) => token.length >= 2);
+  const trimmed = tokens.filter((token) => !PEER_NAME_SUFFIX_WORDS.has(token));
+  return (trimmed.length ? trimmed : tokens).slice(0, 8);
+}
+
+function peerIlikePattern(value: string): string | null {
+  const tokens = peerNameTokens(value).map((token) => ilikeSafeToken(token));
+  if (!tokens.length) return null;
+  return `*${tokens.join('*')}*`;
+}
+
+function overlapRatio(a: string[], b: string[]): number {
+  if (!a.length || !b.length) return 0;
+  const bSet = new Set(b);
+  let overlap = 0;
+  for (const token of a) {
+    if (bSet.has(token)) overlap += 1;
+  }
+  return overlap / Math.max(a.length, b.length);
+}
+
+function pickBestPeerOrg(
+  organizations: Array<Record<string, unknown>>,
+  queryTokens: string[],
+  userLocation: UserLocation,
+): Record<string, unknown> | null {
+  let best: Record<string, unknown> | null = null;
+  let bestScore = -1;
+
+  for (const org of organizations) {
+    const name = typeof org?.name === 'string' ? org.name : '';
+    if (!name) continue;
+    const orgTokens = peerNameTokens(name);
+    const overlap = overlapRatio(queryTokens, orgTokens);
+    if (overlap <= 0) continue;
+
+    const orgState = normalizeState(typeof org?.state === 'string' ? org.state : null);
+    const orgCity = normalizeCity(typeof org?.city === 'string' ? org.city : null);
+
+    let score = overlap * 4;
+    if (userLocation.state && orgState && userLocation.state === orgState) score += 2;
+    if (userLocation.city && orgCity && userLocation.city === orgCity) score += 1.5;
+
+    const subseccd = typeof org?.subseccd === 'number' ? org.subseccd : null;
+    if (subseccd === 3) score += 0.25;
+
+    if (score > bestScore) {
+      bestScore = score;
+      best = org;
+    }
+  }
+
+  return best;
+}
+
+async function resolvePeerProfiles(
+  peerInputs: string[],
+  userLocation: UserLocation,
+): Promise<PeerProfile[]> {
+  const profiles: PeerProfile[] = [];
+
+  for (const rawInput of peerInputs) {
+    const cleaned = normalizePeerInput(rawInput);
+    if (!cleaned) continue;
+
+    const cleanedTokens = peerNameTokens(cleaned);
+    if (!cleanedTokens.length) continue;
+
+    let canonicalName = cleaned;
+    let ein: string | null = null;
+    let city: string | null = null;
+    let state: string | null = null;
+
+    try {
+      const url = `${PROPUBLICA_API_BASE}/search.json?q=${encodeURIComponent(cleaned)}`;
+      const res = await fetch(url, {
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'FunderMatchBot/1.0 (+https://fundermatch.org)',
+        },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const organizations = Array.isArray(json?.organizations) ? json.organizations : [];
+        const best = pickBestPeerOrg(organizations, cleanedTokens, userLocation);
+        if (best) {
+          canonicalName = typeof best.name === 'string' && best.name.trim() ? best.name.trim() : canonicalName;
+          ein = normalizedEin(String(best.ein || ''));
+          city = typeof best.city === 'string' ? best.city : null;
+          state = normalizeState(typeof best.state === 'string' ? best.state : null);
+        }
+      }
+    } catch {
+      // Best-effort only.
+    }
+
+    profiles.push({
+      input: rawInput,
+      canonicalName,
+      normalizedName: normalizeNameForMatch(canonicalName),
+      tokenSignature: peerNameTokens(canonicalName),
+      ein,
+      city,
+      state,
+    });
+  }
+
+  const dedupedByEin = new Map<string, PeerProfile>();
+  const dedupedByName = new Map<string, PeerProfile>();
+  for (const profile of profiles) {
+    if (profile.ein) {
+      if (!dedupedByEin.has(profile.ein)) dedupedByEin.set(profile.ein, profile);
+      continue;
+    }
+    if (!dedupedByName.has(profile.normalizedName)) dedupedByName.set(profile.normalizedName, profile);
+  }
+
+  return [...dedupedByEin.values(), ...dedupedByName.values()];
+}
+
+function grantMatchesPeerLocation(userLocation: UserLocation, grant: GrantRow): boolean {
+  if (!userLocation.hasLocationInput) return true;
+
+  if (userLocation.city) {
+    return grantMatchesCityRequirement(userLocation, grant.grantee_city, grant.grantee_state);
+  }
+
+  if (userLocation.state) {
+    const grantState = normalizeState(grant.grantee_state);
+    return !!grantState && grantState === userLocation.state;
+  }
+
+  return true;
+}
+
+function grantMatchesPeerProfile(grant: GrantRow, profile: PeerProfile): boolean {
+  const grantEin = normalizedEin(grant.grantee_ein);
+  if (profile.ein && grantEin && profile.ein === grantEin) return true;
+
+  const grantNameNorm = normalizeNameForMatch(grant.grantee_name || '');
+  if (!grantNameNorm) return false;
+  if (!profile.tokenSignature.length) return false;
+
+  return profile.tokenSignature.every((token) => grantNameNorm.includes(token));
+}
+
+function matchedPeerNamesForGrant(
+  grant: GrantRow,
+  peerProfiles: PeerProfile[],
+  userLocation: UserLocation,
+): string[] {
+  const matchedProfiles = peerProfiles.filter((profile) => grantMatchesPeerProfile(grant, profile));
+  if (!matchedProfiles.length) return [];
+
+  // Exact EIN matches should survive even when filing rows omit city/state fields.
+  const grantEin = normalizedEin(grant.grantee_ein);
+  const hasExactEinMatch = !!grantEin && matchedProfiles.some((profile) => profile.ein === grantEin);
+  if (!hasExactEinMatch && !grantMatchesPeerLocation(userLocation, grant)) return [];
+
+  return matchedProfiles.map((profile) => profile.canonicalName);
+}
+
+function chunkArray<T>(values: T[], chunkSize: number): T[][] {
+  if (chunkSize <= 0) return [values];
+  const chunks: T[][] = [];
+  for (let i = 0; i < values.length; i += chunkSize) {
+    chunks.push(values.slice(i, i + chunkSize));
+  }
+  return chunks;
+}
+
+function isSupabaseStatementTimeout(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error || '');
+  return message.includes('57014') || message.toLowerCase().includes('statement timeout');
+}
+
+async function fetchPeerGrantsFromDatabase(
+  peerProfiles: PeerProfile[],
+  userLocation: UserLocation,
+): Promise<{ grants: GrantRow[]; stats: Record<string, number> }> {
+  const stats = {
+    queries_attempted: 0,
+    queries_succeeded: 0,
+    queries_timed_out: 0,
+    queries_failed: 0,
+    rows_loaded: 0,
+    timed_out_name_profiles: 0,
+    timeout_fallback_candidate_foundations: 0,
+    timeout_fallback_rows: 0,
+  };
+  const grantsByKey = new Map<string, GrantRow>();
+  const selectColumns =
+    'id,foundation_id,grant_year,grant_amount,grantee_name,grantee_ein,grantee_city,grantee_state,' +
+    'grantee_country,purpose_text,ntee_code,mission_signal_text,grantee_budget_band';
+  const orderAndYear = `&grant_year=gte.${MIN_GRANT_YEAR}&order=grant_year.desc,grant_amount.desc`;
+  const basePath = `foundation_grants?select=${selectColumns}${orderAndYear}`;
+
+  const appendRows = (rows: GrantRow[]) => {
+    for (const row of rows) {
+      if (grantsByKey.size >= PEER_DB_MAX_GRANTS) break;
+      const key = row.id || [
+        row.foundation_id,
+        row.grant_year,
+        normalizedEin(row.grantee_ein) || '',
+        normalizeNameForMatch(row.grantee_name),
+        row.grant_amount ?? '',
+      ].join('|');
+      if (!grantsByKey.has(key)) grantsByKey.set(key, row);
+    }
+  };
+
+  const runQuery = async (path: string): Promise<GrantRow[]> => {
+    stats.queries_attempted += 1;
+    try {
+      const res = await sbFetch(path);
+      const rows = await res.json() as GrantRow[];
+      stats.queries_succeeded += 1;
+      stats.rows_loaded += rows.length;
+      return rows;
+    } catch (error) {
+      if (isSupabaseStatementTimeout(error)) {
+        stats.queries_timed_out += 1;
+      } else {
+        stats.queries_failed += 1;
+      }
+      return [];
+    }
+  };
+
+  const eins = uniqueStrings(peerProfiles.map((profile) => profile.ein || ''));
+  for (const batch of chunkArray(eins, PEER_DB_EIN_BATCH_SIZE)) {
+    if (!batch.length || grantsByKey.size >= PEER_DB_MAX_GRANTS) break;
+    const inFilter = buildInFilter(batch);
+    const rows = await runQuery(
+      `${basePath}&grantee_ein=in.${inFilter}&limit=${PEER_DB_EIN_QUERY_LIMIT}`,
+    );
+    appendRows(rows);
+  }
+
+  const timedOutNameProfiles: PeerProfile[] = [];
+  for (const profile of peerProfiles) {
+    if (grantsByKey.size >= PEER_DB_MAX_GRANTS) break;
+    const pattern = peerIlikePattern(profile.canonicalName);
+    if (!pattern) continue;
+
+    const scopedState = profile.state || userLocation.state || null;
+    let queryPath = `${basePath}&grantee_name=ilike.${encodeURIComponent(pattern)}`;
+    if (scopedState) queryPath += `&grantee_state=eq.${encodeURIComponent(scopedState)}`;
+    queryPath += `&limit=${PEER_DB_NAME_QUERY_LIMIT}`;
+
+    let rows: GrantRow[] = [];
+    let timedOut = false;
+    stats.queries_attempted += 1;
+    try {
+      const res = await sbFetch(queryPath);
+      rows = await res.json() as GrantRow[];
+      stats.queries_succeeded += 1;
+      stats.rows_loaded += rows.length;
+    } catch (error) {
+      if (isSupabaseStatementTimeout(error)) {
+        stats.queries_timed_out += 1;
+        timedOut = true;
+      } else {
+        stats.queries_failed += 1;
+      }
+    }
+    appendRows(rows);
+    if (timedOut) timedOutNameProfiles.push(profile);
+  }
+
+  if (timedOutNameProfiles.length && grantsByKey.size < PEER_DB_MAX_GRANTS) {
+    const locationHints = uniqueStrings(timedOutNameProfiles.flatMap((profile) => {
+      const hints: string[] = [];
+      if (profile.city && profile.state) {
+        hints.push(`${profile.city}||${profile.state}`);
+      }
+      if (profile.state) {
+        hints.push(`||${profile.state}`);
+      }
+      return hints;
+    }));
+
+    if (!locationHints.length && userLocation.state) {
+      const city = userLocation.city || '';
+      locationHints.push(`${city}||${userLocation.state}`);
+    }
+
+    const baseFunderSelect = 'id,total_giving,city,state';
+    const candidateFoundationIds = new Set<string>();
+
+    const sampleAcross = (rows: FunderRow[], max: number): FunderRow[] => {
+      if (rows.length <= max) return rows;
+      const sampled: FunderRow[] = [];
+      for (let i = 0; i < max; i += 1) {
+        const idx = Math.floor((i * rows.length) / max);
+        sampled.push(rows[idx]);
+      }
+      return sampled;
+    };
+
+    for (const hint of locationHints.slice(0, 3)) {
+      if (candidateFoundationIds.size >= PEER_DB_TIMEOUT_FALLBACK_FOUNDER_LIMIT) break;
+      const [cityPart, statePart] = hint.split('||');
+      if (!statePart) continue;
+
+      const stateFilter = `&state=eq.${encodeURIComponent(statePart)}`;
+      const cityFilter = cityPart
+        ? `&city=ilike.*${encodeURIComponent(ilikeSafeToken(cityPart))}*`
+        : '';
+
+      try {
+        const [givingRes, nameRes] = await Promise.all([
+          sbFetch(
+            `funders?select=${baseFunderSelect}&type=eq.foundation${stateFilter}${cityFilter}` +
+            `&order=total_giving.desc.nullslast&limit=220`,
+          ),
+          sbFetch(
+            `funders?select=${baseFunderSelect}&type=eq.foundation${stateFilter}${cityFilter}` +
+            `&order=name.asc&limit=220`,
+          ),
+        ]);
+        const givingRows = await givingRes.json() as FunderRow[];
+        const nameRows = await nameRes.json() as FunderRow[];
+        const selected = [
+          ...givingRows.slice(0, 130),
+          ...sampleAcross(nameRows, 90),
+        ];
+        for (const row of selected) {
+          if (candidateFoundationIds.size >= PEER_DB_TIMEOUT_FALLBACK_FOUNDER_LIMIT) break;
+          if (!row?.id) continue;
+          candidateFoundationIds.add(row.id);
+        }
+      } catch {
+        // Best-effort fallback only.
+      }
+    }
+
+    const tokenClauses = uniqueStrings(
+      timedOutNameProfiles.flatMap((profile) =>
+        profile.tokenSignature
+          .filter((token) => token.length >= 3)
+          .map((token) => `grantee_name.ilike.*${ilikeSafeToken(token)}*`),
+      ),
+    ).slice(0, 10);
+
+    stats.timed_out_name_profiles = timedOutNameProfiles.length;
+    stats.timeout_fallback_candidate_foundations = candidateFoundationIds.size;
+
+    if (tokenClauses.length && candidateFoundationIds.size) {
+      const batchQuery = async (ids: string[]): Promise<GrantRow[]> => {
+        if (!ids.length || grantsByKey.size >= PEER_DB_MAX_GRANTS) return [];
+        const inFilter = buildInFilter(ids);
+        const queryPath =
+          `${basePath}&foundation_id=in.${inFilter}` +
+          `&or=${encodeURIComponent(`(${tokenClauses.join(',')})`)}` +
+          `&limit=${PEER_DB_TIMEOUT_FALLBACK_QUERY_LIMIT}`;
+
+        stats.queries_attempted += 1;
+        try {
+          const res = await sbFetch(queryPath);
+          const rows = await res.json() as GrantRow[];
+          stats.queries_succeeded += 1;
+          stats.rows_loaded += rows.length;
+          return rows;
+        } catch (error) {
+          if (isSupabaseStatementTimeout(error) && ids.length > 20) {
+            stats.queries_timed_out += 1;
+            const mid = Math.ceil(ids.length / 2);
+            const [left, right] = await Promise.all([
+              batchQuery(ids.slice(0, mid)),
+              batchQuery(ids.slice(mid)),
+            ]);
+            return [...left, ...right];
+          }
+          if (isSupabaseStatementTimeout(error)) {
+            stats.queries_timed_out += 1;
+          } else {
+            stats.queries_failed += 1;
+          }
+          return [];
+        }
+      };
+
+      for (const batch of chunkArray(
+        [...candidateFoundationIds],
+        PEER_DB_TIMEOUT_FALLBACK_BATCH_SIZE,
+      )) {
+        if (grantsByKey.size >= PEER_DB_MAX_GRANTS) break;
+        const rows = await batchQuery(batch);
+        stats.timeout_fallback_rows += rows.length;
+        appendRows(rows);
+      }
+    }
+  }
+
+  return {
+    grants: [...grantsByKey.values()],
+    stats,
+  };
+}
+
 function uniqueStrings(values: string[]): string[] {
   return [...new Set(values.filter((v) => v.trim().length > 0))];
 }
@@ -703,6 +1203,576 @@ function isLikelyIndividualGrantee(grant: GrantRow): boolean {
 function isEligibleOrganizationGrant(grant: GrantRow): boolean {
   if (isLikelyIndividualGrantee(grant)) return false;
   return hasMissionEvidence(grant);
+}
+
+function extractYearAnchors(html: string): Array<{ idx: number; year: number }> {
+  const anchors: Array<{ idx: number; year: number }> = [];
+  const re = /id=['"]filing(\d{4})['"]/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    anchors.push({ idx: m.index, year: Number.parseInt(m[1], 10) });
+  }
+  return anchors;
+}
+
+function findYearForIndex(yearAnchors: Array<{ idx: number; year: number }>, idx: number): number | null {
+  let year: number | null = null;
+  for (const y of yearAnchors) {
+    if (y.idx <= idx) year = y.year;
+    else break;
+  }
+  return year;
+}
+
+function extractObjectIdsFromOrgPage(html: string): Array<{ objectId: string; taxYear: number; xmlUrl: string }> {
+  const yearAnchors = extractYearAnchors(html);
+  const entries: Array<{ objectId: string; taxYear: number; xmlUrl: string }> = [];
+  const re = /data-href="\/nonprofits\/organizations\/\d+\/(\d+)\/([^"\/?#]+)"/g;
+  const seen = new Set<string>();
+
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    const objectId = m[1];
+    const formName = m[2];
+    if (formName !== 'IRS990PF') continue;
+    if (seen.has(objectId)) continue;
+    seen.add(objectId);
+
+    const year = findYearForIndex(yearAnchors, m.index);
+    if (!year || year < MIN_GRANT_YEAR) continue;
+
+    entries.push({
+      objectId,
+      taxYear: year,
+      xmlUrl: `https://projects.propublica.org/nonprofits/download-xml?object_id=${objectId}`,
+    });
+  }
+
+  return entries;
+}
+
+function sanitizeXml(xml: string): string {
+  return xml
+    .replace(/<\/?[a-zA-Z0-9_]+:/g, (tag) => tag.replace(':', ''))
+    .replace(/\r/g, '');
+}
+
+function pickTag(block: string, tagName: string): string | null {
+  const re = new RegExp(`<${tagName}[^>]*>([\\s\\S]*?)<\\/${tagName}>`, 'i');
+  const m = block.match(re);
+  return m ? m[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : null;
+}
+
+function parseGrantBlocksFromXml(xml: string): Array<Omit<GrantRow, 'id' | 'foundation_id'>> {
+  const grants: Array<Omit<GrantRow, 'id' | 'foundation_id'>> = [];
+  const re = /<GrantOrContributionPdDurYrGrp>([\s\S]*?)<\/GrantOrContributionPdDurYrGrp>/gi;
+  let m: RegExpExecArray | null;
+
+  while ((m = re.exec(xml)) !== null) {
+    const block = m[1];
+    const granteeName =
+      pickTag(block, 'BusinessNameLine1Txt')
+      || pickTag(block, 'RecipientPersonNm')
+      || pickTag(block, 'RecipientBusinessName')
+      || null;
+    if (!granteeName) continue;
+
+    const grantAmount = asNumber(pickTag(block, 'Amt'));
+    const purposeText = pickTag(block, 'GrantOrContributionPurposeTxt');
+    const city = pickTag(block, 'CityNm');
+    const state = pickTag(block, 'StateAbbreviationCd');
+    const country = pickTag(block, 'CountryCd');
+    const recipientEin = normalizedEin(pickTag(block, 'EIN'));
+
+    grants.push({
+      grant_year: MIN_GRANT_YEAR,
+      grant_amount: grantAmount,
+      grantee_name: granteeName,
+      grantee_ein: recipientEin,
+      grantee_city: city,
+      grantee_state: state,
+      grantee_country: country || (state ? 'US' : null),
+      purpose_text: purposeText,
+      ntee_code: null,
+      mission_signal_text: purposeText,
+      grantee_budget_band: null,
+    });
+  }
+
+  return grants;
+}
+
+function asNumber(value: string | null): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function decodeHtmlEntities(value: string): string {
+  return value
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, '\'')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&#(\d+);/g, (_, code) => {
+      const n = Number.parseInt(code, 10);
+      return Number.isFinite(n) ? String.fromCodePoint(n) : '';
+    })
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => {
+      const n = Number.parseInt(hex, 16);
+      return Number.isFinite(n) ? String.fromCodePoint(n) : '';
+    });
+}
+
+function stripHtml(value: string): string {
+  return value.replace(/<[^>]*>/g, ' ');
+}
+
+function parseLooseAmount(value: string | null): number | null {
+  if (!value) return null;
+  const cleaned = value.replace(/[^0-9.-]/g, '');
+  if (!cleaned) return null;
+  const amount = Number(cleaned);
+  return Number.isFinite(amount) ? amount : null;
+}
+
+function parseTaxYearFromObjectId(objectId: string): number | null {
+  if (!/^\d{4}/.test(objectId)) return null;
+  const filingYear = Number.parseInt(objectId.slice(0, 4), 10);
+  if (!Number.isFinite(filingYear) || filingYear < 2000 || filingYear > 2100) return null;
+  return filingYear - 1;
+}
+
+function parseTaxYearFromFullTextHtml(html: string, objectId: string): number | null {
+  const titleYear = html.match(/<title>\s*TY\s+(\d{4})\s+Form/i)?.[1];
+  if (titleYear) {
+    const parsed = Number.parseInt(titleYear, 10);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return parseTaxYearFromObjectId(objectId);
+}
+
+function extractPeerFullTextCandidates(searchHtml: string): PeerFullTextCandidate[] {
+  const candidates: PeerFullTextCandidate[] = [];
+  const seen = new Set<string>();
+  const linkRe = /(href|data-href)="\/nonprofits\/organizations\/(\d{9})\/(\d+)\/(IRS990ScheduleI|IRS990PF)"/g;
+  let m: RegExpExecArray | null;
+
+  while ((m = linkRe.exec(searchHtml)) !== null) {
+    const foundationEin = normalizedEin(m[2]);
+    const objectId = m[3];
+    const formName = m[4] as 'IRS990ScheduleI' | 'IRS990PF';
+    if (!foundationEin) continue;
+
+    const key = `${foundationEin}:${objectId}:${formName}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    candidates.push({
+      foundationEin,
+      objectId,
+      formName,
+    });
+  }
+
+  return candidates;
+}
+
+function extractPeerFullTextNextPath(searchHtml: string): string | null {
+  const relMatch = searchHtml.match(/<link[^>]+rel="next"[^>]+href="([^"]+)"/i);
+  if (relMatch?.[1]) return decodeHtmlEntities(relMatch[1]);
+
+  const anchorMatch = searchHtml.match(
+    /<a[^>]+href="([^"]*\/nonprofits\/full_text_search[^"]*page=\d+[^"]*)"[^>]*>\s*(?:Next|›)\s*<\/a>/i,
+  );
+  if (anchorMatch?.[1]) return decodeHtmlEntities(anchorMatch[1]);
+
+  return null;
+}
+
+function parseScheduleIFullTextPage(html: string, objectId: string): ParsedScheduleIPage {
+  const spanRe = /<span[^>]*id="([^"]+)"[^>]*>([\s\S]*?)<\/span>/gi;
+  const spans: Array<{ id: string; text: string }> = [];
+
+  let m: RegExpExecArray | null;
+  while ((m = spanRe.exec(html)) !== null) {
+    const id = m[1];
+    const text = decodeHtmlEntities(stripHtml(m[2])).replace(/\s+/g, ' ').trim();
+    if (!id || !text) continue;
+    spans.push({ id, text });
+  }
+
+  const filerName = spans.find((span) =>
+    /\/ReturnHeader\[1\]\/Filer\[1\]\/BusinessName\[1\]\/BusinessNameLine1Txt\[1\]$/i.test(span.id),
+  )?.text || null;
+  const filerCity = spans.find((span) =>
+    /\/ReturnHeader\[1\]\/Filer\[1\]\/USAddress\[1\]\/CityNm\[1\]$/i.test(span.id),
+  )?.text || null;
+  const filerState = spans.find((span) =>
+    /\/ReturnHeader\[1\]\/Filer\[1\]\/USAddress\[1\]\/StateAbbreviationCd\[1\]$/i.test(span.id),
+  )?.text || null;
+
+  const rowMap = new Map<number, Partial<ParsedScheduleIGrant>>();
+  for (const span of spans) {
+    const idxMatch = span.id.match(/\/RecipientTable\[(\d+)\]\//i);
+    if (!idxMatch) continue;
+    const idx = Number.parseInt(idxMatch[1], 10);
+    if (!Number.isFinite(idx)) continue;
+
+    const row = rowMap.get(idx) || {};
+    if (/\/RecipientBusinessName\[1\]\/BusinessNameLine1Txt\[1\]$/i.test(span.id)) {
+      row.grantee_name = span.text;
+    } else if (/\/RecipientEIN\[1\]$/i.test(span.id)) {
+      row.grantee_ein = normalizedEin(span.text);
+    } else if (/\/USAddress\[1\]\/CityNm\[1\]$/i.test(span.id)) {
+      row.grantee_city = span.text;
+    } else if (/\/USAddress\[1\]\/StateAbbreviationCd\[1\]$/i.test(span.id)) {
+      row.grantee_state = span.text;
+    } else if (/\/ForeignAddress\[1\]\/CountryCd\[1\]$/i.test(span.id)) {
+      row.grantee_country = span.text.toUpperCase();
+    } else if (/\/CashGrantAmt\[1\]$/i.test(span.id)) {
+      row.grant_amount = parseLooseAmount(span.text);
+    } else if (/\/PurposeOfGrantTxt\[1\]$/i.test(span.id)) {
+      row.purpose_text = span.text;
+    }
+
+    rowMap.set(idx, row);
+  }
+
+  const grants: ParsedScheduleIGrant[] = [];
+  for (const row of rowMap.values()) {
+    const granteeName = (row.grantee_name || '').trim();
+    if (!granteeName) continue;
+    grants.push({
+      grantee_name: granteeName,
+      grantee_ein: row.grantee_ein || null,
+      grantee_city: row.grantee_city || null,
+      grantee_state: row.grantee_state || null,
+      grantee_country: row.grantee_country || (row.grantee_state ? 'US' : null),
+      grant_amount: typeof row.grant_amount === 'number' ? row.grant_amount : null,
+      purpose_text: row.purpose_text || null,
+    });
+  }
+
+  return {
+    taxYear: parseTaxYearFromFullTextHtml(html, objectId),
+    filerName,
+    filerCity,
+    filerState,
+    grants,
+  };
+}
+
+async function fetchOrganizationSummaryByEin(
+  foundationEin: string,
+): Promise<{
+  name: string | null;
+  city: string | null;
+  state: string | null;
+  foundationCode: number | null;
+  subsectionCode: number | null;
+}> {
+  try {
+    const res = await fetch(`${PROPUBLICA_API_BASE}/organizations/${foundationEin}.json`, {
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'FunderMatchBot/1.0 (+https://fundermatch.org)',
+      },
+    });
+    if (!res.ok) {
+      return { name: null, city: null, state: null, foundationCode: null, subsectionCode: null };
+    }
+    const json = await res.json();
+    const org = json?.organization || {};
+    return {
+      name: typeof org?.name === 'string' ? org.name : null,
+      city: typeof org?.city === 'string' ? org.city : null,
+      state: typeof org?.state === 'string' ? org.state : null,
+      foundationCode: typeof org?.foundation_code === 'number' ? org.foundation_code : null,
+      subsectionCode: typeof org?.subsection_code === 'number' ? org.subsection_code : null,
+    };
+  } catch {
+    return { name: null, city: null, state: null, foundationCode: null, subsectionCode: null };
+  }
+}
+
+async function fetchPeerMatchesViaFullTextSearch(
+  peerProfiles: PeerProfile[],
+  userLocation: UserLocation,
+  deadlineMs: number,
+): Promise<PeerFullTextMatchSet[]> {
+  const queryTerms = uniqueStrings(peerProfiles.flatMap((profile) => {
+    const terms: string[] = [];
+    if (profile.ein) {
+      terms.push(profile.ein);
+      terms.push(`${profile.ein.slice(0, 2)}-${profile.ein.slice(2)}`);
+    }
+    terms.push(profile.canonicalName);
+    terms.push(normalizePeerInput(profile.input));
+    return terms;
+  }))
+    .filter((term) => term.length >= 3)
+    .slice(0, PEER_FULL_TEXT_MAX_QUERY_TERMS);
+
+  if (!queryTerms.length) return [];
+
+  const candidateMap = new Map<string, PeerFullTextCandidate>();
+  for (const term of queryTerms) {
+    if (Date.now() > deadlineMs) break;
+    const query = /\s/.test(term) ? `"${term}"` : term;
+    let nextUrl: string | null = `${PROPUBLICA_FULL_TEXT_SEARCH}?q=${encodeURIComponent(query)}`;
+
+    for (let page = 1; page <= PEER_FULL_TEXT_MAX_PAGES_PER_QUERY; page++) {
+      if (!nextUrl) break;
+      if (Date.now() > deadlineMs) break;
+
+      try {
+        const res = await fetch(nextUrl, {
+          headers: {
+            Accept: 'text/html',
+            'User-Agent': 'FunderMatchBot/1.0 (+https://fundermatch.org)',
+          },
+        });
+        if (!res.ok) break;
+
+        const html = await res.text();
+        const candidates = extractPeerFullTextCandidates(html);
+        for (const candidate of candidates) {
+          const key = `${candidate.foundationEin}:${candidate.objectId}:${candidate.formName}`;
+          if (candidateMap.has(key)) continue;
+          candidateMap.set(key, candidate);
+          if (candidateMap.size >= PEER_FULL_TEXT_MAX_CANDIDATES) break;
+        }
+        if (candidateMap.size >= PEER_FULL_TEXT_MAX_CANDIDATES) break;
+
+        const nextPath = extractPeerFullTextNextPath(html);
+        nextUrl = nextPath
+          ? nextPath.startsWith('http')
+            ? nextPath
+            : `https://projects.propublica.org${nextPath}`
+          : null;
+      } catch {
+        // Best-effort search; continue with remaining terms/pages.
+        break;
+      }
+    }
+
+    if (candidateMap.size >= PEER_FULL_TEXT_MAX_CANDIDATES) break;
+  }
+
+  const matchesByEin = new Map<string, PeerFullTextMatchSet>();
+  const seenGrantKeys = new Set<string>();
+  let fetchedCount = 0;
+
+  for (const candidate of candidateMap.values()) {
+    if (Date.now() > deadlineMs) break;
+    if (fetchedCount >= PEER_FULL_TEXT_MAX_FETCHES) break;
+    fetchedCount += 1;
+
+    try {
+      let parsedTaxYear: number | null = null;
+      let parsedGrants: ParsedScheduleIGrant[] = [];
+      let filerName: string | null = null;
+      let filerCity: string | null = null;
+      let filerState: string | null = null;
+
+      if (candidate.formName === 'IRS990PF') {
+        const xmlRes = await fetch(
+          `https://projects.propublica.org/nonprofits/download-xml?object_id=${candidate.objectId}`,
+          {
+            headers: {
+              Accept: 'application/xml,text/xml,text/html',
+              'User-Agent': 'FunderMatchBot/1.0 (+https://fundermatch.org)',
+            },
+          },
+        );
+        if (!xmlRes.ok) continue;
+        const rawXml = await xmlRes.text();
+        if (!rawXml.trim().startsWith('<?xml')) continue;
+
+        parsedTaxYear = parseTaxYearFromObjectId(candidate.objectId);
+        parsedGrants = parseGrantBlocksFromXml(sanitizeXml(rawXml)).map((grant) => ({
+          grantee_name: grant.grantee_name,
+          grantee_ein: grant.grantee_ein,
+          grantee_city: grant.grantee_city,
+          grantee_state: grant.grantee_state,
+          grantee_country: grant.grantee_country,
+          grant_amount: grant.grant_amount,
+          purpose_text: grant.purpose_text,
+        }));
+      } else {
+        const fullTextRes = await fetch(
+          `${PROPUBLICA_FULL_TEXT_BASE}/${candidate.objectId}/${candidate.formName}`,
+          {
+            headers: {
+              Accept: 'text/html',
+              'User-Agent': 'FunderMatchBot/1.0 (+https://fundermatch.org)',
+            },
+          },
+        );
+        if (!fullTextRes.ok) continue;
+        const fullTextHtml = await fullTextRes.text();
+        const parsed = parseScheduleIFullTextPage(fullTextHtml, candidate.objectId);
+        parsedTaxYear = parsed.taxYear;
+        parsedGrants = parsed.grants;
+        filerName = parsed.filerName;
+        filerCity = parsed.filerCity;
+        filerState = parsed.filerState;
+      }
+
+      if (!parsedTaxYear || parsedTaxYear < MIN_GRANT_YEAR) continue;
+      if (!parsedGrants.length) continue;
+
+      for (const parsedGrant of parsedGrants) {
+        const grantRowBase: GrantRow = {
+          id: `live:ft:${candidate.foundationEin}:${candidate.objectId}:${parsedGrant.grantee_name}`,
+          foundation_id: `ein:${candidate.foundationEin}`,
+          grant_year: parsedTaxYear,
+          grant_amount: parsedGrant.grant_amount,
+          grantee_name: parsedGrant.grantee_name,
+          grantee_ein: parsedGrant.grantee_ein,
+          grantee_city: parsedGrant.grantee_city,
+          grantee_state: parsedGrant.grantee_state,
+          grantee_country: parsedGrant.grantee_country,
+          purpose_text: parsedGrant.purpose_text,
+          ntee_code: null,
+          mission_signal_text: parsedGrant.purpose_text,
+          grantee_budget_band: null,
+        };
+
+        if (isLikelyIndividualGrantee(grantRowBase)) continue;
+        if (!matchedPeerNamesForGrant(grantRowBase, peerProfiles, userLocation).length) continue;
+
+        const dedupeKey = [
+          candidate.foundationEin,
+          parsedTaxYear,
+          normalizedEin(grantRowBase.grantee_ein) || '',
+          normalizeNameForMatch(grantRowBase.grantee_name),
+          grantRowBase.grant_amount || '',
+        ].join('|');
+        if (seenGrantKeys.has(dedupeKey)) continue;
+        seenGrantKeys.add(dedupeKey);
+
+        const entry = matchesByEin.get(candidate.foundationEin) || {
+          foundationEin: candidate.foundationEin,
+          foundationName: filerName,
+          foundationCity: filerCity,
+          foundationState: filerState,
+          foundationCode: null,
+          subsectionCode: null,
+          grants: [],
+        };
+        const grantIndex = entry.grants.length + 1;
+        entry.grants.push({
+          ...grantRowBase,
+          id: `live:ft:${candidate.foundationEin}:${candidate.objectId}:${grantIndex}`,
+        });
+        if (!entry.foundationName && filerName) entry.foundationName = filerName;
+        if (!entry.foundationCity && filerCity) entry.foundationCity = filerCity;
+        if (!entry.foundationState && filerState) entry.foundationState = filerState;
+        matchesByEin.set(candidate.foundationEin, entry);
+      }
+    } catch {
+      // Continue best-effort candidate parsing.
+    }
+  }
+
+  const entriesNeedingSummary = [...matchesByEin.values()].slice(0, 20);
+  for (const entry of entriesNeedingSummary) {
+    if (Date.now() > deadlineMs) break;
+    const summary = await fetchOrganizationSummaryByEin(entry.foundationEin);
+    if (!entry.foundationName && summary.name) entry.foundationName = summary.name;
+    if (!entry.foundationCity && summary.city) entry.foundationCity = summary.city;
+    if (!entry.foundationState && summary.state) entry.foundationState = summary.state;
+    if (entry.foundationCode === null && typeof summary.foundationCode === 'number') {
+      entry.foundationCode = summary.foundationCode;
+    }
+    if (entry.subsectionCode === null && typeof summary.subsectionCode === 'number') {
+      entry.subsectionCode = summary.subsectionCode;
+    }
+  }
+
+  const isFoundationLike = (entry: PeerFullTextMatchSet): boolean => {
+    const name = (entry.foundationName || '').toLowerCase();
+    const nameHint = /\bfoundation\b|\bfund\b|\btrust\b|\bgrant\b|\bphilanthrop/i.test(name);
+    return (entry.foundationCode !== null && entry.foundationCode > 0) || nameHint;
+  };
+
+  return [...matchesByEin.values()]
+    .filter((entry) => entry.grants.length > 0)
+    .filter((entry) => isFoundationLike(entry));
+}
+
+async function fetchLivePeerGrantsForFoundation(
+  foundation: FunderRow,
+  peerProfiles: PeerProfile[],
+  userLocation: UserLocation,
+  deadlineMs: number,
+): Promise<GrantRow[]> {
+  const foundationEin = normalizedEin(foundation.foundation_ein || foundation.id);
+  if (!foundationEin) return [];
+
+  if (Date.now() > deadlineMs) return [];
+
+  try {
+    const orgRes = await fetch(`${PROPUBLICA_ORG_BASE}/${foundationEin}`, {
+      headers: {
+        Accept: 'text/html',
+        'User-Agent': 'FunderMatchBot/1.0 (+https://fundermatch.org)',
+      },
+    });
+    if (!orgRes.ok) return [];
+    const orgHtml = await orgRes.text();
+    const filings = extractObjectIdsFromOrgPage(orgHtml)
+      .sort((a, b) => b.taxYear - a.taxYear)
+      .slice(0, PEER_LIVE_QUERY_MAX_FILINGS_PER_FOUNDATION);
+
+    const matched: GrantRow[] = [];
+    let localIndex = 0;
+
+    for (const filing of filings) {
+      if (Date.now() > deadlineMs) break;
+      const xmlRes = await fetch(filing.xmlUrl, {
+        headers: {
+          Accept: 'application/xml,text/xml,text/html',
+          'User-Agent': 'FunderMatchBot/1.0 (+https://fundermatch.org)',
+        },
+      });
+      if (!xmlRes.ok) continue;
+      const rawXml = await xmlRes.text();
+      if (!rawXml.trim().startsWith('<?xml')) continue;
+
+      const grants = parseGrantBlocksFromXml(sanitizeXml(rawXml));
+      for (const grant of grants) {
+        const grantRow: GrantRow = {
+          id: `live:${foundation.id}:${filing.objectId}:${localIndex++}`,
+          foundation_id: foundation.id,
+          grant_year: filing.taxYear,
+          grant_amount: grant.grant_amount,
+          grantee_name: grant.grantee_name,
+          grantee_ein: grant.grantee_ein,
+          grantee_city: grant.grantee_city,
+          grantee_state: grant.grantee_state,
+          grantee_country: grant.grantee_country,
+          purpose_text: grant.purpose_text,
+          ntee_code: grant.ntee_code,
+          mission_signal_text: grant.mission_signal_text,
+          grantee_budget_band: grant.grantee_budget_band,
+        };
+
+        if (isLikelyIndividualGrantee(grantRow)) continue;
+        if (!matchedPeerNamesForGrant(grantRow, peerProfiles, userLocation).length) continue;
+
+        matched.push(grantRow);
+      }
+    }
+
+    return matched;
+  } catch {
+    return [];
+  }
 }
 
 function grantMatchReasons(
@@ -777,6 +1847,7 @@ Deno.serve(async (req) => {
     const keywords = normalizeKeywords(body?.keywords); // exclusion keywords
     const peerNonprofits = normalizePeerNonprofits(body?.peerNonprofits);
     const isPeerSearch = peerNonprofits.length > 0;
+    const debugMode = !!body?.debug;
     const budgetBand = normalizeBudgetBand(body?.budgetBand);
     const forceRefresh = !!body?.forceRefresh;
 
@@ -788,51 +1859,256 @@ Deno.serve(async (req) => {
     }
 
     if (isPeerSearch) {
-      const peerTokens = peerNonprofits
-        .map((name) => ilikeSafeToken(name))
-        .filter((name) => name.length >= 3);
+      const userLocation = parseUserLocation(locationServed);
+      // Peer lookup should return all foundations that funded the peer nonprofits,
+      // independent of mission-search location constraints.
+      const peerMatchLocation: UserLocation = {
+        city: null,
+        state: null,
+        region: null,
+        isNationalUS: false,
+        isGlobal: false,
+        hasLocationInput: false,
+      };
+      const peerProfiles = await resolvePeerProfiles(peerNonprofits, userLocation);
 
-      if (!peerTokens.length) {
+      if (!peerProfiles.length) {
         return new Response(JSON.stringify({ results: [], cached: false }), {
           headers: { ...headers, 'Content-Type': 'application/json' },
         });
       }
 
-      const orClause = peerTokens
-        .map((token) => `grantee_name.ilike.*${token}*`)
-        .join(',');
-
-      const grantsRes = await sbFetch(
-        `foundation_grants?select=id,foundation_id,grant_year,grant_amount,grantee_name,grantee_ein,grantee_city,grantee_state,grantee_country,purpose_text,ntee_code,mission_signal_text,grantee_budget_band` +
-        `&grant_year=gte.${MIN_GRANT_YEAR}` +
-        `&or=${encodeURIComponent(`(${orClause})`)}` +
-        `&order=grant_year.desc,grant_amount.desc` +
-        `&limit=50000`,
+      const peerDebug: Record<string, unknown> = {};
+      const { grants: matchedGrantsAll, stats: peerDbStats } = await fetchPeerGrantsFromDatabase(
+        peerProfiles,
+        userLocation,
       );
-      const matchedGrantsAll = await grantsRes.json() as GrantRow[];
+      peerDebug.db_query_stats = peerDbStats;
 
-      const peerNorm = peerTokens.map((token) => normalizeNameForMatch(token));
       const grantsByFoundation = new Map<string, Array<GrantRow & { matchedPeers: string[] }>>();
       const peerSetByFoundation = new Map<string, Set<string>>();
 
       for (const grant of matchedGrantsAll) {
         if (isLikelyIndividualGrantee(grant)) continue;
-        const grantNameNorm = normalizeNameForMatch(grant.grantee_name);
-        const matchedPeers = peerNorm.filter((peer) => grantNameNorm.includes(peer));
-        if (!matchedPeers.length) continue;
+
+        const matchedPeerNames = matchedPeerNamesForGrant(grant, peerProfiles, peerMatchLocation);
+
+        if (!matchedPeerNames.length) continue;
 
         const rows = grantsByFoundation.get(grant.foundation_id) || [];
-        rows.push({ ...grant, matchedPeers });
+        rows.push({ ...grant, matchedPeers: uniqueStrings(matchedPeerNames) });
         grantsByFoundation.set(grant.foundation_id, rows);
 
         const peerSet = peerSetByFoundation.get(grant.foundation_id) || new Set<string>();
-        for (const peer of matchedPeers) peerSet.add(peer);
+        for (const peerName of matchedPeerNames) peerSet.add(peerName);
         peerSetByFoundation.set(grant.foundation_id, peerSet);
       }
 
-      const foundationIds = [...grantsByFoundation.keys()];
+      let foundationIds = [...grantsByFoundation.keys()];
+      let locationCandidates: FunderRow[] = [];
+      const syntheticFundersById = new Map<string, FunderRow>();
+      const liveMatchedFoundationIds = new Set<string>();
+      const baseSelect =
+        'id,name,type,foundation_ein,description,focus_areas,ntee_code,city,state,' +
+        'website,contact_url,programs_url,apply_url,news_url,total_giving,asset_amount,' +
+        'grant_range_min,grant_range_max,contact_name,contact_title,contact_email,next_step';
+      let queryCheckRan = false;
+
+      if (foundationIds.length < PEER_LIVE_QUERY_MIN_RESULTS) {
+        queryCheckRan = true;
+        const deadlineMs = Date.now() + PEER_LIVE_QUERY_TIMEOUT_MS;
+
+        const fullTextMatches = await fetchPeerMatchesViaFullTextSearch(
+          peerProfiles,
+          peerMatchLocation,
+          deadlineMs,
+        );
+        peerDebug.full_text_match_sets = fullTextMatches.length;
+
+        if (fullTextMatches.length) {
+          const matchedEins = uniqueStrings(fullTextMatches.map((match) => match.foundationEin));
+          const dbFundersByEin = new Map<string, FunderRow[]>();
+
+          if (matchedEins.length) {
+            try {
+              const fundersByEinRes = await sbFetch(
+                `funders?select=${baseSelect}` +
+                `&foundation_ein=in.${buildInFilter(matchedEins)}` +
+                `&limit=50000`,
+              );
+              const rows = await fundersByEinRes.json() as FunderRow[];
+              for (const row of rows) {
+                const ein = normalizedEin(row.foundation_ein);
+                if (!ein) continue;
+                const group = dbFundersByEin.get(ein) || [];
+                group.push(row);
+                dbFundersByEin.set(ein, group);
+              }
+              peerDebug.full_text_db_funder_rows = rows.length;
+            } catch {
+              // Continue with synthetic records when funders lookup fails.
+              peerDebug.full_text_db_lookup_error = true;
+            }
+          }
+
+          for (const match of fullTextMatches) {
+            const candidates = dbFundersByEin.get(match.foundationEin) || [];
+            const preferred = candidates.find((row) => row.type === 'foundation');
+            let funder = preferred || candidates[0];
+
+            if (!funder) {
+              const syntheticId = `pp:${match.foundationEin}`;
+              funder = syntheticFundersById.get(syntheticId);
+              if (!funder) {
+                funder = {
+                  id: syntheticId,
+                  name: (match.foundationName || `Foundation EIN ${match.foundationEin}`).trim(),
+                  type: 'foundation',
+                  foundation_ein: match.foundationEin,
+                  description: null,
+                  focus_areas: [],
+                  ntee_code: null,
+                  city: match.foundationCity || null,
+                  state: normalizeState(match.foundationState) || match.foundationState || null,
+                  website: null,
+                  contact_url: null,
+                  programs_url: null,
+                  apply_url: null,
+                  news_url: null,
+                  total_giving: null,
+                  asset_amount: null,
+                  grant_range_min: null,
+                  grant_range_max: null,
+                  contact_name: null,
+                  contact_title: null,
+                  contact_email: null,
+                  next_step: null,
+                };
+                syntheticFundersById.set(syntheticId, funder);
+              }
+            }
+
+            const foundationId = funder.id;
+            foundationIds.push(foundationId);
+            liveMatchedFoundationIds.add(foundationId);
+
+            for (const grant of match.grants) {
+              const matchedPeerNames = matchedPeerNamesForGrant(grant, peerProfiles, peerMatchLocation);
+              if (!matchedPeerNames.length) continue;
+
+              const rows = grantsByFoundation.get(foundationId) || [];
+              rows.push({
+                ...grant,
+                foundation_id: foundationId,
+                matchedPeers: uniqueStrings(matchedPeerNames),
+              });
+              grantsByFoundation.set(foundationId, rows);
+
+              const peerSet = peerSetByFoundation.get(foundationId) || new Set<string>();
+              for (const peerName of matchedPeerNames) peerSet.add(peerName);
+              peerSetByFoundation.set(foundationId, peerSet);
+            }
+          }
+        }
+        peerDebug.synthetic_funder_count = syntheticFundersById.size;
+
+        if (foundationIds.length < PEER_LIVE_QUERY_MIN_RESULTS && userLocation.hasLocationInput) {
+          const suffix = (() => {
+            if (userLocation.city && userLocation.state) {
+              return `&state=eq.${encodeURIComponent(userLocation.state)}` +
+                `&city=ilike.*${encodeURIComponent(ilikeSafeToken(userLocation.city))}*`;
+            }
+            if (userLocation.state) {
+              return `&state=eq.${encodeURIComponent(userLocation.state)}`;
+            }
+            return '';
+          })();
+
+          const [nameSortedRes, givingSortedRes] = await Promise.all([
+            sbFetch(
+              `funders?select=${baseSelect}&type=eq.foundation${suffix}` +
+              `&order=name.asc&limit=240`,
+            ),
+            sbFetch(
+              `funders?select=${baseSelect}&type=eq.foundation${suffix}` +
+              `&order=total_giving.desc.nullslast&limit=120`,
+            ),
+          ]);
+
+          const nameSorted = await nameSortedRes.json() as FunderRow[];
+          const givingSorted = await givingSortedRes.json() as FunderRow[];
+          peerDebug.location_candidate_pool = {
+            name_sorted: nameSorted.length,
+            giving_sorted: givingSorted.length,
+          };
+
+          const sampleAcross = (rows: FunderRow[], max: number): FunderRow[] => {
+            if (rows.length <= max) return rows;
+            const sampled: FunderRow[] = [];
+            for (let i = 0; i < max; i += 1) {
+              const idx = Math.floor((i * rows.length) / max);
+              sampled.push(rows[idx]);
+            }
+            return sampled;
+          };
+
+          const candidateFunders = uniqueStrings([
+            ...givingSorted.slice(0, 18).map((f) => f.id),
+            ...sampleAcross(nameSorted, 24).map((f) => f.id),
+          ]).map((id) => givingSorted.find((f) => f.id === id) || nameSorted.find((f) => f.id === id))
+            .filter((funder): funder is FunderRow => !!funder);
+
+          locationCandidates = uniqueStrings(candidateFunders.map((f) => f.id))
+            .map((id) => candidateFunders.find((f) => f.id === id))
+            .filter((funder): funder is FunderRow => !!funder);
+          peerDebug.location_candidates = locationCandidates.length;
+
+          const seenCandidateIds = new Set(foundationIds);
+          let checked = 0;
+
+          for (const funder of locationCandidates) {
+            if (checked >= PEER_LIVE_QUERY_MAX_FOUNDATIONS) break;
+            if (Date.now() > deadlineMs) break;
+            if (seenCandidateIds.has(funder.id)) continue;
+            if (!normalizedEin(funder.foundation_ein || funder.id)) continue;
+
+            checked += 1;
+            const liveMatches = await fetchLivePeerGrantsForFoundation(
+              funder,
+              peerProfiles,
+              peerMatchLocation,
+              deadlineMs,
+            );
+            if (!liveMatches.length) continue;
+
+            seenCandidateIds.add(funder.id);
+            liveMatchedFoundationIds.add(funder.id);
+            foundationIds.push(funder.id);
+
+            for (const grant of liveMatches) {
+              const matchedPeerNames = matchedPeerNamesForGrant(grant, peerProfiles, peerMatchLocation);
+              if (!matchedPeerNames.length) continue;
+              const rows = grantsByFoundation.get(funder.id) || [];
+              rows.push({ ...grant, matchedPeers: uniqueStrings(matchedPeerNames) });
+              grantsByFoundation.set(funder.id, rows);
+
+              const peerSet = peerSetByFoundation.get(funder.id) || new Set<string>();
+              for (const peerName of matchedPeerNames) peerSet.add(peerName);
+              peerSetByFoundation.set(funder.id, peerSet);
+            }
+          }
+        }
+      }
+
+      foundationIds = uniqueStrings(foundationIds);
+      peerDebug.foundation_ids_after_query_check = foundationIds.length;
       if (!foundationIds.length) {
-        return new Response(JSON.stringify({ results: [], cached: false }), {
+        return new Response(JSON.stringify({
+          results: [],
+          cached: false,
+          query_check_run: queryCheckRan,
+          ...(debugMode ? { debug: peerDebug } : {}),
+        }), {
           headers: { ...headers, 'Content-Type': 'application/json' },
         });
       }
@@ -857,19 +2133,29 @@ Deno.serve(async (req) => {
       const funders = await fundersRes.json() as FunderRow[];
       const filings = await filingsRes.json() as FilingRow[];
       const parsedFoundationIds = new Set(filings.map((row) => row.foundation_id));
+      const funderById = new Map<string, FunderRow>();
+      for (const funder of funders) funderById.set(funder.id, funder);
+      for (const candidate of locationCandidates) {
+        if (!funderById.has(candidate.id)) funderById.set(candidate.id, candidate);
+      }
+      for (const synthetic of syntheticFundersById.values()) {
+        if (!funderById.has(synthetic.id)) funderById.set(synthetic.id, synthetic);
+      }
 
-      const results = funders
-        .filter((funder) => parsedFoundationIds.has(funder.id))
+      const results = foundationIds
+        .map((foundationId) => funderById.get(foundationId))
+        .filter((funder): funder is FunderRow => !!funder)
+        .filter((funder) => parsedFoundationIds.has(funder.id) || liveMatchedFoundationIds.has(funder.id))
         .map((funder) => {
           const grants = grantsByFoundation.get(funder.id) || [];
           const peerCoverageCount = (peerSetByFoundation.get(funder.id) || new Set()).size;
-          const coverage = clamp01(peerCoverageCount / Math.max(peerNorm.length, 1));
+          const coverage = clamp01(peerCoverageCount / Math.max(peerProfiles.length, 1));
           const grantCountSignal = clamp01(grants.length / 8);
           const fitScore = clamp01(coverage * 0.75 + grantCountSignal * 0.25);
 
           const granteeBestGrant = new Map<string, GrantRow & { matchedPeers: string[] }>();
           for (const grant of grants) {
-            const key = normalizeNameForMatch(grant.grantee_name);
+            const key = `${normalizedEin(grant.grantee_ein) || ''}|${normalizeNameForMatch(grant.grantee_name)}`;
             const existing = granteeBestGrant.get(key);
             if (!existing) {
               granteeBestGrant.set(key, grant);
@@ -887,6 +2173,8 @@ Deno.serve(async (req) => {
             }
           }
 
+          const liveGrantCount = grants.filter((grant) => grant.id.startsWith('live:')).length;
+
           const topGrantees = [...granteeBestGrant.values()]
             .sort((a, b) => {
               if ((b.grant_year || 0) !== (a.grant_year || 0)) return (b.grant_year || 0) - (a.grant_year || 0);
@@ -899,15 +2187,20 @@ Deno.serve(async (req) => {
               amount: grant.grant_amount,
               match_reasons: [
                 grant.matchedPeers.length > 1 ? 'Matches multiple peer nonprofits' : 'Direct peer nonprofit match',
-                grant.mission_signal_text || grant.ntee_code
-                  ? 'Mission/category evidence available'
-                  : 'Matched from 990 grantee history',
+                grant.id.startsWith('live:')
+                  ? 'Verified via live 990 query check'
+                  : (grant.mission_signal_text || grant.ntee_code
+                    ? 'Mission/category evidence available'
+                    : 'Matched from 990 grantee history'),
               ],
             }));
 
           const next = deriveNextStep(funder);
           const nextStepUrl = resolveNextStepUrl(next.type, funder);
-          const fitExplanation = `Matched ${grants.length} grant${grants.length === 1 ? '' : 's'} in the last 5 years across ${peerCoverageCount} of ${peerNorm.length} peer nonprofit${peerNorm.length === 1 ? '' : 's'}.`;
+          const fitExplanationBase = `Matched ${grants.length} grant${grants.length === 1 ? '' : 's'} in the last 5 years across ${peerCoverageCount} of ${peerProfiles.length} peer nonprofit${peerProfiles.length === 1 ? '' : 's'}.`;
+          const fitExplanation = liveGrantCount > 0
+            ? `${fitExplanationBase} Includes live 990 query-check results.`
+            : fitExplanationBase;
 
           return {
             ...funder,
@@ -922,6 +2215,7 @@ Deno.serve(async (req) => {
             next_step_url: nextStepUrl,
             peer_match_count: grants.length,
             peer_coverage_count: peerCoverageCount,
+            live_990_query_count: liveGrantCount,
           };
         })
         .filter((row) => (row.similar_past_grantees?.length || 0) > 0)
@@ -933,7 +2227,12 @@ Deno.serve(async (req) => {
           return (b.peer_match_count || 0) - (a.peer_match_count || 0);
         });
 
-      return new Response(JSON.stringify({ results, cached: false }), {
+      return new Response(JSON.stringify({
+        results,
+        cached: false,
+        query_check_run: queryCheckRan,
+        ...(debugMode ? { debug: peerDebug } : {}),
+      }), {
         headers: { ...headers, 'Content-Type': 'application/json' },
       });
     }
@@ -1275,10 +2574,15 @@ Deno.serve(async (req) => {
           next_step_url: nextStepUrl,
         };
       })
-      .filter((row) =>
-        (row.similar_past_grantees?.length || 0) >= 3
-        && foundationsWithParsedFilings.has(row.id),
-      )
+      .filter((row) => {
+        // Foundations with rich grant history data: require at least 1 similar grantee
+        if (foundationsWithParsedFilings.has(row.id)) {
+          return (row.similar_past_grantees?.length || 0) >= 1;
+        }
+        // Foundations without parsed filings: allow if fit_score is strong enough
+        // (relies on baseline mission + location alignment)
+        return (row.fit_score || 0) >= 0.25;
+      })
       .sort((a, b) => {
         if ((b.fit_score || 0) !== (a.fit_score || 0)) {
           return (b.fit_score || 0) - (a.fit_score || 0);
