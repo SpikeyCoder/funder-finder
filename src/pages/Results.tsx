@@ -27,7 +27,7 @@ function toExternalUrl(url: string | null | undefined): string | null {
 function resolveNextStepUrl(nextStepUrl: string | undefined, website: string | null): string | null {
   return toExternalUrl(nextStepUrl) ?? toExternalUrl(website);
 }
-import { findMatches, formatGrantRange, formatTotalGiving } from '../utils/matching';
+import { findMatches, formatGrantRange, formatTotalGiving, suggestPeers } from '../utils/matching';
 import { BudgetBand, Funder } from '../types';
 import { getSavedIds, unsaveFunder } from '../utils/storage';
 import { useAuth } from '../contexts/AuthContext';
@@ -107,6 +107,9 @@ export default function Results() {
   const [grantSizeFilter, setGrantSizeFilter] = useState<'any' | 'small' | 'medium' | 'large'>('any');
   const [peerSearchInput, setPeerSearchInput] = useState<string>(peerNonprofitsFromState.join('\n'));
   const [activePeerNonprofits, setActivePeerNonprofits] = useState<string[]>(peerNonprofitsFromState);
+  const [suggestedPeers, setSuggestedPeers] = useState<string[]>([]);
+  const [suggestedPeersLoading, setSuggestedPeersLoading] = useState(false);
+  const suggestedPeersFetchedRef = useRef(false);
   const searchTelemetryRef = useRef<SearchTelemetryContext | null>(null);
   const searchSessionIdRef = useRef<string>(getOrCreateSearchSessionId());
 
@@ -235,6 +238,35 @@ export default function Results() {
     setActivePeerNonprofits([]);
     setPeerSearchInput('');
   };
+
+  const useSuggestedPeers = () => {
+    if (!suggestedPeers.length) return;
+    const joined = suggestedPeers.join('\n');
+    setPeerSearchInput(joined);
+    setGrantSizeFilter('any');
+    setActivePeerNonprofits(suggestedPeers);
+  };
+
+  // Auto-suggest peer nonprofits based on mission/location/budget
+  useEffect(() => {
+    if (suggestedPeersFetchedRef.current) return;
+    if (!mission) return;
+    // Only fetch suggestions if we're not already in peer search mode
+    if (peerNonprofitsFromState.length > 0) return;
+
+    suggestedPeersFetchedRef.current = true;
+    setSuggestedPeersLoading(true);
+    suggestPeers(mission, locationServed, budgetBand)
+      .then((res) => {
+        if (res.peers.length > 0) {
+          setSuggestedPeers(res.peers);
+        }
+      })
+      .catch(() => {
+        // silently fail — suggestions are non-critical
+      })
+      .finally(() => setSuggestedPeersLoading(false));
+  }, [mission, locationServed, budgetBand]);
 
   // Load saved IDs — from DB if logged in, from localStorage if not
   const loadSavedIds = async () => {
@@ -401,6 +433,40 @@ export default function Results() {
           <ArrowLeft size={16} />
           Update Search
         </button>
+
+        {/* Auto-suggested peers */}
+        {!isPeerSearchMode && suggestedPeers.length > 0 && (
+          <div className="mt-4 mb-4 bg-[#0f1d2e] border border-[#1f3a5f] rounded-2xl p-4">
+            <p className="text-sm font-semibold text-blue-300">Suggested peer nonprofits</p>
+            <p className="text-xs text-gray-400 mt-1">
+              Based on your mission, location, and budget, these organizations share a similar profile. Use them to find additional funders via 990 grant history.
+            </p>
+            <div className="flex flex-wrap gap-2 mt-3">
+              {suggestedPeers.map((peer) => (
+                <span
+                  key={peer}
+                  className="inline-flex items-center bg-[#161b22] border border-[#30363d] rounded-lg px-3 py-1.5 text-xs text-gray-200"
+                >
+                  {peer}
+                </span>
+              ))}
+            </div>
+            <button
+              onClick={useSuggestedPeers}
+              className="mt-3 bg-blue-600 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-blue-500 transition-colors"
+            >
+              Search funders of these peers
+            </button>
+          </div>
+        )}
+        {!isPeerSearchMode && suggestedPeersLoading && (
+          <div className="mt-4 mb-4 bg-[#0f1d2e] border border-[#1f3a5f] rounded-2xl p-4">
+            <div className="flex items-center gap-2 text-sm text-blue-300">
+              <Loader2 size={14} className="animate-spin" />
+              Identifying similar peer nonprofits...
+            </div>
+          </div>
+        )}
 
         <div className="mt-4 mb-6 bg-[#161b22] border border-[#30363d] rounded-2xl p-4">
           <p className="text-sm font-semibold text-blue-300">Peer nonprofit lookup (990 grants, last 5 years)</p>

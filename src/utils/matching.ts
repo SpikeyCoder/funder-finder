@@ -3,6 +3,7 @@ import { getEdgeFunctionHeaders } from '../lib/supabase';
 
 const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const EDGE_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/match-funders`;
+const SUGGEST_PEERS_URL = `${SUPABASE_URL}/functions/v1/suggest-peers`;
 
 export interface MatchResponse {
   results: Funder[];
@@ -31,6 +32,32 @@ export async function findMatches(
   }
 
   return res.json();
+}
+
+export interface SuggestPeersResponse {
+  peers: string[];
+  error?: string;
+}
+
+export async function suggestPeers(
+  mission: string,
+  locationServed?: string,
+  budgetBand: BudgetBand = 'prefer_not_to_say',
+): Promise<SuggestPeersResponse> {
+  const headers = await getEdgeFunctionHeaders('application/json', { useAnonOnly: true });
+  const res = await fetch(SUGGEST_PEERS_URL, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ mission, locationServed, budgetBand }),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    return { peers: [], error: body.error || `Server error (${res.status})` };
+  }
+
+  const data = await res.json();
+  return { peers: Array.isArray(data.peers) ? data.peers : [] };
 }
 
 export function formatGrantRange(funder: Funder): string {
