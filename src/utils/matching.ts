@@ -18,7 +18,7 @@ export async function findMatches(
   forceRefresh = false,
   peerNonprofits: string[] = []
 ): Promise<MatchResponse> {
-  const headers = await getEdgeFunctionHeaders();
+  const headers = await getEdgeFunctionHeaders('application/json', { useAnonOnly: true });
   const res = await fetch(EDGE_FUNCTION_URL, {
     method: 'POST',
     headers,

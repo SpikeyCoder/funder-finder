@@ -16,9 +16,22 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   },
 });
 
-export async function getEdgeFunctionHeaders(contentType = 'application/json'): Promise<Record<string, string>> {
-  const { data } = await supabase.auth.getSession();
-  const accessToken = data.session?.access_token || SUPABASE_ANON_KEY;
+interface EdgeFunctionHeaderOptions {
+  useAnonOnly?: boolean;
+}
+
+export async function getEdgeFunctionHeaders(
+  contentType = 'application/json',
+  options: EdgeFunctionHeaderOptions = {},
+): Promise<Record<string, string>> {
+  const { useAnonOnly = false } = options;
+  let accessToken = SUPABASE_ANON_KEY;
+
+  if (!useAnonOnly) {
+    const { data } = await supabase.auth.getSession();
+    accessToken = data.session?.access_token || SUPABASE_ANON_KEY;
+  }
+
   return {
     'Content-Type': contentType,
     apikey: SUPABASE_ANON_KEY,
