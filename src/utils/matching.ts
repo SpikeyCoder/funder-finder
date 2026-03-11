@@ -9,6 +9,7 @@ export interface MatchResponse {
   results: Funder[];
   cached: boolean;
   error?: string;
+  peers?: string[];
 }
 
 export async function findMatches(

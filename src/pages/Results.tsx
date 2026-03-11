@@ -27,7 +27,7 @@ function toExternalUrl(url: string | null | undefined): string | null {
 function resolveNextStepUrl(nextStepUrl: string | undefined, website: string | null): string | null {
   return toExternalUrl(nextStepUrl) ?? toExternalUrl(website);
 }
-import { findMatches, formatGrantRange, formatTotalGiving, suggestPeers } from '../utils/matching';
+import { findMatches, formatGrantRange, formatTotalGiving } from '../utils/matching';
 import { BudgetBand, Funder } from '../types';
 import { getSavedIds, unsaveFunder } from '../utils/storage';
 import { useAuth } from '../contexts/AuthContext';
@@ -108,8 +108,8 @@ export default function Results() {
   const [peerSearchInput, setPeerSearchInput] = useState<string>(peerNonprofitsFromState.join('\n'));
   const [activePeerNonprofits, setActivePeerNonprofits] = useState<string[]>(peerNonprofitsFromState);
   const [suggestedPeers, setSuggestedPeers] = useState<string[]>([]);
-  const [suggestedPeersLoading, setSuggestedPeersLoading] = useState(false);
-  const suggestedPeersFetchedRef = useRef(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const RESULTS_PER_PAGE = 20;
   const autoPeerSearchDoneRef = useRef(false);
   const searchTelemetryRef = useRef<SearchTelemetryContext | null>(null);
   const searchSessionIdRef = useRef<string>(getOrCreateSearchSessionId());
@@ -218,6 +218,14 @@ export default function Results() {
 
       setMatches(rankedResults);
       setCached(isPeerSearch ? false : response.cached);
+
+      // If server returned suggested peers, adopt them in the UI
+      if (response.peers?.length && !peerNonprofits.length) {
+        setSuggestedPeers(response.peers);
+        setPeerSearchInput(response.peers.join('\n'));
+        autoPeerSearchDoneRef.current = true;
+        setActivePeerNonprofits(response.peers);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load matches');
     } finally {
@@ -255,9 +263,8 @@ export default function Results() {
     setSavedIds(getSavedIds());
   };
 
-  // Auto-identify peer nonprofits and trigger peer-based funder search.
-  // The pipeline is: suggest peers → set them as active → loadMatches with peers.
-  // Falls back to mission-only search if peer suggestion fails or returns empty.
+  // Single-call flow: match-funders now handles peer suggestion internally.
+  // Just call loadMatches() once — it will return peers + results in one response.
   useEffect(() => {
     loadSavedIds();
 
@@ -268,57 +275,8 @@ export default function Results() {
       return;
     }
 
-    // If the user already provided peers (from navigation state or manual input), use those directly
-    if (activePeerNonprofits.length > 0) {
-      loadMatches();
-      return;
-    }
-
-    // If no mission, fall back to mission-only search (will show error)
-    if (!mission) {
-      loadMatches();
-      return;
-    }
-
-    // Skip auto-peer-fetch if we already fetched suggestions this session
-    if (suggestedPeersFetchedRef.current) {
-      // If we already have suggested peers, use them; otherwise mission-only
-      if (suggestedPeers.length > 0) {
-        loadMatches(false, suggestedPeers);
-      } else {
-        loadMatches();
-      }
-      return;
-    }
-
-    // First: identify peer nonprofits, then search for their funders
-    suggestedPeersFetchedRef.current = true;
-    setSuggestedPeersLoading(true);
-    setLoading(true);
-
-    suggestPeers(mission, locationServed, budgetBand)
-      .then((res) => {
-        setSuggestedPeersLoading(false);
-        if (res.peers.length > 0) {
-          setSuggestedPeers(res.peers);
-          // Auto-activate peer search with suggested peers
-          const joined = res.peers.join('\n');
-          setPeerSearchInput(joined);
-          // Mark that the next peerKey-triggered re-run should be skipped
-          autoPeerSearchDoneRef.current = true;
-          setActivePeerNonprofits(res.peers);
-          // Trigger peer-based funder search immediately (don't wait for re-render)
-          loadMatches(false, res.peers);
-        } else {
-          // No peers found — fall back to mission-only search
-          loadMatches();
-        }
-      })
-      .catch(() => {
-        setSuggestedPeersLoading(false);
-        // Peer suggestion failed — fall back to mission-only search
-        loadMatches();
-      });
+    setCurrentPage(1);
+    loadMatches();
   }, [mission, locationServed, budgetBand, keywordKey, peerKey, user]);
 
   const toggleSave = async (funder: Funder) => {
@@ -446,6 +404,7 @@ export default function Results() {
     'STRATEGIC GRANT PARTNERS INC',
     // Round 4: Additional DAFs caught in testing
     'GIVE LIVELY FOUNDATION INC',
+    'ROCKEFELLER PHILANTHROPY ADVISORS INC',
     'PAYPAL CHARITABLE GIVING FUND',
     'THRIVENT CHARITABLE IMPACT & INVESTING',
     'T ROWE PRICE PROGRAM FOR CHARITABLE',
@@ -475,6 +434,13 @@ export default function Results() {
       if (grantSizeFilter === 'large')  return effectiveMax > 250_000;
       return true;
     });
+
+  // Pagination
+  const totalPages = Math.max(1, Math.ceil(filteredMatches.length / RESULTS_PER_PAGE));
+  const paginatedMatches = filteredMatches.slice(
+    (currentPage - 1) * RESULTS_PER_PAGE,
+    currentPage * RESULTS_PER_PAGE,
+  );
 
   const GRANT_SIZE_FILTERS: { key: 'any' | 'small' | 'medium' | 'large'; label: string }[] = [
     { key: 'any',    label: 'Any size' },
@@ -570,14 +536,12 @@ export default function Results() {
               </button>
             )}
           </div>
-        )}
-        {suggestedPeersLoading && (
-          <div className="mt-4 mb-4 bg-[#0f1d2e] border border-[#1f3a5f] rounded-2xl p-4">
-            <div className="flex items-center gap-2 text-sm text-blue-300">
-              <Loader2 size={14} className="animate-spin" />
-              Identifying peer nonprofits and their funders...
-            </div>
-          </div>
+          {/* Result count shown directly under peer box */}
+          {!loading && filteredMatches.length > 0 && (
+            <p className="mt-2 text-sm text-gray-400">
+              Found {filteredMatches.length} foundation{filteredMatches.length === 1 ? '' : 's'} with recent grants to your peer nonprofits
+            </p>
+          )}
         )}
 
         {/* Manual peer lookup - hidden by default, toggled via "Edit peers" */}
@@ -625,7 +589,7 @@ export default function Results() {
             {GRANT_SIZE_FILTERS.map(({ key, label }) => (
               <button
                 key={key}
-                onClick={() => setGrantSizeFilter(key)}
+                onClick={() => { setGrantSizeFilter(key); setCurrentPage(1); }}
                 className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
                   grantSizeFilter === key
                     ? 'bg-blue-600 border-blue-500 text-white font-semibold'
@@ -679,7 +643,7 @@ export default function Results() {
                 <p className="text-2xl mb-3">No funders in this size range</p>
                 <p className="mb-4 text-sm">Try a different grant size filter or view all results.</p>
                 <button
-                  onClick={() => setGrantSizeFilter('any')}
+                  onClick={() => { setGrantSizeFilter('any'); setCurrentPage(1); }}
                   className="bg-white text-gray-900 font-semibold px-6 py-3 rounded-xl hover:bg-gray-100 transition-colors"
                 >
                   Show All Sizes
@@ -712,7 +676,8 @@ export default function Results() {
         {/* Funder Cards */}
         {!loading && !error && filteredMatches.length > 0 && (
           <div className="space-y-6">
-            {filteredMatches.map((funder, index) => {
+            {paginatedMatches.map((funder, index) => {
+              const globalIndex = (currentPage - 1) * RESULTS_PER_PAGE + index;
               const isSaved = savedIds.includes(funder.id);
               const fitScore = funder.fit_score ?? funder.score;
               const scorePercent = typeof fitScore === 'number' ? Math.round(fitScore * 100) : null;
@@ -720,7 +685,7 @@ export default function Results() {
               return (
                 <div key={funder.id} className="bg-[#161b22] border border-[#30363d] rounded-2xl p-6">
                   <div className="flex items-start gap-3 mb-3">
-                    <span className="text-blue-400 font-bold text-lg">#{index + 1}</span>
+                    <span className="text-blue-400 font-bold text-lg">#{globalIndex + 1}</span>
                     <div className="flex-1">
                       <div className="flex items-start justify-between gap-2">
                         <h2 className="text-xl font-bold">{funder.name}</h2>
@@ -863,6 +828,36 @@ export default function Results() {
                 </div>
               );
             })}
+
+            {/* Pagination controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-4 pt-4">
+                <button
+                  onClick={() => {
+                    setCurrentPage((p) => Math.max(1, p - 1));
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  disabled={currentPage <= 1}
+                  className="px-4 py-2 rounded-lg bg-[#21262d] text-gray-300 text-sm font-medium hover:bg-[#30363d] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  ← Previous
+                </button>
+                <span className="text-gray-400 text-sm">
+                  Page {currentPage} of {totalPages}
+                  {' '}({(currentPage - 1) * RESULTS_PER_PAGE + 1}–{Math.min(currentPage * RESULTS_PER_PAGE, filteredMatches.length)} of {filteredMatches.length})
+                </span>
+                <button
+                  onClick={() => {
+                    setCurrentPage((p) => Math.min(totalPages, p + 1));
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  disabled={currentPage >= totalPages}
+                  className="px-4 py-2 rounded-lg bg-[#21262d] text-gray-300 text-sm font-medium hover:bg-[#30363d] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Next →
+                </button>
+              </div>
+            )}
 
             {/* Refresh button at bottom */}
             <div className="flex justify-center pt-4">
