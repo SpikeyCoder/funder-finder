@@ -2243,10 +2243,37 @@ const SUGGEST_GENERALIST_PATTERNS = [
   /\bFRED HUTCH/i, /\bCANCER (CENTER|RESEARCH)/i, /\bCHILDREN'?S\b/i,
 ];
 
+// Large national nonprofits that aren't useful peers for small/mid-size nonprofits.
+// These operate at massive scale ($50M+ budgets) and have broad, national missions.
+const LARGE_NATIONAL_NONPROFIT_PATTERNS = [
+  /\bRONALD McDONALD\b/i, /\bUNITED WAY\b/i, /\bSALVATION ARMY\b/i,
+  /\bAMERICAN RED CROSS\b/i, /\bHABITAT FOR HUMANITY\b/i,
+  /\bGOODWILL\b/i, /\bCATHOLIC CHARITIES\b/i, /\bFEEDING AMERICA\b/i,
+  /\bBIG BROTHERS BIG SISTERS\b/i, /\bBOYS (&|AND) GIRLS CLUB/i,
+  /\bSPECIAL OLYMPICS\b/i, /\bMARCH OF DIMES\b/i, /\bMAKE.A.WISH\b/i,
+  /\bST\.?\s*JUDE/i, /\bSHRINERS?\b/i, /\bLIONS CLUB\b/i, /\bROTARY\b/i,
+  /\bKIWANIS\b/i, /\bJUNIOR LEAGUE\b/i, /\bJUNIOR ACHIEVEMENT\b/i,
+  /\bYMCA\b/i, /\bYWCA\b/i, /\bBOY SCOUTS\b/i, /\bGIRL SCOUTS\b/i,
+  /\bPLANNED PARENTHOOD\b/i, /\bNATIONAL PUBLIC RADIO\b/i, /\bNPR\b/i,
+  /\bPBS\b/i, /\bWGBH\b/i, /\bSMITHSONIAN\b/i,
+  // Community foundations & federated charities (large grantmakers, not peers)
+  /\bCOMMUNITY FOUNDATION\b/i, /\bCOMMUNITY TRUST\b/i,
+  /\bJEWISH (UNITED |FEDERATION)/i, /\bUNITED JEWISH/i,
+  /\bCATHOLIC COMMUNITY FOUND/i, /\bMERCY HOME\b/i,
+  /\bSTART EARLY\b/i, /\bOUNSE FAMILY FOUND/i,
+  // Large corporate / bank foundations & DAFs (grantmakers, not peers)
+  /\bBANK OF AMERICA\b/i, /\bJPMORGAN\b/i, /\bCITIGROUP\b/i,
+  /\bWELLS FARGO\b/i, /\bGOLDMAN SACHS\b/i, /\bMORGAN STANLEY\b/i,
+  /\bFIDELITY CHARITABLE\b/i, /\bSCHWAB CHARITABLE\b/i,
+  /\bVANGUARD CHARITABLE\b/i, /\bNATIONAL PHILANTHROPIC TRUST\b/i,
+  /\bSILICON VALLEY COMMUNITY\b/i, /\bDONOR.?ADVISED\b/i,
+];
+
 async function suggestPeersInternal(
   mission: string,
   locationServed: string,
   excludedKeywords: string[] = [],
+  budgetBand: string = 'prefer_not_to_say',
 ): Promise<string[]> {
   const keywords = extractMissionKeywords(mission);
   if (!keywords.length) return [];
@@ -2342,7 +2369,10 @@ async function suggestPeersInternal(
     const cityBonus = data.cityMatch ? 10 : 0;
     const grantBonus = Math.min(data.count, 20);
     const isGeneralist = SUGGEST_GENERALIST_PATTERNS.some((p) => p.test(name));
-    const score = isGeneralist ? -1 : kwScore + cityBonus + grantBonus;
+    // For small/mid budgets, also exclude large national nonprofits as peers
+    const isSmallBudget = budgetBand === 'under_250k' || budgetBand === '250k_1m' || budgetBand === '1m_5m' || budgetBand === 'prefer_not_to_say';
+    const isLargeNational = isSmallBudget && LARGE_NATIONAL_NONPROFIT_PATTERNS.some((p) => p.test(name));
+    const score = (isGeneralist || isLargeNational) ? -1 : kwScore + cityBonus + grantBonus;
     return { name: data.displayName, normKey: name, score, kwCount: data.matchedKeywords.size, count: data.count };
   });
   scoredPeers.sort((a, b) => b.score - a.score || b.count - a.count);
@@ -2438,7 +2468,7 @@ Deno.serve(async (req) => {
     // Auto-suggest peers when none provided but mission is given
     let suggestedPeers: string[] = [];
     if (!peerNonprofits.length && mission) {
-      suggestedPeers = await suggestPeersInternal(mission, locationServed, keywords);
+      suggestedPeers = await suggestPeersInternal(mission, locationServed, keywords, budgetBand);
       peerNonprofits = suggestedPeers;
     }
     const isPeerSearch = peerNonprofits.length > 0;

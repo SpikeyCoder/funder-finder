@@ -50,3 +50,33 @@ export interface Funder {
   apply_url?: string | null;
   news_url?: string | null;
 }
+
+// ── Grant Writer types ────────────────────────────────────────────────────
+
+export type GenerationPhase =
+  | 'idle'
+  | 'uploading'
+  | 'analyzing'
+  | 'researching'
+  | 'generating'
+  | 'done';
+
+export interface UploadedGrantFile {
+  name: string;
+  path: string;      // Supabase Storage path
+  size: number;
+  type: string;       // MIME type
+}
+
+export interface OrgDetails {
+  orgName: string;
+  orgDesc: string;
+  budget: string;
+  targetPop: string;
+  geoFocus: string;
+  programName: string;
+  programDesc: string;
+  programBudget: string;
+  outcomes: string;
+  timeline: string;
+}

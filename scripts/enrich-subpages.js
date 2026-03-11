@@ -33,7 +33,7 @@ const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const DRY_RUN  = process.env.DRY_RUN  === '1';
 const VERBOSE  = process.env.VERBOSE  === '1';
-const LIMIT    = parseInt(process.env.LIMIT || '500', 10);
+const LIMIT    = parseInt(process.env.LIMIT || '1000', 10);
 const ID_FILTER = process.env.ID || null; // single funder by id
 
 if (!SUPABASE_KEY) {
@@ -63,9 +63,9 @@ const SUBPAGE_TYPES = [
   },
   {
     field: 'apply_url',
-    pathHints: ['/apply', '/grant-guideline', '/how-to-apply', '/loi', '/rfp', '/letter-of-inquiry', '/applicant', '/funding-guideline', '/proposal', '/submit', '/grantseekers', '/prospective'],
-    textHints:  ['apply', 'how to apply', 'grant guidelines', 'loi', 'letter of inquiry', 'rfp', 'submit', 'application', 'grantseekers', 'prospective grantees', 'funding guidelines', 'apply for a grant', 'application process'],
-    ddgQueries: ['how to apply grant guidelines LOI letter of inquiry', 'apply for funding RFP grantseekers'],
+    pathHints: ['/apply', '/grant-guideline', '/how-to-apply', '/loi', '/rfp', '/letter-of-inquiry', '/applicant', '/funding-guideline', '/proposal', '/submit', '/grantseekers', '/prospective', '/open-grant', '/grant-opportunit', '/funding-opportunit', '/request-for-proposal', '/grants/', '/funding/', '/eligib'],
+    textHints:  ['apply', 'how to apply', 'grant guidelines', 'loi', 'letter of inquiry', 'rfp', 'submit', 'application', 'grantseekers', 'prospective grantees', 'funding guidelines', 'apply for a grant', 'application process', 'open grants', 'grant opportunities', 'funding opportunities', 'request for proposal', 'eligibility', 'start application', 'begin application', 'apply now', 'apply online', 'grant portal'],
+    ddgQueries: ['how to apply grant guidelines LOI letter of inquiry', 'apply for funding RFP grantseekers', 'open grant opportunities application portal'],
   },
   {
     field: 'news_url',
@@ -282,14 +282,14 @@ async function ddgFallback(website, neededFields) {
 async function fetchFunders() {
   let url;
   if (ID_FILTER) {
-    url = `${SUPABASE_URL}/rest/v1/funders?id=eq.${ID_FILTER}&select=id,name,website,contact_url,programs_url,apply_url,news_url`;
+    url = `${SUPABASE_URL}/rest/v1/funders?id=eq.${ID_FILTER}&select=id,name,website,contact_url,programs_url,apply_url,news_url,discovered_apply_url`;
   } else {
     url =
       `${SUPABASE_URL}/rest/v1/funders` +
       `?website=not.is.null` +
       `&or=(contact_url.is.null,programs_url.is.null,apply_url.is.null,news_url.is.null)` +
-      `&select=id,name,website,contact_url,programs_url,apply_url,news_url` +
-      `&order=total_giving.desc.nullslast` +
+      `&select=id,name,website,contact_url,programs_url,apply_url,news_url,discovered_apply_url` +
+      `&order=name.asc` +
       `&limit=${LIMIT}`;
   }
   const res = await fetch(url, {
