@@ -988,6 +988,21 @@ function normalizeNameForMatch(value: string): string {
     .trim();
 }
 
+/**
+ * Split camelCase / PascalCase compound words into separate words.
+ * "SitStayRead" → "Sit Stay Read", "BigBrothers" → "Big Brothers"
+ * Does NOT split already-spaced text or ALL-CAPS words.
+ */
+function splitCamelCase(text: string): string {
+  // Only apply to individual words (no spaces within the word)
+  return text.replace(/\S+/g, (word) => {
+    // Skip ALL-CAPS words like "YMCA", "SOS", short words, or already-lowercase
+    if (word === word.toUpperCase() || word.length <= 3) return word;
+    // Insert space before each uppercase letter that follows a lowercase letter
+    return word.replace(/([a-z])([A-Z])/g, '$1 $2');
+  });
+}
+
 function normalizePeerInput(raw: string): string {
   const extractedUrl = (raw.match(/https?:\/\/[^\s)]+/i) || [null])[0];
   const withoutUrls = raw
@@ -996,7 +1011,7 @@ function normalizePeerInput(raw: string): string {
     .replace(/\s+/g, ' ')
     .trim();
 
-  if (withoutUrls) return withoutUrls;
+  if (withoutUrls) return splitCamelCase(withoutUrls);
   if (!extractedUrl) return '';
 
   try {
