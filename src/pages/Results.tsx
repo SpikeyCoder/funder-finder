@@ -240,11 +240,13 @@ export default function Results() {
       return;
     }
     setGrantSizeFilter('any');
+    setSuggestedPeers(peers);        // Update displayed peer chips to reflect edits
     setActivePeerNonprofits(peers);
   };
 
   const clearPeerSearch = () => {
     setGrantSizeFilter('any');
+    setSuggestedPeers([]);            // Clear displayed peer chips
     setActivePeerNonprofits([]);
     setPeerSearchInput('');
   };
