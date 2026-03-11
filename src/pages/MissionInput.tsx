@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowRight, Sparkles, X, Plus, MapPin } from 'lucide-react';
 import { BudgetBand } from '../types';
 
@@ -62,6 +62,8 @@ const BUDGET_BANDS: { key: BudgetBand; label: string; hint: string }[] = [
 
 export default function MissionInput() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnState = location.state as { mission?: string; locationServed?: string; budgetBand?: BudgetBand; keywords?: string[] } | null;
 
   useEffect(() => {
     document.title = 'Find Funders for Your Nonprofit | FunderMatch';
@@ -69,16 +71,19 @@ export default function MissionInput() {
     if (desc) desc.content = 'Describe your nonprofit\u2019s mission and get an instant AI-ranked list of foundations, DAFs, and corporate giving programs aligned to your work.';
   }, []);
 
-  const [mission, setMission] = useState('');
-  const [locationServed, setLocationServed] = useState('');
+  const [mission, setMission] = useState(returnState?.mission || sessionStorage.getItem('ff_mission') || '');
+  const [locationServed, setLocationServed] = useState(returnState?.locationServed || sessionStorage.getItem('ff_location') || '');
   const [budgetBand, setBudgetBand] = useState<BudgetBand>(() => {
+    if (returnState?.budgetBand && BUDGET_BANDS.some(b => b.key === returnState.budgetBand)) {
+      return returnState.budgetBand;
+    }
     const saved = sessionStorage.getItem('ff_budget_band') as BudgetBand | null;
     if (saved && BUDGET_BANDS.some(b => b.key === saved)) {
       return saved;
     }
     return 'prefer_not_to_say';
   });
-  const [keywords, setKeywords] = useState<string[]>([]);
+  const [keywords, setKeywords] = useState<string[]>(returnState?.keywords ?? JSON.parse(sessionStorage.getItem('ff_keywords') || '[]'));
   const [keywordInput, setKeywordInput] = useState('');
   const [errors, setErrors] = useState<{ mission?: string; location?: string }>({});
   const [showExamples, setShowExamples] = useState(false);

@@ -503,7 +503,7 @@ export default function Results() {
         </div>
 
         <button
-          onClick={() => navigate('/mission')}
+          onClick={() => navigate('/mission', { state: { mission, locationServed, keywords, budgetBand, peerNonprofits: activePeerNonprofits } })}
           className="flex items-center gap-1 text-gray-400 hover:text-white text-sm transition-colors"
         >
           <ArrowLeft size={16} />
@@ -512,36 +512,38 @@ export default function Results() {
 
         {/* Auto-identified peer nonprofits (shown when peers were auto-detected) */}
         {isPeerSearchMode && suggestedPeers.length > 0 && (
-          <div className="mt-4 mb-4 bg-[#0f1d2e] border border-[#1f3a5f] rounded-2xl p-4">
-            <p className="text-sm font-semibold text-blue-300">Peer nonprofits identified</p>
-            <p className="text-xs text-gray-400 mt-1">
-              These organizations share a similar mission, geography, and budget. Results below show funders that have historically supported them.
-            </p>
-            <div className="flex flex-wrap gap-2 mt-3">
-              {suggestedPeers.map((peer) => (
-                <span
-                  key={peer}
-                  className="inline-flex items-center bg-[#161b22] border border-[#30363d] rounded-lg px-3 py-1.5 text-xs text-gray-200"
+          <>
+            <div className="mt-4 mb-4 bg-[#0f1d2e] border border-[#1f3a5f] rounded-2xl p-4">
+              <p className="text-sm font-semibold text-blue-300">Peer nonprofits identified</p>
+              <p className="text-xs text-gray-400 mt-1">
+                These organizations share a similar mission, geography, and budget. Results below show funders that have historically supported them.
+              </p>
+              <div className="flex flex-wrap gap-2 mt-3">
+                {suggestedPeers.map((peer) => (
+                  <span
+                    key={peer}
+                    className="inline-flex items-center bg-[#161b22] border border-[#30363d] rounded-lg px-3 py-1.5 text-xs text-gray-200"
+                  >
+                    {peer}
+                  </span>
+                ))}
+              </div>
+              {!showPeerEditor && (
+                <button
+                  onClick={() => setShowPeerEditor(true)}
+                  className="mt-3 text-xs text-blue-400 hover:text-blue-300 transition-colors"
                 >
-                  {peer}
-                </span>
-              ))}
+                  Edit peers
+                </button>
+              )}
             </div>
-            {!showPeerEditor && (
-              <button
-                onClick={() => setShowPeerEditor(true)}
-                className="mt-3 text-xs text-blue-400 hover:text-blue-300 transition-colors"
-              >
-                Edit peers
-              </button>
+            {/* Result count shown directly under peer box */}
+            {!loading && filteredMatches.length > 0 && (
+              <p className="mt-2 text-sm text-gray-400">
+                Found {filteredMatches.length} foundation{filteredMatches.length === 1 ? '' : 's'} with recent grants to your peer nonprofits
+              </p>
             )}
-          </div>
-          {/* Result count shown directly under peer box */}
-          {!loading && filteredMatches.length > 0 && (
-            <p className="mt-2 text-sm text-gray-400">
-              Found {filteredMatches.length} foundation{filteredMatches.length === 1 ? '' : 's'} with recent grants to your peer nonprofits
-            </p>
-          )}
+          </>
         )}
 
         {/* Manual peer lookup - hidden by default, toggled via "Edit peers" */}
