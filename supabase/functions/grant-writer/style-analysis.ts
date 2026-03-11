@@ -51,7 +51,7 @@ export async function analyzeStyle(
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-5-20250514',
+        model: 'claude-sonnet-4-5-20250929',
         max_tokens: 1024,
         temperature: 0.3,
         system: STYLE_ANALYSIS_PROMPT,

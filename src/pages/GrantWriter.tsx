@@ -286,6 +286,7 @@ export default function GrantWriter() {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+      let receivedText = false;
 
       while (true) {
         const { done: readerDone, value } = await reader.read();
@@ -299,7 +300,12 @@ export default function GrantWriter() {
           if (!line.startsWith('data: ')) continue;
           const data = line.slice(6).trim();
           if (data === '[DONE]') {
-            setPhase('done');
+            if (receivedText) {
+              setPhase('done');
+            } else {
+              setError('Generation completed but no output was received. Please try again.');
+              setPhase('idle');
+            }
             return;
           }
           try {
@@ -321,7 +327,10 @@ export default function GrantWriter() {
 
             // Text content
             if (parsed.error) throw new Error(parsed.error);
-            if (parsed.text) setOutput((prev) => prev + parsed.text);
+            if (parsed.text) {
+              receivedText = true;
+              setOutput((prev) => prev + parsed.text);
+            }
           } catch (parseErr) {
             if (
               parseErr instanceof Error &&
@@ -333,7 +342,13 @@ export default function GrantWriter() {
         }
       }
 
-      setPhase('done');
+      // If stream ended but no output was generated, treat as error
+      if (!receivedText) {
+        setError('Generation completed but no output was received. Please try again.');
+        setPhase('idle');
+      } else {
+        setPhase('done');
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to generate grant draft');
       setPhase('idle');

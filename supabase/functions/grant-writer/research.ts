@@ -152,7 +152,7 @@ async function claudeFallbackResearch(
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-5-20250514',
+        model: 'claude-sonnet-4-5-20250929',
         max_tokens: 1500,
         temperature: 0.4,
         system: `You are a nonprofit research assistant. Provide factual context to support a grant proposal. Return ONLY valid JSON.`,
