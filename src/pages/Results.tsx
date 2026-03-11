@@ -444,13 +444,23 @@ export default function Results() {
     'GIVE BACK FOUNDATION',
     'GIVE BACK FOUNDATION INC',
     'STRATEGIC GRANT PARTNERS INC',
+    // Round 4: Additional DAFs caught in testing
+    'GIVE LIVELY FOUNDATION INC',
+    'PAYPAL CHARITABLE GIVING FUND',
+    'THRIVENT CHARITABLE IMPACT & INVESTING',
+    'T ROWE PRICE PROGRAM FOR CHARITABLE',
+    'DAFFY CHARITABLE FUND',
+    'THE GOLDMAN SACHS CHARITABLE GIFT FUND',
+    'FREEWILL IMPACT FUND',
   ]);
   const isDAF = (name: string) => {
     const upper = name.toUpperCase();
     return DAF_NAMES.has(upper) ||
       /\bdonor[\s-]advised\b/i.test(name) ||
       /\bglobal impact funding trust\b/i.test(name) ||
-      /\bnational christian (charitable )?foundation\b/i.test(name);
+      /\bnational christian (charitable )?foundation\b/i.test(name) ||
+      /\bcharitable giving fund\b/i.test(name) ||
+      /\bcharitable gift fund\b/i.test(name);
   };
 
   // Grant size filter — uses grant_range_max as primary signal, falls back to grant_range_min
