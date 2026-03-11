@@ -391,23 +391,67 @@ export default function Results() {
 
   // Exclude donor-advised funds (DAFs) — these are pass-through vehicles, not direct grantmakers
   const DAF_NAMES = new Set([
+    // Major brokerage/financial DAF sponsors
     'FIDELITY INVESTMENTS CHARITABLE GIFT FUND',
     'FIDELITY INVESTMENTS CHARITABLE GIFT FUND INC',
     'SCHWAB CHARITABLE FUND',
     'VANGUARD CHARITABLE ENDOWMENT PROGRAM',
     'NATIONAL PHILANTHROPIC TRUST',
     'GS DONOR ADVISED PHILANTHROPY FUND',
+    'GOLDMAN SACHS PHILANTHROPY FUND',
     'BNY MELLON CHARITABLE GIFT FUND',
     'RAYMOND JAMES CHARITABLE ENDOWMENT FUND',
     'AMERICAN ENDOWMENT FOUNDATION',
+    'THE AYCO CHARITABLE FOUNDATION',
+    'THE US CHARITABLE GIFT TRUST',
+    'MORGAN STANLEY GLOBAL IMPACT FUNDING TRUST INC',
+    // Online giving platforms / corporate giving vehicles
+    'THE BLACKBAUD GIVING FUND',
+    'AMERICAN ONLINE GIVING FOUNDATION INC',
+    'NETWORK FOR GOOD',
+    'BRIGHT FUNDS FOUNDATION',
+    'BENEVITY COMMUNITY IMPACT FUND',
+    'MIGHTYCAUSE CHARITABLE FOUNDATION',
+    'CHARITIES AID FOUNDATION AMERICA',
+    'FRONTSTREAM GLOBAL FUND',
+    'UNITED CHARITABLE',
+    'FOUNDATION SOURCE CHARITABLE GIFT FUND INC',
+    // Faith-based DAF sponsors
+    'NATIONAL CHRISTIAN FOUNDATION',
+    'NATIONAL CHRISTIAN FOUNDATION INC',
+    'NATIONAL CHRISTIAN CHARITABLE FOUNDATION',
+    'NATIONAL CHRISTIAN CHARITABLE FOUNDATION INC',
+    'NATL CHRISTIAN CHARITABLE FDN INC',
+    'NCF GIVING INC',
     'JEWISH COMMUNAL FUND',
-    'RENAISSANCE CHARITABLE FOUNDATION INC',
+    'EVERENCE FOUNDATION INC',
+    'BARNABAS FOUNDATION',
+    // Community foundation DAF sponsors
     'SILICON VALLEY COMMUNITY FOUNDATION',
-    'GOLDMAN SACHS PHILANTHROPY FUND',
+    'GREATER HORIZONS',
+    'ARLINGTON COMMUNITY FOUNDATION',
+    // Other DAF sponsors
+    'RENAISSANCE CHARITABLE FOUNDATION INC',
+    'DONORS TRUST',
+    'DONORS TRUST INC',
+    'IMPACTASSETSINC',
+    'THE SIGNATRY CHARITABLE CORPORATION',
+    'THE SIGNATRY CHARITABLE TRUST',
+    'SERVANT FOUNDATION',
+    'DECHOMAI FOUNDATION INC',
+    'AMERICAN GIFT FUND',
+    'KIDVANTAGE',
+    'GIVE BACK FOUNDATION',
+    'GIVE BACK FOUNDATION INC',
+    'STRATEGIC GRANT PARTNERS INC',
   ]);
-  const isDAF = (name: string) =>
-    DAF_NAMES.has(name.toUpperCase()) ||
-    /\bdonor[\s-]advised\b/i.test(name);
+  const isDAF = (name: string) => {
+    const upper = name.toUpperCase();
+    return DAF_NAMES.has(upper) ||
+      /\bdonor[\s-]advised\b/i.test(name) ||
+      /\bglobal impact funding trust\b/i.test(name) ||
+      /\bnational christian (charitable )?foundation\b/i.test(name);
+  };
 
   // Grant size filter — uses grant_range_max as primary signal, falls back to grant_range_min
   const filteredMatches = matches
