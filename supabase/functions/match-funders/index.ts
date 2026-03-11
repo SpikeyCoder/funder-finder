@@ -257,6 +257,93 @@ function lexicalSimilarity(a: Set<string>, b: Set<string>): number {
   return overlap / Math.sqrt(a.size * b.size);
 }
 
+// ── Concept synonym expansion for exclusion filtering ──────────────────
+// Maps root concepts to related terms that should also trigger exclusion.
+// When a user excludes "food insecurity", we should also catch orgs whose
+// names/missions mention "feeding", "hunger", "nutrition", "meal", etc.
+const CONCEPT_SYNONYMS: Record<string, string[]> = {
+  food: ['feed', 'hunger', 'hungry', 'nutrition', 'meal', 'pantry', 'grocery', 'nourish', 'cuisine', 'culinary', 'diet', 'eat', 'kitchen', 'soup'],
+  housing: ['shelter', 'homeless', 'hous', 'rent', 'evict', 'tenant', 'landlord', 'dwelling', 'domicil', 'unhoused', 'unshelter'],
+  health: ['medical', 'clinic', 'hospital', 'wellness', 'healthcare', 'disease', 'illness', 'patient', 'treatment', 'therapy', 'diagnos'],
+  education: ['school', 'teach', 'learn', 'academic', 'student', 'literacy', 'tutor', 'scholar', 'classroom', 'curriculum'],
+  environment: ['climate', 'conservation', 'ecological', 'wildlife', 'nature', 'green', 'sustain', 'pollut', 'emission', 'renewable'],
+  animal: ['wildlife', 'pet', 'veterinar', 'shelter', 'humane', 'spay', 'neuter', 'rescue', 'canine', 'feline', 'equine'],
+  art: ['music', 'theater', 'theatre', 'dance', 'perform', 'gallery', 'museum', 'creative', 'cultural', 'orchestra', 'symphony', 'opera'],
+  religion: ['church', 'faith', 'worship', 'ministry', 'congregation', 'parish', 'mosque', 'synagogue', 'temple', 'spiritual'],
+  veteran: ['military', 'armed force', 'servicemember', 'combat', 'deployment'],
+  disability: ['handicap', 'accessible', 'impair', 'blind', 'deaf', 'wheelchair', 'adaptive'],
+  addiction: ['substance', 'recovery', 'sober', 'rehab', 'detox', 'alcohol', 'drug', 'opioid'],
+  immigrant: ['refugee', 'migrant', 'asylum', 'resettl', 'newcomer', 'undocument'],
+};
+
+// NTEE code prefixes that map to excluded concept areas
+const CONCEPT_NTEE_PREFIXES: Record<string, string[]> = {
+  food: ['K'],         // Food, Agriculture & Nutrition
+  housing: ['L'],      // Housing & Shelter
+  health: ['E', 'F', 'G', 'H'], // Health, Mental Health, Disease, Medical Research
+  education: ['B'],    // Education
+  environment: ['C', 'D'], // Environment, Animal-Related
+  animal: ['D'],       // Animal-Related
+  art: ['A'],          // Arts, Culture, Humanities
+  religion: ['X'],     // Religion-Related
+};
+
+/**
+ * Expands exclusion tokens with concept synonyms.
+ * For each token in the exclusion set, if it matches a concept key or is a
+ * synonym of a concept, adds all related synonyms to the returned set.
+ * This ensures "food insecurity" also catches "Feeding America", "hunger relief", etc.
+ */
+function expandExclusionTokens(baseTokens: Set<string>): Set<string> {
+  const expanded = new Set(baseTokens);
+  for (const token of baseTokens) {
+    // Check if the token matches a concept key directly
+    for (const [concept, synonyms] of Object.entries(CONCEPT_SYNONYMS)) {
+      const conceptStem = stem(concept);
+      if (token === conceptStem || token === concept) {
+        // Add all synonym stems
+        for (const syn of synonyms) expanded.add(stem(syn));
+        expanded.add(conceptStem);
+      }
+      // Check if the token matches any synonym → pull in the whole concept family
+      for (const syn of synonyms) {
+        if (token === stem(syn) || token === syn) {
+          expanded.add(conceptStem);
+          for (const s of synonyms) expanded.add(stem(s));
+          break;
+        }
+      }
+    }
+  }
+  return expanded;
+}
+
+/**
+ * Returns NTEE prefixes that should be excluded based on exclusion tokens.
+ */
+function getExcludedNteePrefixes(baseTokens: Set<string>): Set<string> {
+  const prefixes = new Set<string>();
+  for (const token of baseTokens) {
+    for (const [concept, nteePrefixes] of Object.entries(CONCEPT_NTEE_PREFIXES)) {
+      const conceptStem = stem(concept);
+      if (token === conceptStem || token === concept) {
+        for (const p of nteePrefixes) prefixes.add(p);
+      }
+      // Also check synonyms
+      const synonyms = CONCEPT_SYNONYMS[concept];
+      if (synonyms) {
+        for (const syn of synonyms) {
+          if (token === stem(syn)) {
+            for (const p of nteePrefixes) prefixes.add(p);
+            break;
+          }
+        }
+      }
+    }
+  }
+  return prefixes;
+}
+
 function clamp01(value: number): number {
   if (value < 0) return 0;
   if (value > 1) return 1;
@@ -2182,7 +2269,7 @@ async function suggestPeersInternal(
   const runKeywordQuery = async (original: string, stemmed: string) => {
     const stateFilter = state ? `&grantee_state=eq.${encodeURIComponent(state)}` : '';
     const path =
-      `foundation_grants?select=grantee_name,grantee_city` +
+      `foundation_grants?select=grantee_name,grantee_city,purpose_text,ntee_code` +
       `&purpose_text=ilike.*${encodeURIComponent(stemmed)}*` +
       `&purpose_text=not.is.null` +
       `&grant_year=gte.2019` +
@@ -2190,15 +2277,15 @@ async function suggestPeersInternal(
       `&limit=500`;
     try {
       const res = await sbFetch(path);
-      const rows = await res.json() as Array<{ grantee_name: string; grantee_city: string }>;
+      const rows = await res.json() as Array<{ grantee_name: string; grantee_city: string; purpose_text: string | null; ntee_code: string | null }>;
       return { keyword: original, rows };
     } catch {
-      return { keyword: original, rows: [] as Array<{ grantee_name: string; grantee_city: string }> };
+      return { keyword: original, rows: [] as Array<{ grantee_name: string; grantee_city: string; purpose_text: string | null; ntee_code: string | null }> };
     }
   };
 
   // Run queries in batches of 2
-  const results: Array<{ keyword: string; rows: Array<{ grantee_name: string; grantee_city: string }> }> = [];
+  const results: Array<{ keyword: string; rows: Array<{ grantee_name: string; grantee_city: string; purpose_text: string | null; ntee_code: string | null }> }> = [];
   for (let i = 0; i < searchTerms.length; i += 2) {
     const batch = searchTerms.slice(i, i + 2);
     const batchResults = await Promise.all(
@@ -2207,8 +2294,8 @@ async function suggestPeersInternal(
     results.push(...batchResults);
   }
 
-  // Aggregate
-  interface PeerData { count: number; matchedKeywords: Set<string>; cityMatch: boolean; displayName: string }
+  // Aggregate – also collect purpose texts and NTEE codes per peer for exclusion filtering
+  interface PeerData { count: number; matchedKeywords: Set<string>; cityMatch: boolean; displayName: string; purposeTexts: string[]; nteeCodes: Set<string> }
   const peerMap = new Map<string, PeerData>();
   for (const { keyword, rows } of results) {
     for (const row of rows) {
@@ -2218,13 +2305,16 @@ async function suggestPeersInternal(
       if (!key || key.length < 3) continue;
       let entry = peerMap.get(key);
       if (!entry) {
-        entry = { count: 0, matchedKeywords: new Set(), cityMatch: false, displayName: rawName };
+        entry = { count: 0, matchedKeywords: new Set(), cityMatch: false, displayName: rawName, purposeTexts: [], nteeCodes: new Set() };
         peerMap.set(key, entry);
       }
       entry.count += 1;
       if (rawName.length > entry.displayName.length) entry.displayName = rawName;
       if (!entry.matchedKeywords.has(keyword)) entry.matchedKeywords.add(keyword);
       if (city && (row.grantee_city || '').toUpperCase().includes(city.toUpperCase())) entry.cityMatch = true;
+      // Collect purpose text and NTEE codes for concept-based exclusion
+      if (row.purpose_text && entry.purposeTexts.length < 10) entry.purposeTexts.push(row.purpose_text);
+      if (row.ntee_code) entry.nteeCodes.add(row.ntee_code);
     }
   }
 
@@ -2240,8 +2330,15 @@ async function suggestPeersInternal(
   scoredPeers.sort((a, b) => b.score - a.score || b.count - a.count);
 
   // Build exclusion tokens from excluded keywords for filtering peer suggestions
-  const exclusionTokensForPeers = excludedKeywords.length
+  // Use expanded concept synonyms so "food insecurity" also catches "Feeding America", etc.
+  const baseExclusionTokens = excludedKeywords.length
     ? tokenize(excludedKeywords.join(' '))
+    : new Set<string>();
+  const exclusionTokensForPeers = baseExclusionTokens.size > 0
+    ? expandExclusionTokens(baseExclusionTokens)
+    : new Set<string>();
+  const excludedNteePrefixes = baseExclusionTokens.size > 0
+    ? getExcludedNteePrefixes(baseExclusionTokens)
     : new Set<string>();
 
   // Deduplicate and format
@@ -2251,11 +2348,40 @@ async function suggestPeersInternal(
     if (peers.length >= 8) break;
     if (row.kwCount < 1 || row.score < 0) continue;
 
-    // Skip peer nonprofits whose name overlaps with excluded keywords
+    // Skip peer nonprofits matching excluded concepts via name, purpose text, or NTEE code
     if (exclusionTokensForPeers.size > 0) {
+      const peerData = peerMap.get(row.normKey);
+
+      // Check 1: Name contains any expanded exclusion token
       const peerNameTokens = tokenize(row.name);
-      const overlap = lexicalSimilarity(exclusionTokensForPeers, peerNameTokens);
-      if (overlap > 0.3) continue; // significant overlap with excluded terms → skip
+      let nameHit = false;
+      for (const pt of peerNameTokens) {
+        if (exclusionTokensForPeers.has(pt)) { nameHit = true; break; }
+      }
+      if (nameHit) continue;
+
+      // Check 2: NTEE code matches excluded concept area
+      if (peerData && excludedNteePrefixes.size > 0) {
+        let nteeMatch = false;
+        for (const code of peerData.nteeCodes) {
+          if (code && excludedNteePrefixes.has(code.charAt(0).toUpperCase())) {
+            nteeMatch = true;
+            break;
+          }
+        }
+        if (nteeMatch) continue;
+      }
+
+      // Check 3: Purpose text of associated grants contains multiple exclusion tokens
+      if (peerData && peerData.purposeTexts.length > 0) {
+        const combinedPurpose = peerData.purposeTexts.slice(0, 5).join(' ');
+        const purposeTokens = tokenize(combinedPurpose);
+        let purposeHits = 0;
+        for (const pt of purposeTokens) {
+          if (exclusionTokensForPeers.has(pt)) purposeHits++;
+        }
+        if (purposeHits >= 2) continue; // multiple concept matches in grant purposes → skip
+      }
     }
     const normKey = row.normKey.replace(/[^A-Z0-9\s]/g, '').trim();
     if (!normKey || normKey.length < 3) continue;
@@ -2312,13 +2438,23 @@ Deno.serve(async (req) => {
       // ── Excluded-keyword filtering for peer nonprofits ──────────────────
       // If the user specified exclusion keywords, remove peer nonprofits whose
       // name significantly overlaps with those terms BEFORE resolving them.
-      // Example: excluded "food insecurity" → filter out "Ballard Food Bank".
-      const exclusionTokens = keywords.length ? tokenize(keywords.join(' ')) : new Set<string>();
+      // Uses expanded concept synonyms so "food insecurity" also catches
+      // "Feeding America", "Greater Chicago Food Depository", etc.
+      const baseExclusionTokens = keywords.length ? tokenize(keywords.join(' ')) : new Set<string>();
+      const exclusionTokens = baseExclusionTokens.size > 0
+        ? expandExclusionTokens(baseExclusionTokens)
+        : new Set<string>();
+      const excludedNtee = baseExclusionTokens.size > 0
+        ? getExcludedNteePrefixes(baseExclusionTokens)
+        : new Set<string>();
       if (exclusionTokens.size > 0) {
         peerNonprofits = peerNonprofits.filter((peerName) => {
           const peerTokens = tokenize(peerName);
-          const overlap = lexicalSimilarity(exclusionTokens, peerTokens);
-          return overlap <= 0.3; // keep only peers with low overlap
+          // With expanded synonym set, check if any peer name token matches any exclusion token
+          for (const pt of peerTokens) {
+            if (exclusionTokens.has(pt)) return false; // peer name contains excluded concept → remove
+          }
+          return true;
         });
       }
 
@@ -2361,20 +2497,40 @@ Deno.serve(async (req) => {
       const grantsByFoundation = new Map<string, Array<GrantRow & { matchedPeers: string[] }>>();
       const peerSetByFoundation = new Map<string, Set<string>>();
 
-      // Helper: check if a grantee name significantly overlaps with excluded keywords
+      // Helper: check if a grant matches excluded concepts via grantee name, purpose, or NTEE
       const granteeMatchesExclusion = exclusionTokens.size > 0
-        ? (granteeName: string) => {
-            if (!granteeName) return false;
-            const granteeTokens = tokenize(granteeName);
-            return lexicalSimilarity(exclusionTokens, granteeTokens) > 0.3;
+        ? (granteeName: string, purposeText?: string | null, nteeCode?: string | null) => {
+            // Check 1: Grantee name contains any expanded exclusion token
+            if (granteeName) {
+              const granteeTokens = tokenize(granteeName);
+              for (const gt of granteeTokens) {
+                if (exclusionTokens.has(gt)) return true;
+              }
+            }
+            // Check 2: NTEE code matches excluded concept area
+            if (nteeCode && excludedNtee.size > 0) {
+              if (excludedNtee.has(nteeCode.charAt(0).toUpperCase())) return true;
+            }
+            // Check 3: Purpose text contains significant overlap with exclusion concepts
+            if (purposeText) {
+              const purposeTokens = tokenize(purposeText);
+              let hits = 0;
+              for (const pt of purposeTokens) {
+                if (exclusionTokens.has(pt)) hits++;
+              }
+              // For purpose text (longer text), require at least 2 matching tokens
+              // to avoid false positives from incidental word overlap
+              if (hits >= 2) return true;
+            }
+            return false;
           }
         : () => false;
 
       for (const grant of matchedGrantsAll) {
         if (isLikelyIndividualGrantee(grant)) continue;
 
-        // Skip grants to nonprofits matching excluded keywords
-        if (granteeMatchesExclusion(grant.grantee_name || '')) continue;
+        // Skip grants to nonprofits matching excluded concepts (name, purpose, NTEE)
+        if (granteeMatchesExclusion(grant.grantee_name || '', grant.purpose_text, grant.ntee_code)) continue;
 
         const matchedPeerNames = matchedPeerNamesForGrant(grant, peerProfiles, peerMatchLocation);
 
@@ -2482,7 +2638,7 @@ Deno.serve(async (req) => {
             liveMatchedFoundationIds.add(foundationId);
 
             for (const grant of match.grants) {
-              if (granteeMatchesExclusion(grant.grantee_name || '')) continue;
+              if (granteeMatchesExclusion(grant.grantee_name || '', grant.purpose_text, grant.ntee_code)) continue;
               const matchedPeerNames = matchedPeerNamesForGrant(grant, peerProfiles, peerMatchLocation);
               if (!matchedPeerNames.length) continue;
 
@@ -2579,7 +2735,7 @@ Deno.serve(async (req) => {
               foundationIds.push(funder.id);
 
               for (const grant of liveMatches) {
-                if (granteeMatchesExclusion(grant.grantee_name || '')) continue;
+                if (granteeMatchesExclusion(grant.grantee_name || '', grant.purpose_text, grant.ntee_code)) continue;
                 const matchedPeerNames = matchedPeerNamesForGrant(grant, peerProfiles, peerMatchLocation);
                 if (!matchedPeerNames.length) continue;
                 const rows = grantsByFoundation.get(funder.id) || [];
