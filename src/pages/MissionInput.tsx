@@ -65,25 +65,32 @@ export default function MissionInput() {
   const location = useLocation();
   const returnState = location.state as { mission?: string; locationServed?: string; budgetBand?: BudgetBand; keywords?: string[] } | null;
 
+  // If the user navigated here directly (not via "Update Search"), clear stale session data
+  // so the form starts fresh. Only preserve pre-fill when returnState is present.
+  useEffect(() => {
+    if (!returnState) {
+      sessionStorage.removeItem('ff_mission');
+      sessionStorage.removeItem('ff_location');
+      sessionStorage.removeItem('ff_budget_band');
+      sessionStorage.removeItem('ff_keywords');
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     document.title = 'Find Funders for Your Nonprofit | FunderMatch';
     const desc = document.querySelector<HTMLMetaElement>('meta[name="description"]');
     if (desc) desc.content = 'Describe your nonprofit\u2019s mission and get an instant AI-ranked list of foundations, DAFs, and corporate giving programs aligned to your work.';
   }, []);
 
-  const [mission, setMission] = useState(returnState?.mission || sessionStorage.getItem('ff_mission') || '');
-  const [locationServed, setLocationServed] = useState(returnState?.locationServed || sessionStorage.getItem('ff_location') || '');
+  const [mission, setMission] = useState(returnState?.mission || '');
+  const [locationServed, setLocationServed] = useState(returnState?.locationServed || '');
   const [budgetBand, setBudgetBand] = useState<BudgetBand>(() => {
     if (returnState?.budgetBand && BUDGET_BANDS.some(b => b.key === returnState.budgetBand)) {
       return returnState.budgetBand;
     }
-    const saved = sessionStorage.getItem('ff_budget_band') as BudgetBand | null;
-    if (saved && BUDGET_BANDS.some(b => b.key === saved)) {
-      return saved;
-    }
     return 'prefer_not_to_say';
   });
-  const [keywords, setKeywords] = useState<string[]>(returnState?.keywords ?? JSON.parse(sessionStorage.getItem('ff_keywords') || '[]'));
+  const [keywords, setKeywords] = useState<string[]>(returnState?.keywords ?? []);
   const [keywordInput, setKeywordInput] = useState('');
   const [errors, setErrors] = useState<{ mission?: string; location?: string }>({});
   const [showExamples, setShowExamples] = useState(false);
