@@ -124,7 +124,7 @@ export default function GrantWriter() {
 
   const [showOrg, setShowOrg] = useState(false);
   const [showProgram, setShowProgram] = useState(false);
-  const [showPastGrants, setShowPastGrants] = useState(false);
+  const [showPastGrants, setShowPastGrants] = useState(true);
 
   // ── Upload state ────────────────────────────────────────────────────────
 
