@@ -389,16 +389,38 @@ export default function Results() {
     a.click();
   };
 
+  // Exclude donor-advised funds (DAFs) — these are pass-through vehicles, not direct grantmakers
+  const DAF_NAMES = new Set([
+    'FIDELITY INVESTMENTS CHARITABLE GIFT FUND',
+    'FIDELITY INVESTMENTS CHARITABLE GIFT FUND INC',
+    'SCHWAB CHARITABLE FUND',
+    'VANGUARD CHARITABLE ENDOWMENT PROGRAM',
+    'NATIONAL PHILANTHROPIC TRUST',
+    'GS DONOR ADVISED PHILANTHROPY FUND',
+    'BNY MELLON CHARITABLE GIFT FUND',
+    'RAYMOND JAMES CHARITABLE ENDOWMENT FUND',
+    'AMERICAN ENDOWMENT FOUNDATION',
+    'JEWISH COMMUNAL FUND',
+    'RENAISSANCE CHARITABLE FOUNDATION INC',
+    'SILICON VALLEY COMMUNITY FOUNDATION',
+    'GOLDMAN SACHS PHILANTHROPY FUND',
+  ]);
+  const isDAF = (name: string) =>
+    DAF_NAMES.has(name.toUpperCase()) ||
+    /\bdonor[\s-]advised\b/i.test(name);
+
   // Grant size filter — uses grant_range_max as primary signal, falls back to grant_range_min
-  const filteredMatches = matches.filter(f => {
-    if (grantSizeFilter === 'any') return true;
-    const effectiveMax = f.grant_range_max ?? f.grant_range_min;
-    if (effectiveMax === null) return false; // no grant range data → exclude from size-specific filters
-    if (grantSizeFilter === 'small')  return effectiveMax <= 25_000;
-    if (grantSizeFilter === 'medium') return effectiveMax > 25_000 && effectiveMax <= 250_000;
-    if (grantSizeFilter === 'large')  return effectiveMax > 250_000;
-    return true;
-  });
+  const filteredMatches = matches
+    .filter(f => f.type !== 'daf' && !isDAF(f.name))
+    .filter(f => {
+      if (grantSizeFilter === 'any') return true;
+      const effectiveMax = f.grant_range_max ?? f.grant_range_min;
+      if (effectiveMax === null) return false; // no grant range data → exclude from size-specific filters
+      if (grantSizeFilter === 'small')  return effectiveMax <= 25_000;
+      if (grantSizeFilter === 'medium') return effectiveMax > 25_000 && effectiveMax <= 250_000;
+      if (grantSizeFilter === 'large')  return effectiveMax > 250_000;
+      return true;
+    });
 
   const GRANT_SIZE_FILTERS: { key: 'any' | 'small' | 'medium' | 'large'; label: string }[] = [
     { key: 'any',    label: 'Any size' },

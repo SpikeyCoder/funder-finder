@@ -2258,6 +2258,7 @@ Deno.serve(async (req) => {
       `funders?select=id,name,type,foundation_ein,description,focus_areas,ntee_code,city,state,` +
       `website,contact_url,programs_url,apply_url,news_url,total_giving,asset_amount,` +
       `grant_range_min,grant_range_max,contact_name,contact_title,contact_email,next_step` +
+      `&type=neq.daf` +
       `&order=total_giving.desc.nullslast&limit=${FOUNDATION_SCAN_LIMIT}`,
     );
 
