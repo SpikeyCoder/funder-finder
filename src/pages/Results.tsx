@@ -469,46 +469,45 @@ export default function Results() {
                     Budget band: {BUDGET_BAND_LABEL[budgetBand]}
                   </p>
                 )}
-                {!isPeerSearchMode && keywords.length > 0 && (
+                {keywords.length > 0 && (
                   <p className="text-xs text-gray-400 mt-1">
                     Excluded terms: {keywords.join(', ')}
-                  </p>
-                )}
-                {isPeerSearchMode && (
-                  <p className="text-xs text-gray-400 mt-1">
-                    Peer mode active ({activePeerNonprofits.length} nonprofit{activePeerNonprofits.length === 1 ? '' : 's'}). Mission/location/keyword weights are disabled.
                   </p>
                 )}
               </>
             )}
           </div>
-          <div className="flex gap-3">
-            <button
-              onClick={() => navigate('/saved')}
-              className="flex items-center gap-2 border border-[#30363d] rounded-xl px-4 py-2 text-sm hover:bg-[#161b22] transition-colors"
-            >
-              <Bookmark size={16} />
-              Saved ({savedIds.length})
-            </button>
-            {!loading && matches.length > 0 && (
+          {!loading && (
+            <div className="flex gap-3">
               <button
-                onClick={exportCSV}
+                onClick={() => navigate('/saved')}
                 className="flex items-center gap-2 border border-[#30363d] rounded-xl px-4 py-2 text-sm hover:bg-[#161b22] transition-colors"
               >
-                <Download size={16} />
-                Export
+                <Bookmark size={16} />
+                Saved ({savedIds.length})
               </button>
-            )}
-          </div>
+              {matches.length > 0 && (
+                <button
+                  onClick={exportCSV}
+                  className="flex items-center gap-2 border border-[#30363d] rounded-xl px-4 py-2 text-sm hover:bg-[#161b22] transition-colors"
+                >
+                  <Download size={16} />
+                  Export
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
-        <button
-          onClick={() => navigate('/mission', { state: { mission, locationServed, keywords, budgetBand, peerNonprofits: activePeerNonprofits } })}
-          className="flex items-center gap-1 text-gray-400 hover:text-white text-sm transition-colors"
-        >
-          <ArrowLeft size={16} />
-          Update Search
-        </button>
+        {!loading && (
+          <button
+            onClick={() => navigate('/mission', { state: { mission, locationServed, keywords, budgetBand, peerNonprofits: activePeerNonprofits } })}
+            className="flex items-center gap-1 text-gray-400 hover:text-white text-sm transition-colors"
+          >
+            <ArrowLeft size={16} />
+            Update Search
+          </button>
+        )}
 
         {/* Auto-identified peer nonprofits (shown when peers were auto-detected) */}
         {isPeerSearchMode && suggestedPeers.length > 0 && (

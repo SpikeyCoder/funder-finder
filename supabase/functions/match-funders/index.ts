@@ -108,6 +108,7 @@ interface FunderRow {
   contact_url: string | null;
   programs_url: string | null;
   apply_url: string | null;
+  discovered_apply_url: string | null;
   news_url: string | null;
   total_giving: number | null;
   asset_amount: number | null;
@@ -317,6 +318,167 @@ function normalizedEin(value: string | null | undefined): string | null {
   return digits.length === 9 ? digits : null;
 }
 
+// ── Real-time grant page discovery ──────────────────────────────────────────
+// Adapted from scripts/enrich-subpages.js — lightweight homepage scanner that
+// finds grant application / LOI pages by scoring <a> tag hrefs + anchor text.
+
+const GRANT_PATH_HINTS = [
+  '/apply', '/grant-guideline', '/how-to-apply', '/loi', '/rfp',
+  '/letter-of-inquiry', '/applicant', '/funding-guideline', '/proposal',
+  '/submit', '/grantseekers', '/prospective', '/grants', '/funding',
+  '/open-grant', '/grant-opportunities', '/grantmaking',
+];
+
+const GRANT_TEXT_HINTS = [
+  'apply', 'how to apply', 'grant guidelines', 'loi', 'letter of inquiry',
+  'rfp', 'submit', 'application', 'grantseekers', 'funding guidelines',
+  'grant opportunities', 'open grants', 'apply for a grant',
+  'application process', 'prospective grantees', 'request for proposals',
+  'grants', 'funding', 'grantmaking',
+];
+
+function extractDomain(url: string): string | null {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch { return null; }
+}
+
+/**
+ * Fetch a homepage's HTML with a tight timeout.
+ * Returns null on any failure — caller treats as "no discovery".
+ */
+async function fetchHomepageHtml(url: string, timeoutMs = 3000): Promise<string | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; FunderFinder/1.0; +https://fundermatch.org)',
+        'Accept': 'text/html,application/xhtml+xml',
+      },
+      redirect: 'follow',
+    });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const ct = res.headers.get('content-type') || '';
+    if (!ct.includes('html')) return null;
+    // Limit body read to avoid huge pages
+    const text = await res.text();
+    return text.length > 500_000 ? text.slice(0, 500_000) : text;
+  } catch {
+    clearTimeout(timer);
+    return null;
+  }
+}
+
+/**
+ * Scan homepage HTML for grant-related links, return the best URL or null.
+ */
+function discoverGrantPageUrl(html: string, baseUrl: string): string | null {
+  const funderDomain = extractDomain(baseUrl);
+  if (!funderDomain) return null;
+
+  // Extract <a> tags — same regex as enrich-subpages.js
+  const tagRe = /<a\b[^>]*href\s*=\s*["']([^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  let best: { url: string; score: number } | null = null;
+  let m: RegExpExecArray | null;
+
+  while ((m = tagRe.exec(html)) !== null) {
+    const rawHref = m[1].trim();
+    // Skip non-page links
+    if (!rawHref || rawHref.startsWith('#') || rawHref.startsWith('mailto:') ||
+        rawHref.startsWith('tel:') || rawHref.startsWith('javascript:')) continue;
+
+    let resolvedUrl: string;
+    try { resolvedUrl = new URL(rawHref, baseUrl).href; } catch { continue; }
+
+    // Must be same domain
+    const linkDomain = extractDomain(resolvedUrl);
+    if (!linkDomain) continue;
+    if (!linkDomain.includes(funderDomain) && !funderDomain.includes(linkDomain)) continue;
+
+    // Skip homepage itself
+    try {
+      const parsed = new URL(resolvedUrl);
+      if (parsed.pathname === '/' || parsed.pathname === '') continue;
+    } catch { continue; }
+
+    // Score against hints
+    const urlLower = resolvedUrl.toLowerCase();
+    const anchorText = m[2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+    let score = 0;
+
+    for (const hint of GRANT_PATH_HINTS) {
+      if (urlLower.includes(hint)) score += 3;
+    }
+    for (const hint of GRANT_TEXT_HINTS) {
+      if (anchorText.includes(hint)) score += 3;
+    }
+
+    if (score >= 3 && (!best || score > best.score)) {
+      best = { url: resolvedUrl, score };
+    }
+  }
+
+  return best?.url ?? null;
+}
+
+/**
+ * Batch-discover grant page URLs for funders missing apply_url.
+ * Processes in chunks of 6 concurrently, returns Map<funderId, discoveredUrl>.
+ */
+async function discoverGrantUrlsInBatch(
+  funders: { id: string; website: string }[],
+): Promise<Map<string, string>> {
+  const results = new Map<string, string>();
+  if (funders.length === 0) return results;
+
+  const CHUNK_SIZE = 6;
+  for (let i = 0; i < funders.length; i += CHUNK_SIZE) {
+    const chunk = funders.slice(i, i + CHUNK_SIZE);
+    const settled = await Promise.allSettled(
+      chunk.map(async (f) => {
+        const url = f.website.startsWith('http') ? f.website : `https://${f.website}`;
+        const html = await fetchHomepageHtml(url);
+        if (!html) return null;
+        const discovered = discoverGrantPageUrl(html, url);
+        return discovered ? { id: f.id, url: discovered } : null;
+      }),
+    );
+    for (const result of settled) {
+      if (result.status === 'fulfilled' && result.value) {
+        results.set(result.value.id, result.value.url);
+      }
+    }
+  }
+  return results;
+}
+
+/**
+ * Fire-and-forget: cache newly discovered grant page URLs back to the DB.
+ * Non-blocking — errors are caught and logged, never thrown.
+ */
+function cacheDiscoveredUrls(
+  discoveredUrls: Map<string, string>,
+  supabaseUrl: string,
+  supabaseKey: string,
+): void {
+  if (discoveredUrls.size === 0) return;
+  for (const [id, url] of discoveredUrls) {
+    fetch(`${supabaseUrl}/rest/v1/funders?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify({ discovered_apply_url: url }),
+    }).catch((e) => console.warn(`cache discovered_apply_url failed for ${id}:`, e));
+  }
+}
+
 function propublicaFoundationUrl(funder: FunderRow): string {
   const ein = normalizedEin(funder.foundation_ein);
   if (ein) {
@@ -328,14 +490,14 @@ function propublicaFoundationUrl(funder: FunderRow): string {
 function resolveNextStepUrl(type: string, funder: FunderRow): string | null {
   const chain: (string | null | undefined)[] = (() => {
     switch (type) {
+      case 'apply':
+        return [funder.apply_url, funder.discovered_apply_url, funder.programs_url, funder.website];
+      case 'programs':
+        return [funder.programs_url, funder.apply_url, funder.discovered_apply_url, funder.website];
       case 'contact':
         return [funder.contact_url, funder.website];
-      case 'apply':
-        return [funder.apply_url, funder.programs_url, funder.website];
-      case 'programs':
-        return [funder.programs_url, funder.apply_url, funder.website];
-      case 'news':
-        return [funder.news_url, funder.website];
+      case 'homepage':
+        return [funder.website];
       case 'propublica':
         return [propublicaFoundationUrl(funder)];
       default:
@@ -351,36 +513,43 @@ function resolveNextStepUrl(type: string, funder: FunderRow): string | null {
 }
 
 function deriveNextStep(funder: FunderRow): { text: string; type: string } {
+  // Priority: apply_url → discovered_apply_url → programs_url → contact → website → propublica
+  // This ensures nonprofits see actionable grant pages, not IRS links.
+
   const nextStepText = funder.next_step?.trim();
+
+  // If the DB has a stored next_step, check if it references IRS/guidestar — override those
   if (nextStepText) {
-    const hasLegacyDirectoryFallback = /\bguidestar\b|\birs tax exempt org search\b/i.test(nextStepText);
-    if (hasLegacyDirectoryFallback) {
-      return {
-        type: 'propublica',
-        text: 'Review this foundation profile on ProPublica Nonprofit Explorer to confirm recent grants and filing details.',
-      };
+    const hasLegacyDirectoryFallback = /\bguidestar\b|\birs\b.*\bsearch\b|apps\.irs\.gov/i.test(nextStepText);
+    if (!hasLegacyDirectoryFallback) {
+      // Keep the human-written text but assign the best available type
+      if (funder.apply_url) return { text: nextStepText, type: 'apply' };
+      if (funder.discovered_apply_url) return { text: nextStepText, type: 'apply' };
+      if (funder.programs_url) return { text: nextStepText, type: 'programs' };
+      if (funder.contact_url || funder.contact_email) return { text: nextStepText, type: 'contact' };
+      if (funder.website) return { text: nextStepText, type: 'homepage' };
+      return { text: nextStepText, type: 'propublica' };
     }
-    if (funder.apply_url) return { text: nextStepText, type: 'apply' };
-    if (funder.contact_url || funder.contact_email) return { text: nextStepText, type: 'contact' };
-    if (funder.programs_url) return { text: nextStepText, type: 'programs' };
-    if (funder.news_url) return { text: nextStepText, type: 'news' };
-    return { text: nextStepText, type: 'homepage' };
+    // Legacy IRS/guidestar text — fall through to derive a better next step
   }
 
+  // 1. Direct grant application / LOI page (from batch enrichment)
   if (funder.apply_url) {
     return {
       type: 'apply',
-      text: 'Review current grant guidelines and draft a concise LOI tailored to this funder\'s priorities.',
+      text: 'Review current grant guidelines and submit an LOI tailored to this funder\'s priorities.',
     };
   }
 
-  if (funder.contact_url || funder.contact_email) {
+  // 2. Discovered grant page (from real-time homepage scan)
+  if (funder.discovered_apply_url) {
     return {
-      type: 'contact',
-      text: 'Share a brief mission summary and ask whether your program aligns with current funding priorities.',
+      type: 'apply',
+      text: 'Visit this funder\'s grant page to review application requirements and submission process.',
     };
   }
 
+  // 3. Programs / focus areas page
   if (funder.programs_url) {
     return {
       type: 'programs',
@@ -388,13 +557,23 @@ function deriveNextStep(funder: FunderRow): { text: string; type: string } {
     };
   }
 
-  if (funder.news_url) {
+  // 4. Contact page
+  if (funder.contact_url || funder.contact_email) {
     return {
-      type: 'news',
-      text: 'Read recent reports and updates to align your pitch with their current funding direction.',
+      type: 'contact',
+      text: 'Share a brief mission summary and ask whether your program aligns with current funding priorities.',
     };
   }
 
+  // 5. Bare website (homepage)
+  if (funder.website) {
+    return {
+      type: 'homepage',
+      text: 'Visit the foundation\'s website to explore funding priorities and find application details.',
+    };
+  }
+
+  // 6. ProPublica fallback (last resort)
   return {
     type: 'propublica',
     text: 'Review this foundation profile on ProPublica Nonprofit Explorer to confirm recent grants and filing details.',
@@ -1962,6 +2141,7 @@ const SUGGEST_GENERALIST_PATTERNS = [
 async function suggestPeersInternal(
   mission: string,
   locationServed: string,
+  excludedKeywords: string[] = [],
 ): Promise<string[]> {
   const keywords = extractMissionKeywords(mission);
   if (!keywords.length) return [];
@@ -2059,12 +2239,24 @@ async function suggestPeersInternal(
   });
   scoredPeers.sort((a, b) => b.score - a.score || b.count - a.count);
 
+  // Build exclusion tokens from excluded keywords for filtering peer suggestions
+  const exclusionTokensForPeers = excludedKeywords.length
+    ? tokenize(excludedKeywords.join(' '))
+    : new Set<string>();
+
   // Deduplicate and format
   const seen = new Set<string>();
   const peers: string[] = [];
   for (const row of scoredPeers) {
     if (peers.length >= 8) break;
     if (row.kwCount < 1 || row.score < 0) continue;
+
+    // Skip peer nonprofits whose name overlaps with excluded keywords
+    if (exclusionTokensForPeers.size > 0) {
+      const peerNameTokens = tokenize(row.name);
+      const overlap = lexicalSimilarity(exclusionTokensForPeers, peerNameTokens);
+      if (overlap > 0.3) continue; // significant overlap with excluded terms → skip
+    }
     const normKey = row.normKey.replace(/[^A-Z0-9\s]/g, '').trim();
     if (!normKey || normKey.length < 3) continue;
     let isDupe = false;
@@ -2102,7 +2294,7 @@ Deno.serve(async (req) => {
     // Auto-suggest peers when none provided but mission is given
     let suggestedPeers: string[] = [];
     if (!peerNonprofits.length && mission) {
-      suggestedPeers = await suggestPeersInternal(mission, locationServed);
+      suggestedPeers = await suggestPeersInternal(mission, locationServed, keywords);
       peerNonprofits = suggestedPeers;
     }
     const isPeerSearch = peerNonprofits.length > 0;
@@ -2116,6 +2308,31 @@ Deno.serve(async (req) => {
 
     if (isPeerSearch) {
       const userLocation = parseUserLocation(locationServed);
+
+      // ── Excluded-keyword filtering for peer nonprofits ──────────────────
+      // If the user specified exclusion keywords, remove peer nonprofits whose
+      // name significantly overlaps with those terms BEFORE resolving them.
+      // Example: excluded "food insecurity" → filter out "Ballard Food Bank".
+      const exclusionTokens = keywords.length ? tokenize(keywords.join(' ')) : new Set<string>();
+      if (exclusionTokens.size > 0) {
+        peerNonprofits = peerNonprofits.filter((peerName) => {
+          const peerTokens = tokenize(peerName);
+          const overlap = lexicalSimilarity(exclusionTokens, peerTokens);
+          return overlap <= 0.3; // keep only peers with low overlap
+        });
+      }
+
+      if (!peerNonprofits.length) {
+        return new Response(JSON.stringify({
+          results: [],
+          cached: false,
+          ...(suggestedPeers.length ? { peers: suggestedPeers } : {}),
+        }), {
+          headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      // ────────────────────────────────────────────────────────────────────
+
       // Peer lookup should return all foundations that funded the peer nonprofits,
       // independent of mission-search location constraints.
       const peerMatchLocation: UserLocation = {
@@ -2144,8 +2361,20 @@ Deno.serve(async (req) => {
       const grantsByFoundation = new Map<string, Array<GrantRow & { matchedPeers: string[] }>>();
       const peerSetByFoundation = new Map<string, Set<string>>();
 
+      // Helper: check if a grantee name significantly overlaps with excluded keywords
+      const granteeMatchesExclusion = exclusionTokens.size > 0
+        ? (granteeName: string) => {
+            if (!granteeName) return false;
+            const granteeTokens = tokenize(granteeName);
+            return lexicalSimilarity(exclusionTokens, granteeTokens) > 0.3;
+          }
+        : () => false;
+
       for (const grant of matchedGrantsAll) {
         if (isLikelyIndividualGrantee(grant)) continue;
+
+        // Skip grants to nonprofits matching excluded keywords
+        if (granteeMatchesExclusion(grant.grantee_name || '')) continue;
 
         const matchedPeerNames = matchedPeerNamesForGrant(grant, peerProfiles, peerMatchLocation);
 
@@ -2166,7 +2395,7 @@ Deno.serve(async (req) => {
       const liveMatchedFoundationIds = new Set<string>();
       const baseSelect =
         'id,name,type,foundation_ein,description,focus_areas,ntee_code,city,state,' +
-        'website,contact_url,programs_url,apply_url,news_url,total_giving,asset_amount,' +
+        'website,contact_url,programs_url,apply_url,discovered_apply_url,news_url,total_giving,asset_amount,' +
         'grant_range_min,grant_range_max,contact_name,contact_title,contact_email,next_step';
       let queryCheckRan = false;
 
@@ -2253,6 +2482,7 @@ Deno.serve(async (req) => {
             liveMatchedFoundationIds.add(foundationId);
 
             for (const grant of match.grants) {
+              if (granteeMatchesExclusion(grant.grantee_name || '')) continue;
               const matchedPeerNames = matchedPeerNamesForGrant(grant, peerProfiles, peerMatchLocation);
               if (!matchedPeerNames.length) continue;
 
@@ -2349,6 +2579,7 @@ Deno.serve(async (req) => {
               foundationIds.push(funder.id);
 
               for (const grant of liveMatches) {
+                if (granteeMatchesExclusion(grant.grantee_name || '')) continue;
                 const matchedPeerNames = matchedPeerNamesForGrant(grant, peerProfiles, peerMatchLocation);
                 if (!matchedPeerNames.length) continue;
                 const rows = grantsByFoundation.get(funder.id) || [];
@@ -2382,7 +2613,7 @@ Deno.serve(async (req) => {
       const [fundersRes, filingsRes] = await Promise.all([
         sbFetch(
           `funders?select=id,name,type,foundation_ein,description,focus_areas,ntee_code,city,state,` +
-          `website,contact_url,programs_url,apply_url,news_url,total_giving,asset_amount,` +
+          `website,contact_url,programs_url,apply_url,discovered_apply_url,news_url,total_giving,asset_amount,` +
           `grant_range_min,grant_range_max,contact_name,contact_title,contact_email,next_step` +
           `&id=in.${inFilter}` +
           `&limit=50000`,
@@ -2406,6 +2637,20 @@ Deno.serve(async (req) => {
       for (const synthetic of syntheticFundersById.values()) {
         if (!funderById.has(synthetic.id)) funderById.set(synthetic.id, synthetic);
       }
+
+      // ── Real-time grant page discovery ─────────────────────────────────────
+      // For funders with a website but no apply_url or discovered_apply_url,
+      // scan their homepage for grant application links (3s timeout per site).
+      const fundersNeedingDiscovery = [...funderById.values()]
+        .filter((f) => f.website && !f.apply_url && !f.discovered_apply_url)
+        .map((f) => ({ id: f.id, website: f.website! }));
+      const discoveredUrls = await discoverGrantUrlsInBatch(fundersNeedingDiscovery);
+      // Merge discovered URLs into funder objects so deriveNextStep() picks them up
+      for (const [id, url] of discoveredUrls) {
+        const f = funderById.get(id);
+        if (f) f.discovered_apply_url = url;
+      }
+      // ────────────────────────────────────────────────────────────────────────
 
       const results = foundationIds
         .map((foundationId) => funderById.get(foundationId))
@@ -2492,6 +2737,9 @@ Deno.serve(async (req) => {
           return (b.peer_match_count || 0) - (a.peer_match_count || 0);
         });
 
+      // Fire-and-forget: cache any newly discovered grant page URLs
+      cacheDiscoveredUrls(discoveredUrls, SUPABASE_URL, SUPABASE_KEY);
+
       return new Response(JSON.stringify({
         results,
         cached: false,
@@ -2522,7 +2770,7 @@ Deno.serve(async (req) => {
 
     const fundersRes = await sbFetch(
       `funders?select=id,name,type,foundation_ein,description,focus_areas,ntee_code,city,state,` +
-      `website,contact_url,programs_url,apply_url,news_url,total_giving,asset_amount,` +
+      `website,contact_url,programs_url,apply_url,discovered_apply_url,news_url,total_giving,asset_amount,` +
       `grant_range_min,grant_range_max,contact_name,contact_title,contact_email,next_step` +
       `&type=neq.daf` +
       `&order=total_giving.desc.nullslast&limit=${FOUNDATION_SCAN_LIMIT}`,
@@ -2651,6 +2899,17 @@ Deno.serve(async (req) => {
         }
       }
     }
+
+    // ── Real-time grant page discovery (mission-based path) ──────────────
+    const missionFundersNeedingDiscovery = candidateFunders
+      .filter(({ funder: f }) => f.website && !f.apply_url && !f.discovered_apply_url)
+      .map(({ funder: f }) => ({ id: f.id, website: f.website! }));
+    const missionDiscoveredUrls = await discoverGrantUrlsInBatch(missionFundersNeedingDiscovery);
+    for (const [id, url] of missionDiscoveredUrls) {
+      const entry = candidateFunders.find((c) => c.funder.id === id);
+      if (entry) entry.funder.discovered_apply_url = url;
+    }
+    // ──────────────────────────────────────────────────────────────────────
 
     const results = candidateFunders
       .map(({ funder, baseline, exclusionOverlap: baselineExclusionOverlap }) => {
@@ -2868,6 +3127,9 @@ Deno.serve(async (req) => {
         created_at: new Date().toISOString(),
       }),
     });
+
+    // Fire-and-forget: cache any newly discovered grant page URLs
+    cacheDiscoveredUrls(missionDiscoveredUrls, SUPABASE_URL, SUPABASE_KEY);
 
     return new Response(JSON.stringify({ results, cached: false }), {
       headers: { ...headers, 'Content-Type': 'application/json' },
