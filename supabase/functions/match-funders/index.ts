@@ -966,7 +966,9 @@ function normalizeKeywords(input: unknown): string[] {
 function normalizePeerNonprofits(input: unknown): string[] {
   if (!Array.isArray(input)) return [];
   const cleaned = input
-    .map((item) => typeof item === 'string' ? item.trim().toLowerCase() : '')
+    .map((item) => typeof item === 'string' ? item.trim() : '')
+    // Apply camelCase splitting BEFORE lowercasing so "SitStayRead" → "Sit Stay Read" → "sit stay read"
+    .map((item) => splitCamelCase(item).toLowerCase())
     .map((item) => item.replace(/\s+/g, ' ').trim())
     .filter((item) => item.length >= 3)
     .slice(0, 20);
@@ -1464,6 +1466,7 @@ const ORGANIZATION_HINT_WORDS = new Set([
   'library', 'llc', 'ltd', 'ministries', 'ministry', 'museum', 'network', 'nonprofit', 'office', 'organization',
   'partners', 'partnership', 'program', 'project', 'relief', 'research', 'school', 'service', 'services',
   'society', 'systems', 'team', 'theater', 'theatre', 'trust', 'university',
+  'inc', 'incorporated',
 ]);
 
 function missionSignalText(grant: GrantRow): string {
@@ -2503,11 +2506,21 @@ Deno.serve(async (req) => {
       }
 
       const peerDebug: Record<string, unknown> = {};
+      peerDebug.resolved_profiles = peerProfiles.map((p) => ({
+        input: p.input,
+        canonicalName: p.canonicalName,
+        normalizedName: p.normalizedName,
+        tokenSignature: p.tokenSignature,
+        ein: p.ein,
+        city: p.city,
+        state: p.state,
+      }));
       const { grants: matchedGrantsAll, stats: peerDbStats } = await fetchPeerGrantsFromDatabase(
         peerProfiles,
         userLocation,
       );
       peerDebug.db_query_stats = peerDbStats;
+      peerDebug.total_grants_fetched = matchedGrantsAll.length;
 
       const grantsByFoundation = new Map<string, Array<GrantRow & { matchedPeers: string[] }>>();
       const peerSetByFoundation = new Map<string, Set<string>>();
@@ -2541,15 +2554,33 @@ Deno.serve(async (req) => {
           }
         : () => false;
 
-      for (const grant of matchedGrantsAll) {
-        if (isLikelyIndividualGrantee(grant)) continue;
+      const _peerGrantDebug: Record<string, { excluded: number; noMatch: number; matched: number }> = {};
+      for (const p of peerProfiles) _peerGrantDebug[p.canonicalName] = { excluded: 0, noMatch: 0, matched: 0 };
+      let _excludedCount = 0;
+      let _noMatchCount = 0;
 
+      for (const grant of matchedGrantsAll) {
         // Skip grants to nonprofits matching excluded concepts (name, purpose, NTEE)
-        if (granteeMatchesExclusion(grant.grantee_name || '', grant.purpose_text, grant.ntee_code)) continue;
+        if (granteeMatchesExclusion(grant.grantee_name || '', grant.purpose_text, grant.ntee_code)) {
+          _excludedCount++;
+          continue;
+        }
 
         const matchedPeerNames = matchedPeerNamesForGrant(grant, peerProfiles, peerMatchLocation);
 
-        if (!matchedPeerNames.length) continue;
+        if (!matchedPeerNames.length) {
+          _noMatchCount++;
+          continue;
+        }
+
+        // NOTE: intentionally no isLikelyIndividualGrantee check here.
+        // Peer-matched grants were fetched via intentional name/EIN searches and
+        // validated by matchedPeerNamesForGrant. Short org names like "Sit Stay Read"
+        // would otherwise be misclassified as person names and silently dropped.
+
+        for (const pn of matchedPeerNames) {
+          if (_peerGrantDebug[pn]) _peerGrantDebug[pn].matched++;
+        }
 
         const rows = grantsByFoundation.get(grant.foundation_id) || [];
         rows.push({ ...grant, matchedPeers: uniqueStrings(matchedPeerNames) });
@@ -2559,6 +2590,7 @@ Deno.serve(async (req) => {
         for (const peerName of matchedPeerNames) peerSet.add(peerName);
         peerSetByFoundation.set(grant.foundation_id, peerSet);
       }
+      peerDebug.grant_loop_stats = { excluded: _excludedCount, noMatch: _noMatchCount, perPeer: _peerGrantDebug };
 
       let foundationIds = [...grantsByFoundation.keys()];
       let locationCandidates: FunderRow[] = [];
