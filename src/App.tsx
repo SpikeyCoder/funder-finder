@@ -9,6 +9,7 @@ import FunderDetail from './pages/FunderDetail';
 import SavedFunders from './pages/SavedFunders';
 import GrantWriter from './pages/GrantWriter';
 import NotFound from './pages/NotFound';
+import BugReportButton from './components/BugReportButton';
 
 // Must match the key used in AuthContext.storePendingFunder
 const REDIRECT_AFTER_LOGIN_KEY = 'ff_redirect_after_login';
@@ -78,6 +79,7 @@ function App() {
       <AnalyticsTracker />
       <AuthProvider>
         <AnimatedRoutes />
+        <BugReportButton />
       </AuthProvider>
     </BrowserRouter>
   );
