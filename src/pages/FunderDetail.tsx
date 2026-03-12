@@ -1,9 +1,9 @@
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Bookmark, BookmarkCheck, Copy, Globe, MapPin, User, Mail, TrendingUp, ChevronDown, ChevronUp, BarChart3, Users, Map } from 'lucide-react';
+import { ArrowLeft, Bookmark, BookmarkCheck, Copy, Globe, MapPin, User, Mail, TrendingUp, ChevronDown, ChevronUp, BarChart3, Users, Map, Loader2 } from 'lucide-react';
 import { Funder, FunderInsights, PeerEntry } from '../types';
 import { isSaved, saveFunder, unsaveFunder } from '../utils/storage';
-import { formatGrantRange, formatTotalGiving, fetchFunderInsights, fetchPeers } from '../utils/matching';
+import { formatGrantRange, formatTotalGiving, fetchFunderInsights, fetchPeers, fetchFunderByEin } from '../utils/matching';
 import { useAuth } from '../contexts/AuthContext';
 import LoginModal from '../components/LoginModal';
 import { GivingTrendsChart, GeoBarChart, StatCard, InsightsSkeleton, fmtDollar } from '../components/InsightCharts';
@@ -20,8 +20,21 @@ export default function FunderDetail() {
   const { funder: funderFromState, mission = '', keywords = [] } = location.state || {};
   const { user, saveFunderToDB, unsaveFunderFromDB } = useAuth();
 
-  // Use funder passed in navigation state (avoids extra DB call)
-  const [funder] = useState<Funder | null>(funderFromState || null);
+  // Use funder passed in navigation state; fall back to API fetch by EIN
+  const [funder, setFunder] = useState<Funder | null>(funderFromState || null);
+  const [funderLoading, setFunderLoading] = useState(!funderFromState && !!id);
+
+  // If no funder passed via state, fetch from Supabase by EIN
+  useEffect(() => {
+    if (funder || !id) return;
+    let cancelled = false;
+    setFunderLoading(true);
+    fetchFunderByEin(id)
+      .then(data => { if (!cancelled) setFunder(data); })
+      .catch(() => { /* leave null — shows not-found */ })
+      .finally(() => { if (!cancelled) setFunderLoading(false); });
+    return () => { cancelled = true; };
+  }, [id, funder]);
   const [saved, setSaved] = useState(false);
   const [copiedEmail, setCopiedEmail] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -87,12 +100,18 @@ export default function FunderDetail() {
     return () => { cancelled = true; };
   }, [funder?.id]);
 
+  if (funderLoading) return (
+    <div className="min-h-screen bg-[#0d1117] text-white flex items-center justify-center">
+      <Loader2 size={28} className="animate-spin text-gray-400" />
+    </div>
+  );
+
   if (!funder) return (
     <div className="min-h-screen bg-[#0d1117] text-white flex items-center justify-center">
       <div className="text-center">
         <p className="text-2xl font-bold mb-4">Funder not found</p>
-        <p className="text-gray-400 text-sm mb-6">Please search for funders first.</p>
-        <button onClick={() => navigate('/mission')} className="text-blue-400 hover:underline">Start a search</button>
+        <p className="text-gray-400 text-sm mb-6">This funder may not be in our database yet.</p>
+        <button onClick={() => navigate('/search')} className="text-blue-400 hover:underline">Search organizations</button>
       </div>
     </div>
   );

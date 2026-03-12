@@ -1,19 +1,63 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { ArrowLeft, MapPin, Calendar, Building2, Users } from 'lucide-react';
-import { RecipientProfile as RecipientProfileType, PeerEntry } from '../types';
+import { ArrowLeft, MapPin, Calendar, Building2, Users, Bookmark, BookmarkCheck } from 'lucide-react';
+import { RecipientProfile as RecipientProfileType, PeerEntry, Funder } from '../types';
 import { fetchRecipientProfile, fetchPeers } from '../utils/matching';
 import { GivingTrendsChart, StatCard, fmtDollar } from '../components/InsightCharts';
+import { useAuth } from '../contexts/AuthContext';
+import { isSaved, saveFunder, unsaveFunder } from '../utils/storage';
+import LoginModal from '../components/LoginModal';
 
 export default function RecipientProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  useAuth(); // hook available for future auth-aware save logic
 
   const [profile, setProfile] = useState<RecipientProfileType | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [peers, setPeers] = useState<PeerEntry[]>([]);
   const [peersLoading, setPeersLoading] = useState(false);
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [showLoginModal, setShowLoginModal] = useState(false);
+
+  // Sync saved funder IDs from localStorage
+  useEffect(() => {
+    const ids = new Set((JSON.parse(localStorage.getItem('savedFunders_v2') || '[]') as Funder[]).map(f => f.id));
+    setSavedIds(ids);
+  }, []);
+
+  const toggleSave = (e: React.MouseEvent, funderId: string, funderName: string) => {
+    e.stopPropagation(); // prevent row click navigation
+    if (isSaved(funderId)) {
+      unsaveFunder(funderId);
+      setSavedIds(prev => { const next = new Set(prev); next.delete(funderId); return next; });
+    } else {
+      // Build a minimal Funder object from the available data
+      const entry = profile?.topFunders.find(f => f.funderId === funderId);
+      const minimalFunder: Funder = {
+        id: funderId,
+        name: funderName,
+        type: 'foundation',
+        description: null,
+        focus_areas: [],
+        ntee_code: null,
+        city: null,
+        state: null,
+        website: null,
+        total_giving: entry?.totalAmount ?? null,
+        asset_amount: null,
+        grant_range_min: null,
+        grant_range_max: null,
+        contact_name: null,
+        contact_title: null,
+        contact_email: null,
+        next_step: null,
+      };
+      saveFunder(minimalFunder);
+      setSavedIds(prev => new Set(prev).add(funderId));
+    }
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -160,7 +204,8 @@ export default function RecipientProfile() {
                       <th className="text-left py-2 pr-3">Funder</th>
                       <th className="text-right py-2 px-2">Total</th>
                       <th className="text-right py-2 px-2">Grants</th>
-                      <th className="text-right py-2 pl-2">Last</th>
+                      <th className="text-right py-2 px-2">Last</th>
+                      <th className="py-2 pl-2 w-8"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -178,7 +223,20 @@ export default function RecipientProfile() {
                         </td>
                         <td className="py-2 px-2 text-right text-gray-300 whitespace-nowrap">{fmtDollar(f.totalAmount)}</td>
                         <td className="py-2 px-2 text-right text-gray-400">{f.grantCount}</td>
-                        <td className="py-2 pl-2 text-right text-gray-400">{f.lastYear}</td>
+                        <td className="py-2 px-2 text-right text-gray-400">{f.lastYear}</td>
+                        <td className="py-2 pl-2 text-center">
+                          <button
+                            onClick={(e) => toggleSave(e, f.funderId, f.funderName)}
+                            className="p-1 rounded hover:bg-white/10 transition-colors"
+                            title={savedIds.has(f.funderId) ? 'Remove from saved' : 'Save funder'}
+                          >
+                            {savedIds.has(f.funderId) ? (
+                              <BookmarkCheck size={14} className="text-blue-400" />
+                            ) : (
+                              <Bookmark size={14} className="text-gray-500 hover:text-gray-300" />
+                            )}
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -254,6 +312,7 @@ export default function RecipientProfile() {
           </button>
         </div>
       </div>
+      {showLoginModal && <LoginModal onClose={() => setShowLoginModal(false)} />}
     </div>
   );
 }

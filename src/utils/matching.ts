@@ -9,6 +9,19 @@ const SEARCH_ORGS_URL = `${SUPABASE_URL}/functions/v1/search-organizations`;
 const RECIPIENT_PROFILE_URL = `${SUPABASE_URL}/functions/v1/get-recipient-profile`;
 const COMPUTE_PEERS_URL = `${SUPABASE_URL}/functions/v1/compute-peers`;
 
+/**
+ * Fetch a single funder row from the `funders` table by its EIN (primary key).
+ * Uses the Supabase REST API (PostgREST) directly — no edge function needed.
+ */
+export async function fetchFunderByEin(ein: string): Promise<Funder | null> {
+  const headers = await getEdgeFunctionHeaders('application/json', { useAnonOnly: true });
+  const url = `${SUPABASE_URL}/rest/v1/funders?id=eq.${encodeURIComponent(ein)}&limit=1`;
+  const res = await fetch(url, { headers });
+  if (!res.ok) return null;
+  const rows: Funder[] = await res.json();
+  return rows.length > 0 ? rows[0] : null;
+}
+
 export interface MatchResponse {
   results: Funder[];
   cached: boolean;
