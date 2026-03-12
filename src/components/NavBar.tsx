@@ -1,6 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useState } from 'react';
-import { Menu, X } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Menu, X, ChevronDown } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import LoginModal from './LoginModal';
 
@@ -10,20 +10,34 @@ export default function NavBar() {
   const { user, loading, signOut } = useAuth();
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountRef = useRef<HTMLDivElement>(null);
 
-  const navLinks = [
-    { label: 'Find Funders', path: '/mission' },
-    { label: 'Browse Database', path: '/search' },
-    { label: 'Saved', path: '/saved' },
-  ];
+  // Close account dropdown on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (accountRef.current && !accountRef.current.contains(e.target as Node)) {
+        setAccountOpen(false);
+      }
+    }
+    if (accountOpen) document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [accountOpen]);
 
   const isActive = (path: string) => location.pathname === path;
+
+  const linkClass = (path: string) =>
+    `px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+      isActive(path)
+        ? 'text-white bg-white/[0.08]'
+        : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
+    }`;
 
   return (
     <>
       <nav className="w-full bg-[#0d1117] border-b border-[#1b2130]">
         <div className="max-w-6xl mx-auto flex items-center justify-between h-16 px-6">
-          {/* Logo */}
+          {/* Logo — left */}
           <button
             onClick={() => navigate('/')}
             className="text-white font-bold text-lg tracking-tight shrink-0 hover:opacity-80 transition-opacity"
@@ -31,42 +45,53 @@ export default function NavBar() {
             FunderMatch
           </button>
 
-          {/* Center nav links — desktop */}
+          {/* Nav items — right aligned, desktop */}
           <div className="hidden md:flex items-center gap-1">
-            {navLinks.map(link => (
-              <button
-                key={link.path}
-                onClick={() => navigate(link.path)}
-                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                  isActive(link.path)
-                    ? 'text-white bg-white/[0.08]'
-                    : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
-                }`}
-              >
-                {link.label}
-              </button>
-            ))}
-          </div>
+            <button onClick={() => navigate('/mission')} className={linkClass('/mission')}>
+              Find Funders
+            </button>
+            <button onClick={() => navigate('/search')} className={linkClass('/search')}>
+              Browse Database
+            </button>
 
-          {/* Right actions — desktop */}
-          <div className="hidden md:flex items-center gap-3 shrink-0">
             {!loading && (
               user ? (
                 <>
-                  <span className="text-xs text-gray-500 max-w-[160px] truncate">
-                    {user.email}
-                  </span>
-                  <button
-                    onClick={signOut}
-                    className="text-sm font-medium text-white bg-white/[0.08] border border-white/[0.12] rounded-lg px-5 py-2 hover:bg-white/[0.14] transition-colors"
-                  >
-                    Sign Out
+                  <button onClick={() => navigate('/saved')} className={linkClass('/saved')}>
+                    Saved Funders
                   </button>
+
+                  {/* Account dropdown */}
+                  <div ref={accountRef} className="relative ml-2">
+                    <button
+                      onClick={() => setAccountOpen(!accountOpen)}
+                      className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-400 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors"
+                    >
+                      <span className="max-w-[140px] truncate">
+                        {user.email?.split('@')[0]}
+                      </span>
+                      <ChevronDown size={14} className={`transition-transform ${accountOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {accountOpen && (
+                      <div className="absolute right-0 top-full mt-1 w-56 bg-[#161b22] border border-[#30363d] rounded-lg shadow-xl py-1 z-50">
+                        <div className="px-4 py-2.5 border-b border-[#30363d]">
+                          <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                        </div>
+                        <button
+                          onClick={() => { signOut(); setAccountOpen(false); }}
+                          className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/[0.06] transition-colors"
+                        >
+                          Sign Out
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </>
               ) : (
                 <button
                   onClick={() => setShowLoginModal(true)}
-                  className="text-sm font-medium text-white bg-white/[0.08] border border-white/[0.12] rounded-lg px-5 py-2 hover:bg-white/[0.14] transition-colors"
+                  className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors"
                 >
                   Sign In
                 </button>
@@ -87,41 +112,55 @@ export default function NavBar() {
         {/* Mobile menu */}
         {mobileOpen && (
           <div className="md:hidden border-t border-[#1b2130] bg-[#0d1117] px-6 pb-4 pt-2 space-y-1">
-            {navLinks.map(link => (
-              <button
-                key={link.path}
-                onClick={() => { navigate(link.path); setMobileOpen(false); }}
-                className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
-                  isActive(link.path)
-                    ? 'text-white bg-white/[0.08]'
-                    : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
-                }`}
-              >
-                {link.label}
-              </button>
-            ))}
-            <div className="pt-2 border-t border-[#1b2130] mt-2">
-              {!loading && (
-                user ? (
-                  <div className="flex items-center justify-between px-3 py-2">
-                    <span className="text-xs text-gray-500 truncate">{user.email}</span>
-                    <button
-                      onClick={() => { signOut(); setMobileOpen(false); }}
-                      className="text-sm font-medium text-gray-300 hover:text-white transition-colors"
-                    >
-                      Sign Out
-                    </button>
-                  </div>
-                ) : (
+            <button
+              onClick={() => { navigate('/mission'); setMobileOpen(false); }}
+              className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
+                isActive('/mission') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
+              }`}
+            >
+              Find Funders
+            </button>
+            <button
+              onClick={() => { navigate('/search'); setMobileOpen(false); }}
+              className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
+                isActive('/search') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
+              }`}
+            >
+              Browse Database
+            </button>
+
+            {!loading && (
+              user ? (
+                <>
                   <button
-                    onClick={() => { setShowLoginModal(true); setMobileOpen(false); }}
-                    className="block w-full text-left px-3 py-2.5 text-sm font-medium text-gray-400 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors"
+                    onClick={() => { navigate('/saved'); setMobileOpen(false); }}
+                    className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
+                      isActive('/saved') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
+                    }`}
                   >
-                    Sign In
+                    Saved Funders
                   </button>
-                )
-              )}
-            </div>
+                  <div className="pt-2 border-t border-[#1b2130] mt-2">
+                    <div className="flex items-center justify-between px-3 py-2">
+                      <span className="text-xs text-gray-500 truncate">{user.email}</span>
+                      <button
+                        onClick={() => { signOut(); setMobileOpen(false); }}
+                        className="text-sm font-medium text-gray-300 hover:text-white transition-colors"
+                      >
+                        Sign Out
+                      </button>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <button
+                  onClick={() => { setShowLoginModal(true); setMobileOpen(false); }}
+                  className="block w-full text-left px-3 py-2.5 text-sm font-medium text-gray-400 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors"
+                >
+                  Sign In
+                </button>
+              )
+            )}
           </div>
         )}
       </nav>
