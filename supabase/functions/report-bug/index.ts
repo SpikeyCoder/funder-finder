@@ -38,6 +38,15 @@ interface BugReportPayload {
   technicalContext: TechnicalContext;
 }
 
+const SUPABASE_STORAGE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co/storage/v1/object/public/bug-screenshots/';
+
+const MAX_DESCRIPTION_LENGTH = 2000;
+
+function isValidScreenshotUrl(url: string): boolean {
+  // Only allow URLs pointing to our own Supabase storage bucket
+  return url.startsWith(SUPABASE_STORAGE_URL);
+}
+
 function buildCardDescription(payload: BugReportPayload): string {
   const { description, technicalContext: ctx } = payload;
   const lines: string[] = [description, '', '---'];
@@ -86,6 +95,20 @@ Deno.serve(async (req) => {
         status: 400,
         headers: { ...cors, 'Content-Type': 'application/json' },
       });
+    }
+
+    // Server-side length cap
+    if (payload.description.length > MAX_DESCRIPTION_LENGTH) {
+      return new Response(JSON.stringify({ error: 'Description too long' }), {
+        status: 400,
+        headers: { ...cors, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Validate screenshotUrl — only allow our own Supabase storage URLs (prevents SSRF)
+    if (payload.screenshotUrl && !isValidScreenshotUrl(payload.screenshotUrl)) {
+      console.warn('Rejected invalid screenshotUrl:', payload.screenshotUrl);
+      payload.screenshotUrl = null; // Silently drop invalid URL, still create the card
     }
 
     // Build Trello card
@@ -162,7 +185,7 @@ Deno.serve(async (req) => {
   } catch (err) {
     console.error('report-bug error:', err);
     return new Response(
-      JSON.stringify({ error: err instanceof Error ? err.message : 'Internal server error' }),
+      JSON.stringify({ error: 'Internal server error' }),
       {
         status: 500,
         headers: { ...cors, 'Content-Type': 'application/json' },
