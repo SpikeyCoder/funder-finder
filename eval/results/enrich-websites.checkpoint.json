@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "updated_at": "2026-03-12T20:39:22.631Z",
+  "last_id": "046256494",
+  "processed": 10010,
+  "updated": 368,
+  "not_found": 9633,
+  "errors": 0,
+  "sources": {
+    "ProPublica": 0,
+    "KnowledgeGraph": 374,
+    "WebSearch": 3
+  },
+  "dry_run": false
+}
