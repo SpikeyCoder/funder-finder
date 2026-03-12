@@ -269,7 +269,7 @@ Deno.serve(async (req) => {
           console.error('Stream error:', err);
           send(
             sseEvent({
-              error: err instanceof Error ? err.message : 'Generation failed',
+              error: 'Generation failed',
             }),
           );
           send(sseDone());
@@ -284,7 +284,7 @@ Deno.serve(async (req) => {
     console.error('Request error:', err);
     return new Response(
       JSON.stringify({
-        error: err instanceof Error ? err.message : 'Internal error',
+        error: 'Internal server error',
       }),
       { status: 500, headers: corsHeaders(origin) },
     );

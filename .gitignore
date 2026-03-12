@@ -34,6 +34,10 @@ dist-ssr
 secrets.json
 service-account*.json
 
+# Enrichment / data pipeline logs
+enrichment-log.txt
+FILE_MANIFEST.txt
+
 # Supabase local dev artifacts
 supabase/.branches
 supabase/.temp

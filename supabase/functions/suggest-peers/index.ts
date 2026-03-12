@@ -456,7 +456,7 @@ Deno.serve(async (req: Request) => {
     console.error('[suggest-peers] Unhandled error:', String(err));
     console.error('[suggest-peers] Stack:', (err as Error)?.stack || 'no stack');
     return new Response(
-      JSON.stringify({ error: 'Internal server error', detail: String(err) }),
+      JSON.stringify({ error: 'Internal server error' }),
       {
         status: 500,
         headers: {

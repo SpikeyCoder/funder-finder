@@ -210,9 +210,8 @@ Deno.serve(async (req) => {
       headers: { ...headers, 'Content-Type': 'application/json' },
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
     console.error('log-search-signal error:', err);
-    return new Response(JSON.stringify({ error: message }), {
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
       status: 500,
       headers: { ...headers, 'Content-Type': 'application/json' },
     });
