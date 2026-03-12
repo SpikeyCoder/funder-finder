@@ -1,9 +1,13 @@
-import { BudgetBand, Funder } from '../types';
+import { BudgetBand, Funder, FunderInsights, OrgSearchResult, PeerEntry, RecipientProfile } from '../types';
 import { getEdgeFunctionHeaders } from '../lib/supabase';
 
 const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const EDGE_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/match-funders`;
 const SUGGEST_PEERS_URL = `${SUPABASE_URL}/functions/v1/suggest-peers`;
+const FUNDER_INSIGHTS_URL = `${SUPABASE_URL}/functions/v1/get-funder-990-insights`;
+const SEARCH_ORGS_URL = `${SUPABASE_URL}/functions/v1/search-organizations`;
+const RECIPIENT_PROFILE_URL = `${SUPABASE_URL}/functions/v1/get-recipient-profile`;
+const COMPUTE_PEERS_URL = `${SUPABASE_URL}/functions/v1/compute-peers`;
 
 export interface MatchResponse {
   results: Funder[];
@@ -59,6 +63,78 @@ export async function suggestPeers(
 
   const data = await res.json();
   return { peers: Array.isArray(data.peers) ? data.peers : [] };
+}
+
+export async function fetchFunderInsights(funderId: string): Promise<FunderInsights> {
+  const headers = await getEdgeFunctionHeaders('application/json', { useAnonOnly: true });
+  const res = await fetch(FUNDER_INSIGHTS_URL, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ funderId }),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Server error (${res.status})`);
+  }
+
+  return res.json();
+}
+
+export async function searchOrganizations(query: string, limit = 15): Promise<OrgSearchResult[]> {
+  const headers = await getEdgeFunctionHeaders('application/json', { useAnonOnly: true });
+  const res = await fetch(SEARCH_ORGS_URL, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ query, limit }),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Server error (${res.status})`);
+  }
+
+  const data = await res.json();
+  return Array.isArray(data.results) ? data.results : [];
+}
+
+export async function fetchRecipientProfile(
+  recipientId?: string,
+  ein?: string,
+): Promise<RecipientProfile> {
+  const headers = await getEdgeFunctionHeaders('application/json', { useAnonOnly: true });
+  const res = await fetch(RECIPIENT_PROFILE_URL, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ recipientId, ein }),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Server error (${res.status})`);
+  }
+
+  return res.json();
+}
+
+export async function fetchPeers(
+  entityType: 'funder' | 'recipient',
+  entityId: string,
+): Promise<PeerEntry[]> {
+  const headers = await getEdgeFunctionHeaders('application/json', { useAnonOnly: true });
+  const res = await fetch(COMPUTE_PEERS_URL, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ entityType, entityId }),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Server error (${res.status})`);
+  }
+
+  const data = await res.json();
+  return Array.isArray(data.peers) ? data.peers : [];
 }
 
 export function formatGrantRange(funder: Funder): string {

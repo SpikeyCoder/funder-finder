@@ -1,11 +1,12 @@
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Bookmark, BookmarkCheck, Copy, Globe, MapPin, User, Mail, TrendingUp } from 'lucide-react';
-import { Funder } from '../types';
+import { ArrowLeft, Bookmark, BookmarkCheck, Copy, Globe, MapPin, User, Mail, TrendingUp, ChevronDown, ChevronUp, BarChart3, Users, Map } from 'lucide-react';
+import { Funder, FunderInsights, PeerEntry } from '../types';
 import { isSaved, saveFunder, unsaveFunder } from '../utils/storage';
-import { formatGrantRange, formatTotalGiving } from '../utils/matching';
+import { formatGrantRange, formatTotalGiving, fetchFunderInsights, fetchPeers } from '../utils/matching';
 import { useAuth } from '../contexts/AuthContext';
 import LoginModal from '../components/LoginModal';
+import { GivingTrendsChart, GeoBarChart, StatCard, InsightsSkeleton, fmtDollar } from '../components/InsightCharts';
 
 function formatGrantAmount(amount: number | null | undefined): string {
   if (!amount || !Number.isFinite(amount)) return 'Amount not disclosed';
@@ -24,6 +25,19 @@ export default function FunderDetail() {
   const [saved, setSaved] = useState(false);
   const [copiedEmail, setCopiedEmail] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
+
+  // 990 Intelligence state
+  const [insights, setInsights] = useState<FunderInsights | null>(null);
+  const [insightsLoading, setInsightsLoading] = useState(false);
+  const [insightsError, setInsightsError] = useState<string | null>(null);
+  const [peers, setPeers] = useState<PeerEntry[]>([]);
+  const [peersLoading, setPeersLoading] = useState(false);
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    trends: true, grantees: false, geo: false, recipients: false, peers: false,
+  });
+
+  const toggleSection = (key: string) =>
+    setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }));
 
   // Page title — use funder name when available
   useEffect(() => {
@@ -47,6 +61,31 @@ export default function FunderDetail() {
       }
     }
   }, [id, user]);
+
+  // Fetch 990 insights when funder loads
+  useEffect(() => {
+    if (!funder?.id) return;
+    let cancelled = false;
+    setInsightsLoading(true);
+    setInsightsError(null);
+    fetchFunderInsights(funder.id)
+      .then(data => { if (!cancelled) setInsights(data); })
+      .catch(err => { if (!cancelled) setInsightsError(err.message || 'Failed to load insights'); })
+      .finally(() => { if (!cancelled) setInsightsLoading(false); });
+    return () => { cancelled = true; };
+  }, [funder?.id]);
+
+  // Fetch similar funders (peers)
+  useEffect(() => {
+    if (!funder?.id) return;
+    let cancelled = false;
+    setPeersLoading(true);
+    fetchPeers('funder', funder.id)
+      .then(data => { if (!cancelled) setPeers(data); })
+      .catch(() => { /* silent */ })
+      .finally(() => { if (!cancelled) setPeersLoading(false); });
+    return () => { cancelled = true; };
+  }, [funder?.id]);
 
   if (!funder) return (
     <div className="min-h-screen bg-[#0d1117] text-white flex items-center justify-center">
@@ -214,6 +253,204 @@ export default function FunderDetail() {
                     </div>
                   )}
                 </div>
+              </div>
+              <hr className="border-[#30363d] mb-6" />
+            </>
+          )}
+
+          {/* ── 990 Intelligence Sections ── */}
+          {insightsLoading && <InsightsSkeleton />}
+          {insightsError && (
+            <div className="mb-6 text-sm text-gray-500 italic">
+              990 data unavailable: {insightsError}
+            </div>
+          )}
+          {insights && insights.grantHistory.yearTrend.length > 0 && (
+            <>
+              {/* Section 1: Giving Trends */}
+              <div className="mb-6">
+                <button
+                  onClick={() => toggleSection('trends')}
+                  className="flex items-center justify-between w-full mb-3 group"
+                >
+                  <div className="flex items-center gap-2">
+                    <BarChart3 size={16} className="text-blue-400" />
+                    <h2 className="text-lg font-semibold">990 Giving Trends</h2>
+                  </div>
+                  {expandedSections.trends ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+                </button>
+                {expandedSections.trends && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-3 gap-3">
+                      <StatCard label="Total Grants" value={insights.grantHistory.totalGrants.toLocaleString()} />
+                      <StatCard label="Total Given" value={fmtDollar(insights.grantHistory.totalAmount)} color="text-blue-400" />
+                      <StatCard
+                        label="Avg Grant"
+                        value={fmtDollar(
+                          insights.grantHistory.totalGrants > 0
+                            ? insights.grantHistory.totalAmount / insights.grantHistory.totalGrants
+                            : 0
+                        )}
+                      />
+                    </div>
+                    <div className="bg-[#0d1117] border border-[#30363d] rounded-xl p-4">
+                      <GivingTrendsChart data={insights.grantHistory.yearTrend} />
+                    </div>
+                    <p className="text-xs text-gray-500">Source: IRS 990-PF filings, 2015–present</p>
+                  </div>
+                )}
+              </div>
+              <hr className="border-[#30363d] mb-6" />
+
+              {/* Section 2: Grantee Patterns */}
+              <div className="mb-6">
+                <button
+                  onClick={() => toggleSection('grantees')}
+                  className="flex items-center justify-between w-full mb-3 group"
+                >
+                  <div className="flex items-center gap-2">
+                    <Users size={16} className="text-green-400" />
+                    <h2 className="text-lg font-semibold">Grantee Patterns</h2>
+                  </div>
+                  {expandedSections.grantees ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+                </button>
+                {expandedSections.grantees && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <StatCard label="Total Grantees (5yr)" value={insights.granteeAnalysis.totalGrantees5y.toLocaleString()} />
+                    <StatCard label="New Grantees" value={insights.granteeAnalysis.newGrantees.toLocaleString()} color="text-green-400" />
+                    <StatCard label="Repeat Grantees" value={insights.granteeAnalysis.repeatGrantees.toLocaleString()} color="text-blue-400" />
+                    <StatCard
+                      label="Repeat Rate"
+                      value={`${insights.granteeAnalysis.pctRepeat}%`}
+                      color={insights.granteeAnalysis.pctRepeat >= 50 ? 'text-green-400' : 'text-yellow-400'}
+                    />
+                  </div>
+                )}
+              </div>
+              <hr className="border-[#30363d] mb-6" />
+
+              {/* Section 3: Geographic Footprint */}
+              {insights.geographicFootprint.length > 0 && (
+                <>
+                  <div className="mb-6">
+                    <button
+                      onClick={() => toggleSection('geo')}
+                      className="flex items-center justify-between w-full mb-3 group"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Map size={16} className="text-purple-400" />
+                        <h2 className="text-lg font-semibold">Geographic Footprint</h2>
+                      </div>
+                      {expandedSections.geo ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+                    </button>
+                    {expandedSections.geo && (
+                      <div className="bg-[#0d1117] border border-[#30363d] rounded-xl p-4">
+                        <GeoBarChart data={insights.geographicFootprint} />
+                      </div>
+                    )}
+                  </div>
+                  <hr className="border-[#30363d] mb-6" />
+                </>
+              )}
+
+              {/* Section 4: Key Recipients */}
+              {insights.keyRecipients.length > 0 && (
+                <>
+                  <div className="mb-6">
+                    <button
+                      onClick={() => toggleSection('recipients')}
+                      className="flex items-center justify-between w-full mb-3 group"
+                    >
+                      <div className="flex items-center gap-2">
+                        <TrendingUp size={16} className="text-yellow-400" />
+                        <h2 className="text-lg font-semibold">Key Recipients</h2>
+                      </div>
+                      {expandedSections.recipients ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+                    </button>
+                    {expandedSections.recipients && (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-gray-400 text-xs border-b border-[#30363d]">
+                              <th className="text-left py-2 pr-3">Recipient</th>
+                              <th className="text-right py-2 px-2">Total</th>
+                              <th className="text-right py-2 px-2">Grants</th>
+                              <th className="text-right py-2 pl-2">Last</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {insights.keyRecipients.map((r, i) => (
+                              <tr key={`${r.granteeEin || i}`} className="border-b border-[#30363d]/50 hover:bg-[#21262d]/30">
+                                <td className="py-2 pr-3 text-gray-200 max-w-[200px] truncate">{r.granteeName}</td>
+                                <td className="py-2 px-2 text-right text-gray-300 whitespace-nowrap">{fmtDollar(r.totalAmount)}</td>
+                                <td className="py-2 px-2 text-right text-gray-400">{r.grantCount}</td>
+                                <td className="py-2 pl-2 text-right text-gray-400">{r.lastYear}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                  <hr className="border-[#30363d] mb-6" />
+                </>
+              )}
+            </>
+          )}
+
+          {/* Section 5: Similar Funders (Peers) */}
+          {(peers.length > 0 || peersLoading) && (
+            <>
+              <div className="mb-6">
+                <button
+                  onClick={() => toggleSection('peers')}
+                  className="flex items-center justify-between w-full mb-3 group"
+                >
+                  <div className="flex items-center gap-2">
+                    <Users size={16} className="text-cyan-400" />
+                    <h2 className="text-lg font-semibold">Similar Funders</h2>
+                  </div>
+                  {expandedSections.peers ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+                </button>
+                {expandedSections.peers && (
+                  peersLoading ? (
+                    <div className="space-y-2">
+                      {[1,2,3].map(i => <div key={i} className="h-12 bg-[#21262d] rounded-xl animate-pulse" />)}
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-gray-400 text-xs border-b border-[#30363d]">
+                            <th className="text-left py-2 pr-3">Funder</th>
+                            <th className="text-right py-2 px-2">Shared Recipients</th>
+                            <th className="text-right py-2 px-2">State</th>
+                            <th className="text-right py-2 pl-2">Similarity</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {peers.map((p, i) => (
+                            <tr
+                              key={`${p.id}-${i}`}
+                              className="border-b border-[#30363d]/50 hover:bg-[#21262d]/30 cursor-pointer"
+                              onClick={() => navigate(`/funder/${p.id}`, { state: { funder: { id: p.id, name: p.name, state: p.state } as Funder } })}
+                            >
+                              <td className="py-2 pr-3 text-gray-200 max-w-[200px] truncate">{p.name}</td>
+                              <td className="py-2 px-2 text-right text-gray-400">{p.sharedCount}</td>
+                              <td className="py-2 px-2 text-right text-gray-400">{p.state || '—'}</td>
+                              <td className="py-2 pl-2 text-right">
+                                <span className={`text-xs font-medium ${p.score >= 0.3 ? 'text-green-400' : p.score >= 0.15 ? 'text-yellow-400' : 'text-gray-400'}`}>
+                                  {Math.round(p.score * 100)}%
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <p className="text-xs text-gray-500 mt-2">Based on shared grant recipients over the last 5 years</p>
+                    </div>
+                  )
+                )}
               </div>
               <hr className="border-[#30363d] mb-6" />
             </>

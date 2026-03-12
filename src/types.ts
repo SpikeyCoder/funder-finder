@@ -80,3 +80,105 @@ export interface OrgDetails {
   outcomes: string;
   timeline: string;
 }
+
+// ── 990 Intelligence types ──────────────────────────────────────────────────
+
+export interface YearTrend {
+  year: number;
+  grantCount: number;
+  totalAmount: number;
+  avgGrant: number;
+}
+
+export interface GranteeAnalysis {
+  totalGrantees5y: number;
+  newGrantees: number;
+  repeatGrantees: number;
+  pctRepeat: number;
+}
+
+export interface GeoEntry {
+  state: string;
+  grantCount: number;
+  totalAmount: number;
+  pctOfGrants: number;
+}
+
+export interface KeyRecipient {
+  granteeEin: string | null;
+  granteeName: string;
+  grantCount: number;
+  totalAmount: number;
+  lastYear: number;
+}
+
+export interface FunderInsights {
+  funderId: string;
+  grantHistory: {
+    totalGrants: number;
+    totalAmount: number;
+    yearTrend: YearTrend[];
+  };
+  granteeAnalysis: GranteeAnalysis;
+  geographicFootprint: GeoEntry[];
+  keyRecipients: KeyRecipient[];
+  dataQuality: {
+    completenessScore: number;
+    totalRecords: number;
+  };
+}
+
+// ── Organization Search & Recipient Profile types ───────────────────────────
+
+export interface OrgSearchResult {
+  id: string;
+  ein: string | null;
+  name: string;
+  state: string | null;
+  entity_type: 'funder' | 'recipient';
+  grant_count: number;
+  total_funding: number;
+}
+
+export interface RecipientFunderEntry {
+  funderId: string;
+  funderName: string;
+  grantCount: number;
+  totalAmount: number;
+  lastYear: number;
+}
+
+export interface RecipientYearTrend {
+  year: number;
+  grantCount: number;
+  totalAmount: number;
+  funderCount: number;
+}
+
+export interface RecipientProfile {
+  id: string;
+  ein: string | null;
+  name: string;
+  location: { city: string | null; state: string | null };
+  fundingSummary: {
+    totalFunding: number;
+    grantCount: number;
+    funderCount: number;
+    firstGrantYear: number | null;
+    lastGrantYear: number | null;
+  };
+  yearlyTrends: RecipientYearTrend[];
+  topFunders: RecipientFunderEntry[];
+  ntee_codes: string[];
+}
+
+// ── Peer Intelligence types ─────────────────────────────────────────────────
+
+export interface PeerEntry {
+  id: string;
+  name: string;
+  score: number;
+  sharedCount: number;
+  state: string | null;
+  totalFunding: number | null;
+}

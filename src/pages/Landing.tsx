@@ -26,6 +26,12 @@ export default function Landing() {
             <div className="flex items-center gap-3">
               <span className="text-sm text-gray-400 hidden sm:block">{user.email}</span>
               <button
+                onClick={() => navigate('/search')}
+                className="text-sm text-gray-300 hover:text-white transition-colors"
+              >
+                Browse Database
+              </button>
+              <button
                 onClick={() => navigate('/saved')}
                 className="text-sm text-gray-300 hover:text-white transition-colors"
               >
@@ -39,12 +45,20 @@ export default function Landing() {
               </button>
             </div>
           ) : (
-            <button
-              onClick={() => setShowLoginModal(true)}
-              className="text-sm font-medium text-white bg-[#21262d] border border-[#30363d] rounded-lg px-4 py-2 hover:bg-[#30363d] transition-colors"
-            >
-              Log In
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => navigate('/search')}
+                className="text-sm text-gray-300 hover:text-white transition-colors"
+              >
+                Browse Database
+              </button>
+              <button
+                onClick={() => setShowLoginModal(true)}
+                className="text-sm font-medium text-white bg-[#21262d] border border-[#30363d] rounded-lg px-4 py-2 hover:bg-[#30363d] transition-colors"
+              >
+                Log In
+              </button>
+            </div>
           )
         )}
       </div>

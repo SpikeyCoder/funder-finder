@@ -8,6 +8,8 @@ import Results from './pages/Results';
 import FunderDetail from './pages/FunderDetail';
 import SavedFunders from './pages/SavedFunders';
 import GrantWriter from './pages/GrantWriter';
+import OrgSearchPage from './pages/OrgSearchPage';
+import RecipientProfile from './pages/RecipientProfile';
 import NotFound from './pages/NotFound';
 import BugReportButton from './components/BugReportButton';
 
@@ -65,6 +67,8 @@ function AnimatedRoutes() {
         <Route path="/funder/:id" element={<FunderDetail />} />
         <Route path="/saved" element={<SavedFunders />} />
         <Route path="/grant-writer" element={<GrantWriter />} />
+        <Route path="/search" element={<OrgSearchPage />} />
+        <Route path="/recipient/:id" element={<RecipientProfile />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </div>
