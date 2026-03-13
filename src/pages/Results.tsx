@@ -7,7 +7,7 @@ import NavBar from '../components/NavBar';
 // e.g. "https://spikeycoder.github.io/funder-finder/funder/cct.org"
 const STALE_GH_FUNDER_RE = /^https?:\/\/[^/]*\.github\.io\/[^/]+\/funder\//;
 
-/** Normalise a URL string to a fully-qualified external URL, or null.
+/** Normalise a URL string to a fully-qalified external URL, or null.
  *  - Stale GitHub Pages internal funder URLs: prefix stripped, domain extracted
  *  - Starts with '/': internal app route → rejected (returns null)
  *  - Bare domain like "cct.org": https:// prepended
@@ -30,7 +30,8 @@ function resolveNextStepUrl(nextStepUrl: string | undefined, website: string | n
 }
 import { findMatches, formatGrantRange, formatTotalGiving } from '../utils/matching';
 import { BudgetBand, Funder } from '../types';
-import { getSavedIds, unsaveFunder } from '../utils/storage';
+import { getSavedIds, saveFunder, unsaveFunder } from '../utils/storage';
+import Toast from '../components/Toast';
 import { useAuth } from '../contexts/AuthContext';
 import LoginModal from '../components/LoginModal';
 import {
@@ -115,8 +116,9 @@ export default function Results() {
   const searchTelemetryRef = useRef<SearchTelemetryContext | null>(null);
   const searchSessionIdRef = useRef<string>(getOrCreateSearchSessionId());
 
-  // Login modal state
+  // Login modal + toast state
   const [loginModalFunder, setLoginModalFunder] = useState<Funder | null>(null);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [showPeerEditor, setShowPeerEditor] = useState(false);
   const keywordKey = keywords.join('|');
   const peerKey = activePeerNonprofits.join('|');
@@ -311,8 +313,10 @@ export default function Results() {
         setSavedIds(prev => prev.filter(i => i !== funder.id));
         logResultSignal('result_unsaved', funder, { anonymous: true });
       } else {
-        // Prompt login; the funder will be auto-saved after OAuth redirect
-        setLoginModalFunder(funder);
+        saveFunder(funder);
+        setSavedIds(prev => [...prev, funder.id]);
+        logResultSignal('result_saved', funder, { anonymous: true });
+        setToastMsg('Funder saved! Log in to sync across devices.');
       }
     }
   };
@@ -867,12 +871,21 @@ export default function Results() {
         )}
       </div>
 
-      {/* Login modal — shown when anonymous user tries to save */}
+      {/* Login modal — shown when user explicitly clicks login */}
       {loginModalFunder && (
         <LoginModal
           pendingFunder={loginModalFunder}
           onClose={() => setLoginModalFunder(null)}
         />
+      {/* Toast — non-blocking hint to log in for cloud sync */}
+      {toastMsg && (
+        <Toast
+          message={toastMsg}
+          action={{ label: 'Log in', onClick: () => { setToastMsg(null); setLoginModalFunder({} as Funder); } }}
+          onClose={() => setToastMsg(null)}
+        />
+      )}
+
       )}
     </div>
   );
