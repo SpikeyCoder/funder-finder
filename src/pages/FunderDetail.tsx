@@ -6,6 +6,7 @@ import { isSaved, saveFunder, unsaveFunder } from '../utils/storage';
 import { formatGrantRange, formatTotalGiving, fetchFunderInsights, fetchPeers, fetchFunderByEin } from '../utils/matching';
 import { useAuth } from '../contexts/AuthContext';
 import LoginModal from '../components/LoginModal';
+import Toast from '../components/Toast';
 import { GivingTrendsChart, GeoBarChart, GeoHeatMap, StatCard, InsightsSkeleton, fmtDollar } from '../components/InsightCharts';
 
 /** Classify giving trend as increasing / stable / decreasing (FEAT-006) */
@@ -54,6 +55,7 @@ export default function FunderDetail() {
   const [saved, setSaved] = useState(false);
   const [copiedEmail, setCopiedEmail] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   // 990 Intelligence state
   const [insights, setInsights] = useState<FunderInsights | null>(null);
@@ -160,8 +162,9 @@ export default function FunderDetail() {
         unsaveFunder(funder.id);
         setSaved(false);
       } else {
-        // Show login modal; funder will be auto-saved after OAuth redirect
-        setShowLoginModal(true);
+        saveFunder(funder);
+        setSaved(true);
+        setToastMsg('Funder saved! Log in to sync across devices.');
       }
     }
   };
@@ -713,12 +716,21 @@ export default function FunderDetail() {
         </div>
       </div>
 
-      {/* Login modal — shown when anonymous user tries to save */}
+      {/* Login modal — shown when user explicitly clicks login */}
       {showLoginModal && (
         <LoginModal
           pendingFunder={funder}
           onClose={() => setShowLoginModal(false)}
         />
+      {/* Toast — non-blocking hint to log in for cloud sync */}
+      {toastMsg && (
+        <Toast
+          message={toastMsg}
+          action={{ label: 'Log in', onClick: () => { setToastMsg(null); setShowLoginModal(true); } }}
+          onClose={() => setToastMsg(null)}
+        />
+      )}
+
       )}
     </div>
   );
