@@ -728,6 +728,10 @@ export default function FunderDetail() {
       {toastMsg && (
         <Toast
           message={toastMsg}
-          action={{ label: 'Log in', onClick: () => { setToastMsg(null); setShowLoginModal(traction={{ label: 'Log in', onClick: handleToastLogin }}v>
+          action={{ label: 'Log in', onClick: handleToastLogin }}
+          onClose={() => setToastMsg(null)}
+        />
+      )}
+    </>
   );
 }
