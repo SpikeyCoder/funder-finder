@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       # Delete lockfile before install so npm resolves platform-specific optional
       # deps (e.g. @rollup/rollup-linux-x64-gnu) correctly on the CI runner.
       # The lockfile is committed for Dependabot scanning but intentionally

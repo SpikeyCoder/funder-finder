@@ -461,7 +461,6 @@ export default function SavedFunders() {
             )}
           </>
         )}
-      </div>
 
         {/* FEAT-008: Peer Recommendations */}
         {entries.length > 0 && (peerRecs.length > 0 || peersLoading) && (
