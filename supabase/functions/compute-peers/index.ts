@@ -1,9 +1,11 @@
 /**
  * compute-peers — Supabase Edge Function
  *
- * Finds similar funders by analysing shared grantees over the last 5 years.
- * Uses a multi-signal approach: shared recipients (Jaccard), geographic
- * proximity, and revenue similarity.
+ * Finds similar funders/recipients using multi-signal scoring:
+ * - Shared grantees/funders overlap (Jaccard-like)
+ * - Geographic proximity (state + census region)
+ * - Budget/revenue similarity (log-scale)
+ * - NTEE code match (funders only — recipient ntee_codes currently unpopulated)
  *
  * Input:  { entityType: 'funder'|'recipient', entityId: string }
  * Output: { peers: PeerEntry[] }
@@ -21,7 +23,7 @@ const ALLOWED_ORIGINS = new Set([
 
 const RECENT_YEARS = 5;
 const MAX_PEERS = 10;
-const MIN_SHARED = 2; // need at least 2 shared grantees to be a peer
+const MIN_SHARED = 2; // need at least 2 shared entities to be a peer
 
 function corsHeaders(requestOrigin: string | null): Record<string, string> {
   const origin =
@@ -67,6 +69,27 @@ interface FunderRow {
   ntee_code: string | null;
 }
 
+interface RecipientRow {
+  id: string;
+  ein: string;
+  name: string;
+  primary_state: string | null;
+  total_funding: number | null;
+  funder_count: number | null;
+}
+
+// US Census regions for geographic proximity — shared by both funder & recipient paths
+const STATE_REGION: Record<string, string> = {
+  CT: 'NE', ME: 'NE', MA: 'NE', NH: 'NE', RI: 'NE', VT: 'NE',
+  NJ: 'NE', NY: 'NE', PA: 'NE',
+  IL: 'MW', IN: 'MW', MI: 'MW', OH: 'MW', WI: 'MW',
+  IA: 'MW', KS: 'MW', MN: 'MW', MO: 'MW', NE: 'MW', ND: 'MW', SD: 'MW',
+  DE: 'SO', FL: 'SO', GA: 'SO', MD: 'SO', NC: 'SO', SC: 'SO', VA: 'SO', WV: 'SO', DC: 'SO',
+  AL: 'SO', KY: 'SO', MS: 'SO', TN: 'SO', AR: 'SO', LA: 'SO', OK: 'SO', TX: 'SO',
+  AZ: 'WE', CO: 'WE', ID: 'WE', MT: 'WE', NV: 'WE', NM: 'WE', UT: 'WE', WY: 'WE',
+  AK: 'WE', CA: 'WE', HI: 'WE', OR: 'WE', WA: 'WE',
+};
+
 Deno.serve(async (req) => {
   const headers = corsHeaders(req.headers.get('origin'));
 
@@ -102,14 +125,28 @@ Deno.serve(async (req) => {
     // ── Recipient peers: find other recipients who share funders ──────────
     if (entityType === 'recipient') {
       // entityId is the recipient's UUID (from recipient_organizations) or EIN
-      // Step 1: Resolve EIN — if entityId looks like a UUID, look it up
+      // Step 1: Resolve recipient details (EIN, state, funding) for multi-factor scoring
       let recipientEin = entityId;
+      let sourceState: string | null = null;
+      let sourceFunding: number | null = null;
+
       if (entityId.includes('-') && entityId.length > 20) {
+        // UUID — look up from recipient_organizations
         const recipientRows = (await restQuery(
           'recipient_organizations',
-          `id=eq.${encodeURIComponent(entityId)}&select=ein&limit=1`,
-        )) as Array<{ ein: string | null }>;
+          `id=eq.${encodeURIComponent(entityId)}&select=ein,primary_state,total_funding&limit=1`,
+        )) as Array<{ ein: string | null; primary_state: string | null; total_funding: number | null }>;
         recipientEin = recipientRows[0]?.ein || '';
+        sourceState = recipientRows[0]?.primary_state?.toUpperCase() || null;
+        sourceFunding = recipientRows[0]?.total_funding ?? null;
+      } else {
+        // EIN — look up state and funding
+        const recipientRows = (await restQuery(
+          'recipient_organizations',
+          `ein=eq.${encodeURIComponent(entityId)}&select=ein,primary_state,total_funding&limit=1`,
+        )) as Array<{ ein: string | null; primary_state: string | null; total_funding: number | null }>;
+        sourceState = recipientRows[0]?.primary_state?.toUpperCase() || null;
+        sourceFunding = recipientRows[0]?.total_funding ?? null;
       }
 
       if (!recipientEin) {
@@ -152,45 +189,95 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Step 4: Score by Jaccard of shared funders
-      const recipientScored: Array<{ ein: string; sharedCount: number; score: number }> = [];
+      // Step 4: Pre-filter candidates with minimum shared funders, take top 50 for enrichment
+      const recipientCandidates: Array<{ ein: string; sharedCount: number; sharedSet: Set<string> }> = [];
       for (const [ein, sharedFunderSet] of peerShared) {
-        if (sharedFunderSet.size < 1) continue;
-        const score = sharedFunderSet.size / myFunders.size;
-        recipientScored.push({ ein, sharedCount: sharedFunderSet.size, score });
+        if (sharedFunderSet.size < MIN_SHARED) continue;
+        recipientCandidates.push({ ein, sharedCount: sharedFunderSet.size, sharedSet: sharedFunderSet });
       }
-      recipientScored.sort((a, b) => b.score - a.score);
-      const topRecipients = recipientScored.slice(0, MAX_PEERS);
 
-      if (topRecipients.length === 0) {
+      if (recipientCandidates.length === 0) {
         return new Response(JSON.stringify({ peers: [] }), {
           headers: { ...headers, 'Content-Type': 'application/json' },
         });
       }
 
-      // Enrich from recipient_organizations
-      const rEins = topRecipients.map(r => r.ein);
+      // Sort by raw shared count and take top 50 for enrichment
+      recipientCandidates.sort((a, b) => b.sharedCount - a.sharedCount);
+      const enrichPool = recipientCandidates.slice(0, 50);
+
+      // Step 5: Enrich from recipient_organizations for multi-factor scoring
+      const rEins = enrichPool.map(r => r.ein);
       const rFilter = `(${rEins.map(e => `"${e}"`).join(',')})`;
       const recipientRows = (await restQuery(
         'recipient_organizations',
-        `ein=in.${rFilter}&select=id,ein,name,primary_state,total_funding&limit=${MAX_PEERS}`,
-      )) as Array<{ id: string; ein: string; name: string; primary_state: string | null; total_funding: number | null }>;
+        `ein=in.${rFilter}&select=id,ein,name,primary_state,total_funding,funder_count&limit=50`,
+      )) as RecipientRow[];
       const rLookup = new Map(recipientRows.map(r => [r.ein, r]));
 
-      const peers = topRecipients
+      // Step 6: Multi-factor scoring for recipient peers
+      // Signal 1: Shared funders overlap (40%) — geometric mean normalization
+      // Signal 2: Geographic proximity (30%) — same state=1.0, same region=0.5
+      // Signal 3: Budget/funding proximity (30%) — log-scale comparison
+      // (NTEE codes omitted — currently unpopulated for recipients)
+
+      const R_WEIGHT_SHARED = 0.40;
+      const R_WEIGHT_GEO    = 0.30;
+      const R_WEIGHT_BUDGET = 0.30;
+
+      const scored = enrichPool
         .map(c => {
           const r = rLookup.get(c.ein);
           if (!r) return null;
+
+          // Signal 1: Shared funders — geometric mean normalization
+          // sharedCount / sqrt(myFunders * peerFunders) gives a balanced Jaccard-like score
+          const peerFunderCount = r.funder_count && r.funder_count > 0 ? r.funder_count : c.sharedCount;
+          const denominator = Math.sqrt(myFunders.size * peerFunderCount);
+          const sharedScore = denominator > 0 ? Math.min(c.sharedCount / denominator, 1.0) : 0;
+
+          // Signal 2: Geographic proximity
+          let geoScore = 0;
+          const peerState = r.primary_state?.toUpperCase() || null;
+          if (sourceState && peerState) {
+            if (sourceState === peerState) {
+              geoScore = 1.0;
+            } else {
+              const srcRegion = STATE_REGION[sourceState];
+              const peerRegion = STATE_REGION[peerState];
+              if (srcRegion && peerRegion && srcRegion === peerRegion) {
+                geoScore = 0.5;
+              }
+            }
+          }
+
+          // Signal 3: Budget/funding proximity (log-scale)
+          let budgetScore = 0.5; // default if data missing
+          if (sourceFunding && sourceFunding > 0 && r.total_funding && r.total_funding > 0) {
+            const logDiff = Math.abs(Math.log10(sourceFunding) - Math.log10(r.total_funding));
+            // 0 diff = 1.0, 1 order of magnitude diff = 0.5, 2+ orders = ~0
+            budgetScore = Math.max(0, 1.0 - logDiff * 0.5);
+          }
+
+          // Composite score
+          const composite =
+            sharedScore * R_WEIGHT_SHARED +
+            geoScore * R_WEIGHT_GEO +
+            budgetScore * R_WEIGHT_BUDGET;
+
           return {
             id: r.id,
             name: r.name,
-            score: Math.round(c.score * 1000) / 1000,
+            score: Math.round(composite * 1000) / 1000,
             sharedCount: c.sharedCount,
             state: r.primary_state,
             totalFunding: r.total_funding,
           };
         })
         .filter(Boolean);
+
+      scored.sort((a, b) => (b?.score ?? 0) - (a?.score ?? 0));
+      const peers = scored.slice(0, MAX_PEERS);
 
       return new Response(JSON.stringify({ peers }), {
         headers: { ...headers, 'Content-Type': 'application/json' },
@@ -223,11 +310,9 @@ Deno.serve(async (req) => {
     }
 
     // Step 2: Find other funders who also funded these grantees
-    // Query in batches of EINs to avoid URL length limits
     const einList = Array.from(sourceEins);
-    const candidateShared = new Map<string, Set<string>>(); // funderId -> Set<grantee_ein>
+    const candidateShared = new Map<string, Set<string>>();
 
-    // Batch query — up to 50 EINs at a time
     const BATCH = 50;
     for (let i = 0; i < einList.length && i < 500; i += BATCH) {
       const batch = einList.slice(i, i + BATCH);
@@ -266,11 +351,10 @@ Deno.serve(async (req) => {
     }
 
     // Step 4: Enrich candidates with funder details for multi-factor scoring
-    // Take top 50 by raw shared count to limit lookups, then re-rank
     qualifiedCandidates.sort((a, b) => b.sharedSet.size - a.sharedSet.size);
-    const enrichPool = qualifiedCandidates.slice(0, 50);
+    const funderEnrichPool = qualifiedCandidates.slice(0, 50);
 
-    const peerIds = enrichPool.map((c) => c.funderId);
+    const peerIds = funderEnrichPool.map((c) => c.funderId);
     const idFilter = `(${peerIds.map((id) => `"${id}"`).join(',')})`;
     const funderRows = (await restQuery(
       'funders',
@@ -280,33 +364,16 @@ Deno.serve(async (req) => {
     const funderLookup = new Map(funderRows.map((f) => [f.id, f]));
 
     // ── Multi-factor scoring (FEAT-007) ─────────────────────────────────
-    // Signal 1: Shared grantees overlap (40%)
-    // Signal 2: NTEE code match (20%)
-    // Signal 3: Budget / revenue proximity (20%)
-    // Signal 4: Geographic overlap (20%)
-
     const WEIGHT_SHARED   = 0.40;
     const WEIGHT_NTEE     = 0.20;
     const WEIGHT_BUDGET   = 0.20;
     const WEIGHT_GEO      = 0.20;
 
     const sourceNtee = sourceFunder?.ntee_code?.charAt(0)?.toUpperCase() || null;
-    const sourceState = sourceFunder?.state?.toUpperCase() || null;
+    const funderSourceState = sourceFunder?.state?.toUpperCase() || null;
     const sourceGiving = sourceFunder?.total_giving ?? null;
 
-    // US Census regions for geographic proximity
-    const STATE_REGION: Record<string, string> = {
-      CT: 'NE', ME: 'NE', MA: 'NE', NH: 'NE', RI: 'NE', VT: 'NE',
-      NJ: 'NE', NY: 'NE', PA: 'NE',
-      IL: 'MW', IN: 'MW', MI: 'MW', OH: 'MW', WI: 'MW',
-      IA: 'MW', KS: 'MW', MN: 'MW', MO: 'MW', NE: 'MW', ND: 'MW', SD: 'MW',
-      DE: 'SO', FL: 'SO', GA: 'SO', MD: 'SO', NC: 'SO', SC: 'SO', VA: 'SO', WV: 'SO', DC: 'SO',
-      AL: 'SO', KY: 'SO', MS: 'SO', TN: 'SO', AR: 'SO', LA: 'SO', OK: 'SO', TX: 'SO',
-      AZ: 'WE', CO: 'WE', ID: 'WE', MT: 'WE', NV: 'WE', NM: 'WE', UT: 'WE', WY: 'WE',
-      AK: 'WE', CA: 'WE', HI: 'WE', OR: 'WE', WA: 'WE',
-    };
-
-    const scored = enrichPool
+    const funderScored = funderEnrichPool
       .map((c) => {
         const f = funderLookup.get(c.funderId);
         if (!f) return null;
@@ -322,21 +389,20 @@ Deno.serve(async (req) => {
         }
 
         // Signal 3: Budget proximity (log-scale comparison)
-        let budgetScore = 0.5; // default if data missing
+        let budgetScore = 0.5;
         if (sourceGiving && sourceGiving > 0 && f.total_giving && f.total_giving > 0) {
           const logDiff = Math.abs(Math.log10(sourceGiving) - Math.log10(f.total_giving));
-          // 0 diff = 1.0, 1 order of magnitude diff = 0.5, 2+ = ~0
           budgetScore = Math.max(0, 1.0 - logDiff * 0.5);
         }
 
         // Signal 4: Geographic overlap
         let geoScore = 0;
         const peerState = f.state?.toUpperCase() || null;
-        if (sourceState && peerState) {
-          if (sourceState === peerState) {
+        if (funderSourceState && peerState) {
+          if (funderSourceState === peerState) {
             geoScore = 1.0;
           } else {
-            const srcRegion = STATE_REGION[sourceState];
+            const srcRegion = STATE_REGION[funderSourceState];
             const peerRegion = STATE_REGION[peerState];
             if (srcRegion && peerRegion && srcRegion === peerRegion) {
               geoScore = 0.5;
@@ -362,8 +428,8 @@ Deno.serve(async (req) => {
       })
       .filter(Boolean);
 
-    scored.sort((a, b) => (b?.score ?? 0) - (a?.score ?? 0));
-    const peers = scored.slice(0, MAX_PEERS);
+    funderScored.sort((a, b) => (b?.score ?? 0) - (a?.score ?? 0));
+    const peers = funderScored.slice(0, MAX_PEERS);
 
     return new Response(JSON.stringify({ peers }), {
       headers: { ...headers, 'Content-Type': 'application/json' },
