@@ -112,6 +112,13 @@ export interface KeyRecipient {
   lastYear: number;
 }
 
+export interface GrantPurpose {
+  purpose: string;
+  granteeName: string;
+  amount: number | null;
+  year: number;
+}
+
 export interface FunderInsights {
   funderId: string;
   grantHistory: {
@@ -122,6 +129,7 @@ export interface FunderInsights {
   granteeAnalysis: GranteeAnalysis;
   geographicFootprint: GeoEntry[];
   keyRecipients: KeyRecipient[];
+  recentGrantPurposes: GrantPurpose[];
   dataQuality: {
     completenessScore: number;
     totalRecords: number;

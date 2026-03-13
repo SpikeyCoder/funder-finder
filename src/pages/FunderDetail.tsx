@@ -1,6 +1,6 @@
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Bookmark, BookmarkCheck, Copy, Globe, MapPin, User, Mail, TrendingUp, ChevronDown, ChevronUp, BarChart3, Users, Map, Loader2 } from 'lucide-react';
+import { ArrowLeft, Bookmark, BookmarkCheck, Copy, Globe, MapPin, User, Mail, TrendingUp, ChevronDown, ChevronUp, BarChart3, Users, Map, Loader2, FileText, Info } from 'lucide-react';
 import { Funder, FunderInsights, PeerEntry } from '../types';
 import { isSaved, saveFunder, unsaveFunder } from '../utils/storage';
 import { formatGrantRange, formatTotalGiving, fetchFunderInsights, fetchPeers, fetchFunderByEin } from '../utils/matching';
@@ -46,7 +46,7 @@ export default function FunderDetail() {
   const [peers, setPeers] = useState<PeerEntry[]>([]);
   const [peersLoading, setPeersLoading] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
-    trends: true, grantees: false, geo: false, recipients: false, peers: false,
+    trends: true, grantees: false, geo: false, recipients: false, purposes: false, peers: false,
   });
 
   const toggleSection = (key: string) =>
@@ -205,6 +205,17 @@ export default function FunderDetail() {
               {funder.score && (
                 <p className="text-xs text-gray-300 mt-2">Match score: {Math.round(funder.score * 100)}%</p>
               )}
+            </div>
+          )}
+
+          {/* Mission / Description (FEAT-003) */}
+          {funder.description && (
+            <div className="mb-6 bg-[#0d1117] border border-[#30363d] rounded-xl px-4 py-3">
+              <div className="flex items-center gap-2 mb-2">
+                <Info size={14} className="text-gray-400" />
+                <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide">About this funder</p>
+              </div>
+              <p className="text-gray-300 text-sm leading-relaxed">{funder.description}</p>
             </div>
           )}
 
@@ -415,6 +426,45 @@ export default function FunderDetail() {
                             ))}
                           </tbody>
                         </table>
+                      </div>
+                    )}
+                  </div>
+                  <hr className="border-[#30363d] mb-6" />
+                </>
+              )}
+
+              {/* Section 5: Recent Grant Purposes (FEAT-001) */}
+              {insights.recentGrantPurposes && insights.recentGrantPurposes.length > 0 && (
+                <>
+                  <div className="mb-6">
+                    <button
+                      onClick={() => toggleSection('purposes')}
+                      className="flex items-center justify-between w-full mb-3 group"
+                    >
+                      <div className="flex items-center gap-2">
+                        <FileText size={16} className="text-orange-400" />
+                        <h2 className="text-lg font-semibold">Recent Grant Purposes</h2>
+                      </div>
+                      {expandedSections.purposes ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+                    </button>
+                    {expandedSections.purposes && (
+                      <div className="space-y-2">
+                        {insights.recentGrantPurposes.map((gp, i) => (
+                          <div
+                            key={`purpose-${i}`}
+                            className="bg-[#0d1117] border border-[#30363d] rounded-lg px-4 py-3"
+                          >
+                            <p className="text-sm text-gray-200 leading-relaxed">{gp.purpose}</p>
+                            <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-gray-400">
+                              <span>{gp.granteeName}</span>
+                              {gp.amount != null && gp.amount > 0 && (
+                                <span className="text-gray-500">{fmtDollar(gp.amount)}</span>
+                              )}
+                              <span className="text-gray-500">{gp.year}</span>
+                            </div>
+                          </div>
+                        ))}
+                        <p className="text-xs text-gray-500 mt-1">Source: IRS 990-PF grant purpose descriptions</p>
                       </div>
                     )}
                   </div>
