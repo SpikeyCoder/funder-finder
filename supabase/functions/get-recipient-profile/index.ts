@@ -59,6 +59,36 @@ interface GrantRow {
 interface FunderRow {
   id: string;
   name: string;
+  ntee_code: string | null;
+}
+
+// Known Donor-Advised Fund (DAF) sponsor EINs — these are intermediaries, not direct funders
+const DAF_EINS = new Set([
+  '110303001',  // Fidelity Investments Charitable Gift Fund
+  '934792247',  // Fidelity Investments Charitable Gift Fund (alt)
+  '311640316',  // Schwab Charitable Fund
+  '341747398',  // American Endowment Foundation
+  '450931286',  // PayPal Charitable Giving Fund
+  '810739440',  // American Online Giving Foundation
+  '233100408',  // National Philanthropic Trust
+  '204073032',  // Vanguard Charitable Endowment Program
+  '522166327',  // Goldman Sachs Philanthropy Fund
+  '133791717',  // Morgan Stanley Global Impact Funding Trust
+  '208106820',  // BNY Mellon Charitable Gift Fund
+  '900614284',  // Renaissance Charitable Foundation
+]);
+
+// NTEE codes that indicate DAF / fiscal sponsorship intermediaries
+const DAF_NTEE_PREFIXES = ['T11', 'T12', 'T30'];
+
+function isDonorAdvisedFund(funderId: string, funderName: string, nteeCode: string | null): boolean {
+  if (DAF_EINS.has(funderId)) return true;
+  if (nteeCode && DAF_NTEE_PREFIXES.some(p => nteeCode.startsWith(p))) return true;
+  const lower = funderName.toLowerCase();
+  if (lower.includes('donor advised') || lower.includes('donor-advised')) return true;
+  if (lower.includes('charitable gift fund')) return true;
+  if (lower.includes('charitable giving fund')) return true;
+  return false;
 }
 
 Deno.serve(async (req) => {
@@ -146,29 +176,47 @@ Deno.serve(async (req) => {
       funderAgg.set(g.foundation_id, entry);
     }
 
-    const topFunderIds = Array.from(funderAgg.entries())
+    // Sort all funders by total giving, take a larger pool to allow for DAF filtering
+    const allFunderIds = Array.from(funderAgg.entries())
       .sort((a, b) => b[1].total - a[1].total)
-      .slice(0, 15);
+      .slice(0, 30); // fetch extra to compensate for filtered DAFs
 
-    // Enrich with funder names
-    const funderIds = topFunderIds.map(([id]) => id);
-    let funderLookup = new Map<string, string>();
+    // Enrich with funder names and NTEE codes
+    const funderIds = allFunderIds.map(([id]) => id);
+    let funderLookup = new Map<string, FunderRow>();
     if (funderIds.length > 0) {
       const idFilter = `(${funderIds.map((id) => `"${id}"`).join(',')})`;
       const funderRows = (await restQuery(
         'funders',
-        `id=in.${idFilter}&select=id,name`,
+        `id=in.${idFilter}&select=id,name,ntee_code`,
       )) as FunderRow[];
-      funderLookup = new Map(funderRows.map((f) => [f.id, f.name]));
+      funderLookup = new Map(funderRows.map((f) => [f.id, f]));
     }
 
-    const topFunders = topFunderIds.map(([fId, agg]) => ({
-      funderId: fId,
-      funderName: funderLookup.get(fId) || fId,
-      grantCount: agg.count,
-      totalAmount: Math.round(agg.total),
-      lastYear: agg.lastYear,
-    }));
+    // Filter out DAFs and take top 15 non-DAF funders
+    const topFunders = allFunderIds
+      .map(([fId, agg]) => {
+        const funder = funderLookup.get(fId);
+        const funderName = funder?.name || fId;
+        const nteeCode = funder?.ntee_code || null;
+        // Skip DAFs
+        if (isDonorAdvisedFund(fId, funderName, nteeCode)) return null;
+        return {
+          funderId: fId,
+          funderName,
+          grantCount: agg.count,
+          totalAmount: Math.round(agg.total),
+          lastYear: agg.lastYear,
+        };
+      })
+      .filter(Boolean)
+      .slice(0, 15) as Array<{
+        funderId: string;
+        funderName: string;
+        grantCount: number;
+        totalAmount: number;
+        lastYear: number;
+      }>;
 
     const result = {
       id: lookupEin,
