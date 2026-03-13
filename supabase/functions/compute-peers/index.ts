@@ -90,15 +90,114 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Currently only funder peers are supported
-    if (entityType !== 'funder') {
+    if (entityType !== 'funder' && entityType !== 'recipient') {
       return new Response(
-        JSON.stringify({ peers: [], error: 'Only funder peers are currently supported' }),
+        JSON.stringify({ peers: [], error: 'entityType must be "funder" or "recipient"' }),
         { headers: { ...headers, 'Content-Type': 'application/json' } },
       );
     }
 
     const minYear = new Date().getUTCFullYear() - RECENT_YEARS;
+
+    // ── Recipient peers: find other recipients who share funders ──────────
+    if (entityType === 'recipient') {
+      // entityId is the recipient's UUID (from recipient_organizations) or EIN
+      // Step 1: Resolve EIN — if entityId looks like a UUID, look it up
+      let recipientEin = entityId;
+      if (entityId.includes('-') && entityId.length > 20) {
+        const recipientRows = (await restQuery(
+          'recipient_organizations',
+          `id=eq.${encodeURIComponent(entityId)}&select=ein&limit=1`,
+        )) as Array<{ ein: string | null }>;
+        recipientEin = recipientRows[0]?.ein || '';
+      }
+
+      if (!recipientEin) {
+        return new Response(JSON.stringify({ peers: [] }), {
+          headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Step 2: Get funders of this recipient
+      const myGrants = (await restQuery(
+        'foundation_grants',
+        `grantee_ein=eq.${encodeURIComponent(recipientEin)}&grant_year=gte.${minYear}&select=foundation_id&limit=5000`,
+      )) as Array<{ foundation_id: string }>;
+
+      const myFunders = new Set(myGrants.map(g => g.foundation_id));
+      if (myFunders.size < 1) {
+        return new Response(JSON.stringify({ peers: [] }), {
+          headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Step 3: Find other recipients funded by the same funders
+      const funderList = Array.from(myFunders);
+      const peerShared = new Map<string, Set<string>>(); // grantee_ein -> Set<shared_funder_ids>
+
+      const BATCH = 50;
+      for (let i = 0; i < funderList.length && i < 200; i += BATCH) {
+        const batch = funderList.slice(i, i + BATCH);
+        const fFilter = `(${batch.map(f => `"${f}"`).join(',')})`;
+        const peerGrants = (await restQuery(
+          'foundation_grants',
+          `foundation_id=in.${fFilter}&grant_year=gte.${minYear}&grantee_ein=not.is.null&grantee_ein=neq.${encodeURIComponent(recipientEin)}&select=grantee_ein,foundation_id&limit=10000`,
+        )) as Array<{ grantee_ein: string; foundation_id: string }>;
+
+        for (const g of peerGrants) {
+          if (!g.grantee_ein) continue;
+          const set = peerShared.get(g.grantee_ein) || new Set();
+          set.add(g.foundation_id);
+          peerShared.set(g.grantee_ein, set);
+        }
+      }
+
+      // Step 4: Score by Jaccard of shared funders
+      const recipientScored: Array<{ ein: string; sharedCount: number; score: number }> = [];
+      for (const [ein, sharedFunderSet] of peerShared) {
+        if (sharedFunderSet.size < 1) continue;
+        const score = sharedFunderSet.size / myFunders.size;
+        recipientScored.push({ ein, sharedCount: sharedFunderSet.size, score });
+      }
+      recipientScored.sort((a, b) => b.score - a.score);
+      const topRecipients = recipientScored.slice(0, MAX_PEERS);
+
+      if (topRecipients.length === 0) {
+        return new Response(JSON.stringify({ peers: [] }), {
+          headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Enrich from recipient_organizations
+      const rEins = topRecipients.map(r => r.ein);
+      const rFilter = `(${rEins.map(e => `"${e}"`).join(',')})`;
+      const recipientRows = (await restQuery(
+        'recipient_organizations',
+        `ein=in.${rFilter}&select=id,ein,name,primary_state,total_funding&limit=${MAX_PEERS}`,
+      )) as Array<{ id: string; ein: string; name: string; primary_state: string | null; total_funding: number | null }>;
+      const rLookup = new Map(recipientRows.map(r => [r.ein, r]));
+
+      const peers = topRecipients
+        .map(c => {
+          const r = rLookup.get(c.ein);
+          if (!r) return null;
+          return {
+            id: r.id,
+            name: r.name,
+            score: Math.round(c.score * 1000) / 1000,
+            sharedCount: c.sharedCount,
+            state: r.primary_state,
+            totalFunding: r.total_funding,
+          };
+        })
+        .filter(Boolean);
+
+      return new Response(JSON.stringify({ peers }), {
+        headers: { ...headers, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ── Funder peers ─────────────────────────────────────────────────────
 
     // Step 1: Get this funder's grantees (by EIN) from last N years
     const sourceGrants = (await restQuery(
@@ -146,33 +245,32 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Step 3: Score candidates using Jaccard similarity of shared grantees
-    const scored: Array<{ funderId: string; sharedCount: number; jaccard: number }> =
-      [];
+    // Step 3: Fetch source funder details for multi-factor scoring
+    const sourceFunderRows = (await restQuery(
+      'funders',
+      `id=eq.${encodeURIComponent(entityId)}&select=id,name,state,total_giving,ntee_code&limit=1`,
+    )) as FunderRow[];
+    const sourceFunder = sourceFunderRows[0] || null;
 
+    // Pre-filter candidates that meet minimum shared threshold
+    const qualifiedCandidates: Array<{ funderId: string; sharedSet: Set<string> }> = [];
     for (const [fId, sharedSet] of candidateShared) {
       if (sharedSet.size < MIN_SHARED) continue;
-
-      // Jaccard = |intersection| / |union|
-      // intersection = sharedSet (already computed — these are grantees in common)
-      // We need the other funder's total unique grantees for union
-      // Approximate: union ≈ sourceEins.size + otherTotal - intersection
-      // Since we don't have otherTotal cheaply, use a simpler overlap score:
-      const jaccard = sharedSet.size / sourceEins.size;
-      scored.push({ funderId: fId, sharedCount: sharedSet.size, jaccard });
+      qualifiedCandidates.push({ funderId: fId, sharedSet });
     }
 
-    scored.sort((a, b) => b.jaccard - a.jaccard);
-    const topCandidates = scored.slice(0, MAX_PEERS);
-
-    if (topCandidates.length === 0) {
+    if (qualifiedCandidates.length === 0) {
       return new Response(JSON.stringify({ peers: [] }), {
         headers: { ...headers, 'Content-Type': 'application/json' },
       });
     }
 
-    // Step 4: Enrich with funder details
-    const peerIds = topCandidates.map((c) => c.funderId);
+    // Step 4: Enrich candidates with funder details for multi-factor scoring
+    // Take top 50 by raw shared count to limit lookups, then re-rank
+    qualifiedCandidates.sort((a, b) => b.sharedSet.size - a.sharedSet.size);
+    const enrichPool = qualifiedCandidates.slice(0, 50);
+
+    const peerIds = enrichPool.map((c) => c.funderId);
     const idFilter = `(${peerIds.map((id) => `"${id}"`).join(',')})`;
     const funderRows = (await restQuery(
       'funders',
@@ -181,20 +279,91 @@ Deno.serve(async (req) => {
 
     const funderLookup = new Map(funderRows.map((f) => [f.id, f]));
 
-    const peers = topCandidates
+    // ── Multi-factor scoring (FEAT-007) ─────────────────────────────────
+    // Signal 1: Shared grantees overlap (40%)
+    // Signal 2: NTEE code match (20%)
+    // Signal 3: Budget / revenue proximity (20%)
+    // Signal 4: Geographic overlap (20%)
+
+    const WEIGHT_SHARED   = 0.40;
+    const WEIGHT_NTEE     = 0.20;
+    const WEIGHT_BUDGET   = 0.20;
+    const WEIGHT_GEO      = 0.20;
+
+    const sourceNtee = sourceFunder?.ntee_code?.charAt(0)?.toUpperCase() || null;
+    const sourceState = sourceFunder?.state?.toUpperCase() || null;
+    const sourceGiving = sourceFunder?.total_giving ?? null;
+
+    // US Census regions for geographic proximity
+    const STATE_REGION: Record<string, string> = {
+      CT: 'NE', ME: 'NE', MA: 'NE', NH: 'NE', RI: 'NE', VT: 'NE',
+      NJ: 'NE', NY: 'NE', PA: 'NE',
+      IL: 'MW', IN: 'MW', MI: 'MW', OH: 'MW', WI: 'MW',
+      IA: 'MW', KS: 'MW', MN: 'MW', MO: 'MW', NE: 'MW', ND: 'MW', SD: 'MW',
+      DE: 'SO', FL: 'SO', GA: 'SO', MD: 'SO', NC: 'SO', SC: 'SO', VA: 'SO', WV: 'SO', DC: 'SO',
+      AL: 'SO', KY: 'SO', MS: 'SO', TN: 'SO', AR: 'SO', LA: 'SO', OK: 'SO', TX: 'SO',
+      AZ: 'WE', CO: 'WE', ID: 'WE', MT: 'WE', NV: 'WE', NM: 'WE', UT: 'WE', WY: 'WE',
+      AK: 'WE', CA: 'WE', HI: 'WE', OR: 'WE', WA: 'WE',
+    };
+
+    const scored = enrichPool
       .map((c) => {
         const f = funderLookup.get(c.funderId);
         if (!f) return null;
+
+        // Signal 1: Shared grantees overlap (Jaccard-like)
+        const sharedScore = Math.min(c.sharedSet.size / sourceEins.size, 1.0);
+
+        // Signal 2: NTEE code match
+        let nteeScore = 0;
+        if (sourceNtee && f.ntee_code) {
+          const peerNtee = f.ntee_code.charAt(0).toUpperCase();
+          if (sourceNtee === peerNtee) nteeScore = 1.0;
+        }
+
+        // Signal 3: Budget proximity (log-scale comparison)
+        let budgetScore = 0.5; // default if data missing
+        if (sourceGiving && sourceGiving > 0 && f.total_giving && f.total_giving > 0) {
+          const logDiff = Math.abs(Math.log10(sourceGiving) - Math.log10(f.total_giving));
+          // 0 diff = 1.0, 1 order of magnitude diff = 0.5, 2+ = ~0
+          budgetScore = Math.max(0, 1.0 - logDiff * 0.5);
+        }
+
+        // Signal 4: Geographic overlap
+        let geoScore = 0;
+        const peerState = f.state?.toUpperCase() || null;
+        if (sourceState && peerState) {
+          if (sourceState === peerState) {
+            geoScore = 1.0;
+          } else {
+            const srcRegion = STATE_REGION[sourceState];
+            const peerRegion = STATE_REGION[peerState];
+            if (srcRegion && peerRegion && srcRegion === peerRegion) {
+              geoScore = 0.5;
+            }
+          }
+        }
+
+        // Composite score
+        const composite =
+          sharedScore * WEIGHT_SHARED +
+          nteeScore * WEIGHT_NTEE +
+          budgetScore * WEIGHT_BUDGET +
+          geoScore * WEIGHT_GEO;
+
         return {
           id: f.id,
           name: f.name,
-          score: Math.round(c.jaccard * 1000) / 1000,
-          sharedCount: c.sharedCount,
+          score: Math.round(composite * 1000) / 1000,
+          sharedCount: c.sharedSet.size,
           state: f.state,
           totalFunding: f.total_giving,
         };
       })
       .filter(Boolean);
+
+    scored.sort((a, b) => (b?.score ?? 0) - (a?.score ?? 0));
+    const peers = scored.slice(0, MAX_PEERS);
 
     return new Response(JSON.stringify({ peers }), {
       headers: { ...headers, 'Content-Type': 'application/json' },

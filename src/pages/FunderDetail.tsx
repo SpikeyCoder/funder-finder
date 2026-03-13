@@ -6,7 +6,23 @@ import { isSaved, saveFunder, unsaveFunder } from '../utils/storage';
 import { formatGrantRange, formatTotalGiving, fetchFunderInsights, fetchPeers, fetchFunderByEin } from '../utils/matching';
 import { useAuth } from '../contexts/AuthContext';
 import LoginModal from '../components/LoginModal';
-import { GivingTrendsChart, GeoBarChart, StatCard, InsightsSkeleton, fmtDollar } from '../components/InsightCharts';
+import { GivingTrendsChart, GeoBarChart, GeoHeatMap, StatCard, InsightsSkeleton, fmtDollar } from '../components/InsightCharts';
+
+/** Classify giving trend as increasing / stable / decreasing (FEAT-006) */
+function classifyTrend(yearTrend: { year: number; totalAmount: number }[]): { label: string; color: string } | null {
+  if (yearTrend.length < 3) return null;
+  const sorted = [...yearTrend].sort((a, b) => a.year - b.year);
+  const recent = sorted.slice(-3);
+  const first = recent[0].totalAmount;
+  const last = recent[recent.length - 1].totalAmount;
+  if (first === 0 && last === 0) return null;
+  const mean = recent.reduce((s, d) => s + d.totalAmount, 0) / recent.length;
+  if (mean === 0) return null;
+  const pctChange = (last - first) / mean;
+  if (pctChange > 0.05) return { label: 'Increasing', color: 'text-green-400 bg-green-900/30 border-green-800/50' };
+  if (pctChange < -0.05) return { label: 'Decreasing', color: 'text-red-400 bg-red-900/30 border-red-800/50' };
+  return { label: 'Stable', color: 'text-yellow-400 bg-yellow-900/30 border-yellow-800/50' };
+}
 
 function formatGrantAmount(amount: number | null | undefined): string {
   if (!amount || !Number.isFinite(amount)) return 'Amount not disclosed';
@@ -48,6 +64,8 @@ export default function FunderDetail() {
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     trends: true, grantees: false, geo: false, recipients: false, purposes: false, peers: false,
   });
+
+  const [showAllRecipients, setShowAllRecipients] = useState(false);
 
   const toggleSection = (key: string) =>
     setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }));
@@ -313,6 +331,14 @@ export default function FunderDetail() {
                   <div className="flex items-center gap-2">
                     <BarChart3 size={16} className="text-blue-400" />
                     <h2 className="text-lg font-semibold">990 Giving Trends</h2>
+                    {(() => {
+                      const trend = classifyTrend(insights.grantHistory.yearTrend);
+                      return trend ? (
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${trend.color}`}>
+                          {trend.label}
+                        </span>
+                      ) : null;
+                    })()}
                   </div>
                   {expandedSections.trends ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
                 </button>
@@ -333,7 +359,9 @@ export default function FunderDetail() {
                     <div className="bg-[#0d1117] border border-[#30363d] rounded-xl p-4">
                       <GivingTrendsChart data={insights.grantHistory.yearTrend} />
                     </div>
-                    <p className="text-xs text-gray-500">Source: IRS 990-PF filings, 2015–present</p>
+                    <p className="text-xs text-gray-500">
+                      Data through {insights.dataAsOf || 'IRS 990-PF filings, 2015–present'}
+                    </p>
                   </div>
                 )}
               </div>
@@ -381,8 +409,14 @@ export default function FunderDetail() {
                       {expandedSections.geo ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
                     </button>
                     {expandedSections.geo && (
-                      <div className="bg-[#0d1117] border border-[#30363d] rounded-xl p-4">
-                        <GeoBarChart data={insights.geographicFootprint} />
+                      <div className="space-y-4">
+                        <div className="bg-[#0d1117] border border-[#30363d] rounded-xl p-4">
+                          <GeoHeatMap data={insights.geographicFootprint} />
+                        </div>
+                        <div className="bg-[#0d1117] border border-[#30363d] rounded-xl p-4">
+                          <p className="text-xs text-gray-500 mb-2">Top states by grant count</p>
+                          <GeoBarChart data={insights.geographicFootprint} />
+                        </div>
                       </div>
                     )}
                   </div>
@@ -390,7 +424,7 @@ export default function FunderDetail() {
                 </>
               )}
 
-              {/* Section 4: Key Recipients */}
+              {/* Section 4: Key Recipients (FEAT-005: paginated with clickable links) */}
               {insights.keyRecipients.length > 0 && (
                 <>
                   <div className="mb-6">
@@ -401,6 +435,7 @@ export default function FunderDetail() {
                       <div className="flex items-center gap-2">
                         <TrendingUp size={16} className="text-yellow-400" />
                         <h2 className="text-lg font-semibold">Key Recipients</h2>
+                        <span className="text-xs text-gray-500">({insights.keyRecipients.length})</span>
                       </div>
                       {expandedSections.recipients ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
                     </button>
@@ -416,9 +451,15 @@ export default function FunderDetail() {
                             </tr>
                           </thead>
                           <tbody>
-                            {insights.keyRecipients.map((r, i) => (
-                              <tr key={`${r.granteeEin || i}`} className="border-b border-[#30363d]/50 hover:bg-[#21262d]/30">
-                                <td className="py-2 pr-3 text-gray-200 max-w-[200px] truncate">{r.granteeName}</td>
+                            {(showAllRecipients ? insights.keyRecipients : insights.keyRecipients.slice(0, 10)).map((r, i) => (
+                              <tr
+                                key={`${r.granteeEin || i}`}
+                                className="border-b border-[#30363d]/50 hover:bg-[#21262d]/30 cursor-pointer"
+                                onClick={() => r.granteeEin && navigate(`/recipient/${r.granteeEin}`)}
+                              >
+                                <td className="py-2 pr-3 max-w-[200px] truncate">
+                                  <span className={r.granteeEin ? 'text-blue-400 hover:underline' : 'text-gray-200'}>{r.granteeName}</span>
+                                </td>
                                 <td className="py-2 px-2 text-right text-gray-300 whitespace-nowrap">{fmtDollar(r.totalAmount)}</td>
                                 <td className="py-2 px-2 text-right text-gray-400">{r.grantCount}</td>
                                 <td className="py-2 pl-2 text-right text-gray-400">{r.lastYear}</td>
@@ -426,6 +467,14 @@ export default function FunderDetail() {
                             ))}
                           </tbody>
                         </table>
+                        {insights.keyRecipients.length > 10 && (
+                          <button
+                            onClick={() => setShowAllRecipients(prev => !prev)}
+                            className="mt-2 text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                          >
+                            {showAllRecipients ? 'Show fewer' : `View all ${insights.keyRecipients.length} recipients`}
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>

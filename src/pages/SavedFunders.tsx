@@ -3,10 +3,12 @@ import { useEffect, useState, useRef } from 'react';
 import {
   ArrowLeft, BookmarkX, Download, ChevronRight, Loader2,
   LogOut, PenLine, User as UserIcon, StickyNote, ChevronDown, ChevronUp,
+  Users, Building2,
 } from 'lucide-react';
-import { SavedFunderEntry, FunderStatus } from '../types';
+import { SavedFunderEntry, FunderStatus, PeerEntry } from '../types';
 import { getSavedEntries, unsaveFunder, setFunderMeta } from '../utils/storage';
-import { formatTotalGiving } from '../utils/matching';
+import { formatTotalGiving, fetchPeers } from '../utils/matching';
+import { fmtDollar } from '../components/InsightCharts';
 import { useAuth } from '../contexts/AuthContext';
 import LoginModal from '../components/LoginModal';
 
@@ -39,6 +41,10 @@ export default function SavedFunders() {
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
   const [notesDraft, setNotesDraft] = useState<Record<string, string>>({});
   const [showLoginModal, setShowLoginModal] = useState(false);
+
+  // FEAT-008: Peer recommendations aggregated from saved funders
+  const [peerRecs, setPeerRecs] = useState<(PeerEntry & { recommendedBy: string })[]>([]);
+  const [peersLoading, setPeersLoading] = useState(false);
 
   // Debounce timers for note persistence
   const noteTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -165,6 +171,44 @@ export default function SavedFunders() {
     : entries.filter(e => e.status === statusFilter);
 
   const countByStatus = (key: FunderStatus) => entries.filter(e => e.status === key).length;
+
+  // FEAT-008: Fetch peer recommendations from top saved funders
+  useEffect(() => {
+    if (entries.length === 0) { setPeerRecs([]); return; }
+    let cancelled = false;
+    setPeersLoading(true);
+
+    // Pick up to 5 saved funders to fetch peers for (skip those with status 'passed')
+    const activeSaved = entries.filter(e => e.status !== 'passed').slice(0, 5);
+    const savedIds = new Set(entries.map(e => e.funder.id));
+
+    Promise.allSettled(
+      activeSaved.map(async (entry) => {
+        const peers = await fetchPeers('funder', entry.funder.id);
+        return peers.map(p => ({ ...p, recommendedBy: entry.funder.name }));
+      }),
+    ).then(results => {
+      if (cancelled) return;
+      const allPeers: (PeerEntry & { recommendedBy: string })[] = [];
+      for (const r of results) {
+        if (r.status === 'fulfilled') allPeers.push(...r.value);
+      }
+      // Deduplicate by id, keeping highest score. Exclude already-saved funders.
+      const seen = new Map<string, (typeof allPeers)[0]>();
+      for (const p of allPeers) {
+        if (savedIds.has(p.id)) continue;
+        const existing = seen.get(p.id);
+        if (!existing || p.score > existing.score) seen.set(p.id, p);
+      }
+      const deduped = Array.from(seen.values())
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 8);
+      setPeerRecs(deduped);
+      setPeersLoading(false);
+    });
+
+    return () => { cancelled = true; };
+  }, [entries]);
 
   // ── Render ────────────────────────────────────────────────────────────────────
 
@@ -416,6 +460,66 @@ export default function SavedFunders() {
               </div>
             )}
           </>
+        )}
+      </div>
+
+        {/* FEAT-008: Peer Recommendations */}
+        {entries.length > 0 && (peerRecs.length > 0 || peersLoading) && (
+          <div className="mt-10">
+            <h2 className="text-xl font-bold mb-1 flex items-center gap-2">
+              <Users size={18} className="text-cyan-400" />
+              Discover Similar Funders
+            </h2>
+            <p className="text-sm text-gray-400 mb-4">
+              Based on giving patterns of your saved funders
+            </p>
+            {peersLoading ? (
+              <div className="space-y-2">
+                {[1,2,3].map(i => <div key={i} className="h-14 bg-[#21262d] rounded-xl animate-pulse" />)}
+              </div>
+            ) : (
+              <div className="bg-[#161b22] border border-[#30363d] rounded-2xl overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-gray-400 text-xs border-b border-[#30363d]">
+                      <th className="text-left py-3 px-4">Funder</th>
+                      <th className="text-right py-3 px-2">Total Giving</th>
+                      <th className="text-right py-3 px-2">Match</th>
+                      <th className="text-left py-3 px-3 hidden sm:table-cell">Similar to</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {peerRecs.map((p, i) => (
+                      <tr
+                        key={`${p.id}-${i}`}
+                        className="border-b border-[#30363d]/50 hover:bg-[#21262d]/40 cursor-pointer transition-colors"
+                        onClick={() => navigate(`/funder/${p.id}`)}
+                      >
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2">
+                            <Building2 size={13} className="text-blue-400 shrink-0" />
+                            <span className="text-gray-200 truncate max-w-[220px]">{p.name}</span>
+                            {p.state && <span className="text-gray-500 text-xs shrink-0">{p.state}</span>}
+                          </div>
+                        </td>
+                        <td className="py-3 px-2 text-right text-gray-300 whitespace-nowrap">
+                          {p.totalFunding ? fmtDollar(p.totalFunding) : '—'}
+                        </td>
+                        <td className="py-3 px-2 text-right">
+                          <span className={`text-xs font-medium ${p.score >= 0.3 ? 'text-green-400' : p.score >= 0.15 ? 'text-yellow-400' : 'text-gray-400'}`}>
+                            {Math.round(p.score * 100)}%
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-gray-500 text-xs truncate max-w-[160px] hidden sm:table-cell">
+                          {p.recommendedBy}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         )}
       </div>
 

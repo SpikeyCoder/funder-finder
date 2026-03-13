@@ -134,6 +134,7 @@ export interface FunderInsights {
     completenessScore: number;
     totalRecords: number;
   };
+  dataAsOf?: string | null;
 }
 
 // ── Organization Search & Recipient Profile types ───────────────────────────

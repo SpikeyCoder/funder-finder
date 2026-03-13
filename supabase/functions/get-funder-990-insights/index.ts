@@ -313,6 +313,7 @@ Deno.serve(async (req) => {
       keyRecipients,
       recentGrantPurposes,
       dataQuality: { completenessScore, totalRecords },
+      dataAsOf: yearTrend.length > 0 ? `${yearTrend[yearTrend.length - 1].year} IRS 990-PF filings` : null,
     };
 
     return new Response(JSON.stringify(result), {

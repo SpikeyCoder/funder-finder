@@ -193,10 +193,13 @@ export default function RecipientProfile() {
             </>
           )}
 
-          {/* Top Funders */}
+          {/* Top Funders — FEAT-002: prominent CTA to save funders */}
           {profile.topFunders.length > 0 && (
             <>
-              <h2 className="text-lg font-semibold mb-3">Top Funders</h2>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-lg font-semibold">Top Funders</h2>
+                <span className="text-xs text-gray-500">Click bookmark to add to your prospects</span>
+              </div>
               <div className="overflow-x-auto mb-2">
                 <table className="w-full text-sm">
                   <thead>
@@ -242,6 +245,33 @@ export default function RecipientProfile() {
                   </tbody>
                 </table>
               </div>
+              {/* FEAT-002: Prominent bulk-save CTA */}
+              {profile.topFunders.filter(f => !savedIds.has(f.funderId)).length > 0 && (
+                <button
+                  onClick={() => {
+                    const unsaved = profile.topFunders.filter(f => !savedIds.has(f.funderId));
+                    const newIds = new Set(savedIds);
+                    unsaved.forEach(f => {
+                      const minimalFunder: Funder = {
+                        id: f.funderId, name: f.funderName, type: 'foundation',
+                        description: null, focus_areas: [], ntee_code: null,
+                        city: null, state: null, website: null,
+                        total_giving: f.totalAmount ?? null, asset_amount: null,
+                        grant_range_min: null, grant_range_max: null,
+                        contact_name: null, contact_title: null, contact_email: null,
+                        next_step: null,
+                      };
+                      saveFunder(minimalFunder);
+                      newIds.add(f.funderId);
+                    });
+                    setSavedIds(newIds);
+                  }}
+                  className="mt-3 w-full bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-xl py-2.5 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Bookmark size={14} />
+                  Add All {profile.topFunders.filter(f => !savedIds.has(f.funderId)).length} Funders to My Prospects
+                </button>
+              )}
             </>
           )}
 
