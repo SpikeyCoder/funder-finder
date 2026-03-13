@@ -876,8 +876,6 @@ export default function Results() {
 
       {/* Login modal — shown when user explicitly clicks login */}
       {loginModalFunder && (
-        <LoginModal
-          pendingFunder={loginModalFunder && (
         <LoginModal pendingFunder={loginModalFunder} onClose={() => setLoginModalFunder(null)} />
       )}
 
