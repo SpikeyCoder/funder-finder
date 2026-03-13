@@ -319,7 +319,7 @@ export default function RecipientProfile() {
                       ))}
                     </tbody>
                   </table>
-                  <p className="text-xs text-gray-500 mt-2">Based on shared funders, mission area, geography, and budget similarity</p>
+                  <p className="text-xs text-gray-500 mt-2">Based on mission area, geography, and budget similarity</p>
                 </div>
               )}
             </>
