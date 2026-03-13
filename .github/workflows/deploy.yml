@@ -28,6 +28,9 @@ jobs:
       # skipped here to avoid cross-platform ARM/x64 mismatch issues.
       - run: rm -f package-lock.json && npm install
       - run: npm run build
+      # SPA routing fix: serve the full app for any 404 so React Router
+      # handles client-side routes (replaces the redirect-hack 404.html).
+      - run: cp dist/index.html dist/404.html
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

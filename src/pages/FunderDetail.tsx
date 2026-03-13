@@ -159,7 +159,14 @@ export default function FunderDetail() {
     <div className="min-h-screen bg-[#0d1117] text-white py-12 px-6">
       <div className="max-w-2xl mx-auto">
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => {
+            // If there's real navigation history, go back; otherwise fall back to /search
+            if (window.history.length > 2) {
+              navigate(-1);
+            } else {
+              navigate('/search');
+            }
+          }}
           className="flex items-center gap-2 text-gray-400 hover:text-white mb-8 transition-colors"
         >
           <ArrowLeft size={18} />
@@ -583,10 +590,20 @@ export default function FunderDetail() {
         {/* Bottom nav */}
         <div className="flex gap-3 mt-6">
           <button
-            onClick={() => navigate('/results', { state: { mission, keywords } })}
+            onClick={() => {
+              // If the user arrived from AI matching (mission context exists), return to /results
+              // Otherwise fall back to /search
+              if (mission) {
+                navigate('/results', { state: { mission, keywords } });
+              } else if (window.history.length > 2) {
+                navigate(-1);
+              } else {
+                navigate('/search');
+              }
+            }}
             className="flex-1 border border-[#30363d] rounded-xl py-3 text-sm hover:bg-[#161b22] transition-colors"
           >
-            ← Back to Results
+            {mission ? '← Back to Results' : '← Back to Search'}
           </button>
           <button
             onClick={() => navigate('/saved')}
