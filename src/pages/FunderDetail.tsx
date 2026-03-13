@@ -176,6 +176,8 @@ export default function FunderDetail() {
     setTimeout(() => setCopiedEmail(false), 2000);
   };
 
+  const handleToastLogin = () => { setToastMsg(null); setShowLoginModal(true); };
+
   return (
     <div className="min-h-screen bg-[#0d1117] text-white py-12 px-6">
       <div className="max-w-2xl mx-auto">
@@ -726,12 +728,6 @@ export default function FunderDetail() {
       {toastMsg && (
         <Toast
           message={toastMsg}
-          action={{ label: 'Log in', onClick: () => { setToastMsg(null); setShowLoginModal(true); } }}
-          onClose={() => setToastMsg(null)}
-        />
-      )}
-
-      )}
-    </div>
+          action={{ label: 'Log in', onClick: () => { setToastMsg(null); setShowLoginModal(traction={{ label: 'Log in', onClick: handleToastLogin }}v>
   );
 }
