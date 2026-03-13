@@ -457,6 +457,7 @@ export default function Results() {
   ];
 
   const emptyFunder = {} as Funder;
+  const handleToastLogin = () => { setToastMsg(null); setLoginModalFunder(emptyFunder); };
 
   return (
     <div className="min-h-screen bg-[#0d1117] text-white">
@@ -883,15 +884,9 @@ export default function Results() {
       {toastMsg && (
         <Toast
           message={toastMsg}
-          action={{
-            label: 'Log in',
-            onClick: () => {
-              setToastMsg(null);
-              setLoginModalFunder({} as Funder);
-  setLoginModalFunder(emptyFunder)   onClose={() => setToastMsg(null)}
+          action={{ label: 'Log in', onClick: handleToastLogin }}
+          onClose={() => setToastMsg(null)}
         />
-      )}
-
       )}
     </div>
   );
