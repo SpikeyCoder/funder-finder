@@ -174,7 +174,7 @@ export default function RecipientProfile() {
               <div className="flex items-center gap-1.5">
                 <Calendar size={14} className="text-gray-500" />
                 <p className="text-lg font-bold text-white">
-                  {profile.fundingSummary.firstGrantYear || '?'} – {profile.fundingSummary.lastGrantYear || '?'}
+                  {profile.fundingSummary.firstGrantYear || '?'} â {profile.fundingSummary.lastGrantYear || '?'}
                 </p>
               </div>
             </div>
@@ -188,12 +188,12 @@ export default function RecipientProfile() {
               <div className="bg-[#0d1117] border border-[#30363d] rounded-xl p-4 mb-2">
                 <GivingTrendsChart data={chartData} />
               </div>
-              <p className="text-xs text-gray-500 mb-6">Source: IRS 990-PF filings, 2015–present</p>
+              <p className="text-xs text-gray-500 mb-6">Source: IRS 990-PF filings, 2015âpresent</p>
               <hr className="border-[#30363d] mb-6" />
             </>
           )}
 
-          {/* Top Funders — FEAT-002: prominent CTA to save funders */}
+          {/* Top Funders â FEAT-002: prominent CTA to save funders */}
           {profile.topFunders.length > 0 && (
             <>
               <div className="flex items-center justify-between mb-3">
@@ -293,7 +293,7 @@ export default function RecipientProfile() {
                     <thead>
                       <tr className="text-gray-400 text-xs border-b border-[#30363d]">
                         <th className="text-left py-2 pr-3">Organization</th>
-                        <th className="text-right py-2 px-2">Shared Funders</th>
+                        <th className="text-right py-2 px-2">State</th>
                         <th className="text-right py-2 px-2">Total Funding</th>
                         <th className="text-right py-2 pl-2">Similarity</th>
                       </tr>
@@ -306,9 +306,9 @@ export default function RecipientProfile() {
                           onClick={() => navigate(`/recipient/${p.id}`)}
                         >
                           <td className="py-2 pr-3 text-gray-200 max-w-[200px] truncate">{p.name?.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')}</td>
-                          <td className="py-2 px-2 text-right text-gray-400">{p.sharedCount}</td>
+                          <td className="py-2 px-2 text-right text-gray-400">{p.state || '—'}</td>
                           <td className="py-2 px-2 text-right text-gray-300 whitespace-nowrap">
-                            {p.totalFunding ? fmtDollar(p.totalFunding) : '—'}
+                            {p.totalFunding ? fmtDollar(p.totalFunding) : 'â'}
                           </td>
                           <td className="py-2 pl-2 text-right">
                             <span className={`text-xs font-medium ${p.score >= 0.3 ? 'text-green-400' : p.score >= 0.15 ? 'text-yellow-400' : 'text-gray-400'}`}>
@@ -332,7 +332,7 @@ export default function RecipientProfile() {
             onClick={() => navigate('/search')}
             className="flex-1 border border-[#30363d] rounded-xl py-3 text-sm hover:bg-[#161b22] transition-colors"
           >
-            ← Back to Search
+            â Back to Search
           </button>
           <button
             onClick={() => navigate('/mission')}
