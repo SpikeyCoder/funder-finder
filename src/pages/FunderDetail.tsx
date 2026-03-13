@@ -720,10 +720,9 @@ export default function FunderDetail() {
 
       {/* Login modal — shown when user explicitly clicks login */}
       {showLoginModal && (
-        <LoginModal
-          pendingFunder={funder}
-          onClose={() => setShowLoginModal(false)}
-        />
+        <LoginModal pendingFunder={funder} onClose={() => setShowLoginModal(false)} />
+      )}
+
       {/* Toast — non-blocking hint to log in for cloud sync */}
       {toastMsg && (
         <Toast
@@ -732,6 +731,6 @@ export default function FunderDetail() {
           onClose={() => setToastMsg(null)}
         />
       )}
-    </>
+    </div>
   );
 }
