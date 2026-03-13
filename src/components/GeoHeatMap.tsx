@@ -108,7 +108,6 @@ export function GeoHeatMap({ data }: GeoHeatMapProps) {
         {(() => {
           const lx = GAP;
           const ly = H - 16;
-          const lw = 120;
           return (
             <>
               <text x={lx} y={ly} fill="#8b949e" fontSize={8}>Fewer</text>
