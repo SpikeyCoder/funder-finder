@@ -605,7 +605,16 @@ export default function FunderDetail() {
                       if (!s || s.startsWith('/')) return null;
                       return s.startsWith('http') ? s : `https://${s}`;
                     };
-                    const linkUrl = toExtUrl(funder.next_step_url) ?? toExtUrl(funder.website);
+                    // Check for URLs embedded in the next_step text itself
+                    // e.g. "Review current filing history in IRS EO Search: https://apps.irs.gov/app/eos/?ein=..."
+                    const urlMatch = funder.next_step?.match(/(https?:\/\/[^\s]+)/);
+                    const embeddedUrl = urlMatch ? urlMatch[1] : null;
+                    // Clean text: remove the raw URL and any trailing colon/space before it
+                    const cleanedText = embeddedUrl
+                      ? funder.next_step.replace(/:\s*https?:\/\/[^\s]+/, '').replace(/\s+$/, '')
+                      : funder.next_step;
+
+                    const linkUrl = toExtUrl(funder.next_step_url) ?? (embeddedUrl ? toExtUrl(embeddedUrl) : null) ?? toExtUrl(funder.website);
                     return linkUrl ? (
                       <a
                         href={linkUrl}
@@ -613,7 +622,7 @@ export default function FunderDetail() {
                         rel="noopener noreferrer"
                         className="hover:text-blue-200 underline underline-offset-2 transition-colors"
                       >
-                        {funder.next_step}
+                        {cleanedText}
                       </a>
                     ) : (
                       funder.next_step
