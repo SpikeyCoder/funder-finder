@@ -456,6 +456,8 @@ export default function Results() {
     { key: 'large',  label: '$250K+' },
   ];
 
+  const emptyFunder = {} as Funder;
+
   return (
     <div className="min-h-screen bg-[#0d1117] text-white">
       <NavBar />
@@ -881,8 +883,12 @@ export default function Results() {
       {toastMsg && (
         <Toast
           message={toastMsg}
-          action={{ label: 'Log in', onClick: () => { setToastMsg(null); setLoginModalFunder({} as Funder); } }}
-          onClose={() => setToastMsg(null)}
+          action={{
+            label: 'Log in',
+            onClick: () => {
+              setToastMsg(null);
+              setLoginModalFunder({} as Funder);
+  setLoginModalFunder(emptyFunder)   onClose={() => setToastMsg(null)}
         />
       )}
 
