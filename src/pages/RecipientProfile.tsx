@@ -305,7 +305,7 @@ export default function RecipientProfile() {
                           className="border-b border-[#30363d]/50 hover:bg-[#21262d]/30 cursor-pointer"
                           onClick={() => navigate(`/recipient/${p.id}`)}
                         >
-                          <td className="py-2 pr-3 text-gray-200 max-w-[200px] truncate">{p.name}</td>
+                          <td className="py-2 pr-3 text-gray-200 max-w-[200px] truncate">{p.name?.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')}</td>
                           <td className="py-2 px-2 text-right text-gray-400">{p.sharedCount}</td>
                           <td className="py-2 px-2 text-right text-gray-300 whitespace-nowrap">
                             {p.totalFunding ? fmtDollar(p.totalFunding) : '—'}
@@ -319,7 +319,7 @@ export default function RecipientProfile() {
                       ))}
                     </tbody>
                   </table>
-                  <p className="text-xs text-gray-500 mt-2">Based on shared funders over the last 5 years</p>
+                  <p className="text-xs text-gray-500 mt-2">Based on shared funders, mission area, geography, and budget similarity</p>
                 </div>
               )}
             </>
