@@ -877,9 +877,10 @@ export default function Results() {
       {/* Login modal — shown when user explicitly clicks login */}
       {loginModalFunder && (
         <LoginModal
-          pendingFunder={loginModalFunder}
-          onClose={() => setLoginModalFunder(null)}
-        />
+          pendingFunder={loginModalFunder && (
+        <LoginModal pendingFunder={loginModalFunder} onClose={() => setLoginModalFunder(null)} />
+      )}
+
       {/* Toast — non-blocking hint to log in for cloud sync */}
       {toastMsg && (
         <Toast
