@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, Building2, AlertCircle, ChevronRight, ChevronLeft, Loader, CheckCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -38,21 +38,7 @@ const BUDGET_RANGES = [
 
 type SignupStep = 'account' | 'profile' | 'review';
 
-interface AccountData {
-  email: string;
-  password: string;
-  confirmPassword: string;
-}
 
-interface ProfileData {
-  organizationName: string;
-  ein: string;
-  missionStatement: string;
-  city: string;
-  state: string;
-  nteeCodes: string[];
-  budgetRange: string;
-}
 
 export default function SignupPage() {
   const navigate = useNavigate();

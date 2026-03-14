@@ -4,7 +4,7 @@ import { ExternalLink, ArrowUpDown } from 'lucide-react';
 import NavBar from '../components/NavBar';
 import FilterPanel, { FilterState, EMPTY_FILTERS } from '../components/FilterPanel';
 import SaveToProjectButton from '../components/SaveToProjectButton';
-import { supabase, getEdgeFunctionHeaders, SUPABASE_ANON_KEY } from '../lib/supabase';
+import { getEdgeFunctionHeaders } from '../lib/supabase';
 
 const EDGE_FUNCTION_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co/functions/v1/filter-funders';
 
@@ -141,11 +141,12 @@ const BrowsePage: React.FC = () => {
         per_page: RESULTS_PER_PAGE,
       };
 
+      const edgeHeaders = await getEdgeFunctionHeaders();
       const response = await fetch(EDGE_FUNCTION_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...getEdgeFunctionHeaders(),
+          ...edgeHeaders,
         },
         body: JSON.stringify(requestBody),
       });
