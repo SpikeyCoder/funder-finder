@@ -1,31 +1,29 @@
 /**
- * suggest-peers - Supabase Edge Function (v10 - simple equal scoring, no IDF)
+ * suggest-peers - Supabase Edge Function (v11 - LLM-powered keyword expansion)
  *
  * Receives { mission, locationServed, budgetBand }.
- * Uses the foundation_grants database to find real peer nonprofits that
- * share similar mission keywords and geographic proximity.
+ * Uses Claude Haiku to expand mission text into semantically related search
+ * terms, then searches foundation_grants.purpose_text to find real peer
+ * nonprofits with similar missions.
  *
- * v8 improvements over v7:
- * - Name normalization BEFORE aggregation: strips common suffixes (INC, LLC,
- *   GROUP, FOUNDATION, etc.) so "Plymouth Housing Group" and "Plymouth Housing"
- *   merge into one entity with combined keyword matches and grant counts.
- * - Increased city bonus (10) and grant bonus cap (20) to better reward
- *   local organizations with strong grant histories.
- * - Removed IDF weighting (capped LIMIT flattens IDF distribution, hurting
- *   orgs that match common-but-relevant keywords like "homeless" and "housing")
- * - Simple equal keyword weighting: each keyword match = 10 points
- * - Generalist institution exclusion (hospitals, universities, etc.)
- * - Batched queries (2 at a time) to avoid DB statement timeouts
- * - Basic stemming for better ilike matching
- * - Expanded stop words, keyword relevance scoring, debug info
+ * v11 improvements over v10:
+ * - LLM-powered keyword expansion: uses Claude Haiku to generate 12-15
+ *   semantically related search terms from the mission description.
+ *   This catches peers whose grant descriptions use different wording
+ *   for similar work (e.g., "youth mentoring" instead of "STEM education").
+ * - Falls back to rule-based extraction if LLM is unavailable
+ * - Increased result limit to 10 peers (from 8)
+ * - Multi-word phrase support: LLM can return 2-word phrases for precise matching
+ * - Better scoring: LLM keywords weighted higher (15pts) vs fallback (10pts)
  *
- * Returns { peers: string[], debug?: {...} } — an array of 5-8 real nonprofit names.
+ * Returns { peers: string[], debug?: {...} } — an array of 8-10 real nonprofit names.
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') || '';
 
 const ALLOWED_ORIGINS = new Set([
   'https://fundermatch.org',
@@ -48,7 +46,6 @@ function corsHeaders(requestOrigin: string | null): Record<string, string> {
 }
 
 const STOP_WORDS = new Set([
-  // Common English
   'a','an','the','and','or','but','in','on','at','to','for','of','with',
   'by','from','is','are','was','were','be','been','being','have','has',
   'had','do','does','did','will','would','shall','should','may','might',
@@ -60,7 +57,6 @@ const STOP_WORDS = new Set([
   'there','when','where','why','how','all','each','every','both','few',
   'more','most','other','some','any','only','own','same','up','down',
   'out','off','while','because','until','what',
-  // Nonprofit/mission boilerplate
   'provide','providing','program','programs','services','service','support',
   'community','communities','organization','organizations','mission',
   'help','helps','helping','people','individuals','including','based',
@@ -68,7 +64,6 @@ const STOP_WORDS = new Set([
   'focuses','serve','serving','served','across','within','offer','offering',
   'offers','ensure','promote','create','address','need','needs','access',
   'improve','improving','build','building','develop','developing',
-  // Generic/low-value words that waste query slots
   'desc','complex','use','achieve','achieving','highest','high','well',
   'serious','new','make','making','effort','efforts','range','able',
   'various','many','also','great','good','best','way','ways','like',
@@ -77,15 +72,97 @@ const STOP_WORDS = new Set([
 ]);
 
 /**
- * Basic English stemmer - strips common suffixes to get root forms.
- * This helps ilike queries match more variations in purpose_text.
- * e.g., "homelessness" → "homeless", "disorders" → "disorder", "treatment" → "treat"
+ * Use Claude Haiku to expand a mission description into semantically related
+ * search terms that would appear in foundation grant purpose descriptions
+ * for similar organizations.
  */
-function stemWord(word: string): string {
-  // Don't stem short words
-  if (word.length <= 5) return word;
+async function expandKeywordsWithLLM(
+  mission: string,
+  locationServed: string,
+  budgetBand: string,
+): Promise<{ terms: string[]; usedLLM: boolean }> {
+  if (!ANTHROPIC_API_KEY) {
+    console.log('[suggest-peers] No ANTHROPIC_API_KEY, falling back to rule-based extraction');
+    return { terms: extractMissionKeywords(mission), usedLLM: false };
+  }
 
-  // Order matters: try longest suffixes first
+  try {
+    const prompt = `You are a nonprofit grant database search expert. Given a nonprofit's mission description, generate search terms that would appear in foundation grant PURPOSE DESCRIPTIONS for organizations doing similar work.
+
+MISSION: "${mission}"
+${locationServed ? `LOCATION: ${locationServed}` : ''}
+${budgetBand && budgetBand !== 'prefer_not_to_say' ? `BUDGET: ${budgetBand}` : ''}
+
+Generate 12-15 search terms. Include:
+1. Core activity terms (what the org actually DOES day-to-day)
+2. Beneficiary terms (who they serve, described different ways)
+3. Methodology terms (HOW they deliver services)
+4. Sector/field terms (the broader category of work)
+5. Outcome terms (what results they achieve)
+6. Synonyms and related phrases that grant writers commonly use
+
+RULES:
+- Each term should be 1-2 words (short enough for database substring matching)
+- Use terms that would literally appear in grant purpose text descriptions
+- Avoid generic nonprofit jargon (e.g., "community", "program", "services")
+- Include the specific city/region name if provided
+- Think about what SIMILAR organizations call themselves and their work
+- Prioritize terms that distinguish this type of org from unrelated nonprofits
+
+Return ONLY a JSON array of strings, nothing else. Example:
+["youth mentoring", "after-school", "tutoring", "college prep", "teen leadership", "academic enrichment", "dropout prevention", "high school", "graduation", "career readiness", "youth empowerment", "chicago"]`;
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 300,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.text().catch(() => '');
+      console.error(`[suggest-peers] LLM API error ${res.status}: ${err.substring(0, 200)}`);
+      return { terms: extractMissionKeywords(mission), usedLLM: false };
+    }
+
+    const data = await res.json();
+    const text = data?.content?.[0]?.text || '';
+
+    // Parse JSON array from response - handle markdown code blocks too
+    const jsonMatch = text.match(/\[[\s\S]*?\]/);
+    if (!jsonMatch) {
+      console.error('[suggest-peers] LLM response not parseable:', text.substring(0, 200));
+      return { terms: extractMissionKeywords(mission), usedLLM: false };
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      return { terms: extractMissionKeywords(mission), usedLLM: false };
+    }
+
+    // Clean and validate terms
+    const terms = parsed
+      .filter((t: unknown): t is string => typeof t === 'string' && t.trim().length >= 2)
+      .map((t: string) => t.trim().toLowerCase())
+      .slice(0, 15);
+
+    console.log(`[suggest-peers] LLM expanded to ${terms.length} terms:`, terms.join(', '));
+    return { terms, usedLLM: true };
+  } catch (err) {
+    console.error('[suggest-peers] LLM expansion failed:', String(err));
+    return { terms: extractMissionKeywords(mission), usedLLM: false };
+  }
+}
+
+function stemWord(word: string): string {
+  if (word.length <= 5) return word;
   const suffixes = [
     { suffix: 'nesses', minRoot: 4 },
     { suffix: 'ments', minRoot: 4 },
@@ -104,18 +181,14 @@ function stemWord(word: string): string {
     { suffix: 'ive', minRoot: 3 },
     { suffix: 'ous', minRoot: 3 },
   ];
-
   for (const { suffix, minRoot } of suffixes) {
     if (word.endsWith(suffix) && word.length - suffix.length >= minRoot) {
       return word.slice(0, word.length - suffix.length);
     }
   }
-
-  // Strip trailing 's' for plurals (but not 'ss' like "illness")
   if (word.endsWith('s') && !word.endsWith('ss') && word.length > 4) {
     return word.slice(0, -1);
   }
-
   return word;
 }
 
@@ -126,7 +199,6 @@ function extractMissionKeywords(mission: string): string[] {
     .split(/\s+/)
     .filter((w) => w.length >= 3 && !STOP_WORDS.has(w));
 
-  // Deduplicate
   const seen = new Set<string>();
   const unique: string[] = [];
   for (const w of words) {
@@ -136,23 +208,18 @@ function extractMissionKeywords(mission: string): string[] {
     }
   }
 
-  // Score keywords by relevance:
-  // - Longer words are more specific/useful (bonus for length)
-  // - Words that appear multiple times get a frequency boost
   const freq = new Map<string, number>();
   for (const w of words) {
     freq.set(w, (freq.get(w) || 0) + 1);
   }
 
   const scored = unique.map((w) => {
-    const lengthScore = Math.min(w.length, 12); // longer = more specific
+    const lengthScore = Math.min(w.length, 12);
     const freqScore = (freq.get(w) || 1) * 3;
     return { word: w, score: lengthScore + freqScore };
   });
 
-  // Sort by score descending, then alphabetically for stability
   scored.sort((a, b) => b.score - a.score || a.word.localeCompare(b.word));
-
   return scored.map((s) => s.word).slice(0, 8);
 }
 
@@ -198,11 +265,6 @@ function parseLocation(locationServed: string): { city: string; state: string } 
   return { city, state };
 }
 
-/**
- * Normalize a grantee name by stripping common legal suffixes.
- * This merges variant names (e.g. "PLYMOUTH HOUSING GROUP" and
- * "PLYMOUTH HOUSING") into a single entity for aggregation.
- */
 function normalizeGranteeName(name: string): string {
   return name
     .toUpperCase()
@@ -214,16 +276,11 @@ function normalizeGranteeName(name: string): string {
 interface PeerData {
   count: number;
   matchedKeywords: Set<string>;
-  keywordWeightSum: number;  // sum of IDF-like weights for matched keywords
+  keywordWeightSum: number;
   cityMatch: boolean;
-  displayName: string;  // best display name (longest variant seen)
+  displayName: string;
 }
 
-/**
- * Patterns that indicate generalist institutions (hospitals, universities,
- * medical centers) which match many keywords but aren't true peer nonprofits
- * for mission-specific searches.
- */
 const GENERALIST_PATTERNS = [
   /\bUNIVERSIT/i,
   /\bHOSPITAL\b/i,
@@ -233,7 +290,10 @@ const GENERALIST_PATTERNS = [
   /\bCOLLEGE\b/i,
   /\bFRED HUTCH/i,
   /\bCANCER (CENTER|RESEARCH)/i,
-  /\bCHILDREN'?S\b/i,  // e.g. Seattle Children's (hospital system)
+  /\bCHILDREN'?S\b/i,
+  /\bSCHOOL DISTRICT\b/i,
+  /\bPUBLIC SCHOOL/i,
+  /\bBOARD OF EDUCATION/i,
 ];
 
 Deno.serve(async (req: Request) => {
@@ -260,6 +320,7 @@ Deno.serve(async (req: Request) => {
 
     const mission = typeof body?.mission === 'string' ? body.mission.trim() : '';
     const locationServed = typeof body?.locationServed === 'string' ? body.locationServed.trim() : '';
+    const budgetBand = typeof body?.budgetBand === 'string' ? body.budgetBand.trim() : 'prefer_not_to_say';
 
     if (!mission) {
       return new Response(
@@ -268,36 +329,68 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const keywords = extractMissionKeywords(mission);
-    console.log('[suggest-peers] Keywords:', keywords.join(', '));
+    // Step 1: Use LLM to expand mission into semantically related search terms
+    const { terms: searchTerms, usedLLM } = await expandKeywordsWithLLM(
+      mission, locationServed, budgetBand,
+    );
 
-    if (keywords.length === 0) {
+    const llmTime = Date.now() - startTime;
+    console.log(`[suggest-peers] Keyword expansion (${usedLLM ? 'LLM' : 'rule-based'}) in ${llmTime}ms: ${searchTerms.join(', ')}`);
+
+    if (searchTerms.length === 0) {
       return new Response(
         JSON.stringify({ peers: [], debug: { keywords: [], candidates: 0 } }),
         { headers: { ...headers, 'Content-Type': 'application/json' } },
       );
     }
 
-    const { city, state } = parseLocation(locationServed);
+    let { city, state } = parseLocation(locationServed);
+
+    // Also extract city names from mission text if not provided in locationServed
+    // This handles cases like "STEM programs in Chicago" where locationServed is just "IL"
+    if (!city) {
+      const MAJOR_CITIES = [
+        'chicago','new york','los angeles','houston','phoenix','philadelphia',
+        'san antonio','san diego','dallas','san jose','austin','jacksonville',
+        'fort worth','columbus','charlotte','indianapolis','san francisco',
+        'seattle','denver','washington','nashville','oklahoma city','el paso',
+        'boston','portland','las vegas','memphis','louisville','baltimore',
+        'milwaukee','albuquerque','tucson','fresno','mesa','sacramento',
+        'atlanta','kansas city','colorado springs','omaha','raleigh','miami',
+        'long beach','virginia beach','oakland','minneapolis','tulsa','tampa',
+        'arlington','new orleans','cleveland','pittsburgh','detroit','st louis',
+        'cincinnati','orlando','newark','brooklyn','bronx','queens','manhattan',
+      ];
+      const missionLower = mission.toLowerCase();
+      for (const c of MAJOR_CITIES) {
+        if (missionLower.includes(c)) {
+          city = c.charAt(0).toUpperCase() + c.slice(1);
+          // Handle multi-word cities
+          if (c.includes(' ')) {
+            city = c.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+          }
+          break;
+        }
+      }
+    }
+
     console.log(`[suggest-peers] Location: city="${city}", state="${state}"`);
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    // === PARALLEL queries for ALL keywords ===
-    // Apply basic stemming to each keyword for better ilike matching
-    const searchTerms = keywords.map((kw) => ({
-      original: kw,
-      stemmed: stemWord(kw),
-    }));
+    // Step 2: Search grant purpose text for each term
+    // For multi-word terms, search as exact phrase; for single words, apply stemming
+    const preparedTerms = searchTerms.map((term) => {
+      const words = term.split(/\s+/);
+      if (words.length > 1) {
+        // Multi-word phrase: use as-is for exact matching
+        return { original: term, searchTerm: term };
+      }
+      // Single word: apply stemming
+      return { original: term, searchTerm: stemWord(term) };
+    });
 
-    console.log('[suggest-peers] Search terms:', searchTerms.map(t =>
-      t.original === t.stemmed ? t.original : `${t.original}→${t.stemmed}`
-    ).join(', '));
-
-    // Run a single keyword query
-    async function runKeywordQuery(original: string, stemmed: string) {
-      const searchTerm = stemmed;
-
+    async function runKeywordQuery(original: string, searchTerm: string) {
       let query = supabase
         .from('foundation_grants')
         .select('grantee_name, grantee_city')
@@ -320,26 +413,25 @@ Deno.serve(async (req: Request) => {
       return { keyword: original, rows, rowCount: rows.length, error: null };
     }
 
-    // Run queries in batches of 2 to avoid overwhelming the DB
-    // (8 parallel ilike queries cause statement timeouts on large tables)
-    const BATCH_SIZE = 2;
+    // Run queries in batches of 3 (LLM terms are more targeted, less DB load per query)
+    const BATCH_SIZE = 3;
     const results: Array<{ keyword: string; rows: Array<{ grantee_name: string; grantee_city: string }>; rowCount: number; error: string | null }> = [];
 
-    for (let i = 0; i < searchTerms.length; i += BATCH_SIZE) {
-      const batch = searchTerms.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < preparedTerms.length; i += BATCH_SIZE) {
+      const batch = preparedTerms.slice(i, i + BATCH_SIZE);
       const batchResults = await Promise.all(
-        batch.map(({ original, stemmed }) => runKeywordQuery(original, stemmed))
+        batch.map(({ original, searchTerm }) => runKeywordQuery(original, searchTerm))
       );
       results.push(...batchResults);
     }
 
     const queryTime = Date.now() - startTime;
-    console.log(`[suggest-peers] All ${searchTerms.length} queries completed in ${queryTime}ms`);
+    console.log(`[suggest-peers] All ${preparedTerms.length} queries completed in ${queryTime}ms`);
 
-    // Single-pass aggregation: build peerMap with keyword tracking
-    // Names are normalized BEFORE aggregation so variants like
-    // "PLYMOUTH HOUSING GROUP" and "PLYMOUTH HOUSING" merge together.
+    // Step 3: Aggregate results
     const peerMap = new Map<string, PeerData>();
+    // Weight per keyword match: LLM terms are more targeted so get higher weight
+    const KW_WEIGHT = usedLLM ? 15 : 10;
 
     for (const { keyword, rows } of results) {
       for (const row of rows) {
@@ -355,13 +447,12 @@ Deno.serve(async (req: Request) => {
           peerMap.set(key, entry);
         }
         entry.count += 1;
-        // Keep the longest variant as the display name
         if (rawName.length > entry.displayName.length) {
           entry.displayName = rawName;
         }
         if (!entry.matchedKeywords.has(keyword)) {
           entry.matchedKeywords.add(keyword);
-          entry.keywordWeightSum += 1; // equal weight per keyword
+          entry.keywordWeightSum += 1;
         }
         if (city && (row.grantee_city || '').toUpperCase().includes(city.toUpperCase())) {
           entry.cityMatch = true;
@@ -369,20 +460,17 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Score and sort: simple formula that rewards keyword matches,
-    // city proximity, and grant count equally weighted.
-    // Each keyword match = 10 pts, city match = 10 pts, grants capped at 20 pts
+    // Step 4: Score and rank
+    // City bonus is high (30pts) to strongly prefer local organizations
     const scoredPeers = [...peerMap.entries()].map(([name, data]) => {
       const kwCount = data.matchedKeywords.size;
-      const kwScore = kwCount * 10;
-      const cityBonus = data.cityMatch ? 10 : 0;
-      const grantBonus = Math.min(data.count, 20);
+      const kwScore = kwCount * KW_WEIGHT;
+      const cityBonus = data.cityMatch ? 30 : 0;
+      const grantBonus = Math.min(data.count, 25);
 
-      // Exclude generalist institutions entirely - they match many keywords
-      // due to broad research/service portfolios but aren't true peer nonprofits
       const isGeneralist = GENERALIST_PATTERNS.some(p => p.test(name));
-
       const score = isGeneralist ? -1 : kwScore + cityBonus + grantBonus;
+
       return { name: data.displayName, normKey: name, score, kwCount,
                count: data.count, cityMatch: data.cityMatch,
                weightSum: data.keywordWeightSum, isGeneralist };
@@ -392,20 +480,19 @@ Deno.serve(async (req: Request) => {
 
     console.log(`[suggest-peers] ${scoredPeers.length} candidates found`);
     if (scoredPeers.length > 0) {
-      console.log('[suggest-peers] Top 10:', scoredPeers.slice(0, 10).map(p =>
-        `${p.name} (kw=${p.kwCount}, wt=${p.weightSum.toFixed(1)}, grants=${p.count}, city=${p.cityMatch}, gen=${p.isGeneralist}, score=${p.score.toFixed(1)})`
+      console.log('[suggest-peers] Top 15:', scoredPeers.slice(0, 15).map(p =>
+        `${p.name} (kw=${p.kwCount}, grants=${p.count}, city=${p.cityMatch}, gen=${p.isGeneralist}, score=${p.score.toFixed(1)})`
       ).join(' | '));
     }
 
-    // Deduplicate similar names and format
-    // Names are already normalized as aggregation keys, so dedup uses normKey
+    // Step 5: Deduplicate and format
     const seen = new Set<string>();
     const peers: string[] = [];
 
     for (const row of scoredPeers) {
-      if (peers.length >= 8) break;
+      if (peers.length >= 10) break;
       if (row.kwCount < 1) continue;
-      if (row.score < 0) continue;  // skip excluded generalists
+      if (row.score < 0) continue;
 
       const normKey = row.normKey.replace(/[^A-Z0-9\s]/g, '').trim();
       if (!normKey || normKey.length < 3) continue;
@@ -420,7 +507,6 @@ Deno.serve(async (req: Request) => {
       if (isDupe) continue;
       seen.add(normKey);
 
-      // Title-case for display using the best display name
       const displayName = row.name
         .split(/\s+/)
         .map((w: string) => {
@@ -435,17 +521,18 @@ Deno.serve(async (req: Request) => {
     const totalTime = Date.now() - startTime;
     console.log(`[suggest-peers] Returning ${peers.length} peers in ${totalTime}ms:`, peers.join(', '));
 
-    // Include debug info for diagnostics
     const debug = {
-      keywords: searchTerms.map(t => t.original === t.stemmed ? t.original : `${t.original}→${t.stemmed}`),
+      usedLLM,
+      keywords: preparedTerms.map(t => t.original === t.searchTerm ? t.original : `${t.original}→${t.searchTerm}`),
       queryResults: results.map(r => ({ keyword: r.keyword, rows: r.rowCount, error: r.error })),
       candidates: scoredPeers.length,
-      topCandidates: scoredPeers.slice(0, 10).map(p => ({
+      topCandidates: scoredPeers.slice(0, 15).map(p => ({
         name: p.name, kwCount: p.kwCount, weightSum: +p.weightSum.toFixed(2),
         grants: p.count, cityMatch: p.cityMatch, isGeneralist: p.isGeneralist,
         score: +p.score.toFixed(1),
       })),
-      queryTimeMs: queryTime,
+      llmTimeMs: llmTime,
+      queryTimeMs: queryTime - llmTime,
       totalTimeMs: totalTime,
     };
 
