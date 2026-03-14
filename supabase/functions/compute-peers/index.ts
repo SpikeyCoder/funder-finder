@@ -144,8 +144,10 @@ Deno.serve(async (req) => {
     const minYear = new Date().getUTCFullYear() - RECENT_YEARS;
 
     // ── Recipient peers: find similar orgs by MISSION KEYWORD SIMILARITY ──
-    // Uses grant purpose_text to extract mission keywords, then finds other
-    // recipients with overlapping mission areas. Geography is a minor secondary signal.
+    // v10 — Uses grant purpose_text to build a weighted mission profile for the
+    // source org, then finds other recipients whose grants concentrate on the
+    // SAME mission areas.  Rewards focused orgs, penalises mega-orgs that match
+    // every category.  Geography and scale are secondary signals.
     if (entityType === 'recipient') {
       // Step 1: Resolve source recipient details
       const isUuid = entityId.includes('-') && entityId.length > 20;
@@ -168,6 +170,7 @@ Deno.serve(async (req) => {
 
       const sourceState = source.primary_state?.toUpperCase() || null;
       const sourceCity = source.primary_city?.toUpperCase() || null;
+      const sourceFunding = Number(source.total_funding) || 0;
 
       // Step 2: Fetch all grants for this recipient to get purpose_text values
       const sourceGrants = (await restQuery(
@@ -181,32 +184,31 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Step 3: Extract mission keywords from purpose_text
-      // These are the mission-relevant terms we look for in grant descriptions
+      // Step 3: Mission keyword dictionary
       const MISSION_KEYWORDS: Record<string, string[]> = {
-        'housing': ['housing', 'shelter', 'homeless', 'homelessness', 'transitional housing', 'permanent supportive housing', 'affordable housing', 'rent assistance', 'rental assistance'],
-        'mental_health': ['mental health', 'behavioral health', 'psychiatric', 'counseling', 'therapy', 'substance abuse', 'addiction', 'recovery', 'drug', 'alcohol'],
-        'food': ['food', 'hunger', 'nutrition', 'meal', 'meals', 'food bank', 'food pantry', 'feeding'],
-        'education': ['education', 'school', 'scholarship', 'tutoring', 'literacy', 'learning', 'academic', 'stem', 'after-school', 'afterschool'],
-        'youth': ['youth', 'children', 'child', 'teen', 'adolescent', 'juvenile', 'kids', 'young people', 'foster'],
-        'health': ['health', 'medical', 'clinic', 'hospital', 'healthcare', 'health care', 'patient', 'disease', 'wellness'],
-        'arts': ['arts', 'art', 'music', 'theater', 'theatre', 'dance', 'cultural', 'museum', 'gallery', 'creative', 'performing arts'],
-        'environment': ['environment', 'conservation', 'climate', 'wildlife', 'ecological', 'sustainability', 'clean water', 'clean energy', 'nature', 'land trust'],
-        'workforce': ['workforce', 'employment', 'job training', 'job placement', 'career', 'vocational', 'workforce development'],
-        'disability': ['disability', 'disabilities', 'disabled', 'accessibility', 'special needs', 'deaf', 'blind', 'autism'],
-        'domestic_violence': ['domestic violence', 'domestic abuse', 'sexual assault', 'violence prevention', 'victim', 'survivors', 'abuse'],
-        'seniors': ['senior', 'seniors', 'elderly', 'aging', 'older adults', 'elder care', 'retirement'],
+        'housing': ['permanent supportive housing', 'transitional housing', 'affordable housing', 'rental assistance', 'rent assistance', 'homelessness', 'homeless', 'housing', 'shelter'],
+        'mental_health': ['behavioral health', 'mental health', 'substance abuse', 'psychiatric', 'counseling', 'addiction', 'recovery', 'therapy'],
+        'food': ['food bank', 'food pantry', 'food', 'hunger', 'nutrition', 'meal', 'meals', 'feeding'],
+        'education': ['after-school', 'afterschool', 'scholarship', 'education', 'tutoring', 'literacy', 'learning', 'academic', 'school'],
+        'youth': ['young people', 'foster', 'youth', 'children', 'child', 'teen', 'adolescent', 'juvenile', 'kids'],
+        'health': ['health care', 'healthcare', 'hospital', 'medical', 'clinic', 'patient', 'disease', 'health', 'wellness'],
+        'arts': ['performing arts', 'arts', 'music', 'theater', 'theatre', 'dance', 'cultural', 'museum', 'gallery', 'creative'],
+        'environment': ['clean water', 'clean energy', 'land trust', 'conservation', 'environment', 'climate', 'wildlife', 'sustainability', 'nature'],
+        'workforce': ['workforce development', 'job training', 'job placement', 'workforce', 'employment', 'career', 'vocational'],
+        'disability': ['special needs', 'disability', 'disabilities', 'disabled', 'accessibility', 'deaf', 'blind', 'autism'],
+        'domestic_violence': ['domestic violence', 'domestic abuse', 'sexual assault', 'violence prevention', 'victim', 'survivors'],
+        'seniors': ['older adults', 'elder care', 'senior', 'seniors', 'elderly', 'aging'],
         'immigrant': ['immigrant', 'immigration', 'refugee', 'migrant', 'asylum', 'newcomer', 'resettlement'],
-        'legal': ['legal', 'legal aid', 'legal services', 'justice', 'advocacy', 'civil rights', 'human rights'],
-        'animals': ['animal', 'animals', 'veterinary', 'pet', 'humane', 'spay', 'neuter', 'rescue'],
+        'legal': ['legal aid', 'legal services', 'civil rights', 'human rights', 'legal', 'justice', 'advocacy'],
+        'animals': ['animal', 'animals', 'veterinary', 'pet', 'humane', 'rescue'],
         'religion': ['church', 'religious', 'faith', 'ministry', 'congregation', 'worship', 'spiritual'],
-        'poverty': ['poverty', 'low-income', 'low income', 'underserved', 'disadvantaged', 'economic empowerment'],
-        'community_dev': ['community development', 'neighborhood', 'civic', 'capacity building', 'community organizing'],
-        'emergency': ['emergency', 'disaster', 'crisis', 'relief', 'emergency services', 'first responders'],
+        'poverty': ['low-income', 'low income', 'poverty', 'underserved', 'disadvantaged', 'economic empowerment'],
+        'community_dev': ['community development', 'capacity building', 'community organizing', 'neighborhood', 'civic'],
+        'emergency': ['emergency services', 'first responders', 'emergency', 'disaster', 'crisis', 'relief'],
         'human_services': ['human services', 'social services', 'case management', 'supportive services', 'wraparound'],
       };
 
-      // Generic terms to ignore (not mission-relevant)
+      // Generic purpose texts to exclude
       const GENERIC_PURPOSES = new Set([
         'general support', 'general operating', 'unrestricted', 'operating support',
         'general purpose', 'charitable purpose', 'charitable purposes',
@@ -218,98 +220,112 @@ Deno.serve(async (req) => {
         .map(g => g.purpose_text?.toLowerCase().trim() || '')
         .filter(t => t.length > 0 && !GENERIC_PURPOSES.has(t));
 
-      const combinedText = allPurposeText.join(' ');
+      // Step 4: Build WEIGHTED mission profile for source org
+      // Count how many grants fall into each category → this is the mission profile
+      const sourceCategoryHits = new Map<string, number>();
+      let totalCategorised = 0;
 
-      // Find which mission categories match this recipient
-      const sourceMissionCategories = new Set<string>();
-      const sourceMissionSearchTerms: string[] = [];
-
-      for (const [category, terms] of Object.entries(MISSION_KEYWORDS)) {
-        for (const term of terms) {
-          if (combinedText.includes(term)) {
-            sourceMissionCategories.add(category);
-            // Collect the most specific matching terms for SQL search (max 2 per category)
-            if (!sourceMissionSearchTerms.some(t => t === term)) {
-              sourceMissionSearchTerms.push(term);
+      for (const text of allPurposeText) {
+        for (const [category, terms] of Object.entries(MISSION_KEYWORDS)) {
+          for (const term of terms) {
+            if (text.includes(term)) {
+              sourceCategoryHits.set(category, (sourceCategoryHits.get(category) || 0) + 1);
+              totalCategorised++;
+              break; // one category match per purpose text per category
             }
-            break; // one match per category is enough
           }
         }
       }
 
-      if (sourceMissionCategories.size === 0) {
-        // Fallback: use the most common non-generic purpose texts as search terms
-        const purposeFreq = new Map<string, number>();
-        for (const t of allPurposeText) {
-          if (t.length > 3 && t.length < 60) {
-            purposeFreq.set(t, (purposeFreq.get(t) || 0) + 1);
-          }
-        }
-        const topPurposes = Array.from(purposeFreq.entries())
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 5)
-          .map(([text]) => text);
-        for (const p of topPurposes) {
-          sourceMissionSearchTerms.push(p);
-          sourceMissionCategories.add(`custom_${p.slice(0, 20)}`);
-        }
-      }
-
-      if (sourceMissionCategories.size === 0) {
+      if (sourceCategoryHits.size === 0) {
         return new Response(JSON.stringify({ peers: [] }), {
           headers: { ...headers, 'Content-Type': 'application/json' },
         });
       }
 
-      // Step 4: For each mission search term, find candidate recipients via purpose_text
-      // Use the most distinctive terms (up to 8) to query foundation_grants
-      const searchTerms = sourceMissionSearchTerms.slice(0, 8);
-      const candidateKeywordHits = new Map<string, Set<string>>(); // grantee_ein -> matched categories
+      // Build source profile weights (normalised to sum to 1.0)
+      const sourceProfile = new Map<string, number>();
+      for (const [cat, count] of sourceCategoryHits) {
+        sourceProfile.set(cat, count / totalCategorised);
+      }
 
-      for (const term of searchTerms) {
-        // Find the category this term belongs to
-        let matchedCategory = '';
-        for (const [cat, terms] of Object.entries(MISSION_KEYWORDS)) {
-          if (terms.includes(term)) { matchedCategory = cat; break; }
-        }
-        if (!matchedCategory) matchedCategory = `custom_${term.slice(0, 20)}`;
+      // Rank categories by weight — top categories are the org's core mission
+      const rankedCategories = Array.from(sourceProfile.entries())
+        .sort((a, b) => b[1] - a[1]);
 
-        // Use PostgREST ilike filter on purpose_text to find matching grants
-        const encoded = encodeURIComponent(`*${term}*`);
-        const candidateGrants = (await restQuery(
-          'foundation_grants',
-          `purpose_text=ilike.${encoded}&grantee_ein=not.is.null&grantee_ein=neq.${encodeURIComponent(source.ein)}&select=grantee_ein&limit=3000`,
-        )) as Array<{ grantee_ein: string }>;
+      // Step 5: Build search terms — use multiple terms per TOP category
+      // More specific terms first (already ordered in MISSION_KEYWORDS)
+      const searchTermsForCategory = new Map<string, string[]>();
+      const combinedText = allPurposeText.join(' ');
 
-        for (const g of candidateGrants) {
-          if (!g.grantee_ein) continue;
-          const cats = candidateKeywordHits.get(g.grantee_ein) || new Set();
-          cats.add(matchedCategory);
-          candidateKeywordHits.set(g.grantee_ein, cats);
+      for (const [cat] of rankedCategories.slice(0, 6)) {
+        const terms = MISSION_KEYWORDS[cat] || [];
+        const matching = terms.filter(t => combinedText.includes(t));
+        // Pick up to 2 search terms per category, prefer the more specific ones (first in list)
+        searchTermsForCategory.set(cat, matching.slice(0, 2));
+      }
+
+      // Step 6: Search for candidate grantees via purpose_text
+      // Track per-candidate: which categories matched AND how many grant hits
+      type CandidateData = { categories: Set<string>; hitCount: number };
+      const candidateHits = new Map<string, CandidateData>();
+
+      for (const [cat, terms] of searchTermsForCategory) {
+        for (const term of terms) {
+          const encoded = encodeURIComponent(`*${term}*`);
+          const grants = (await restQuery(
+            'foundation_grants',
+            `purpose_text=ilike.${encoded}&grantee_ein=not.is.null&grantee_ein=neq.${encodeURIComponent(source.ein)}&select=grantee_ein&limit=5000`,
+          )) as Array<{ grantee_ein: string }>;
+
+          for (const g of grants) {
+            if (!g.grantee_ein) continue;
+            const data = candidateHits.get(g.grantee_ein) || { categories: new Set(), hitCount: 0 };
+            data.categories.add(cat);
+            data.hitCount += 1;
+            candidateHits.set(g.grantee_ein, data);
+          }
         }
       }
 
-      // Step 5: Score candidates by mission keyword overlap
-      // Only keep candidates that match at least 2 mission categories (or 1 if source has ≤2)
-      const minCategoryMatch = sourceMissionCategories.size <= 2 ? 1 : 2;
+      // Step 7: Score candidates using WEIGHTED PRECISION
+      // Weighted precision = (sum of source profile weights for matching categories)
+      //                    / (candidate's total matched categories)
+      // This heavily rewards focused orgs whose mission aligns with the source's
+      // CORE mission areas, and penalises orgs that match many diverse categories.
+      const candidateScores: Array<{
+        ein: string; focusScore: number; hitCount: number;
+        matchedCategories: Set<string>;
+      }> = [];
 
-      const candidateScores: Array<{ ein: string; missionScore: number; matchedCategories: Set<string> }> = [];
-      for (const [ein, matchedCats] of candidateKeywordHits) {
-        if (matchedCats.size < minCategoryMatch) continue;
+      for (const [ein, data] of candidateHits) {
+        if (data.categories.size === 0) continue;
 
-        // Jaccard similarity of mission categories
-        const intersection = new Set([...matchedCats].filter(c => sourceMissionCategories.has(c)));
-        const union = new Set([...matchedCats, ...sourceMissionCategories]);
-        const missionScore = union.size > 0 ? intersection.size / union.size : 0;
-
-        if (missionScore > 0) {
-          candidateScores.push({ ein, missionScore, matchedCategories: intersection });
+        // Weighted sum: how much of the source's profile does this candidate overlap?
+        let weightedOverlap = 0;
+        for (const cat of data.categories) {
+          weightedOverlap += sourceProfile.get(cat) || 0;
         }
+
+        // Focus score = weighted overlap / candidate's breadth
+        // An org matching only housing (weight 0.5) scores: 0.5 / 1 = 0.50
+        // A mega-org matching 8 categories (total weight 0.9) scores: 0.9 / 8 = 0.11
+        const focusScore = weightedOverlap / data.categories.size;
+
+        // Also require a minimum number of matching grants to filter out noise
+        if (data.hitCount < 2) continue;
+
+        candidateScores.push({
+          ein,
+          focusScore,
+          hitCount: data.hitCount,
+          matchedCategories: data.categories,
+        });
       }
 
-      // Sort by mission score, take top 60 for enrichment
-      candidateScores.sort((a, b) => b.missionScore - a.missionScore);
-      const enrichPool = candidateScores.slice(0, 60);
+      // Sort by focus score, take top 80 for enrichment
+      candidateScores.sort((a, b) => b.focusScore - a.focusScore);
+      const enrichPool = candidateScores.slice(0, 80);
 
       if (enrichPool.length === 0) {
         return new Response(JSON.stringify({ peers: [] }), {
@@ -317,7 +333,7 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Step 6: Enrich candidates from recipient_organizations
+      // Step 8: Enrich candidates from recipient_organizations
       type RecipientInfo = {
         id: string; ein: string; name: string;
         primary_city: string | null; primary_state: string | null;
@@ -336,44 +352,65 @@ Deno.serve(async (req) => {
         for (const r of rows) enrichedMap.set(r.ein, r);
       }
 
-      // Step 7: Final scoring — mission similarity (85%) + geography (15%)
-      const R_WEIGHT_MISSION = 0.85;
-      const R_WEIGHT_GEO     = 0.15;
+      // Step 9: Final composite scoring
+      // 55% mission focus + 20% geography + 15% scale similarity + 10% hit volume
+      const W_FOCUS = 0.55;
+      const W_GEO   = 0.20;
+      const W_SCALE = 0.15;
+      const W_HITS  = 0.10;
+
+      // Max hit count for normalisation
+      const maxHits = Math.max(...enrichPool.map(c => c.hitCount), 1);
 
       const scored = enrichPool
         .map(c => {
           const r = enrichedMap.get(c.ein);
           if (!r) return null;
-          // Filter out for-profit and government entities
           if (isLikelyNonNonprofit(r.name || '')) return null;
-          // Filter out one-off recipients (need at least a few grants)
           if ((r.funder_count ?? 0) < MIN_GRANTS_FOR_PEER) return null;
 
-          // Signal 1: Mission keyword overlap (primary — 85%)
-          const missionScore = c.missionScore;
+          // Exclude mega-orgs: if funder_count is 20x+ the source, likely a national org
+          const sourceFunderCount = source.funder_count ?? 10;
+          if ((r.funder_count ?? 0) > sourceFunderCount * 20) return null;
 
-          // Signal 2: Geographic proximity (minor — 15%)
+          // Signal 1: Mission focus score (55%)
+          const focusScore = c.focusScore;
+
+          // Signal 2: Geographic proximity (20%)
           let geoScore = 0;
           const peerState = r.primary_state?.toUpperCase() || null;
           const peerCity = r.primary_city?.toUpperCase() || null;
           if (sourceCity && peerCity && sourceState && peerState &&
               sourceCity === peerCity && sourceState === peerState) {
-            geoScore = 1.0;
+            geoScore = 1.0; // same city
           } else if (sourceState && peerState) {
             if (sourceState === peerState) {
-              geoScore = 0.7;
+              geoScore = 0.6; // same state
             } else {
               const srcRegion = STATE_REGION[sourceState];
               const peerRegion = peerState ? STATE_REGION[peerState] : null;
               if (srcRegion && peerRegion && srcRegion === peerRegion) {
-                geoScore = 0.4;
+                geoScore = 0.3; // same region
               }
             }
           }
 
+          // Signal 3: Scale similarity — log-ratio of total funding (15%)
+          let scaleScore = 0.5; // neutral default
+          const peerFunding = Number(r.total_funding) || 0;
+          if (sourceFunding > 0 && peerFunding > 0) {
+            const logDiff = Math.abs(Math.log10(sourceFunding) - Math.log10(peerFunding));
+            scaleScore = Math.max(0, 1.0 - logDiff * 0.4);
+          }
+
+          // Signal 4: Hit volume — more matching grants = stronger signal (10%)
+          const hitScore = c.hitCount / maxHits;
+
           const composite =
-            missionScore * R_WEIGHT_MISSION +
-            geoScore * R_WEIGHT_GEO;
+            focusScore * W_FOCUS +
+            geoScore   * W_GEO +
+            scaleScore * W_SCALE +
+            hitScore   * W_HITS;
 
           return {
             id: r.id,
