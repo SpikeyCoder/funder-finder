@@ -134,7 +134,7 @@ Deno.serve(async (req: Request) => {
     }
 
     if (states.length > 0) {
-      query_builder = query_builder.in_('state', states);
+      query_builder = query_builder.in('state', states);
     }
 
     if (ntee_codes.length > 0) {
@@ -144,7 +144,7 @@ Deno.serve(async (req: Request) => {
     }
 
     if (funder_types.length > 0) {
-      query_builder = query_builder.in_('entity_type', funder_types);
+      query_builder = query_builder.in('entity_type', funder_types);
     }
 
     if (grant_size_min != null && grant_size_min > 0) {
