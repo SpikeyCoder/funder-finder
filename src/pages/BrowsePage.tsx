@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ExternalLink, ArrowUpDown } from 'lucide-react';
 import NavBar from '../components/NavBar';
+import { useAuth } from '..//contexts/AuthContext';
 import FilterPanel, { FilterState, EMPTY_FILTERS } from '../components/FilterPanel';
 import SaveToProjectButton from '../components/SaveToProjectButton';
 import { getEdgeFunctionHeaders } from '../lib/supabase';
@@ -41,6 +42,7 @@ const BrowsePage: React.FC = () => {
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
 
+  const { user } = useAuth();
   const RESULTS_PER_PAGE = 25;
 
   // Parse URL params on mount and when they change
@@ -141,7 +143,7 @@ const BrowsePage: React.FC = () => {
         per_page: RESULTS_PER_PAGE,
       };
 
-      const edgeHeaders = await getEdgeFunctionHeaders();
+      const edgeHeaders = await getEdgeFunctionHeaders('application/json', { useAnonOnly: true });
       const response = await fetch(EDGE_FUNCTION_URL, {
         method: 'POST',
         headers: {
@@ -208,7 +210,7 @@ const BrowsePage: React.FC = () => {
 
       <div className="flex h-[calc(100vh-64px)]">
         {/* Filter Panel - Desktop Sidebar */}
-        <FilterPanel filters={filters} onChange={handleFilterChange} />
+        <FilterPanel filters={filters} onChange={handleFilterChange} showPeerToggle={!!user} />
 
         {/* Main Content Area */}
         <div className="flex-1 flex flex-col overflow-hidden">

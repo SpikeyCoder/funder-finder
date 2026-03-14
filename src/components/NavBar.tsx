@@ -102,7 +102,7 @@ export default function NavBar() {
                 </>
               ) : (
                 <button
-                  onClick={() => setShowLoginModal(true)}
+                  onClick={() => navigate('/login')}
                   className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors"
                 >
                   Sign In
@@ -182,7 +182,7 @@ export default function NavBar() {
                 </>
               ) : (
                 <button
-                  onClick={() => { setShowLoginModal(true); setMobileOpen(false); }}
+                  onClick={() => { navigate('/login'); setMobileOpen(false); }}
                   className="block w-full text-left px-3 py-2.5 text-sm font-medium text-gray-400 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors"
                 >
                   Sign In

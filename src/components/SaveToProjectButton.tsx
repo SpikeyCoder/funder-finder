@@ -22,6 +22,7 @@ const SaveToProjectButton: React.FC<SaveToProjectButtonProps> = ({
 }) => {
   const { user, session, loading: authLoading } = useAuth();
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showToast, setShowToast] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(false);
@@ -146,6 +147,8 @@ const SaveToProjectButton: React.FC<SaveToProjectButtonProps> = ({
   const handleMainButtonClick = () => {
     if (!user || !session) {
       setShowLoginModal(true);
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
       return;
     }
 
@@ -214,6 +217,13 @@ const SaveToProjectButton: React.FC<SaveToProjectButtonProps> = ({
         )}
       </div>
 
+
+      {/* Toast notification for unauthenticated users */}
+      {showToast && !showLoginModal && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[#161b22] border border-[#30363d] rounded-lg px-4 py-3 shadow-lg text-sm text-gray-300 animate-fade-in">
+          Sign in to save funders to your projects
+        </div>
+      )}
       {/* Login Modal */}
       {showLoginModal && (
         <LoginModal

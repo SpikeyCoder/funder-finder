@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, ChevronLeft, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
+import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
 
 interface SearchCriteria {
@@ -26,6 +26,8 @@ const STATES = [
   'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VT',
   'VA', 'WA', 'WV', 'WI', 'WY'
 ];
+
+const MATCH_FUNDERS_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co/functions/v1/match-funders';
 
 const NTEE_CATEGORIES = [
   { code: 'A', label: 'Arts, Culture & Humanities' },
@@ -196,6 +198,21 @@ export default function NewProjectPage() {
         .single();
 
       if (insertError) throw insertError;
+
+      // Fire-and-forget: trigger match computation for the new project
+      try {
+        const headers = await getEdgeFunctionHeaders();
+        fetch(MATCH_FUNDERS_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...headers },
+          body: JSON.stringify({
+            project_id: data.id,
+            mission: form.description || form.name,
+          }),
+        }).catch(err => console.warn('Match trigger failed (non-blocking):', err));
+      } catch (matchErr) {
+        console.warn('Failed to trigger match computation:', matchErr);
+      }
 
       navigate(`/projects/${data.id}`);
     } catch (err) {
@@ -500,7 +517,7 @@ export default function NewProjectPage() {
                     </div>
                   )}
 
-                  {form.search_criteria.min_grant_size !== undefined && (
+                  {(form.search_criteria.min_grant_size != null || form.search_criteria.max_grant_size != null) && (
                     <div>
                       <p className="text-xs text-gray-400 uppercase">Grant Size Range</p>
                       <p className="text-sm text-gray-300 mt-1">
