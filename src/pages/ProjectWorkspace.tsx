@@ -5,15 +5,17 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
 
-const MATCH_FUNDERS_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co/functions/v1/match-funders';
+const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
+const MATCH_FUNDERS_URL = `${SUPABASE_URL}/functions/v1/match-funders`;
+const SUGGEST_PEERS_URL = `${SUPABASE_URL}/functions/v1/suggest-peers`;
 
 interface PeerOrg {
-  ein: string;
   name: string;
-  state: string;
-  ntee_code: string;
-  total_revenue: number | null;
-  shared_funders: number;
+  ein?: string;
+  state?: string;
+  ntee_code?: string;
+  total_revenue?: number | null;
+  shared_funders?: number;
 }
 
 interface Project {
@@ -188,42 +190,70 @@ export default function ProjectWorkspace() {
   const loadPeers = async (proj: Project) => {
     setPeersLoading(true);
     try {
-      // Build criteria from project: find recipients in same state(s) and NTEE codes
+      const mission = proj.description || proj.name;
       const states = proj.location_scope?.map(l => l.state) || [];
-      const nteeCodes = proj.fields_of_work || [];
+      const locationServed = states.join(', ') || undefined;
 
-      // Query recipient_organizations that share the project's geography and NTEE codes
-      let query = supabase
-        .from('recipient_organizations')
-        .select('ein, name, primary_state, ntee_code, total_funding, funder_count')
-        .gt('funder_count', 0)
-        .order('funder_count', { ascending: false })
-        .limit(25);
-
-      if (states.length > 0) {
-        query = query.in('primary_state', states);
+      // Determine budget band from project budget range
+      let budgetBand: string = 'prefer_not_to_say';
+      if (proj.budget_min || proj.budget_max) {
+        const amt = proj.budget_max || proj.budget_min || 0;
+        if (amt <= 50000) budgetBand = 'under_50k';
+        else if (amt <= 250000) budgetBand = '50k_250k';
+        else if (amt <= 1000000) budgetBand = '250k_1m';
+        else if (amt <= 5000000) budgetBand = '1m_5m';
+        else budgetBand = 'over_5m';
       }
 
-      if (nteeCodes.length > 0) {
-        const nteeFilters = nteeCodes.map((code: string) => `ntee_code.like.${code}%`).join(',');
-        query = query.or(nteeFilters);
-      }
+      // Call the suggest-peers edge function for mission-aware peer matching
+      const headers = await getEdgeFunctionHeaders();
+      const res = await fetch(SUGGEST_PEERS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ mission, locationServed, budgetBand }),
+      });
 
-      const { data, error } = await query;
-
-      if (error) {
-        console.error('Error loading peers:', error);
+      if (!res.ok) {
+        console.error('suggest-peers error:', res.status);
         setPeers([]);
-      } else {
-        setPeers((data || []).map((r: any) => ({
-          ein: r.ein,
-          name: r.name,
-          state: r.primary_state,
-          ntee_code: r.ntee_code,
-          total_revenue: r.total_funding,
-          shared_funders: r.funder_count || 0,
-        })));
+        return;
       }
+
+      const data = await res.json();
+      const peerNames: string[] = Array.isArray(data.peers) ? data.peers : [];
+
+      if (peerNames.length === 0) {
+        setPeers([]);
+        return;
+      }
+
+      // Look up peer names in recipient_organizations for richer display data
+      // Use ilike matching since suggest-peers returns title-cased names
+      const enriched: PeerOrg[] = [];
+      for (const peerName of peerNames) {
+        const { data: matches } = await supabase
+          .from('recipient_organizations')
+          .select('ein, name, primary_state, ntee_code, total_funding, funder_count')
+          .ilike('name', `%${peerName.replace(/'/g, "''")}%`)
+          .limit(1);
+
+        if (matches && matches.length > 0) {
+          const r = matches[0];
+          enriched.push({
+            name: r.name || peerName,
+            ein: r.ein,
+            state: r.primary_state,
+            ntee_code: r.ntee_code,
+            total_revenue: r.total_funding,
+            shared_funders: r.funder_count || 0,
+          });
+        } else {
+          // Still show the peer even without DB enrichment
+          enriched.push({ name: peerName });
+        }
+      }
+
+      setPeers(enriched);
     } catch (err) {
       console.error('Error loading peers:', err);
       setPeers([]);
@@ -275,7 +305,7 @@ export default function ProjectWorkspace() {
           funder_name: r.name || r.foundation_ein || '',
           match_score: Math.round((r.fit_score || 0) * 100),
           match_reasons: r.fit_explanation || null,
-          gives_to_peers: !!r.gives_to_peers,
+          gives_to_peers: (r.peer_match_count || 0) > 0,
           computed_at: new Date().toISOString(),
         }));
 
@@ -525,40 +555,52 @@ export default function ProjectWorkspace() {
           {/* PEERS TAB */}
           {activeTab === 'peers' && (
             <div>
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-sm text-gray-400">
+                  {peers.length > 0 ? `${peers.length} peer organization${peers.length !== 1 ? 's' : ''} with similar missions` : ''}
+                </p>
+                <button
+                  onClick={() => project && loadPeers(project)}
+                  disabled={peersLoading}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
+                >
+                  <RefreshCw size={16} className={peersLoading ? 'animate-spin' : ''} />
+                  {peersLoading ? 'Finding Peers...' : 'Refresh Peers'}
+                </button>
+              </div>
               {peersLoading ? (
-                <div className="flex items-center justify-center py-12"><Loader className="animate-spin text-gray-400" size={24} /></div>
+                <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-8 text-center">
+                  <Loader className="animate-spin text-blue-400 mx-auto mb-3" size={24} />
+                  <p className="text-gray-400 mb-2">Finding peer organizations...</p>
+                  <p className="text-gray-500 text-sm">Analyzing grant records to find nonprofits with similar missions.</p>
+                </div>
               ) : peers.length === 0 ? (
                 <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-8 text-center">
                   <Users size={32} className="mx-auto text-gray-500 mb-3" />
                   <p className="text-gray-400 mb-2">No peer organizations found.</p>
-                  <p className="text-gray-500 text-sm">Try updating your project's location and field of work criteria in Settings.</p>
+                  <p className="text-gray-500 text-sm">Try updating your project description and location in Settings, then click "Refresh Peers".</p>
                 </div>
               ) : (
                 <div className="bg-[#161b22] border border-[#30363d] rounded-lg overflow-hidden">
-                  <div className="px-6 py-3 border-b border-[#30363d] bg-[#0d1117]">
-                    <p className="text-sm text-gray-400">
-                      {peers.length} peer organization{peers.length !== 1 ? 's' : ''} matching your project's NTEE codes and geography
-                    </p>
-                  </div>
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead className="bg-[#0d1117] border-b border-[#30363d]">
                         <tr>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">Organization</th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">State</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">NTEE</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">Category</th>
                           <th className="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase">Funders</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[#30363d]">
-                        {peers.map(peer => (
-                          <tr key={peer.ein} className="hover:bg-[#0d1117] transition-colors cursor-pointer" onClick={() => navigate(`/recipient/${peer.ein}`)}>
+                        {peers.map((peer, idx) => (
+                          <tr key={peer.ein || `peer-${idx}`} className="hover:bg-[#0d1117] transition-colors cursor-pointer" onClick={() => peer.ein && navigate(`/recipient/${peer.ein}`)}>
                             <td className="px-6 py-4 text-blue-400 hover:text-blue-300 font-medium text-sm">{peer.name}</td>
                             <td className="px-6 py-4 text-gray-400 text-sm">{peer.state || '—'}</td>
                             <td className="px-6 py-4 text-gray-400 text-sm">
                               {NTEE_CATEGORIES.find(c => peer.ntee_code?.startsWith(c.code))?.label || peer.ntee_code || '—'}
                             </td>
-                            <td className="px-6 py-4 text-right text-gray-300 text-sm">{peer.shared_funders}</td>
+                            <td className="px-6 py-4 text-right text-gray-300 text-sm">{peer.shared_funders ?? '—'}</td>
                           </tr>
                         ))}
                       </tbody>
