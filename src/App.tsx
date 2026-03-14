@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-ro
 import { useEffect, useRef } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import AnalyticsTracker from './components/AnalyticsTracker';
+import AuthGuard from './components/AuthGuard';
 import Landing from './pages/Landing';
 import MissionInput from './pages/MissionInput';
 import Results from './pages/Results';
@@ -10,6 +11,13 @@ import SavedFunders from './pages/SavedFunders';
 import GrantWriter from './pages/GrantWriter';
 import OrgSearchPage from './pages/OrgSearchPage';
 import RecipientProfile from './pages/RecipientProfile';
+import LoginPage from './pages/LoginPage';
+import SignupPage from './pages/SignupPage';
+import DashboardPage from './pages/DashboardPage';
+import NewProjectPage from './pages/NewProjectPage';
+import ProjectWorkspace from './pages/ProjectWorkspace';
+import BrowsePage from './pages/BrowsePage';
+import UserSettingsPage from './pages/UserSettingsPage';
 import NotFound from './pages/NotFound';
 import BugReportButton from './components/BugReportButton';
 
@@ -61,6 +69,7 @@ function AnimatedRoutes() {
   return (
     <div key={location.pathname} className="page-fade-in">
       <Routes location={location}>
+        {/* Public routes */}
         <Route path="/" element={<Landing />} />
         <Route path="/mission" element={<MissionInput />} />
         <Route path="/results" element={<Results />} />
@@ -69,6 +78,20 @@ function AnimatedRoutes() {
         <Route path="/grant-writer" element={<GrantWriter />} />
         <Route path="/search" element={<OrgSearchPage />} />
         <Route path="/recipient/:id" element={<RecipientProfile />} />
+        <Route path="/browse" element={<BrowsePage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignupPage />} />
+
+        {/* Auth-gated routes */}
+        <Route path="/dashboard" element={<AuthGuard><DashboardPage /></AuthGuard>} />
+        <Route path="/projects/new" element={<AuthGuard><NewProjectPage /></AuthGuard>} />
+        <Route path="/projects/:id" element={<AuthGuard><ProjectWorkspace /></AuthGuard>} />
+        <Route path="/projects/:id/matches" element={<AuthGuard><ProjectWorkspace /></AuthGuard>} />
+        <Route path="/projects/:id/tracker" element={<AuthGuard><ProjectWorkspace /></AuthGuard>} />
+        <Route path="/projects/:id/peers" element={<AuthGuard><ProjectWorkspace /></AuthGuard>} />
+        <Route path="/projects/:id/settings" element={<AuthGuard><ProjectWorkspace /></AuthGuard>} />
+        <Route path="/settings" element={<AuthGuard><UserSettingsPage /></AuthGuard>} />
+
         <Route path="*" element={<NotFound />} />
       </Routes>
     </div>

@@ -107,8 +107,26 @@ Deno.serve(async (req) => {
     const ein = typeof body?.ein === 'string' ? body.ein.trim() : '';
     const recipientId = typeof body?.recipientId === 'string' ? body.recipientId.trim() : '';
 
-    // Use EIN if provided, otherwise try recipientId (which may also be an EIN)
-    const lookupEin = ein || recipientId;
+    // Resolve the EIN to query grants with
+    let lookupEin = ein;
+
+    if (!lookupEin && recipientId) {
+      // recipientId might be a UUID (from OrgSearch) — resolve it to an EIN
+      const isUuid = recipientId.includes('-') && recipientId.length > 20;
+      if (isUuid) {
+        const rows = (await restQuery(
+          'recipient_organizations',
+          `id=eq.${encodeURIComponent(recipientId)}&select=ein&limit=1`,
+        )) as Array<{ ein: string }>;
+        if (rows.length > 0) {
+          lookupEin = rows[0].ein;
+        }
+      } else {
+        // recipientId is likely an EIN itself (e.g. from peer links)
+        lookupEin = recipientId;
+      }
+    }
+
     if (!lookupEin) {
       return new Response(
         JSON.stringify({ error: 'ein or recipientId is required' }),
@@ -193,30 +211,22 @@ Deno.serve(async (req) => {
       funderLookup = new Map(funderRows.map((f) => [f.id, f]));
     }
 
-    // Filter out DAFs and take top 15 non-DAF funders
+    // Return top 25 funders with isDaf flag (frontend handles filtering)
     const topFunders = allFunderIds
       .map(([fId, agg]) => {
         const funder = funderLookup.get(fId);
         const funderName = funder?.name || fId;
         const nteeCode = funder?.ntee_code || null;
-        // Skip DAFs
-        if (isDonorAdvisedFund(fId, funderName, nteeCode)) return null;
         return {
           funderId: fId,
           funderName,
           grantCount: agg.count,
           totalAmount: Math.round(agg.total),
           lastYear: agg.lastYear,
+          isDaf: isDonorAdvisedFund(fId, funderName, nteeCode),
         };
       })
-      .filter(Boolean)
-      .slice(0, 15) as Array<{
-        funderId: string;
-        funderName: string;
-        grantCount: number;
-        totalAmount: number;
-        lastYear: number;
-      }>;
+      .slice(0, 25);
 
     const result = {
       id: lookupEin,

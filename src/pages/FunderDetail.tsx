@@ -157,7 +157,7 @@ export default function FunderDetail() {
         }
       }
     } else {
-      // Anonymous path
+      // Anonymous path — save to localStorage immediately, suggest login for sync
       if (saved) {
         unsaveFunder(funder.id);
         setSaved(false);
@@ -175,8 +175,6 @@ export default function FunderDetail() {
     setCopiedEmail(true);
     setTimeout(() => setCopiedEmail(false), 2000);
   };
-
-  const handleToastLogin = () => { setToastMsg(null); setShowLoginModal(true); };
 
   return (
     <div className="min-h-screen bg-[#0d1117] text-white py-12 px-6">
@@ -605,8 +603,9 @@ export default function FunderDetail() {
                       if (!s || s.startsWith('/')) return null;
                       return s.startsWith('http') ? s : `https://${s}`;
                     };
+
                     // Check for URLs embedded in the next_step text itself
-                    // e.g. "Review current filing history in IRS EO Search: https://apps.irs.gov/app/eos/?ein=..."
+                    // e.g. "Review current filing history in IRS EO Search: https://apps.irs.gov/app/eos/?ein=611934172"
                     const urlMatch = funder.next_step?.match(/(https?:\/\/[^\s]+)/);
                     const embeddedUrl = urlMatch ? urlMatch[1] : null;
                     // Clean text: remove the raw URL and any trailing colon/space before it
@@ -729,14 +728,17 @@ export default function FunderDetail() {
 
       {/* Login modal — shown when user explicitly clicks login */}
       {showLoginModal && (
-        <LoginModal pendingFunder={funder} onClose={() => setShowLoginModal(false)} />
+        <LoginModal
+          pendingFunder={funder}
+          onClose={() => setShowLoginModal(false)}
+        />
       )}
 
       {/* Toast — non-blocking hint to log in for cloud sync */}
       {toastMsg && (
         <Toast
           message={toastMsg}
-          action={{ label: 'Log in', onClick: handleToastLogin }}
+          action={{ label: 'Log in', onClick: () => { setToastMsg(null); setShowLoginModal(true); } }}
           onClose={() => setToastMsg(null)}
         />
       )}

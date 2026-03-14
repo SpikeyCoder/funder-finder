@@ -24,7 +24,7 @@ export default function NavBar() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, [accountOpen]);
 
-  const isActive = (path: string) => location.pathname === path;
+  const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/');
 
   const linkClass = (path: string) =>
     `px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
@@ -50,13 +50,19 @@ export default function NavBar() {
             <button onClick={() => navigate('/mission')} className={linkClass('/mission')}>
               Find Funders
             </button>
+            <button onClick={() => navigate('/browse')} className={linkClass('/browse')}>
+              Browse Grants
+            </button>
             <button onClick={() => navigate('/search')} className={linkClass('/search')}>
-              Browse Database
+              Search
             </button>
 
             {!loading && (
               user ? (
                 <>
+                  <button onClick={() => navigate('/dashboard')} className={linkClass('/dashboard')}>
+                    Dashboard
+                  </button>
                   <button onClick={() => navigate('/saved')} className={linkClass('/saved')}>
                     Saved Funders
                   </button>
@@ -78,6 +84,12 @@ export default function NavBar() {
                         <div className="px-4 py-2.5 border-b border-[#30363d]">
                           <p className="text-xs text-gray-500 truncate">{user.email}</p>
                         </div>
+                        <button
+                          onClick={() => { navigate('/settings'); setAccountOpen(false); }}
+                          className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/[0.06] transition-colors"
+                        >
+                          Settings
+                        </button>
                         <button
                           onClick={() => { signOut(); setAccountOpen(false); }}
                           className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/[0.06] transition-colors"
@@ -121,17 +133,33 @@ export default function NavBar() {
               Find Funders
             </button>
             <button
+              onClick={() => { navigate('/browse'); setMobileOpen(false); }}
+              className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
+                isActive('/browse') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
+              }`}
+            >
+              Browse Grants
+            </button>
+            <button
               onClick={() => { navigate('/search'); setMobileOpen(false); }}
               className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
                 isActive('/search') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
               }`}
             >
-              Browse Database
+              Search
             </button>
 
             {!loading && (
               user ? (
                 <>
+                  <button
+                    onClick={() => { navigate('/dashboard'); setMobileOpen(false); }}
+                    className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
+                      isActive('/dashboard') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
+                    }`}
+                  >
+                    Dashboard
+                  </button>
                   <button
                     onClick={() => { navigate('/saved'); setMobileOpen(false); }}
                     className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
