@@ -1,10 +1,12 @@
 /**
- * compute-peers — Supabase Edge Function
+ * compute-peers v12 — Supabase Edge Function
  *
- * Finds similar organizations:
- * - Recipients: mission keyword similarity from grant purpose_text (primary),
- *   geographic proximity (secondary)
- * - Funders: shared grantee overlap, NTEE code, budget, geography
+ * Finds similar organizations using:
+ *   1. ProPublica NTEE code lookup (authoritative mission classification)
+ *   2. Grant purpose_text keyword analysis
+ *   3. Org name keyword extraction
+ *   4. Semantic category proximity
+ *   5. Geographic & scale signals
  *
  * Input:  { entityType: 'funder'|'recipient', entityId: string }
  * Output: { peers: PeerEntry[] }
@@ -22,7 +24,7 @@ const ALLOWED_ORIGINS = new Set([
 
 const RECENT_YEARS = 5;
 const MAX_PEERS = 10;
-const MIN_SHARED = 2; // need at least 2 shared entities to be a peer
+const MIN_SHARED = 2;
 
 function corsHeaders(requestOrigin: string | null): Record<string, string> {
   const origin =
@@ -52,6 +54,108 @@ async function restQuery(table: string, params: string): Promise<unknown[]> {
   return res.json() as Promise<unknown[]>;
 }
 
+// ── ProPublica NTEE Lookup ──────────────────────────────────────────────
+// Fetches the NTEE code for a nonprofit from the ProPublica API.
+// Returns null on any error (network, 404, etc.) — never blocks scoring.
+async function fetchNteeCode(ein: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://projects.propublica.org/nonprofits/api/v2/organizations/${ein}.json`,
+      { signal: AbortSignal.timeout(4000) }, // 4s timeout per call
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.organization?.ntee_code || null;
+  } catch {
+    return null;
+  }
+}
+
+// ── NTEE Code → Mission Category Mapping ────────────────────────────────
+// Maps NTEE major letter (and some subcategories) to our mission categories
+const NTEE_TO_CATEGORIES: Record<string, string[]> = {
+  'A': ['arts'],
+  'B': ['education'],
+  'C': ['environment'],
+  'D': ['animals'],
+  'E': ['health'],
+  'F': ['mental_health'],      // F = Mental Health, Crisis Intervention
+  'F3': ['mental_health', 'housing'],  // F3xx = Residential, Custodial Care — housing focused
+  'G': ['health'],
+  'H': ['health'],
+  'I': ['legal'],
+  'J': ['workforce'],
+  'K': ['food'],
+  'L': ['housing'],
+  'L4': ['housing', 'emergency'],  // L4x = Temporary Shelter
+  'M': ['emergency'],
+  'N': [],                     // Recreation
+  'O': ['youth'],
+  'P': ['human_services', 'poverty'],
+  'Q': [],                     // International
+  'R': ['legal'],
+  'S': ['community_dev'],
+  'T': [],                     // Philanthropy
+  'U': [],                     // Science
+  'V': [],
+  'W': [],
+  'X': ['religion'],
+  'Y': [],
+  'Z': [],
+};
+
+// Which NTEE major letters are mission-related to each other
+const NTEE_RELATED_LETTERS: Record<string, string[]> = {
+  'F': ['L', 'P', 'E'],       // Mental Health ↔ Housing, Human Services, Health
+  'L': ['F', 'P', 'M'],       // Housing ↔ Mental Health, Human Services, Emergency
+  'P': ['F', 'L', 'K', 'O', 'J', 'M'], // Human Services ↔ many
+  'E': ['F', 'G', 'H'],       // Health ↔ Mental Health, Diseases, Medical Research
+  'K': ['P'],                  // Food ↔ Human Services
+  'M': ['L', 'P'],             // Emergency ↔ Housing, Human Services
+  'O': ['B', 'P'],             // Youth ↔ Education, Human Services
+  'B': ['O'],                  // Education ↔ Youth
+  'I': ['R'],                  // Crime/Legal ↔ Civil Rights
+  'R': ['I', 'P'],             // Civil Rights ↔ Crime/Legal, Human Services
+  'J': ['P', 'B'],             // Employment ↔ Human Services, Education
+};
+
+// Compute NTEE similarity score between two NTEE codes
+function nteeSimScore(a: string | null, b: string | null): number {
+  if (!a || !b) return 0;
+  const majorA = a.charAt(0).toUpperCase();
+  const majorB = b.charAt(0).toUpperCase();
+
+  // Same major letter = strong match
+  if (majorA === majorB) return 1.0;
+
+  // Check if related
+  const relatedA = NTEE_RELATED_LETTERS[majorA] || [];
+  if (relatedA.includes(majorB)) return 0.6;
+
+  // Check reverse
+  const relatedB = NTEE_RELATED_LETTERS[majorB] || [];
+  if (relatedB.includes(majorA)) return 0.6;
+
+  return 0;
+}
+
+// Map an NTEE code to our mission categories (checks subcategory first, then major)
+function nteeToCats(ntee: string | null): string[] {
+  if (!ntee || ntee.length < 1) return [];
+  const upper = ntee.toUpperCase();
+
+  // Try 2-char subcategory first (e.g., "F3" for F300)
+  if (upper.length >= 2) {
+    const sub2 = upper.substring(0, 2);
+    if (NTEE_TO_CATEGORIES[sub2]) return NTEE_TO_CATEGORIES[sub2];
+  }
+
+  // Fall back to major letter
+  const major = upper.charAt(0);
+  return NTEE_TO_CATEGORIES[major] || [];
+}
+
+// ── Interfaces ──────────────────────────────────────────────────────────
 interface GrantRow {
   foundation_id: string;
   grantee_ein: string | null;
@@ -77,12 +181,11 @@ interface RecipientRow {
   funder_count: number | null;
 }
 
-// For-profit indicators — names containing these tokens are filtered out of peer results
+// For-profit indicators
 const FOR_PROFIT_PATTERNS = [
   ' llc', ' llp', ' lp', ' ltd', ' dba ', ' d/b/a ',
   ' pllc', ' plc', ' gmbh', ' s.a.', ' sarl',
 ];
-// Government entity patterns
 const GOVT_PATTERNS = [
   'department of ', 'state of ', 'city of ', 'county of ',
   'village of ', 'town of ', 'borough of ', ' police ',
@@ -91,15 +194,14 @@ const GOVT_PATTERNS = [
 function isLikelyNonNonprofit(name: string): boolean {
   const lower = ` ${name.toLowerCase()} `;
   if (FOR_PROFIT_PATTERNS.some(p => lower.includes(p))) return true;
-  // Check government entities
   const lowerTrimmed = name.toLowerCase().trim();
   if (GOVT_PATTERNS.some(p => lowerTrimmed.includes(p))) return true;
   return false;
 }
 
-const MIN_GRANTS_FOR_PEER = 3; // filter out one-off COVID relief recipients etc.
+const MIN_GRANTS_FOR_PEER = 3;
 
-// US Census regions for geographic proximity — shared by both funder & recipient paths
+// US Census regions for geographic proximity
 const STATE_REGION: Record<string, string> = {
   CT: 'NE', ME: 'NE', MA: 'NE', NH: 'NE', RI: 'NE', VT: 'NE',
   NJ: 'NE', NY: 'NE', PA: 'NE',
@@ -143,13 +245,9 @@ Deno.serve(async (req) => {
 
     const minYear = new Date().getUTCFullYear() - RECENT_YEARS;
 
-    // ── Recipient peers: find similar orgs by MISSION KEYWORD SIMILARITY ──
-    // v10 — Uses grant purpose_text to build a weighted mission profile for the
-    // source org, then finds other recipients whose grants concentrate on the
-    // SAME mission areas.  Rewards focused orgs, penalises mega-orgs that match
-    // every category.  Geography and scale are secondary signals.
+    // ── Recipient peers ─────────────────────────────────────────────────
     if (entityType === 'recipient') {
-      // Step 1: Resolve source recipient details
+      // Step 1: Resolve source recipient
       const isUuid = entityId.includes('-') && entityId.length > 20;
       const lookupField = isUuid ? 'id' : 'ein';
       const sourceRows = (await restQuery(
@@ -172,13 +270,18 @@ Deno.serve(async (req) => {
       const sourceCity = source.primary_city?.toUpperCase() || null;
       const sourceFunding = Number(source.total_funding) || 0;
 
-      // Step 2: Fetch all grants for this recipient to get purpose_text values
-      const sourceGrants = (await restQuery(
-        'foundation_grants',
-        `grantee_ein=eq.${encodeURIComponent(source.ein)}&select=purpose_text&limit=5000`,
-      )) as Array<{ purpose_text: string | null }>;
+      // Step 2: Fetch source grants + NTEE code in parallel
+      const [sourceGrants, sourceNtee] = await Promise.all([
+        restQuery(
+          'foundation_grants',
+          `grantee_ein=eq.${encodeURIComponent(source.ein)}&select=purpose_text&limit=5000`,
+        ) as Promise<Array<{ purpose_text: string | null }>>,
+        fetchNteeCode(source.ein),
+      ]);
 
-      if (sourceGrants.length === 0) {
+      console.log(`[compute-peers] Source: ${source.name} (${source.ein}), NTEE: ${sourceNtee}, grants: ${sourceGrants.length}`);
+
+      if (sourceGrants.length === 0 && !sourceNtee) {
         return new Response(JSON.stringify({ peers: [] }), {
           headers: { ...headers, 'Content-Type': 'application/json' },
         });
@@ -208,65 +311,121 @@ Deno.serve(async (req) => {
         'human_services': ['human services', 'social services', 'case management', 'supportive services', 'wraparound'],
       };
 
+      // Semantic proximity
+      const RELATED_CATEGORIES: Record<string, string[]> = {
+        'housing':        ['emergency', 'human_services', 'mental_health', 'poverty', 'food'],
+        'emergency':      ['housing', 'human_services', 'food', 'poverty', 'mental_health'],
+        'human_services': ['housing', 'emergency', 'food', 'poverty', 'mental_health'],
+        'food':           ['emergency', 'human_services', 'poverty', 'housing'],
+        'mental_health':  ['human_services', 'housing', 'emergency'],
+        'poverty':        ['housing', 'food', 'emergency', 'human_services'],
+        'youth':          ['education', 'domestic_violence'],
+        'education':      ['youth', 'workforce'],
+        'workforce':      ['education', 'poverty'],
+        'domestic_violence': ['human_services', 'legal', 'housing'],
+        'seniors':        ['health', 'human_services', 'disability'],
+        'health':         ['mental_health', 'disability', 'seniors'],
+        'disability':     ['health', 'seniors', 'human_services'],
+        'immigrant':      ['legal', 'human_services'],
+        'legal':          ['immigrant', 'domestic_violence', 'human_services'],
+      };
+
       // Generic purpose texts to exclude
       const GENERIC_PURPOSES = new Set([
         'general support', 'general operating', 'unrestricted', 'operating support',
         'general purpose', 'charitable purpose', 'charitable purposes',
         'general operations', 'annual fund', 'capital campaign',
+        'to provide general support', 'to provide general support.',
+        'for recipient\'s exempt purpose', 'program support',
       ]);
 
-      // Aggregate all purpose texts for this recipient
+      // Aggregate purpose texts
       const allPurposeText = sourceGrants
         .map(g => g.purpose_text?.toLowerCase().trim() || '')
         .filter(t => t.length > 0 && !GENERIC_PURPOSES.has(t));
 
-      // Step 4: Build WEIGHTED mission profile for source org
-      // Count how many grants fall into each category → this is the mission profile
+      // Step 4: Build WEIGHTED mission profile
       const sourceCategoryHits = new Map<string, number>();
       let totalCategorised = 0;
 
+      // 4a: From purpose_text
       for (const text of allPurposeText) {
         for (const [category, terms] of Object.entries(MISSION_KEYWORDS)) {
           for (const term of terms) {
             if (text.includes(term)) {
               sourceCategoryHits.set(category, (sourceCategoryHits.get(category) || 0) + 1);
               totalCategorised++;
-              break; // one category match per purpose text per category
+              break;
             }
           }
         }
       }
 
-      if (sourceCategoryHits.size === 0) {
+      // 4b: From org name keywords
+      const orgNameLower = source.name.toLowerCase();
+      for (const [category, terms] of Object.entries(MISSION_KEYWORDS)) {
+        for (const term of terms) {
+          if (orgNameLower.includes(term)) {
+            sourceCategoryHits.set(category, (sourceCategoryHits.get(category) || 0) + 3);
+            totalCategorised += 3;
+            break;
+          }
+        }
+      }
+
+      // 4c: ★ NEW — From ProPublica NTEE code (strongest signal)
+      // NTEE is an authoritative classification from the IRS/NCCS.
+      // Weight it heavily (equivalent to 8 grants) because it's the most reliable
+      // indicator of mission, especially when purpose_text is generic.
+      const nteeCats = nteeToCats(sourceNtee);
+      for (const cat of nteeCats) {
+        sourceCategoryHits.set(cat, (sourceCategoryHits.get(cat) || 0) + 8);
+        totalCategorised += 8;
+      }
+
+      console.log(`[compute-peers] Source categories (pre-expand):`, Object.fromEntries(sourceCategoryHits));
+
+      // 4d: Expand profile with RELATED categories at reduced weight
+      const expandedHits = new Map(sourceCategoryHits);
+      for (const [cat, count] of sourceCategoryHits) {
+        const related = RELATED_CATEGORIES[cat] || [];
+        for (const relCat of related) {
+          if (!expandedHits.has(relCat)) {
+            expandedHits.set(relCat, Math.ceil(count * 0.3));
+            totalCategorised += Math.ceil(count * 0.3);
+          }
+        }
+      }
+
+      if (expandedHits.size === 0) {
         return new Response(JSON.stringify({ peers: [] }), {
           headers: { ...headers, 'Content-Type': 'application/json' },
         });
       }
 
-      // Build source profile weights (normalised to sum to 1.0)
+      // Build source profile weights (normalised to sum ≈ 1.0)
       const sourceProfile = new Map<string, number>();
-      for (const [cat, count] of sourceCategoryHits) {
+      for (const [cat, count] of expandedHits) {
         sourceProfile.set(cat, count / totalCategorised);
       }
 
-      // Rank categories by weight — top categories are the org's core mission
       const rankedCategories = Array.from(sourceProfile.entries())
         .sort((a, b) => b[1] - a[1]);
 
-      // Step 5: Build search terms — use multiple terms per TOP category
-      // More specific terms first (already ordered in MISSION_KEYWORDS)
-      const searchTermsForCategory = new Map<string, string[]>();
-      const combinedText = allPurposeText.join(' ');
+      console.log(`[compute-peers] Source profile (expanded):`, rankedCategories.slice(0, 10));
 
-      for (const [cat] of rankedCategories.slice(0, 6)) {
+      // Step 5: Build search terms from TOP categories
+      const searchTermsForCategory = new Map<string, string[]>();
+      const combinedText = allPurposeText.join(' ') + ' ' + orgNameLower;
+
+      for (const [cat] of rankedCategories.slice(0, 10)) {
         const terms = MISSION_KEYWORDS[cat] || [];
         const matching = terms.filter(t => combinedText.includes(t));
-        // Pick up to 2 search terms per category, prefer the more specific ones (first in list)
-        searchTermsForCategory.set(cat, matching.slice(0, 2));
+        const searchTerms = matching.length > 0 ? matching.slice(0, 3) : terms.slice(0, 3);
+        searchTermsForCategory.set(cat, searchTerms);
       }
 
       // Step 6: Search for candidate grantees via purpose_text
-      // Track per-candidate: which categories matched AND how many grant hits
       type CandidateData = { categories: Set<string>; hitCount: number };
       const candidateHits = new Map<string, CandidateData>();
 
@@ -288,11 +447,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Step 7: Score candidates using WEIGHTED PRECISION
-      // Weighted precision = (sum of source profile weights for matching categories)
-      //                    / (candidate's total matched categories)
-      // This heavily rewards focused orgs whose mission aligns with the source's
-      // CORE mission areas, and penalises orgs that match many diverse categories.
+      // Step 7: Score candidates — first pass using MISSION KEYWORDS
       const candidateScores: Array<{
         ein: string; focusScore: number; hitCount: number;
         matchedCategories: Set<string>;
@@ -301,24 +456,18 @@ Deno.serve(async (req) => {
       for (const [ein, data] of candidateHits) {
         if (data.categories.size === 0) continue;
 
-        // Weighted sum: how much of the source's profile does this candidate overlap?
         let weightedOverlap = 0;
         for (const cat of data.categories) {
           weightedOverlap += sourceProfile.get(cat) || 0;
         }
 
-        // Focus score = weighted overlap / candidate's breadth
-        // An org matching only housing (weight 0.5) scores: 0.5 / 1 = 0.50
-        // A mega-org matching 8 categories (total weight 0.9) scores: 0.9 / 8 = 0.11
-        const focusScore = weightedOverlap / data.categories.size;
+        const focus = weightedOverlap / data.categories.size;
+        const focusScore = weightedOverlap * 0.6 + focus * 0.4;
 
-        // Also require a minimum number of matching grants to filter out noise
         if (data.hitCount < 2) continue;
 
         candidateScores.push({
-          ein,
-          focusScore,
-          hitCount: data.hitCount,
+          ein, focusScore, hitCount: data.hitCount,
           matchedCategories: data.categories,
         });
       }
@@ -352,91 +501,140 @@ Deno.serve(async (req) => {
         for (const r of rows) enrichedMap.set(r.ein, r);
       }
 
-      // Step 9: Final composite scoring
-      // 55% mission focus + 20% geography + 15% scale similarity + 10% hit volume
-      const W_FOCUS = 0.55;
-      const W_GEO   = 0.20;
-      const W_SCALE = 0.15;
-      const W_HITS  = 0.10;
-
-      // Max hit count for normalisation
-      const maxHits = Math.max(...enrichPool.map(c => c.hitCount), 1);
-
-      const scored = enrichPool
+      // Step 9: Filter and pre-score to find top 25 for NTEE lookup
+      const preScored = enrichPool
         .map(c => {
           const r = enrichedMap.get(c.ein);
           if (!r) return null;
           if (isLikelyNonNonprofit(r.name || '')) return null;
           if ((r.funder_count ?? 0) < MIN_GRANTS_FOR_PEER) return null;
 
-          // Exclude mega-orgs: if funder_count is 20x+ the source, likely a national org
           const sourceFunderCount = source.funder_count ?? 10;
           if ((r.funder_count ?? 0) > sourceFunderCount * 20) return null;
 
-          // Signal 1: Mission focus score (55%)
-          const focusScore = c.focusScore;
-
-          // Signal 2: Geographic proximity (20%)
-          let geoScore = 0;
-          const peerState = r.primary_state?.toUpperCase() || null;
-          const peerCity = r.primary_city?.toUpperCase() || null;
-          if (sourceCity && peerCity && sourceState && peerState &&
-              sourceCity === peerCity && sourceState === peerState) {
-            geoScore = 1.0; // same city
-          } else if (sourceState && peerState) {
-            if (sourceState === peerState) {
-              geoScore = 0.6; // same state
-            } else {
-              const srcRegion = STATE_REGION[sourceState];
-              const peerRegion = peerState ? STATE_REGION[peerState] : null;
-              if (srcRegion && peerRegion && srcRegion === peerRegion) {
-                geoScore = 0.3; // same region
-              }
-            }
-          }
-
-          // Signal 3: Scale similarity — log-ratio of total funding (15%)
-          let scaleScore = 0.5; // neutral default
-          const peerFunding = Number(r.total_funding) || 0;
-          if (sourceFunding > 0 && peerFunding > 0) {
-            const logDiff = Math.abs(Math.log10(sourceFunding) - Math.log10(peerFunding));
-            scaleScore = Math.max(0, 1.0 - logDiff * 0.4);
-          }
-
-          // Signal 4: Hit volume — more matching grants = stronger signal (10%)
-          const hitScore = c.hitCount / maxHits;
-
-          const composite =
-            focusScore * W_FOCUS +
-            geoScore   * W_GEO +
-            scaleScore * W_SCALE +
-            hitScore   * W_HITS;
-
-          return {
-            id: r.id,
-            name: r.name,
-            score: Math.round(composite * 1000) / 1000,
-            matchedMission: Array.from(c.matchedCategories).join(', '),
-            state: r.primary_state,
-            totalFunding: Number(r.total_funding) || null,
-          };
+          return { ...c, recipient: r };
         })
         .filter(Boolean) as Array<{
-          id: string; name: string; score: number; matchedMission: string;
-          state: string | null; totalFunding: number | null;
+          ein: string; focusScore: number; hitCount: number;
+          matchedCategories: Set<string>; recipient: RecipientInfo;
         }>;
+
+      // Step 10: ★ Fetch NTEE codes for top 25 candidates in parallel
+      const top25 = preScored.slice(0, 25);
+      const nteeResults = await Promise.allSettled(
+        top25.map(c => fetchNteeCode(c.ein)),
+      );
+      const candidateNtees = new Map<string, string | null>();
+      top25.forEach((c, i) => {
+        const result = nteeResults[i];
+        candidateNtees.set(c.ein, result.status === 'fulfilled' ? result.value : null);
+      });
+
+      console.log(`[compute-peers] Fetched NTEE for ${top25.length} candidates`);
+
+      // Step 11: Final composite scoring
+      // 40% mission keyword + 25% NTEE similarity + 15% geo + 10% scale + 10% hits
+      const W_FOCUS = 0.40;
+      const W_NTEE  = 0.25;
+      const W_GEO   = 0.15;
+      const W_SCALE = 0.10;
+      const W_HITS  = 0.10;
+
+      const maxHits = Math.max(...preScored.map(c => c.hitCount), 1);
+
+      const scored = preScored.map(c => {
+        const r = c.recipient;
+
+        // Signal 1: Mission keyword focus (40%)
+        const focusScore = c.focusScore;
+
+        // Signal 2: ★ NTEE similarity (25%)
+        const candidateNtee = candidateNtees.get(c.ein) ?? null;
+        let nteeScore = 0;
+
+        if (sourceNtee && candidateNtee) {
+          nteeScore = nteeSimScore(sourceNtee, candidateNtee);
+        }
+        // Bonus: if candidate's NTEE maps to categories that overlap with source profile
+        if (candidateNtee && nteeScore === 0) {
+          const candNteeCats = nteeToCats(candidateNtee);
+          let catOverlap = 0;
+          for (const cat of candNteeCats) {
+            if (sourceProfile.has(cat)) catOverlap += sourceProfile.get(cat)!;
+          }
+          nteeScore = Math.min(catOverlap * 0.5, 0.4); // Cap at 0.4
+        }
+        // Also: if candidate name strongly matches source's NTEE-derived categories
+        const candNameLower = r.name.toLowerCase();
+        for (const cat of nteeCats) {
+          const terms = MISSION_KEYWORDS[cat] || [];
+          for (const term of terms) {
+            if (candNameLower.includes(term)) {
+              nteeScore = Math.max(nteeScore, 0.5);
+              break;
+            }
+          }
+        }
+
+        // Signal 3: Geographic proximity (15%)
+        let geoScore = 0;
+        const peerState = r.primary_state?.toUpperCase() || null;
+        const peerCity = r.primary_city?.toUpperCase() || null;
+        if (sourceCity && peerCity && sourceState && peerState &&
+            sourceCity === peerCity && sourceState === peerState) {
+          geoScore = 1.0;
+        } else if (sourceState && peerState) {
+          if (sourceState === peerState) {
+            geoScore = 0.6;
+          } else {
+            const srcRegion = STATE_REGION[sourceState];
+            const peerRegion = peerState ? STATE_REGION[peerState] : null;
+            if (srcRegion && peerRegion && srcRegion === peerRegion) {
+              geoScore = 0.3;
+            }
+          }
+        }
+
+        // Signal 4: Scale similarity (10%)
+        let scaleScore = 0.5;
+        const peerFunding = Number(r.total_funding) || 0;
+        if (sourceFunding > 0 && peerFunding > 0) {
+          const logDiff = Math.abs(Math.log10(sourceFunding) - Math.log10(peerFunding));
+          scaleScore = Math.max(0, 1.0 - logDiff * 0.4);
+        }
+
+        // Signal 5: Hit volume (10%)
+        const hitScore = c.hitCount / maxHits;
+
+        const composite =
+          focusScore * W_FOCUS +
+          nteeScore  * W_NTEE +
+          geoScore   * W_GEO +
+          scaleScore * W_SCALE +
+          hitScore   * W_HITS;
+
+        return {
+          id: r.id,
+          name: r.name,
+          score: Math.round(composite * 1000) / 1000,
+          matchedMission: Array.from(c.matchedCategories).join(', '),
+          state: r.primary_state,
+          totalFunding: Number(r.total_funding) || null,
+        };
+      });
 
       scored.sort((a, b) => b.score - a.score);
       const peers = scored.slice(0, MAX_PEERS);
+
+      console.log(`[compute-peers] Top 5 peers:`, peers.slice(0, 5).map(p => `${p.name} (${p.score})`));
 
       return new Response(JSON.stringify({ peers }), {
         headers: { ...headers, 'Content-Type': 'application/json' },
       });
     }
 
-    // ── Funder peers ─────────────────────────────────────────────────────
+    // ── Funder peers ──────────────────────────────────────────────────────
 
-    // Step 1: Get this funder's grantees (by EIN) from last N years
     const sourceGrants = (await restQuery(
       'foundation_grants',
       `foundation_id=eq.${encodeURIComponent(entityId)}&grant_year=gte.${minYear}&grantee_ein=not.is.null&select=grantee_ein,grantee_name&limit=5000`,
@@ -448,7 +646,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Unique grantee EINs for this funder
     const sourceEins = new Set(
       sourceGrants.map((g) => g.grantee_ein!).filter(Boolean),
     );
@@ -459,13 +656,12 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Step 2: Find other funders who also funded these grantees
-    const einList = Array.from(sourceEins);
+    const funderEinList = Array.from(sourceEins);
     const candidateShared = new Map<string, Set<string>>();
 
     const BATCH = 50;
-    for (let i = 0; i < einList.length && i < 500; i += BATCH) {
-      const batch = einList.slice(i, i + BATCH);
+    for (let i = 0; i < funderEinList.length && i < 500; i += BATCH) {
+      const batch = funderEinList.slice(i, i + BATCH);
       const einFilter = `(${batch.map((e) => `"${e}"`).join(',')})`;
       const otherGrants = (await restQuery(
         'foundation_grants',
@@ -480,14 +676,12 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Step 3: Fetch source funder details for multi-factor scoring
     const sourceFunderRows = (await restQuery(
       'funders',
       `id=eq.${encodeURIComponent(entityId)}&select=id,name,state,total_giving,ntee_code&limit=1`,
     )) as FunderRow[];
     const sourceFunder = sourceFunderRows[0] || null;
 
-    // Pre-filter candidates that meet minimum shared threshold
     const qualifiedCandidates: Array<{ funderId: string; sharedSet: Set<string> }> = [];
     for (const [fId, sharedSet] of candidateShared) {
       if (sharedSet.size < MIN_SHARED) continue;
@@ -500,7 +694,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Step 4: Enrich candidates with funder details for multi-factor scoring
     qualifiedCandidates.sort((a, b) => b.sharedSet.size - a.sharedSet.size);
     const funderEnrichPool = qualifiedCandidates.slice(0, 50);
 
@@ -513,7 +706,6 @@ Deno.serve(async (req) => {
 
     const funderLookup = new Map(funderRows.map((f) => [f.id, f]));
 
-    // ── Multi-factor scoring (FEAT-007) ─────────────────────────────────
     const WEIGHT_SHARED   = 0.40;
     const WEIGHT_NTEE     = 0.20;
     const WEIGHT_BUDGET   = 0.20;
@@ -528,24 +720,20 @@ Deno.serve(async (req) => {
         const f = funderLookup.get(c.funderId);
         if (!f) return null;
 
-        // Signal 1: Shared grantees overlap (Jaccard-like)
         const sharedScore = Math.min(c.sharedSet.size / sourceEins.size, 1.0);
 
-        // Signal 2: NTEE code match
         let nteeScore = 0;
         if (sourceNtee && f.ntee_code) {
           const peerNtee = f.ntee_code.charAt(0).toUpperCase();
           if (sourceNtee === peerNtee) nteeScore = 1.0;
         }
 
-        // Signal 3: Budget proximity (log-scale comparison)
         let budgetScore = 0.5;
         if (sourceGiving && sourceGiving > 0 && f.total_giving && f.total_giving > 0) {
           const logDiff = Math.abs(Math.log10(sourceGiving) - Math.log10(f.total_giving));
           budgetScore = Math.max(0, 1.0 - logDiff * 0.5);
         }
 
-        // Signal 4: Geographic overlap
         let geoScore = 0;
         const peerState = f.state?.toUpperCase() || null;
         if (funderSourceState && peerState) {
@@ -560,7 +748,6 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Composite score
         const composite =
           sharedScore * WEIGHT_SHARED +
           nteeScore * WEIGHT_NTEE +
