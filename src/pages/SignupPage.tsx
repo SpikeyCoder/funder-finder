@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, Building2, AlertCircle, ChevronRight, ChevronLeft, Loader, CheckCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -62,7 +62,7 @@ export default function SignupPage() {
   const [budgetRange, setBudgetRange] = useState('');
 
   // Redirect if already authenticated
-  React.useEffect(() => {
+  useEffect(() => {
     if (user) {
       navigate('/dashboard');
     }

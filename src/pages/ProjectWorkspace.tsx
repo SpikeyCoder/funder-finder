@@ -222,10 +222,6 @@ export default function ProjectWorkspace() {
     }
   };
 
-    if (n >= 1e6) return `$${(n / 1e6).toFixed(1)}M`;
-    if (n >= 1e3) return `$${(n / 1e3).toFixed(0)}K`;
-    return `$${n.toLocaleString()}`;
-  };
 
   if (loading || projectLoading) {
     return (<><NavBar /><main className="min-h-screen bg-[#0d1117] pt-20 flex items-center justify-center"><Loader className="animate-spin text-gray-400" size={24} /></main></>);

@@ -55,6 +55,7 @@ function UserSettingsContent() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
 
   // Form state
   const [displayName, setDisplayName] = useState('');
