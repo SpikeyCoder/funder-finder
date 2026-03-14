@@ -271,10 +271,10 @@ export default function ProjectWorkspace() {
         // Insert new matches
         const rows = results.slice(0, 50).map((r: any) => ({
           project_id: id,
-          funder_ein: r.funder?.foundation_ein || r.funder?.id || '',
-          funder_name: r.funder?.name || r.funder?.foundation_ein || '',
+          funder_ein: r.foundation_ein || r.id || '',
+          funder_name: r.name || r.foundation_ein || '',
           match_score: Math.round((r.fit_score || 0) * 100),
-          match_reasons: r.match_reasons || null,
+          match_reasons: r.fit_explanation || null,
           gives_to_peers: !!r.gives_to_peers,
           computed_at: new Date().toISOString(),
         }));
