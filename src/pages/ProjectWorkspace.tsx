@@ -470,4 +470,3 @@ export default function ProjectWorkspace() {
       </main>
     </>
   );
-}
