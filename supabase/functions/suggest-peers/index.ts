@@ -87,30 +87,36 @@ async function expandKeywordsWithLLM(
   }
 
   try {
-    const prompt = `You are a nonprofit grant database search expert. Given a nonprofit's mission description, generate search terms that would appear in foundation grant PURPOSE DESCRIPTIONS for organizations doing similar work.
+    const prompt = `You are a nonprofit grant database search expert. I need to find PEER ORGANIZATIONS — nonprofits doing similar work — by searching a database of foundation grant purpose descriptions.
 
-MISSION: "${mission}"
+NONPROFIT MISSION: "${mission}"
 ${locationServed ? `LOCATION: ${locationServed}` : ''}
 ${budgetBand && budgetBand !== 'prefer_not_to_say' ? `BUDGET: ${budgetBand}` : ''}
 
-Generate 12-15 search terms. Include:
-1. Core activity terms (what the org actually DOES day-to-day)
-2. Beneficiary terms (who they serve, described different ways)
-3. Methodology terms (HOW they deliver services)
-4. Sector/field terms (the broader category of work)
-5. Outcome terms (what results they achieve)
-6. Synonyms and related phrases that grant writers commonly use
+Your task: generate 15-18 search terms that would appear in foundation grant PURPOSE TEXT for organizations doing SIMILAR work. These terms will be used as substring searches (SQL ilike '%term%') on grant purpose descriptions.
 
-RULES:
-- Each term should be 1-2 words (short enough for database substring matching)
-- Use terms that would literally appear in grant purpose text descriptions
-- Avoid generic nonprofit jargon (e.g., "community", "program", "services")
-- Include the specific city/region name if provided
-- Think about what SIMILAR organizations call themselves and their work
-- Prioritize terms that distinguish this type of org from unrelated nonprofits
+Think step by step:
+1. What KIND of nonprofit is this? (e.g., youth development org, food bank, arts education, etc.)
+2. What are 5-10 well-known organizations that do very similar work? Think of their names and what words would appear in grants TO those organizations.
+3. What words do grant makers use when describing grants to these types of orgs?
 
-Return ONLY a JSON array of strings, nothing else. Example:
-["youth mentoring", "after-school", "tutoring", "college prep", "teen leadership", "academic enrichment", "dropout prevention", "high school", "graduation", "career readiness", "youth empowerment", "chicago"]`;
+Generate terms in these categories:
+- ACTIVITY terms: what staff/volunteers do day-to-day (e.g., "mentoring", "tutoring", "counseling")
+- BENEFICIARY terms: who is served, described multiple ways (e.g., "at-risk youth", "low-income", "underserved")
+- METHOD terms: how the work is delivered (e.g., "after-school", "summer camp", "hands-on")
+- FIELD terms: the sector of work (e.g., "youth development", "workforce", "literacy")
+- OUTCOME terms: what the work achieves (e.g., "graduation", "college readiness", "leadership")
+- LOCATION terms: the specific city/metro area if provided
+
+CRITICAL RULES:
+- Each term MUST be 1-3 words (for substring matching in grant descriptions)
+- Use terms that literally appear in how grant makers DESCRIBE grants to these types of orgs
+- AVOID generic words: "community", "program", "services", "support", "organization"
+- MUST include the city name if location is provided
+- Include BOTH specific terms (e.g., "robotics") AND broader category terms (e.g., "youth development")
+- Think about what grant purpose text says: "To support [TERM]..." or "For [TERM]..."
+
+Return ONLY a JSON array of strings, nothing else.`;
 
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -121,7 +127,7 @@ Return ONLY a JSON array of strings, nothing else. Example:
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 300,
+        max_tokens: 400,
         messages: [{ role: 'user', content: prompt }],
       }),
     });
@@ -151,7 +157,7 @@ Return ONLY a JSON array of strings, nothing else. Example:
     const terms = parsed
       .filter((t: unknown): t is string => typeof t === 'string' && t.trim().length >= 2)
       .map((t: string) => t.trim().toLowerCase())
-      .slice(0, 15);
+      .slice(0, 18);
 
     console.log(`[suggest-peers] LLM expanded to ${terms.length} terms:`, terms.join(', '));
     return { terms, usedLLM: true };
@@ -294,6 +300,14 @@ const GENERALIST_PATTERNS = [
   /\bSCHOOL DISTRICT\b/i,
   /\bPUBLIC SCHOOL/i,
   /\bBOARD OF EDUCATION/i,
+  // Intermediaries/funders that appear as grantees but aren't peer service orgs
+  /\bUNITED WAY\b/i,
+  /\bCOMMUNITY FOUNDATION\b/i,
+  /\bJEWISH FEDERATION/i,
+  /\bCATHOLIC CHARIT/i,
+  /\bSALVATION ARMY/i,
+  /\bYMCA\b/i,
+  /\bYWCA\b/i,
 ];
 
 Deno.serve(async (req: Request) => {
