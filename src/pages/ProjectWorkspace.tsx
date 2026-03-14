@@ -1,9 +1,20 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Save, Loader } from 'lucide-react';
+import { ArrowLeft, Save, Loader, Users, RefreshCw } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
+import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
+
+const MATCH_FUNDERS_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co/functions/v1/match-funders';
+
+interface PeerOrg {
+  ein: string;
+  name: string;
+  state: string;
+  ntee_code: string;
+  total_revenue: number | null;
+  shared_funders: number;
+}
 
 interface Project {
   id: string;
@@ -24,6 +35,7 @@ interface Project {
 interface ProjectMatch {
   id: string;
   funder_ein: string;
+  funder_name?: string;
   match_score: number;
   match_reasons?: any;
   gives_to_peers: boolean;
@@ -94,10 +106,13 @@ export default function ProjectWorkspace() {
   const [project, setProject] = useState<Project | null>(null);
   const [matches, setMatches] = useState<ProjectMatch[]>([]);
   const [savedFunders, setSavedFunders] = useState<SavedFunder[]>([]);
+  const [peers, setPeers] = useState<PeerOrg[]>([]);
+  const [peersLoading, setPeersLoading] = useState(false);
   const [projectLoading, setProjectLoading] = useState(true);
   const [matchesLoading, setMatchesLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [computing, setComputing] = useState(false);
 
   // Editable fields for settings tab
   const [editName, setEditName] = useState('');
@@ -158,11 +173,135 @@ export default function ProjectWorkspace() {
       setSavedFunders(savedData || []);
 
       setMatchesLoading(false);
+
+      // Load peer organizations based on project criteria
+      loadPeers(projectData);
     } catch (err) {
       console.error('Error loading project:', err);
       setError('Failed to load project data.');
     } finally {
       setProjectLoading(false);
+      setMatchesLoading(false);
+    }
+  };
+
+  const loadPeers = async (proj: Project) => {
+    setPeersLoading(true);
+    try {
+      // Build criteria from project: find recipients in same state(s) and NTEE codes
+      const states = proj.location_scope?.map(l => l.state) || [];
+      const nteeCodes = proj.fields_of_work || [];
+
+      // Query recipient_organizations that share the project's geography and NTEE codes
+      let query = supabase
+        .from('recipient_organizations')
+        .select('ein, name, primary_state, ntee_code, total_funding, funder_count')
+        .gt('funder_count', 0)
+        .order('funder_count', { ascending: false })
+        .limit(25);
+
+      if (states.length > 0) {
+        query = query.in('primary_state', states);
+      }
+
+      if (nteeCodes.length > 0) {
+        const nteeFilters = nteeCodes.map((code: string) => `ntee_code.like.${code}%`).join(',');
+        query = query.or(nteeFilters);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('Error loading peers:', error);
+        setPeers([]);
+      } else {
+        setPeers((data || []).map((r: any) => ({
+          ein: r.ein,
+          name: r.name,
+          state: r.primary_state,
+          ntee_code: r.ntee_code,
+          total_revenue: r.total_funding,
+          shared_funders: r.funder_count || 0,
+        })));
+      }
+    } catch (err) {
+      console.error('Error loading peers:', err);
+      setPeers([]);
+    } finally {
+      setPeersLoading(false);
+    }
+  };
+
+  const computeMatches = async (proj?: Project) => {
+    const p = proj || project;
+    if (!p || !id) return;
+    try {
+      setComputing(true);
+      setMatchesLoading(true);
+      setError(null);
+
+      const headers = await getEdgeFunctionHeaders();
+      const states = p.location_scope?.map(l => l.state) || [];
+      const keywords = p.keywords || [];
+      const fieldsOfWork = p.fields_of_work || [];
+
+      const res = await fetch(MATCH_FUNDERS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({
+          mission: p.description || p.name,
+          locationServed: states.join(', ') || undefined,
+          keywords: keywords.length > 0 ? keywords : fieldsOfWork.length > 0 ? fieldsOfWork : undefined,
+          budgetBand: p.budget_min ? `${p.budget_min}-${p.budget_max || ''}` : undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error || `Match computation failed (${res.status})`);
+      }
+
+      const data = await res.json();
+      const results = Array.isArray(data.results) ? data.results : [];
+
+      if (results.length > 0) {
+        // Delete old matches for this project
+        await supabase.from('project_matches').delete().eq('project_id', id);
+
+        // Insert new matches
+        const rows = results.slice(0, 50).map((r: any) => ({
+          project_id: id,
+          funder_ein: r.funder?.foundation_ein || r.funder?.id || '',
+          funder_name: r.funder?.name || r.funder?.foundation_ein || '',
+          match_score: Math.round((r.fit_score || 0) * 100),
+          match_reasons: r.match_reasons || null,
+          gives_to_peers: !!r.gives_to_peers,
+          computed_at: new Date().toISOString(),
+        }));
+
+        const validRows = rows.filter((r: any) => r.funder_ein);
+        if (validRows.length > 0) {
+          const { error: insertError } = await supabase.from('project_matches').insert(validRows);
+          if (insertError) {
+            console.error('Error inserting matches:', insertError);
+            // Retry without funder_name in case column doesn't exist yet
+            if (insertError.message?.includes('funder_name')) {
+              const fallbackRows = validRows.map(({ funder_name, ...rest }: any) => rest);
+              await supabase.from('project_matches').insert(fallbackRows);
+            }
+          }
+        }
+      }
+
+      // Reload matches from DB
+      const { data: matchesData } = await supabase
+        .from('project_matches').select('*').eq('project_id', id).order('match_score', { ascending: false });
+      setMatches(matchesData || []);
+    } catch (err: any) {
+      console.error('Error computing matches:', err);
+      setError(err.message || 'Failed to compute matches.');
+    } finally {
+      setComputing(false);
       setMatchesLoading(false);
     }
   };
@@ -187,6 +326,8 @@ export default function ProjectWorkspace() {
         .eq('id', id);
       if (updateError) throw updateError;
       await loadProjectData();
+      // Trigger match re-computation after saving criteria
+      computeMatches().catch(err => console.warn('Match re-computation failed:', err));
     } catch (err) {
       console.error('Error saving project:', err);
       setError('Failed to save project.');
@@ -221,7 +362,6 @@ export default function ProjectWorkspace() {
       console.error('Error updating funder:', err);
     }
   };
-
 
   if (loading || projectLoading) {
     return (<><NavBar /><main className="min-h-screen bg-[#0d1117] pt-20 flex items-center justify-center"><Loader className="animate-spin text-gray-400" size={24} /></main></>);
@@ -263,12 +403,31 @@ export default function ProjectWorkspace() {
           {/* MATCHES TAB */}
           {activeTab === 'matches' && (
             <div>
-              {matchesLoading ? (
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-sm text-gray-400">
+                  {matches.length > 0 ? `${matches.length} matched funder${matches.length !== 1 ? 's' : ''}` : ''}
+                </p>
+                <button
+                  onClick={() => computeMatches()}
+                  disabled={computing}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
+                >
+                  <RefreshCw size={16} className={computing ? 'animate-spin' : ''} />
+                  {computing ? 'Computing...' : matches.length > 0 ? 'Refresh Matches' : 'Compute Matches'}
+                </button>
+              </div>
+              {matchesLoading && !computing ? (
                 <div className="flex items-center justify-center py-12"><Loader className="animate-spin text-gray-400" size={24} /></div>
+              ) : computing ? (
+                <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-8 text-center">
+                  <Loader className="animate-spin text-blue-400 mx-auto mb-3" size={24} />
+                  <p className="text-gray-400 mb-2">Computing matches...</p>
+                  <p className="text-gray-500 text-sm">This may take a moment as we analyze funder compatibility.</p>
+                </div>
               ) : matches.length === 0 ? (
                 <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-8 text-center">
                   <p className="text-gray-400 mb-2">No matches computed yet.</p>
-                  <p className="text-gray-500 text-sm">Match computation runs when you create or update project criteria.</p>
+                  <p className="text-gray-500 text-sm">Click "Compute Matches" above or update your project criteria in Settings.</p>
                 </div>
               ) : (
                 <div className="bg-[#161b22] border border-[#30363d] rounded-lg overflow-hidden">
@@ -285,7 +444,7 @@ export default function ProjectWorkspace() {
                       <tbody className="divide-y divide-[#30363d]">
                         {matches.map(m => (
                           <tr key={m.id} className="hover:bg-[#0d1117] transition-colors cursor-pointer" onClick={() => navigate(`/funder/${m.funder_ein}`)}>
-                            <td className="px-6 py-4 text-white">{m.funder_ein}</td>
+                            <td className="px-6 py-4 text-white">{m.funder_name || m.funder_ein}</td>
                             <td className="px-6 py-4">
                               <span className={`text-xs font-medium px-2 py-1 rounded-full ${Number(m.match_score) >= 70 ? 'bg-green-900/30 text-green-400' : Number(m.match_score) >= 40 ? 'bg-yellow-900/30 text-yellow-400' : 'bg-gray-800 text-gray-400'}`}>
                                 {Math.round(Number(m.match_score))}%
@@ -293,7 +452,7 @@ export default function ProjectWorkspace() {
                             </td>
                             <td className="px-6 py-4 text-gray-400">{m.gives_to_peers ? 'Yes' : '—'}</td>
                             <td className="px-6 py-4 text-right">
-                              <button onClick={(e) => { e.stopPropagation(); handleSaveFunder(m.funder_ein, m.funder_ein); }}
+                              <button onClick={(e) => { e.stopPropagation(); handleSaveFunder(m.funder_ein, m.funder_name || m.funder_ein); }}
                                 disabled={savedFunders.some(sf => sf.funder_ein === m.funder_ein)}
                                 className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors">
                                 {savedFunders.some(sf => sf.funder_ein === m.funder_ein) ? 'Saved' : 'Save'}
@@ -365,9 +524,48 @@ export default function ProjectWorkspace() {
 
           {/* PEERS TAB */}
           {activeTab === 'peers' && (
-            <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-8 text-center">
-              <p className="text-gray-400">Peer organizations based on your project's NTEE codes and geography will appear here.</p>
-              <p className="text-gray-500 text-sm mt-2">This feature uses the Phase 1 peer matching engine scoped to your project criteria.</p>
+            <div>
+              {peersLoading ? (
+                <div className="flex items-center justify-center py-12"><Loader className="animate-spin text-gray-400" size={24} /></div>
+              ) : peers.length === 0 ? (
+                <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-8 text-center">
+                  <Users size={32} className="mx-auto text-gray-500 mb-3" />
+                  <p className="text-gray-400 mb-2">No peer organizations found.</p>
+                  <p className="text-gray-500 text-sm">Try updating your project's location and field of work criteria in Settings.</p>
+                </div>
+              ) : (
+                <div className="bg-[#161b22] border border-[#30363d] rounded-lg overflow-hidden">
+                  <div className="px-6 py-3 border-b border-[#30363d] bg-[#0d1117]">
+                    <p className="text-sm text-gray-400">
+                      {peers.length} peer organization{peers.length !== 1 ? 's' : ''} matching your project's NTEE codes and geography
+                    </p>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-[#0d1117] border-b border-[#30363d]">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">Organization</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">State</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">NTEE</th>
+                          <th className="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase">Funders</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#30363d]">
+                        {peers.map(peer => (
+                          <tr key={peer.ein} className="hover:bg-[#0d1117] transition-colors cursor-pointer" onClick={() => navigate(`/recipient/${peer.ein}`)}>
+                            <td className="px-6 py-4 text-blue-400 hover:text-blue-300 font-medium text-sm">{peer.name}</td>
+                            <td className="px-6 py-4 text-gray-400 text-sm">{peer.state || '—'}</td>
+                            <td className="px-6 py-4 text-gray-400 text-sm">
+                              {NTEE_CATEGORIES.find(c => peer.ntee_code?.startsWith(c.code))?.label || peer.ntee_code || '—'}
+                            </td>
+                            <td className="px-6 py-4 text-right text-gray-300 text-sm">{peer.shared_funders}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -466,6 +664,4 @@ export default function ProjectWorkspace() {
       </main>
     </>
   );
-
-};
-
+}

@@ -5,6 +5,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
 
+const MATCH_FUNDERS_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co/functions/v1/match-funders';
+
 interface SearchCriteria {
   locations: string[];
   fields_of_work: string[];
@@ -26,8 +28,6 @@ const STATES = [
   'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VT',
   'VA', 'WA', 'WV', 'WI', 'WY'
 ];
-
-const MATCH_FUNDERS_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co/functions/v1/match-funders';
 
 const NTEE_CATEGORIES = [
   { code: 'A', label: 'Arts, Culture & Humanities' },
@@ -199,19 +199,49 @@ export default function NewProjectPage() {
 
       if (insertError) throw insertError;
 
-      // Fire-and-forget: trigger match computation for the new project
+      // Trigger match computation and store results
       try {
         const headers = await getEdgeFunctionHeaders();
-        fetch(MATCH_FUNDERS_URL, {
+        const matchRes = await fetch(MATCH_FUNDERS_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...headers },
           body: JSON.stringify({
-            project_id: data.id,
             mission: form.description || form.name,
+            locationServed: form.search_criteria.locations.join(', ') || undefined,
+            keywords: form.search_criteria.keywords.length > 0
+              ? form.search_criteria.keywords
+              : form.search_criteria.fields_of_work.length > 0
+                ? form.search_criteria.fields_of_work.map(
+                    code => NTEE_CATEGORIES.find(c => c.code === code)?.label || code
+                  )
+                : undefined,
+            budgetBand: form.search_criteria.min_grant_size
+              ? `${form.search_criteria.min_grant_size}-${form.search_criteria.max_grant_size || ''}`
+              : undefined,
           }),
-        }).catch(err => console.warn('Match trigger failed (non-blocking):', err));
+        });
+
+        if (matchRes.ok) {
+          const matchData = await matchRes.json();
+          const results = Array.isArray(matchData.results) ? matchData.results : [];
+          if (results.length > 0) {
+            const rows = results.slice(0, 50).map((r: any) => ({
+              project_id: data.id,
+              funder_ein: r.funder?.foundation_ein || r.funder?.id || '',
+              funder_name: r.funder?.name || r.funder?.foundation_ein || '',
+              match_score: Math.round((r.fit_score || 0) * 100),
+              match_reasons: r.match_reasons || null,
+              gives_to_peers: !!r.gives_to_peers,
+              computed_at: new Date().toISOString(),
+            }));
+            const validRows = rows.filter((r: any) => r.funder_ein);
+            if (validRows.length > 0) {
+              await supabase.from('project_matches').insert(validRows);
+            }
+          }
+        }
       } catch (matchErr) {
-        console.warn('Failed to trigger match computation:', matchErr);
+        console.warn('Match computation failed (non-blocking):', matchErr);
       }
 
       navigate(`/projects/${data.id}`);
@@ -521,8 +551,11 @@ export default function NewProjectPage() {
                     <div>
                       <p className="text-xs text-gray-400 uppercase">Grant Size Range</p>
                       <p className="text-sm text-gray-300 mt-1">
-                        ${form.search_criteria.min_grant_size?.toLocaleString()} -{' '}
-                        {form.search_criteria.max_grant_size
+                        {form.search_criteria.min_grant_size != null
+                          ? `$${form.search_criteria.min_grant_size.toLocaleString()}`
+                          : 'Any'}{' '}
+                        -{' '}
+                        {form.search_criteria.max_grant_size != null
                           ? `$${form.search_criteria.max_grant_size.toLocaleString()}`
                           : 'No limit'}
                       </p>
