@@ -341,7 +341,7 @@ export default function RecipientProfile() {
                       ))}
                     </tbody>
                   </table>
-                  <p className="text-xs text-gray-500 mt-2">Based on mission keyword similarity from grant purpose descriptions</p>
+                  <p className="text-xs text-gray-500 mt-2">Based on NTEE classification, geography, and funding patterns</p>
                 </div>
               )}
             </>
