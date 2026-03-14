@@ -155,6 +155,7 @@ export interface RecipientFunderEntry {
   grantCount: number;
   totalAmount: number;
   lastYear: number;
+  isDaf?: boolean;
 }
 
 export interface RecipientYearTrend {
@@ -187,7 +188,8 @@ export interface PeerEntry {
   id: string;
   name: string;
   score: number;
-  sharedCount: number;
+  sharedCount?: number;
+  matchedMission?: string;
   state: string | null;
   totalFunding: number | null;
 }

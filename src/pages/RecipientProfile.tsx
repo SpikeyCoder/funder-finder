@@ -20,6 +20,7 @@ export default function RecipientProfile() {
   const [peersLoading, setPeersLoading] = useState(false);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [filterDafs, setFilterDafs] = useState(false);
 
   // Sync saved funder IDs from localStorage
   useEffect(() => {
@@ -174,7 +175,7 @@ export default function RecipientProfile() {
               <div className="flex items-center gap-1.5">
                 <Calendar size={14} className="text-gray-500" />
                 <p className="text-lg font-bold text-white">
-                  {profile.fundingSummary.firstGrantYear || '?'} â {profile.fundingSummary.lastGrantYear || '?'}
+                  {profile.fundingSummary.firstGrantYear || '?'} – {profile.fundingSummary.lastGrantYear || '?'}
                 </p>
               </div>
             </div>
@@ -188,18 +189,35 @@ export default function RecipientProfile() {
               <div className="bg-[#0d1117] border border-[#30363d] rounded-xl p-4 mb-2">
                 <GivingTrendsChart data={chartData} />
               </div>
-              <p className="text-xs text-gray-500 mb-6">Source: IRS 990-PF filings, 2015âpresent</p>
+              <p className="text-xs text-gray-500 mb-6">Source: IRS 990-PF filings, 2015–present</p>
               <hr className="border-[#30363d] mb-6" />
             </>
           )}
 
-          {/* Top Funders â FEAT-002: prominent CTA to save funders */}
-          {profile.topFunders.length > 0 && (
+          {/* Top Funders — FEAT-002: prominent CTA to save funders */}
+          {profile.topFunders.length > 0 && (() => {
+            const visibleFunders = filterDafs
+              ? profile.topFunders.filter(f => !f.isDaf).slice(0, 15)
+              : profile.topFunders.slice(0, 15);
+            const dafCount = profile.topFunders.filter(f => f.isDaf).length;
+            return (
             <>
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-lg font-semibold">Top Funders</h2>
                 <span className="text-xs text-gray-500">Click bookmark to add to your prospects</span>
               </div>
+              {dafCount > 0 && (
+                <button
+                  onClick={() => setFilterDafs(prev => !prev)}
+                  className={`mb-3 text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${
+                    filterDafs
+                      ? 'bg-amber-900/30 border-amber-700/50 text-amber-400 hover:bg-amber-900/50'
+                      : 'bg-[#21262d] border-[#30363d] text-gray-400 hover:text-gray-200 hover:border-gray-500'
+                  }`}
+                >
+                  {filterDafs ? `Showing without DAFs (${dafCount} hidden)` : 'Filter out Donor Advised Funds'}
+                </button>
+              )}
               <div className="overflow-x-auto mb-2">
                 <table className="w-full text-sm">
                   <thead>
@@ -212,7 +230,7 @@ export default function RecipientProfile() {
                     </tr>
                   </thead>
                   <tbody>
-                    {profile.topFunders.map((f, i) => (
+                    {visibleFunders.map((f, i) => (
                       <tr
                         key={`${f.funderId}-${i}`}
                         className="border-b border-[#30363d]/50 hover:bg-[#21262d]/30 cursor-pointer"
@@ -220,8 +238,9 @@ export default function RecipientProfile() {
                       >
                         <td className="py-2 pr-3 max-w-[200px]">
                           <div className="flex items-center gap-2">
-                            <Building2 size={12} className="text-blue-400 shrink-0" />
+                            <Building2 size={12} className={f.isDaf ? 'text-amber-400 shrink-0' : 'text-blue-400 shrink-0'} />
                             <span className="text-gray-200 truncate">{f.funderName}</span>
+                            {f.isDaf && <span className="text-[10px] text-amber-400/70 bg-amber-900/20 border border-amber-800/30 px-1.5 py-0.5 rounded shrink-0">DAF</span>}
                           </div>
                         </td>
                         <td className="py-2 px-2 text-right text-gray-300 whitespace-nowrap">{fmtDollar(f.totalAmount)}</td>
@@ -246,10 +265,10 @@ export default function RecipientProfile() {
                 </table>
               </div>
               {/* FEAT-002: Prominent bulk-save CTA */}
-              {profile.topFunders.filter(f => !savedIds.has(f.funderId)).length > 0 && (
+              {visibleFunders.filter(f => !savedIds.has(f.funderId)).length > 0 && (
                 <button
                   onClick={() => {
-                    const unsaved = profile.topFunders.filter(f => !savedIds.has(f.funderId));
+                    const unsaved = visibleFunders.filter(f => !savedIds.has(f.funderId));
                     const newIds = new Set(savedIds);
                     unsaved.forEach(f => {
                       const minimalFunder: Funder = {
@@ -269,13 +288,16 @@ export default function RecipientProfile() {
                   className="mt-3 w-full bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-xl py-2.5 transition-colors flex items-center justify-center gap-2"
                 >
                   <Bookmark size={14} />
-                  Add All {profile.topFunders.filter(f => !savedIds.has(f.funderId)).length} Funders to My Prospects
+                  Add All {visibleFunders.filter(f => !savedIds.has(f.funderId)).length} Funders to My Prospects
                 </button>
               )}
             </>
-          )}
+            );
+          })()}
 
           {/* Similar Recipients (Peers) */}
+          {/* Decode common HTML entities that may be stored in DB names */}
+          {/* Safety net in case upstream data contains &amp; etc. */}
           {(peers.length > 0 || peersLoading) && (
             <>
               <hr className="border-[#30363d] my-6" />
@@ -308,7 +330,7 @@ export default function RecipientProfile() {
                           <td className="py-2 pr-3 text-gray-200 max-w-[200px] truncate">{p.name?.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')}</td>
                           <td className="py-2 px-2 text-right text-gray-400">{p.state || '—'}</td>
                           <td className="py-2 px-2 text-right text-gray-300 whitespace-nowrap">
-                            {p.totalFunding ? fmtDollar(p.totalFunding) : 'â'}
+                            {p.totalFunding ? fmtDollar(p.totalFunding) : '—'}
                           </td>
                           <td className="py-2 pl-2 text-right">
                             <span className={`text-xs font-medium ${p.score >= 0.3 ? 'text-green-400' : p.score >= 0.15 ? 'text-yellow-400' : 'text-gray-400'}`}>
@@ -319,7 +341,7 @@ export default function RecipientProfile() {
                       ))}
                     </tbody>
                   </table>
-                  <p className="text-xs text-gray-500 mt-2">Based on mission area, geography, and budget similarity</p>
+                  <p className="text-xs text-gray-500 mt-2">Based on mission keyword similarity from grant purpose descriptions</p>
                 </div>
               )}
             </>
@@ -332,7 +354,7 @@ export default function RecipientProfile() {
             onClick={() => navigate('/search')}
             className="flex-1 border border-[#30363d] rounded-xl py-3 text-sm hover:bg-[#161b22] transition-colors"
           >
-            â Back to Search
+            ← Back to Search
           </button>
           <button
             onClick={() => navigate('/mission')}
