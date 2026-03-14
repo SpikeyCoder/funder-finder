@@ -466,3 +466,7 @@ export default function ProjectWorkspace() {
       </main>
     </>
   );
+
+};
+
+export default ProjectWorkspace;
