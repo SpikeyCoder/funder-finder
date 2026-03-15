@@ -18,6 +18,8 @@ import NewProjectPage from './pages/NewProjectPage';
 import ProjectWorkspace from './pages/ProjectWorkspace';
 import BrowsePage from './pages/BrowsePage';
 import UserSettingsPage from './pages/UserSettingsPage';
+import PortfolioPage from './pages/PortfolioPage';
+import MyTasksPage from './pages/MyTasksPage';
 import NotFound from './pages/NotFound';
 import BugReportButton from './components/BugReportButton';
 
@@ -91,6 +93,8 @@ function AnimatedRoutes() {
         <Route path="/projects/:id/peers" element={<AuthGuard><ProjectWorkspace /></AuthGuard>} />
         <Route path="/projects/:id/settings" element={<AuthGuard><ProjectWorkspace /></AuthGuard>} />
         <Route path="/settings" element={<AuthGuard><UserSettingsPage /></AuthGuard>} />
+        <Route path="/portfolio" element={<AuthGuard><PortfolioPage /></AuthGuard>} />
+        <Route path="/tasks" element={<AuthGuard><MyTasksPage /></AuthGuard>} />
 
         <Route path="*" element={<NotFound />} />
       </Routes>

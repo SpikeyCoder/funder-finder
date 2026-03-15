@@ -182,6 +182,128 @@ export interface RecipientProfile {
   ntee_codes: string[];
 }
 
+// ── Phase 3: Pipeline & Grant Tracking types ────────────────────────────────
+
+export interface PipelineStatus {
+  id: string;
+  user_id: string;
+  name: string;
+  slug: string;
+  color: string;
+  sort_order: number;
+  is_default: boolean;
+  is_terminal: boolean;
+  created_at: string;
+}
+
+export interface TrackedGrant {
+  id: string;
+  project_id: string;
+  user_id: string;
+  funder_ein: string | null;
+  funder_name: string;
+  grant_title: string | null;
+  status_id: string;
+  amount: number | null;
+  deadline: string | null;
+  grant_url: string | null;
+  notes: string | null;
+  source: string;
+  is_external: boolean;
+  awarded_amount: number | null;
+  awarded_date: string | null;
+  added_at: string;
+  updated_at: string;
+  // Joined relations
+  pipeline_statuses?: {
+    name: string;
+    slug: string;
+    color: string;
+    is_terminal: boolean;
+  };
+  tasks?: GrantTask[];
+  history?: StatusHistoryEntry[];
+}
+
+export interface StatusHistoryEntry {
+  id: string;
+  tracked_grant_id: string;
+  from_status_id: string | null;
+  to_status_id: string;
+  changed_by: string;
+  changed_at: string;
+  from_status?: { name: string; color: string };
+  to_status?: { name: string; color: string };
+}
+
+export interface GrantTask {
+  id: string;
+  tracked_grant_id: string;
+  project_id: string;
+  user_id: string;
+  title: string;
+  description: string | null;
+  assignee_email: string | null;
+  assignee_user_id: string | null;
+  due_date: string | null;
+  status: 'todo' | 'in_progress' | 'done';
+  is_overdue: boolean;
+  created_at: string;
+  completed_at: string | null;
+  // Joined
+  tracked_grants?: { funder_name: string; grant_title: string | null; deadline: string | null };
+  projects?: { name: string };
+}
+
+export interface PortfolioMetrics {
+  total_tracked: number;
+  active_proposals: number;
+  pending_ask: number;
+  win_rate: number | null;
+  total_awarded: number;
+  upcoming_deadlines: number;
+}
+
+export interface PortfolioGrant {
+  id: string;
+  project_id: string;
+  project_name: string;
+  funder_name: string;
+  funder_ein: string | null;
+  grant_title: string | null;
+  status_name: string;
+  status_slug: string;
+  status_color: string;
+  amount: number | null;
+  deadline: string | null;
+  source: string;
+  added_at: string;
+  updated_at: string;
+}
+
+export interface CalendarFeed {
+  id: string;
+  user_id: string;
+  project_id: string | null;
+  token: string;
+  include_tasks: boolean;
+  created_at: string;
+  last_accessed: string | null;
+  feed_url?: string;
+  projects?: { name: string };
+}
+
+export interface NotificationPreferences {
+  id: string;
+  user_id: string;
+  deadline_reminders: number[];
+  task_reminders: number[];
+  weekly_digest: boolean;
+  digest_day: number;
+  realtime_matches: boolean;
+  email_enabled: boolean;
+}
+
 // ── Peer Intelligence types ─────────────────────────────────────────────────
 
 export interface PeerEntry {

@@ -2,13 +2,10 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useState, useRef, useEffect } from 'react';
 import { Menu, X, ChevronDown } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import LoginModal from './LoginModal';
-
 export default function NavBar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, loading, signOut } = useAuth();
-  const [showLoginModal, setShowLoginModal] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const accountRef = useRef<HTMLDivElement>(null);
@@ -63,8 +60,11 @@ export default function NavBar() {
                   <button onClick={() => navigate('/dashboard')} className={linkClass('/dashboard')}>
                     Dashboard
                   </button>
-                  <button onClick={() => navigate('/saved')} className={linkClass('/saved')}>
-                    Saved Funders
+                  <button onClick={() => navigate('/portfolio')} className={linkClass('/portfolio')}>
+                    Portfolio
+                  </button>
+                  <button onClick={() => navigate('/tasks')} className={linkClass('/tasks')}>
+                    Tasks
                   </button>
 
                   {/* Account dropdown */}
@@ -161,12 +161,20 @@ export default function NavBar() {
                     Dashboard
                   </button>
                   <button
-                    onClick={() => { navigate('/saved'); setMobileOpen(false); }}
+                    onClick={() => { navigate('/portfolio'); setMobileOpen(false); }}
                     className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
-                      isActive('/saved') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
+                      isActive('/portfolio') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
                     }`}
                   >
-                    Saved Funders
+                    Portfolio
+                  </button>
+                  <button
+                    onClick={() => { navigate('/tasks'); setMobileOpen(false); }}
+                    className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
+                      isActive('/tasks') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
+                    }`}
+                  >
+                    Tasks
                   </button>
                   <div className="pt-2 border-t border-[#1b2130] mt-2">
                     <div className="flex items-center justify-between px-3 py-2">
@@ -193,9 +201,6 @@ export default function NavBar() {
         )}
       </nav>
 
-      {showLoginModal && (
-        <LoginModal onClose={() => setShowLoginModal(false)} />
-      )}
     </>
   );
 }
