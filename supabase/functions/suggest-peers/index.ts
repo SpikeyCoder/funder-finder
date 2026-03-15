@@ -407,7 +407,7 @@ Deno.serve(async (req: Request) => {
     async function runKeywordQuery(original: string, searchTerm: string) {
       let query = supabase
         .from('foundation_grants')
-        .select('grantee_name, grantee_city')
+        .select('grantee_name, grantee_city, grantee_state')
         .ilike('purpose_text', `%${searchTerm}%`)
         .not('purpose_text', 'is', null)
         .gte('grant_year', 2019)
@@ -420,9 +420,9 @@ Deno.serve(async (req: Request) => {
       const { data, error } = await query;
       if (error) {
         console.error(`[suggest-peers] Query error for "${searchTerm}":`, error.message);
-        return { keyword: original, rows: [] as Array<{ grantee_name: string; grantee_city: string }>, rowCount: 0, error: error.message };
+        return { keyword: original, rows: [] as Array<{ grantee_name: string; grantee_city: string; grantee_state: string }>, rowCount: 0, error: error.message };
       }
-      const rows = (data || []) as Array<{ grantee_name: string; grantee_city: string }>;
+      const rows = (data || []) as Array<{ grantee_name: string; grantee_city: string; grantee_state: string }>;
       console.log(`[suggest-peers] "${original}" (search: "${searchTerm}"): ${rows.length} rows`);
       return { keyword: original, rows, rowCount: rows.length, error: null };
     }
@@ -457,12 +457,19 @@ Deno.serve(async (req: Request) => {
 
         let entry = peerMap.get(key);
         if (!entry) {
-          entry = { count: 0, matchedKeywords: new Set(), keywordWeightSum: 0, cityMatch: false, displayName: rawName };
+          entry = { count: 0, matchedKeywords: new Set(), keywordWeightSum: 0, cityMatch: false, displayName: rawName, granteeCity: '', granteeState: '' };
           peerMap.set(key, entry);
         }
         entry.count += 1;
         if (rawName.length > entry.displayName.length) {
           entry.displayName = rawName;
+        }
+        // Track state/city from grant records (use most recent/common)
+        if (row.grantee_state && !entry.granteeState) {
+          entry.granteeState = row.grantee_state.toUpperCase();
+        }
+        if (row.grantee_city && !entry.granteeCity) {
+          entry.granteeCity = row.grantee_city;
         }
         if (!entry.matchedKeywords.has(keyword)) {
           entry.matchedKeywords.add(keyword);
@@ -487,7 +494,8 @@ Deno.serve(async (req: Request) => {
 
       return { name: data.displayName, normKey: name, score, kwCount,
                count: data.count, cityMatch: data.cityMatch,
-               weightSum: data.keywordWeightSum, isGeneralist };
+               weightSum: data.keywordWeightSum, isGeneralist,
+               granteeCity: data.granteeCity, granteeState: data.granteeState };
     });
 
     scoredPeers.sort((a, b) => b.score - a.score || b.count - a.count);
@@ -502,6 +510,7 @@ Deno.serve(async (req: Request) => {
     // Step 5: Deduplicate and format
     const seen = new Set<string>();
     const peers: string[] = [];
+    const peerDetails: Array<{ name: string; state: string; city: string }> = [];
 
     for (const row of scoredPeers) {
       if (peers.length >= 10) break;
@@ -530,6 +539,11 @@ Deno.serve(async (req: Request) => {
         .join(' ');
 
       peers.push(displayName);
+      peerDetails.push({
+        name: displayName,
+        state: row.granteeState || '',
+        city: row.granteeCity || '',
+      });
     }
 
     const totalTime = Date.now() - startTime;
@@ -550,7 +564,7 @@ Deno.serve(async (req: Request) => {
       totalTimeMs: totalTime,
     };
 
-    return new Response(JSON.stringify({ peers, debug }), {
+    return new Response(JSON.stringify({ peers, peerDetails, debug }), {
       headers: { ...headers, 'Content-Type': 'application/json' },
     });
   } catch (err) {

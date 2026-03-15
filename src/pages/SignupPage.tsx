@@ -38,8 +38,6 @@ const BUDGET_RANGES = [
 
 type SignupStep = 'account' | 'profile' | 'review';
 
-
-
 export default function SignupPage() {
   const navigate = useNavigate();
   const { user } = useAuth();

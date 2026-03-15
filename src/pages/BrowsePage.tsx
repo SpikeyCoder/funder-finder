@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ExternalLink, ArrowUpDown } from 'lucide-react';
 import NavBar from '../components/NavBar';
-import { useAuth } from '..//contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import FilterPanel, { FilterState, EMPTY_FILTERS } from '../components/FilterPanel';
 import SaveToProjectButton from '../components/SaveToProjectButton';
 import { getEdgeFunctionHeaders } from '../lib/supabase';
