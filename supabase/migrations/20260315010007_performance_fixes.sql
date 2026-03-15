@@ -16,10 +16,9 @@ CREATE INDEX IF NOT EXISTS idx_foundation_grants_funder_year
 -- funders: speed up EIN lookups (primary lookup pattern)
 CREATE INDEX IF NOT EXISTS idx_funders_ein ON funders(foundation_ein);
 
--- recipient_organizations: speed up name search with trigram
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
-CREATE INDEX IF NOT EXISTS idx_recipient_orgs_name_trgm
-  ON recipient_organizations USING gin (name gin_trgm_ops);
+-- recipient_organizations: speed up name search (basic btree on name)
+CREATE INDEX IF NOT EXISTS idx_recipient_orgs_name
+  ON recipient_organizations (name);
 
 -- 2. Optimize RLS policies - add indexes that support RLS checks
 -- (auth.uid() checks benefit from user_id indexes already created above)

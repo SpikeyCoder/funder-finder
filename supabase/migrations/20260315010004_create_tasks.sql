@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   assignee_user_id uuid REFERENCES auth.users(id),
   due_date date,
   status text NOT NULL DEFAULT 'todo' CHECK (status IN ('todo', 'in_progress', 'done')),
-  is_overdue boolean GENERATED ALWAYS AS (due_date < CURRENT_DATE AND status != 'done') STORED,
+  is_overdue boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now(),
   completed_at timestamptz
 );
@@ -23,6 +23,19 @@ CREATE INDEX idx_tasks_user ON tasks(user_id);
 CREATE INDEX idx_tasks_assignee ON tasks(assignee_user_id) WHERE assignee_user_id IS NOT NULL;
 CREATE INDEX idx_tasks_due_date ON tasks(due_date) WHERE due_date IS NOT NULL AND status != 'done';
 CREATE INDEX idx_tasks_overdue ON tasks(is_overdue) WHERE is_overdue = true;
+
+-- Update is_overdue on insert/update
+CREATE OR REPLACE FUNCTION update_task_is_overdue()
+RETURNS trigger AS $$
+BEGIN
+  NEW.is_overdue = (NEW.due_date IS NOT NULL AND NEW.due_date < CURRENT_DATE AND NEW.status != 'done');
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tasks_is_overdue
+  BEFORE INSERT OR UPDATE ON tasks
+  FOR EACH ROW EXECUTE FUNCTION update_task_is_overdue();
 
 -- Auto-set completed_at when status changes to 'done'
 CREATE OR REPLACE FUNCTION update_task_completed_at()
