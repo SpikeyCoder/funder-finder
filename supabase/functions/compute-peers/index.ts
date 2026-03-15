@@ -375,7 +375,6 @@ Deno.serve(async (req) => {
       }
 
       // ── Step 3: Build list of NTEE letters to search ────────────────────
-      // Same letter + all related letters
       const searchLetters = new Set<string>([sourceMajor]);
       const relatedLetters = NTEE_RELATED[sourceMajor] || [];
       for (const letter of relatedLetters) {
@@ -385,8 +384,6 @@ Deno.serve(async (req) => {
       console.log(`[compute-peers] Searching NTEE letters: ${Array.from(searchLetters).join(', ')}`);
 
       // ── Step 4: Query candidates from DB by NTEE code ───────────────────
-      // Fetch recipients whose NTEE code starts with any of the search letters
-      // Filter: funder_count >= 3, not the source org itself
       type CandidateRow = {
         id: string; ein: string; name: string;
         primary_city: string | null; primary_state: string | null;
@@ -405,14 +402,8 @@ Deno.serve(async (req) => {
         allCandidates.push(...rows);
       }
 
-      // Also search for orgs by NAME keywords for ALL related NTEE letters.
-      // This is critical: most orgs don't have NTEE codes in the DB yet,
-      // so we find them by mission-relevant keywords in their org name.
-      // e.g., DESC (F=Mental Health) → also search L=Housing keywords:
-      //   "housing", "shelter", "homeless" → finds Plymouth Housing Group
       for (const letter of searchLetters) {
         const keywords = NAME_MISSION_KEYWORDS[letter] || [];
-        // Use top 4 keywords per letter (most distinctive first = longest)
         const sorted = [...keywords].sort((a, b) => b.length - a.length).slice(0, 4);
         for (const kw of sorted) {
           if (kw.length < 4) continue;
@@ -436,7 +427,6 @@ Deno.serve(async (req) => {
       console.log(`[compute-peers] Found ${candidateMap.size} unique candidates`);
 
       // ── Step 5: Score all candidates ────────────────────────────────────
-      // Weights: 40% NTEE match + 30% geography + 20% scale + 10% name
       const W_NTEE  = 0.40;
       const W_GEO   = 0.30;
       const W_SCALE = 0.20;
@@ -451,43 +441,38 @@ Deno.serve(async (req) => {
       for (const [, c] of candidateMap) {
         if (isLikelyNonNonprofit(c.name)) continue;
 
-        // Exclude mega-orgs (20x the source's funder count)
         const sourceFunderCount = source.funder_count ?? 10;
         if ((c.funder_count ?? 0) > sourceFunderCount * 20) continue;
 
-        // Signal 1: NTEE similarity (40%)
         let ntee = 0;
         const candNtee = c.ntee_code;
         if (sourceNtee && candNtee && candNtee !== 'UNKNOWN') {
           ntee = nteeScore(sourceNtee, candNtee);
         } else {
-          // If candidate has no NTEE, infer from name
           const inferred = inferNteeFromName(c.name);
           if (inferred && sourceMajor) {
             ntee = nteeScore(sourceNtee!, `${inferred}00`);
           }
         }
 
-        // Signal 2: Geographic proximity (30%)
         let geo = 0;
         const peerState = c.primary_state?.toUpperCase() || null;
         const peerCity = c.primary_city?.toUpperCase() || null;
         if (sourceCity && peerCity && sourceState && peerState &&
             sourceCity === peerCity && sourceState === peerState) {
-          geo = 1.0; // same city
+          geo = 1.0;
         } else if (sourceState && peerState) {
           if (sourceState === peerState) {
-            geo = 0.6; // same state
+            geo = 0.6;
           } else {
             const srcRegion = STATE_REGION[sourceState];
             const peerRegion = peerState ? STATE_REGION[peerState] : null;
             if (srcRegion && peerRegion && srcRegion === peerRegion) {
-              geo = 0.3; // same region
+              geo = 0.3;
             }
           }
         }
 
-        // Signal 3: Scale similarity (20%)
         let scale = 0.5;
         const peerFunding = Number(c.total_funding) || 0;
         if (sourceFunding > 0 && peerFunding > 0) {
@@ -495,12 +480,9 @@ Deno.serve(async (req) => {
           scale = Math.max(0, 1.0 - logDiff * 0.4);
         }
 
-        // Signal 4: Name keyword overlap (10%)
-        // Does the candidate's name share mission keywords with the source?
         let nameOverlap = 0;
         const srcNameLower = source.name.toLowerCase();
         const candNameLower = c.name.toLowerCase();
-        // Check if both names contain keywords from the same NTEE category
         for (const [letter, keywords] of Object.entries(NAME_MISSION_KEYWORDS)) {
           const srcHas = keywords.some(kw => srcNameLower.includes(kw));
           const candHas = keywords.some(kw => candNameLower.includes(kw));
@@ -509,7 +491,6 @@ Deno.serve(async (req) => {
             break;
           }
         }
-        // Also boost if candidate name contains keywords from source's NTEE category
         if (nameOverlap === 0 && sourceMajor) {
           const srcCatKeywords = NAME_MISSION_KEYWORDS[sourceMajor] || [];
           if (srcCatKeywords.some(kw => candNameLower.includes(kw))) {
@@ -523,7 +504,6 @@ Deno.serve(async (req) => {
           scale * W_SCALE +
           nameOverlap * W_NAME;
 
-        // Build mission label from NTEE code
         const candMajor = (candNtee && candNtee !== 'UNKNOWN')
           ? candNtee.charAt(0).toUpperCase()
           : inferNteeFromName(c.name);
