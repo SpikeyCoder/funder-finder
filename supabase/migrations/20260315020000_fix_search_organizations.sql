@@ -73,11 +73,16 @@ BEGIN
   scored AS (
     SELECT c.*,
       -- Score breakdown:
-      -- - Word match ratio (0-0.5): normalized count of matched distinctive words
-      -- - Funding log scale (0-0.3): logarithmic scale of total_funding
-      -- - Type preference (0-0.2): favor funders over recipients
-      (c._word_hits / GREATEST(array_length(v_distinctive, 1), 1)) * 0.50
-      + CASE WHEN c._tf > 0 THEN LEAST(ln(c._tf + 1) / 24.0 * 0.30, 0.30) ELSE 0 END
+      -- - Exact full name match bonus (0 or 0.40): huge boost if name matches query exactly
+      -- - Whole-word match ratio (0-0.30): words that match as whole words (not substrings)
+      -- - Any-word match ratio (0-0.10): partial substring matches
+      -- - Funding log scale (0-0.10): logarithmic scale of total_funding
+      -- - Type preference (0-0.10): favor funders over recipients
+      CASE WHEN lower(trim(c._name)) = lower(trim(p_query)) THEN 0.40 ELSE 0 END
+      + (SELECT count(*)::numeric FROM unnest(v_distinctive) dw
+         WHERE c._name ~* ('\m' || dw || '\M')) / GREATEST(array_length(v_distinctive, 1), 1) * 0.30
+      + (c._word_hits / GREATEST(array_length(v_distinctive, 1), 1)) * 0.10
+      + CASE WHEN c._tf > 0 THEN LEAST(ln(c._tf + 1) / 24.0 * 0.10, 0.10) ELSE 0 END
       + CASE WHEN c._etype = 'funder' THEN 0.10 ELSE 0 END
       AS _rel
     FROM combined c
