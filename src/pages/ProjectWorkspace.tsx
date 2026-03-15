@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Save, Loader, Users, RefreshCw, Plus, Download, Upload, X, CheckCircle, Clock, AlertTriangle, ExternalLink, Trash2 } from 'lucide-react';
+import { ArrowLeft, Save, Loader, Users, RefreshCw, Plus, Download, Upload, X, CheckCircle, Clock, AlertTriangle, ExternalLink, Trash2, ClipboardList, Calendar } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
@@ -91,7 +91,7 @@ const FUNDING_TYPES = [
   { value: 'capacity_building', label: 'Capacity Building' },
 ];
 
-type TabType = 'matches' | 'tracker' | 'peers' | 'settings';
+type TabType = 'matches' | 'tracker' | 'calendar' | 'peers' | 'settings';
 
 // Format currency amounts
 function fmtCurrency(amount: number | null | undefined): string {
@@ -147,9 +147,19 @@ export default function ProjectWorkspace() {
   const [editBudgetMin, setEditBudgetMin] = useState<string>('');
   const [editBudgetMax, setEditBudgetMax] = useState<string>('');
 
+  // Custom pipeline status form
+  const [showStatusForm, setShowStatusForm] = useState(false);
+  const [newStatusName, setNewStatusName] = useState('');
+  const [newStatusColor, setNewStatusColor] = useState('#3b82f6');
+  const [newStatusIsTerminal, setNewStatusIsTerminal] = useState(false);
+
+  // Calendar state
+  const [calendarDate, setCalendarDate] = useState(new Date());
+
   const activeTab = useMemo<TabType>(() => {
     const path = location.pathname;
     if (path.includes('/tracker')) return 'tracker';
+    if (path.includes('/calendar')) return 'calendar';
     if (path.includes('/peers')) return 'peers';
     if (path.includes('/settings')) return 'settings';
     return 'matches';
@@ -664,6 +674,77 @@ export default function ProjectWorkspace() {
     }
   };
 
+  const createCustomStatus = async () => {
+    if (!newStatusName.trim()) {
+      setError('Status name is required');
+      return;
+    }
+    try {
+      setSaving(true);
+      setError(null);
+      const headers = await getEdgeFunctionHeaders();
+      const response = await fetch(PIPELINE_STATUSES_URL, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newStatusName.trim(),
+          color: newStatusColor,
+          is_terminal: newStatusIsTerminal
+        })
+      });
+      if (!response.ok) throw new Error('Failed to create status');
+
+      // Reset form and reload statuses
+      setNewStatusName('');
+      setNewStatusColor('#3b82f6');
+      setNewStatusIsTerminal(false);
+      setShowStatusForm(false);
+
+      // Reload pipeline statuses
+      const statusRes = await fetch(PIPELINE_STATUSES_URL, { headers });
+      if (statusRes.ok) {
+        const statuses = await statusRes.json();
+        setPipelineStatuses(statuses);
+      }
+    } catch (err) {
+      console.error('Error creating status:', err);
+      setError('Failed to create custom status');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteCustomStatus = async (statusId: string) => {
+    const status = pipelineStatuses.find(s => s.id === statusId);
+    if (!status || status.is_default) {
+      setError('Cannot delete default statuses');
+      return;
+    }
+    try {
+      setSaving(true);
+      setError(null);
+      const headers = await getEdgeFunctionHeaders();
+      const response = await fetch(PIPELINE_STATUSES_URL, {
+        method: 'DELETE',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ statusId })
+      });
+      if (!response.ok) throw new Error('Failed to delete status');
+
+      // Reload pipeline statuses
+      const statusRes = await fetch(PIPELINE_STATUSES_URL, { headers });
+      if (statusRes.ok) {
+        const statuses = await statusRes.json();
+        setPipelineStatuses(statuses);
+      }
+    } catch (err) {
+      console.error('Error deleting status:', err);
+      setError('Failed to delete status');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading || projectLoading) {
     return (<><NavBar /><main className="min-h-screen bg-[#0d1117] pt-20 flex items-center justify-center"><Loader className="animate-spin text-gray-400" size={24} /></main></>);
   }
@@ -694,7 +775,7 @@ export default function ProjectWorkspace() {
           {/* Tabs */}
           <div className="mb-8 overflow-x-auto">
             <div className="flex gap-2 border-b border-[#30363d] pb-4 min-w-max sm:min-w-0">
-              {(['matches', 'tracker', 'peers', 'settings'] as TabType[]).map(tab => (
+              {(['matches', 'tracker', 'calendar', 'peers', 'settings'] as TabType[]).map(tab => (
                 <button key={tab} onClick={() => handleTabChange(tab)}
                   className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap capitalize ${activeTab === tab ? 'bg-blue-600/20 text-blue-400 border border-blue-500' : 'text-gray-400 hover:text-white'}`}>
                   {tab}
@@ -865,6 +946,9 @@ export default function ProjectWorkspace() {
                               <td className="px-4 py-3 text-gray-500 text-xs uppercase">{grant.source}</td>
                               <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
                                 <div className="flex items-center justify-end gap-1">
+                                  <button onClick={() => openGrantDetail(grant)} className="p-1.5 text-gray-500 hover:text-green-400 transition-colors" title="Add Task">
+                                    <ClipboardList size={14} />
+                                  </button>
                                   {grant.funder_ein && (
                                     <button onClick={() => navigate(`/funder/${grant.funder_ein}`)} className="p-1.5 text-gray-500 hover:text-blue-400 transition-colors" title="View funder">
                                       <ExternalLink size={14} />
@@ -936,6 +1020,143 @@ export default function ProjectWorkspace() {
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* CALENDAR TAB */}
+          {activeTab === 'calendar' && (
+            <div>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-lg font-semibold text-white">
+                  {calendarDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                </h2>
+                <div className="flex gap-2">
+                  <button onClick={() => setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1))}
+                    className="px-4 py-2 bg-[#161b22] border border-[#30363d] hover:border-[#484f58] text-gray-300 rounded-lg text-sm transition-colors">
+                    Previous
+                  </button>
+                  <button onClick={() => setCalendarDate(new Date())}
+                    className="px-4 py-2 bg-[#161b22] border border-[#30363d] hover:border-[#484f58] text-gray-300 rounded-lg text-sm transition-colors">
+                    Today
+                  </button>
+                  <button onClick={() => setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1))}
+                    className="px-4 py-2 bg-[#161b22] border border-[#30363d] hover:border-[#484f58] text-gray-300 rounded-lg text-sm transition-colors">
+                    Next
+                  </button>
+                </div>
+              </div>
+
+              {trackedGrants.length === 0 ? (
+                <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-8 text-center">
+                  <Calendar size={32} className="mx-auto text-gray-500 mb-3" />
+                  <p className="text-gray-400 mb-2">No tracked grants yet.</p>
+                  <p className="text-gray-500 text-sm mb-4">Add grants to the tracker tab to see deadlines on the calendar.</p>
+                  <button onClick={() => handleTabChange('tracker')}
+                    className="inline-block px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
+                    Go to Tracker
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* Calendar Grid */}
+                  <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-6">
+                    <div className="grid grid-cols-7 gap-1 mb-4">
+                      {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                        <div key={day} className="text-center text-xs font-semibold text-gray-500 py-2">
+                          {day}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-7 gap-1">
+                      {(() => {
+                        const year = calendarDate.getFullYear();
+                        const month = calendarDate.getMonth();
+                        const firstDay = new Date(year, month, 1);
+                        const lastDay = new Date(year, month + 1, 0);
+                        const prevLastDay = new Date(year, month, 0).getDate();
+                        const startDate = firstDay.getDay();
+                        const endDate = lastDay.getDate();
+                        const nextDays = 7 - lastDay.getDay() - 1;
+
+                        const days = [];
+
+                        // Previous month's days
+                        for (let i = startDate - 1; i >= 0; i--) {
+                          days.push({
+                            date: prevLastDay - i,
+                            isCurrentMonth: false,
+                            fullDate: new Date(year, month - 1, prevLastDay - i),
+                          });
+                        }
+
+                        // Current month's days
+                        for (let i = 1; i <= endDate; i++) {
+                          days.push({
+                            date: i,
+                            isCurrentMonth: true,
+                            fullDate: new Date(year, month, i),
+                          });
+                        }
+
+                        // Next month's days
+                        for (let i = 1; i <= nextDays; i++) {
+                          days.push({
+                            date: i,
+                            isCurrentMonth: false,
+                            fullDate: new Date(year, month + 1, i),
+                          });
+                        }
+
+                        return days.map((day, idx) => {
+                          const dateStr = day.fullDate.toISOString().split('T')[0];
+                          const grantsForDay = trackedGrants.filter(g => {
+                            if (!g.deadline) return false;
+                            const deadlineDate = new Date(g.deadline);
+                            return deadlineDate.toISOString().split('T')[0] === dateStr;
+                          });
+
+                          return (
+                            <div key={idx}
+                              className={`min-h-24 p-2 border border-[#30363d] rounded-lg text-xs ${day.isCurrentMonth ? 'bg-[#0d1117]' : 'bg-[#0d1117]/50'}`}>
+                              <div className={`font-semibold mb-1 ${day.isCurrentMonth ? 'text-white' : 'text-gray-600'}`}>
+                                {day.date}
+                              </div>
+                              <div className="space-y-1">
+                                {grantsForDay.map(grant => (
+                                  <button key={grant.id}
+                                    onClick={() => {
+                                      setSelectedGrant(grant);
+                                      setDrawerOpen(true);
+                                    }}
+                                    className="block w-full text-left px-1.5 py-0.5 bg-blue-900/40 text-blue-200 rounded hover:bg-blue-900/60 transition-colors truncate border border-blue-800/50">
+                                    <span className="inline-block w-1.5 h-1.5 bg-blue-400 rounded-full mr-1"></span>
+                                    {grant.funder_name || 'Grant'}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* Legend and Subscribe Button */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4 text-sm text-gray-400">
+                      <div className="flex items-center gap-2">
+                        <span className="inline-block w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
+                        <span>Grant deadline</span>
+                      </div>
+                    </div>
+                    <button onClick={() => navigate(`/projects/${id}/settings`)}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
+                      Calendar Settings
+                    </button>
                   </div>
                 </div>
               )}
@@ -1018,6 +1239,127 @@ export default function ProjectWorkspace() {
                       className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
                   </div>
                 </div>
+              </div>
+
+              {/* PIPELINE STATUSES SECTION */}
+              <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-6">
+                <h2 className="text-lg font-semibold text-white mb-4">Pipeline Statuses</h2>
+
+                {/* List of current statuses */}
+                <div className="space-y-2 mb-6">
+                  {pipelineStatuses.length > 0 ? (
+                    pipelineStatuses.map(status => (
+                      <div key={status.id} className="flex items-center justify-between p-3 bg-[#0d1117] border border-[#30363d] rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: status.color }}
+                          ></div>
+                          <div className="flex flex-col">
+                            <span className="text-sm font-medium text-white">{status.name}</span>
+                            <span className="text-xs text-gray-500">
+                              {status.is_default ? 'Default' : 'Custom'}{status.is_terminal ? ' • Terminal' : ''}
+                            </span>
+                          </div>
+                        </div>
+                        {!status.is_default && (
+                          <button
+                            onClick={() => deleteCustomStatus(status.id)}
+                            disabled={saving}
+                            className="p-1 hover:bg-red-600/20 rounded text-red-500 hover:text-red-400 disabled:opacity-50 transition-colors"
+                            title="Delete status"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-gray-500 text-sm">No pipeline statuses available</div>
+                  )}
+                </div>
+
+                {/* Add Custom Status Form */}
+                {!showStatusForm ? (
+                  <button
+                    onClick={() => setShowStatusForm(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg font-medium transition-colors"
+                  >
+                    <Plus size={16} />
+                    Add Custom Status
+                  </button>
+                ) : (
+                  <div className="p-4 bg-[#0d1117] border border-[#30363d] rounded-lg space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">Status Name</label>
+                      <input
+                        type="text"
+                        value={newStatusName}
+                        onChange={e => setNewStatusName(e.target.value)}
+                        placeholder="e.g. In Review"
+                        className="w-full bg-[#161b22] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">Color</label>
+                      <div className="flex gap-2 flex-wrap">
+                        {[
+                          { color: '#3b82f6', name: 'Blue' },
+                          { color: '#10b981', name: 'Green' },
+                          { color: '#f59e0b', name: 'Amber' },
+                          { color: '#ef4444', name: 'Red' },
+                          { color: '#8b5cf6', name: 'Purple' },
+                          { color: '#ec4899', name: 'Pink' },
+                          { color: '#06b6d4', name: 'Cyan' },
+                          { color: '#6b7280', name: 'Gray' }
+                        ].map(({ color, name }) => (
+                          <button
+                            key={color}
+                            onClick={() => setNewStatusColor(color)}
+                            className={`w-8 h-8 rounded-full border-2 transition-all ${
+                              newStatusColor === color ? 'border-white' : 'border-[#30363d]'
+                            }`}
+                            style={{ backgroundColor: color }}
+                            title={name}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={newStatusIsTerminal}
+                        onChange={e => setNewStatusIsTerminal(e.target.checked)}
+                        className="rounded border-[#30363d] bg-[#0d1117] text-blue-600"
+                      />
+                      <span className="text-sm text-gray-300">Is Terminal (grant is done - awarded/rejected)</span>
+                    </label>
+
+                    <div className="flex gap-2 pt-2">
+                      <button
+                        onClick={createCustomStatus}
+                        disabled={saving || !newStatusName.trim()}
+                        className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm rounded-lg font-medium transition-colors"
+                      >
+                        {saving ? 'Creating...' : 'Save Status'}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowStatusForm(false);
+                          setNewStatusName('');
+                          setNewStatusColor('#3b82f6');
+                          setNewStatusIsTerminal(false);
+                        }}
+                        disabled={saving}
+                        className="flex-1 px-4 py-2 bg-[#30363d] hover:bg-[#3d444d] disabled:opacity-50 text-white text-sm rounded-lg font-medium transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <button onClick={handleSaveProject} disabled={saving}

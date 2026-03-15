@@ -10,7 +10,7 @@ interface ProjectWithCounts {
   name: string;
   description?: string;
   updated_at: string;
-  project_saved_funders: Array<{ count?: number }>;
+  tracked_grants: Array<{ count?: number }>;
   project_matches: Array<{ count?: number }>;
 }
 
@@ -34,7 +34,7 @@ export default function DashboardPage() {
 
       const { data, error: fetchError } = await supabase
         .from('projects')
-        .select('*, project_saved_funders(count), project_matches(count)')
+        .select('*, tracked_grants(count), project_matches(count)')
         .eq('user_id', user!.id)
         .order('updated_at', { ascending: false });
 
@@ -76,10 +76,10 @@ export default function DashboardPage() {
   };
 
   const getSavedFundersCount = (project: ProjectWithCounts) => {
-    if (!project.project_saved_funders || project.project_saved_funders.length === 0) {
+    if (!project.tracked_grants || project.tracked_grants.length === 0) {
       return 0;
     }
-    return project.project_saved_funders[0]?.count || 0;
+    return project.tracked_grants[0]?.count || 0;
   };
 
   const getMatchesCount = (project: ProjectWithCounts) => {
@@ -175,7 +175,7 @@ export default function DashboardPage() {
                       </div>
                     </div>
                     <div className="bg-[#0d1117] rounded p-3">
-                      <div className="text-xs text-gray-500 uppercase tracking-wide">Saved</div>
+                      <div className="text-xs text-gray-500 uppercase tracking-wide">Tracked</div>
                       <div className="text-2xl font-bold text-white">
                         {getSavedFundersCount(project)}
                       </div>

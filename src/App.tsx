@@ -90,6 +90,7 @@ function AnimatedRoutes() {
         <Route path="/projects/:id" element={<AuthGuard><ProjectWorkspace /></AuthGuard>} />
         <Route path="/projects/:id/matches" element={<AuthGuard><ProjectWorkspace /></AuthGuard>} />
         <Route path="/projects/:id/tracker" element={<AuthGuard><ProjectWorkspace /></AuthGuard>} />
+        <Route path="/projects/:id/calendar" element={<AuthGuard><ProjectWorkspace /></AuthGuard>} />
         <Route path="/projects/:id/peers" element={<AuthGuard><ProjectWorkspace /></AuthGuard>} />
         <Route path="/projects/:id/settings" element={<AuthGuard><ProjectWorkspace /></AuthGuard>} />
         <Route path="/settings" element={<AuthGuard><UserSettingsPage /></AuthGuard>} />
