@@ -31,6 +31,7 @@ function resolveNextStepUrl(nextStepUrl: string | undefined, website: string | n
 import { findMatches, formatGrantRange, formatTotalGiving } from '../utils/matching';
 import { BudgetBand, Funder } from '../types';
 import { getSavedIds, saveFunder, unsaveFunder } from '../utils/storage';
+
 import Toast from '../components/Toast';
 import { useAuth } from '../contexts/AuthContext';
 import LoginModal from '../components/LoginModal';
@@ -307,7 +308,7 @@ export default function Results() {
         }
       }
     } else {
-      // Anonymous path — show login modal (if saving), or unsave from localStorage
+      // Anonymous path — save to localStorage immediately, suggest login for sync
       if (alreadySaved) {
         unsaveFunder(funder.id);
         setSavedIds(prev => prev.filter(i => i !== funder.id));
