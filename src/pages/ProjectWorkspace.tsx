@@ -137,6 +137,7 @@ export default function ProjectWorkspace() {
   // Task creation
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDueDate, setNewTaskDueDate] = useState('');
+  const [newTaskAssignee, setNewTaskAssignee] = useState('');
 
   // Editable fields for settings tab
   const [editName, setEditName] = useState('');
@@ -509,6 +510,7 @@ export default function ProjectWorkspace() {
           project_id: id,
           title: newTaskTitle.trim(),
           due_date: newTaskDueDate || null,
+          assignee_email: newTaskAssignee.trim() || null,
         }),
       });
       if (res.ok) {
@@ -516,6 +518,7 @@ export default function ProjectWorkspace() {
         setGrantTasks(prev => [...prev, task]);
         setNewTaskTitle('');
         setNewTaskDueDate('');
+        setNewTaskAssignee('');
       }
     } catch (err) {
       console.error('Error adding task:', err);
@@ -1577,28 +1580,40 @@ export default function ProjectWorkspace() {
                       </button>
                       <div className="flex-1 min-w-0">
                         <p className={`text-sm ${task.status === 'done' ? 'line-through text-gray-500' : 'text-white'}`}>{task.title}</p>
-                        {task.due_date && (
-                          <p className={`text-xs mt-0.5 ${task.is_overdue ? 'text-red-400' : 'text-gray-500'}`}>
-                            <Clock size={10} className="inline mr-1" />
-                            Due {new Date(task.due_date).toLocaleDateString()}
-                          </p>
-                        )}
+                        <div className="flex gap-3 mt-0.5">
+                          {task.due_date && (
+                            <p className={`text-xs ${task.is_overdue ? 'text-red-400' : 'text-gray-500'}`}>
+                              <Clock size={10} className="inline mr-1" />
+                              Due {new Date(task.due_date).toLocaleDateString()}
+                            </p>
+                          )}
+                          {task.assignee_email && (
+                            <p className="text-xs text-gray-500">
+                              Assigned: {task.assignee_email}
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
                 </div>
 
                 {/* Add task */}
-                <div className="flex gap-2">
-                  <input type="text" value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)}
-                    placeholder="Add a task..." onKeyDown={e => e.key === 'Enter' && handleAddTask()}
-                    className="flex-1 bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500" />
-                  <input type="date" value={newTaskDueDate} onChange={e => setNewTaskDueDate(e.target.value)}
-                    className="bg-[#0d1117] border border-[#30363d] rounded-lg px-2 py-1.5 text-white text-sm w-[130px]" />
-                  <button onClick={handleAddTask} disabled={!newTaskTitle.trim()}
-                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm transition-colors">
-                    <Plus size={16} />
-                  </button>
+                <div className="flex flex-col gap-2">
+                  <div className="flex gap-2">
+                    <input type="text" value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)}
+                      placeholder="Add a task..." onKeyDown={e => e.key === 'Enter' && handleAddTask()}
+                      className="flex-1 bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500" />
+                    <input type="date" value={newTaskDueDate} onChange={e => setNewTaskDueDate(e.target.value)}
+                      className="bg-[#0d1117] border border-[#30363d] rounded-lg px-2 py-1.5 text-white text-sm w-[130px]" />
+                    <button onClick={handleAddTask} disabled={!newTaskTitle.trim()}
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm transition-colors">
+                      <Plus size={16} />
+                    </button>
+                  </div>
+                  <input type="email" value={newTaskAssignee} onChange={e => setNewTaskAssignee(e.target.value)}
+                    placeholder="Assignee email (optional)"
+                    className="bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500" />
                 </div>
               </div>
             </div>
