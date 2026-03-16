@@ -1812,22 +1812,22 @@ export default function ProjectWorkspace() {
             </div>
           </div>
         </div>
+      )}
 
-        {/* Share dialog */}
-        {showShareDialog && shareUrl && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowShareDialog(false)}>
-            <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-6 max-w-md w-full mx-4" onClick={e => e.stopPropagation()}>
-              <h3 className="text-lg font-semibold mb-2">Share Link Created</h3>
-              <p className="text-sm text-gray-400 mb-4">Anyone with this link can view the tracker (read-only).</p>
-              <div className="flex gap-2">
-                <input type="text" readOnly value={shareUrl}
-                  className="flex-1 bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm" />
-                <button onClick={() => { navigator.clipboard.writeText(shareUrl); setShowShareDialog(false); }}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm">Copy</button>
-              </div>
+      {/* Share dialog */}
+      {showShareDialog && shareUrl && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowShareDialog(false)}>
+          <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-6 max-w-md w-full mx-4" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-2">Share Link Created</h3>
+            <p className="text-sm text-gray-400 mb-4">Anyone with this link can view the tracker (read-only).</p>
+            <div className="flex gap-2">
+              <input type="text" readOnly value={shareUrl}
+                className="flex-1 bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm" />
+              <button onClick={() => { navigator.clipboard.writeText(shareUrl); setShowShareDialog(false); }}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm">Copy</button>
             </div>
           </div>
-        )}
+        </div>
       )}
     </>
   );
