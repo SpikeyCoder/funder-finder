@@ -4,7 +4,7 @@ import { ArrowLeft, Save, Loader, Users, RefreshCw, Plus, Download, Upload, X, C
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
-import type { PipelineStatus, TrackedGrant, GrantTask } from '../types';
+import type { PipelineStatus, TrackedGrant, GrantTask, ComplianceRequirement } from '../types';
 
 const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const MATCH_FUNDERS_URL = `${SUPABASE_URL}/functions/v1/match-funders`;
@@ -12,6 +12,9 @@ const SUGGEST_PEERS_URL = `${SUPABASE_URL}/functions/v1/suggest-peers`;
 const TRACKED_GRANTS_URL = `${SUPABASE_URL}/functions/v1/tracked-grants`;
 const PIPELINE_STATUSES_URL = `${SUPABASE_URL}/functions/v1/pipeline-statuses`;
 const GRANT_TASKS_URL = `${SUPABASE_URL}/functions/v1/grant-tasks`;
+const COMPLIANCE_URL = `${SUPABASE_URL}/functions/v1/compliance`;
+const SHARE_LINK_URL = `${SUPABASE_URL}/functions/v1/share-link`;
+const AI_DRAFT_URL = `${SUPABASE_URL}/functions/v1/ai-draft`;
 
 interface PeerOrg {
   name: string;
@@ -138,6 +141,21 @@ export default function ProjectWorkspace() {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDueDate, setNewTaskDueDate] = useState('');
   const [newTaskAssignee, setNewTaskAssignee] = useState('');
+
+  // Compliance
+  const [complianceItems, setComplianceItems] = useState<ComplianceRequirement[]>([]);
+  const [showComplianceForm, setShowComplianceForm] = useState(false);
+  const [newCompTitle, setNewCompTitle] = useState('');
+  const [newCompType, setNewCompType] = useState('narrative_report');
+  const [newCompDue, setNewCompDue] = useState('');
+
+  // Share link
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [showShareDialog, setShowShareDialog] = useState(false);
+
+  // AI Draft
+  const [aiDraft, setAiDraft] = useState<string | null>(null);
+  const [aiDraftLoading, setAiDraftLoading] = useState(false);
 
   // Editable fields for settings tab
   const [editName, setEditName] = useState('');
@@ -541,6 +559,88 @@ export default function ProjectWorkspace() {
     }
   };
 
+  // Load compliance items for selected grant
+  const loadCompliance = async (grantId: string) => {
+    try {
+      const headers = await getEdgeFunctionHeaders();
+      const res = await fetch(`${COMPLIANCE_URL}?grant_id=${grantId}`, { headers });
+      if (res.ok) setComplianceItems(await res.json());
+    } catch (err) { console.error('Error loading compliance:', err); }
+  };
+
+  const handleAddCompliance = async () => {
+    if (!newCompTitle.trim() || !selectedGrant) return;
+    try {
+      const headers = await getEdgeFunctionHeaders();
+      const res = await fetch(COMPLIANCE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({
+          tracked_grant_id: selectedGrant.id,
+          project_id: id,
+          title: newCompTitle.trim(),
+          type: newCompType,
+          due_date: newCompDue || null,
+        }),
+      });
+      if (res.ok) {
+        const item = await res.json();
+        setComplianceItems(prev => [...prev, item]);
+        setNewCompTitle('');
+        setNewCompDue('');
+        setShowComplianceForm(false);
+      }
+    } catch (err) { console.error('Error adding compliance:', err); }
+  };
+
+  const handleUpdateComplianceStatus = async (compId: string, status: string) => {
+    try {
+      const headers = await getEdgeFunctionHeaders();
+      await fetch(COMPLIANCE_URL, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ id: compId, status }),
+      });
+      setComplianceItems(prev => prev.map(c => c.id === compId ? { ...c, status: status as any } : c));
+    } catch (err) { console.error('Error updating compliance:', err); }
+  };
+
+  // Share link
+  const handleCreateShareLink = async () => {
+    try {
+      const headers = await getEdgeFunctionHeaders();
+      const res = await fetch(SHARE_LINK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ project_id: id, scope: 'tracker' }),
+      });
+      if (res.ok) {
+        const link = await res.json();
+        setShareUrl(`https://fundermatch.org/shared/${link.token}`);
+        setShowShareDialog(true);
+      }
+    } catch (err) { console.error('Error creating share link:', err); }
+  };
+
+  // AI Draft generation
+  const handleGenerateDraft = async () => {
+    if (!selectedGrant) return;
+    try {
+      setAiDraftLoading(true);
+      const headers = await getEdgeFunctionHeaders();
+      const res = await fetch(AI_DRAFT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ grant_id: selectedGrant.id, project_id: id }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAiDraft(data.draft);
+      }
+    } catch (err) { console.error('Error generating draft:', err); }
+    finally { setAiDraftLoading(false); }
+  };
+
   // CSV Import
   const handleCsvFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -871,6 +971,10 @@ export default function ProjectWorkspace() {
                 <button onClick={handleCsvExport} disabled={trackedGrants.length === 0}
                   className="flex items-center gap-2 px-3 py-2 bg-[#161b22] border border-[#30363d] hover:border-[#484f58] text-gray-300 rounded-lg text-sm transition-colors disabled:opacity-50">
                   <Download size={14} /> Export CSV
+                </button>
+                <button onClick={handleCreateShareLink}
+                  className="flex items-center gap-2 px-3 py-2 bg-[#161b22] border border-[#30363d] hover:border-[#484f58] text-gray-300 rounded-lg text-sm transition-colors">
+                  <ExternalLink size={14} /> Share
                 </button>
                 <span className="text-sm text-gray-500 ml-auto">
                   {trackedGrants.length} grant{trackedGrants.length !== 1 ? 's' : ''} tracked
@@ -1615,10 +1719,115 @@ export default function ProjectWorkspace() {
                     placeholder="Assignee email (optional)"
                     className="bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500" />
                 </div>
+
+                {/* Compliance Section (for Awarded grants) */}
+                {selectedGrant && (
+                  <div className="border-t border-[#30363d] pt-4 mt-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-sm font-semibold text-white">Compliance Requirements</h4>
+                      <button onClick={() => { setShowComplianceForm(!showComplianceForm); loadCompliance(selectedGrant.id); }}
+                        className="text-xs text-blue-400 hover:text-blue-300">
+                        {showComplianceForm ? 'Cancel' : '+ Add Requirement'}
+                      </button>
+                    </div>
+
+                    {showComplianceForm && (
+                      <div className="mb-3 space-y-2">
+                        <input type="text" value={newCompTitle} onChange={e => setNewCompTitle(e.target.value)}
+                          placeholder="Requirement title..."
+                          className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500" />
+                        <div className="flex gap-2">
+                          <select value={newCompType} onChange={e => setNewCompType(e.target.value)}
+                            className="bg-[#0d1117] border border-[#30363d] rounded-lg px-2 py-1.5 text-white text-sm flex-1">
+                            <option value="narrative_report">Narrative Report</option>
+                            <option value="financial_report">Financial Report</option>
+                            <option value="progress_report">Progress Report</option>
+                            <option value="site_visit">Site Visit</option>
+                            <option value="audit">Audit</option>
+                            <option value="final_report">Final Report</option>
+                            <option value="other">Other</option>
+                          </select>
+                          <input type="date" value={newCompDue} onChange={e => setNewCompDue(e.target.value)}
+                            className="bg-[#0d1117] border border-[#30363d] rounded-lg px-2 py-1.5 text-white text-sm" />
+                          <button onClick={handleAddCompliance} disabled={!newCompTitle.trim()}
+                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm">
+                            <Plus size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      {complianceItems.map(item => (
+                        <div key={item.id} className={`flex items-center justify-between p-2 rounded-lg text-sm ${
+                          item.is_overdue ? 'bg-red-900/10 border border-red-900/30' : 'bg-[#0d1117]'
+                        }`}>
+                          <div>
+                            <p className={`text-white ${item.status === 'submitted' || item.status === 'approved' ? 'line-through text-gray-500' : ''}`}>
+                              {item.title}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {item.type.replace(/_/g, ' ')}
+                              {item.due_date && ` · Due ${new Date(item.due_date).toLocaleDateString()}`}
+                            </p>
+                          </div>
+                          <select value={item.status} onChange={e => handleUpdateComplianceStatus(item.id, e.target.value)}
+                            className={`text-xs rounded px-2 py-1 border-0 ${
+                              item.status === 'approved' ? 'bg-green-900/30 text-green-400' :
+                              item.status === 'submitted' ? 'bg-blue-900/30 text-blue-400' :
+                              item.is_overdue ? 'bg-red-900/30 text-red-400' :
+                              'bg-[#161b22] text-gray-400'
+                            }`}>
+                            <option value="upcoming">Upcoming</option>
+                            <option value="in_progress">In Progress</option>
+                            <option value="submitted">Submitted</option>
+                            <option value="approved">Approved</option>
+                          </select>
+                        </div>
+                      ))}
+                      {complianceItems.length === 0 && !showComplianceForm && (
+                        <p className="text-xs text-gray-500">No compliance requirements added.</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* AI Draft Button */}
+                {selectedGrant && (
+                  <div className="border-t border-[#30363d] pt-4 mt-4">
+                    <button onClick={handleGenerateDraft} disabled={aiDraftLoading}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-purple-600/20 border border-purple-500/30 hover:border-purple-500 text-purple-300 rounded-lg text-sm transition-colors disabled:opacity-50">
+                      {aiDraftLoading ? <Loader size={14} className="animate-spin" /> : <ClipboardList size={14} />}
+                      {aiDraftLoading ? 'Generating Draft...' : 'Generate AI Draft Proposal'}
+                    </button>
+                    {aiDraft && (
+                      <div className="mt-3 bg-[#0d1117] border border-[#30363d] rounded-lg p-3 max-h-64 overflow-y-auto">
+                        <p className="text-xs text-gray-500 mb-2">AI-Generated Draft</p>
+                        <div className="text-sm text-gray-300 whitespace-pre-wrap">{aiDraft}</div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
         </div>
+
+        {/* Share dialog */}
+        {showShareDialog && shareUrl && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowShareDialog(false)}>
+            <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-6 max-w-md w-full mx-4" onClick={e => e.stopPropagation()}>
+              <h3 className="text-lg font-semibold mb-2">Share Link Created</h3>
+              <p className="text-sm text-gray-400 mb-4">Anyone with this link can view the tracker (read-only).</p>
+              <div className="flex gap-2">
+                <input type="text" readOnly value={shareUrl}
+                  className="flex-1 bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm" />
+                <button onClick={() => { navigator.clipboard.writeText(shareUrl); setShowShareDialog(false); }}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm">Copy</button>
+              </div>
+            </div>
+          </div>
+        )}
       )}
     </>
   );

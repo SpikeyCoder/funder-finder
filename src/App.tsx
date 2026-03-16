@@ -20,6 +20,11 @@ import BrowsePage from './pages/BrowsePage';
 import UserSettingsPage from './pages/UserSettingsPage';
 import PortfolioPage from './pages/PortfolioPage';
 import MyTasksPage from './pages/MyTasksPage';
+import TeamSettingsPage from './pages/TeamSettingsPage';
+import SharedViewPage from './pages/SharedViewPage';
+import ReportsPage from './pages/ReportsPage';
+import ApplicationsPage from './pages/ApplicationsPage';
+import OnboardingPage from './pages/OnboardingPage';
 import NotFound from './pages/NotFound';
 import BugReportButton from './components/BugReportButton';
 
@@ -94,8 +99,20 @@ function AnimatedRoutes() {
         <Route path="/projects/:id/peers" element={<AuthGuard><ProjectWorkspace /></AuthGuard>} />
         <Route path="/projects/:id/settings" element={<AuthGuard><ProjectWorkspace /></AuthGuard>} />
         <Route path="/settings" element={<AuthGuard><UserSettingsPage /></AuthGuard>} />
+        <Route path="/settings/team" element={<AuthGuard><TeamSettingsPage /></AuthGuard>} />
+        <Route path="/settings/team/activity" element={<AuthGuard><TeamSettingsPage /></AuthGuard>} />
         <Route path="/portfolio" element={<AuthGuard><PortfolioPage /></AuthGuard>} />
         <Route path="/tasks" element={<AuthGuard><MyTasksPage /></AuthGuard>} />
+        <Route path="/reports" element={<AuthGuard><ReportsPage /></AuthGuard>} />
+        <Route path="/applications" element={<AuthGuard><ApplicationsPage /></AuthGuard>} />
+        <Route path="/onboarding/welcome" element={<AuthGuard><OnboardingPage /></AuthGuard>} />
+        <Route path="/onboarding/profile" element={<AuthGuard><OnboardingPage /></AuthGuard>} />
+        <Route path="/onboarding/first-project" element={<AuthGuard><OnboardingPage /></AuthGuard>} />
+        <Route path="/onboarding/matches" element={<AuthGuard><OnboardingPage /></AuthGuard>} />
+        <Route path="/onboarding/save" element={<AuthGuard><OnboardingPage /></AuthGuard>} />
+
+        {/* Public shared view (no auth required) */}
+        <Route path="/shared/:token" element={<SharedViewPage />} />
 
         <Route path="*" element={<NotFound />} />
       </Routes>

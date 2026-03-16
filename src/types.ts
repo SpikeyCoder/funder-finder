@@ -304,6 +304,65 @@ export interface NotificationPreferences {
   email_enabled: boolean;
 }
 
+// ── Phase 4: Team Collaboration types ────────────────────────────────────────
+
+export interface OrgMember {
+  id: string;
+  user_id: string;
+  email?: string;
+  role: 'admin' | 'editor' | 'viewer';
+  status: string;
+  created_at: string;
+}
+
+export interface ShareableLink {
+  id: string;
+  project_id: string;
+  token: string;
+  scope: 'tracker' | 'portfolio' | 'report';
+  is_active: boolean;
+  view_count: number;
+  expires_at: string | null;
+  created_at: string;
+  projects?: { name: string };
+}
+
+// ── Phase 5: Reporting & Compliance types ────────────────────────────────────
+
+export interface ComplianceRequirement {
+  id: string;
+  tracked_grant_id: string;
+  project_id: string;
+  type: string;
+  title: string;
+  description: string | null;
+  due_date: string | null;
+  status: 'upcoming' | 'in_progress' | 'submitted' | 'approved' | 'overdue';
+  assignee_email: string | null;
+  is_overdue?: boolean;
+  completed_at: string | null;
+  created_at: string;
+}
+
+export interface KnowledgeBaseEntry {
+  id: string;
+  title: string;
+  content: string;
+  source_type: string;
+  file_name: string | null;
+  sections: any[];
+  created_at: string;
+}
+
+export interface OnboardingProgress {
+  id: string;
+  user_id: string;
+  current_step: number;
+  completed_steps: number[];
+  skipped: boolean;
+  completed_at: string | null;
+}
+
 // ── Peer Intelligence types ─────────────────────────────────────────────────
 
 export interface PeerEntry {

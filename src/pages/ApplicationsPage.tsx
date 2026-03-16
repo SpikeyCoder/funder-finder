@@ -1,0 +1,176 @@
+import { useEffect, useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { getEdgeFunctionHeaders } from '../lib/supabase';
+import NavBar from '../components/NavBar';
+import { Plus, Trash2, FileText, BookOpen, Star, Upload } from 'lucide-react';
+
+const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
+const KB_URL = `${SUPABASE_URL}/functions/v1/knowledge-base`;
+
+interface KBEntry {
+  id: string;
+  title: string;
+  content: string;
+  source_type: string;
+  file_name: string | null;
+  sections: any[];
+  created_at: string;
+}
+
+export default function ApplicationsPage() {
+  const { user, loading } = useAuth();
+  const [entries, setEntries] = useState<KBEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newContent, setNewContent] = useState('');
+  const [selectedEntry, setSelectedEntry] = useState<KBEntry | null>(null);
+
+  useEffect(() => {
+    if (!loading && user) loadEntries();
+  }, [user, loading]);
+
+  const loadEntries = async () => {
+    try {
+      setIsLoading(true);
+      const headers = await getEdgeFunctionHeaders();
+      const res = await fetch(KB_URL, { headers });
+      if (res.ok) setEntries(await res.json());
+    } catch (err) {
+      console.error('Error loading knowledge base:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAdd = async () => {
+    if (!newTitle.trim() || !newContent.trim()) return;
+    try {
+      const headers = await getEdgeFunctionHeaders();
+      const res = await fetch(KB_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ title: newTitle.trim(), content: newContent.trim(), source_type: 'manual' }),
+      });
+      if (res.ok) {
+        setNewTitle('');
+        setNewContent('');
+        setShowForm(false);
+        loadEntries();
+      }
+    } catch (err) {
+      console.error('Error adding entry:', err);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      const headers = await getEdgeFunctionHeaders();
+      await fetch(`${KB_URL}?id=${id}`, { method: 'DELETE', headers });
+      setEntries(prev => prev.filter(e => e.id !== id));
+      if (selectedEntry?.id === id) setSelectedEntry(null);
+    } catch (err) {
+      console.error('Error deleting entry:', err);
+    }
+  };
+
+  if (loading) return null;
+
+  return (
+    <div className="min-h-screen bg-[#0d1117] text-white">
+      <NavBar />
+      <main className="max-w-6xl mx-auto px-4 py-8">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold">Application Knowledge Base</h1>
+            <p className="text-gray-400 text-sm mt-1">Store past applications to power AI-assisted grant writing</p>
+          </div>
+          <button onClick={() => setShowForm(!showForm)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm transition-colors">
+            <Plus size={16} /> Add Content
+          </button>
+        </div>
+
+        {showForm && (
+          <div className="mb-6 p-4 bg-[#161b22] border border-[#30363d] rounded-lg">
+            <h3 className="text-sm font-semibold mb-3">Add Application Content</h3>
+            <input type="text" value={newTitle} onChange={e => setNewTitle(e.target.value)}
+              placeholder="Title (e.g., 'Ford Foundation 2025 LOI')"
+              className="w-full mb-3 bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
+            <textarea value={newContent} onChange={e => setNewContent(e.target.value)}
+              placeholder="Paste your application text, proposal sections, or notes here..."
+              rows={8}
+              className="w-full mb-3 bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setShowForm(false)} className="px-4 py-2 text-gray-400 hover:text-white text-sm">Cancel</button>
+              <button onClick={handleAdd} disabled={!newTitle.trim() || !newContent.trim()}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-lg text-sm transition-colors">Save</button>
+            </div>
+          </div>
+        )}
+
+        <div className="grid md:grid-cols-3 gap-6">
+          {/* Entry list */}
+          <div className="md:col-span-1">
+            <div className="space-y-2">
+              {isLoading && <div className="text-gray-500 text-sm p-4">Loading...</div>}
+              {!isLoading && entries.length === 0 && (
+                <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-6 text-center">
+                  <BookOpen size={24} className="mx-auto text-gray-500 mb-2" />
+                  <p className="text-sm text-gray-500">No entries yet. Add past applications to build your knowledge base.</p>
+                </div>
+              )}
+              {entries.map(entry => (
+                <button key={entry.id} onClick={() => setSelectedEntry(entry)}
+                  className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                    selectedEntry?.id === entry.id ? 'bg-blue-900/20 border-blue-500' : 'bg-[#161b22] border-[#30363d] hover:border-[#484f58]'
+                  }`}>
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-2">
+                      <FileText size={14} className="mt-0.5 text-gray-500 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium text-white">{entry.title}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {entry.source_type} · {new Date(entry.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                    <button onClick={e => { e.stopPropagation(); handleDelete(entry.id); }}
+                      className="text-gray-600 hover:text-red-400 flex-shrink-0"><Trash2 size={14} /></button>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Entry detail / preview */}
+          <div className="md:col-span-2">
+            {selectedEntry ? (
+              <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-5">
+                <h3 className="text-lg font-semibold mb-1">{selectedEntry.title}</h3>
+                <p className="text-xs text-gray-500 mb-4">{selectedEntry.source_type} · Added {new Date(selectedEntry.created_at).toLocaleDateString()}</p>
+                <div className="prose prose-invert text-sm whitespace-pre-wrap text-gray-300 leading-relaxed max-h-[500px] overflow-y-auto">
+                  {selectedEntry.content}
+                </div>
+                {selectedEntry.sections && selectedEntry.sections.length > 0 && (
+                  <div className="mt-4 border-t border-[#30363d] pt-4">
+                    <h4 className="text-sm font-semibold mb-2">Sections</h4>
+                    {selectedEntry.sections.map((s: any, i: number) => (
+                      <div key={i} className="mb-2 text-xs text-gray-400">{s.title || `Section ${i + 1}`}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-12 text-center text-gray-500">
+                <FileText size={32} className="mx-auto mb-3" />
+                <p className="text-sm">Select an entry to preview its content</p>
+                <p className="text-xs mt-1">Your knowledge base powers AI-assisted grant draft generation</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
