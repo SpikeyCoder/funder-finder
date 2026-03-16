@@ -21,10 +21,18 @@ export default function AuthGuard({ children }: AuthGuardProps) {
         sessionStorage.setItem('authRedirect', location.pathname);
         navigate('/login', { replace: true });
       } else {
-        // Check if onboarding is complete
+        // Only redirect truly new users to onboarding (not existing users)
         const onboardingComplete = localStorage.getItem('onboarding_complete');
         if (!onboardingComplete && location.pathname === '/dashboard') {
-          navigate('/onboarding/welcome', { replace: true });
+          // Check account age - only redirect users created after onboarding was deployed
+          const createdAt = new Date(user.created_at || 0);
+          const onboardingDeployDate = new Date('2026-03-16T00:00:00Z');
+          if (createdAt > onboardingDeployDate) {
+            navigate('/onboarding/welcome', { replace: true });
+          } else {
+            // Existing user — mark onboarding as complete automatically
+            localStorage.setItem('onboarding_complete', 'true');
+          }
         }
       }
       setIsChecking(false);
