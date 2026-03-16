@@ -143,26 +143,18 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- project_access: missing INSERT, UPDATE, DELETE (admins manage access)
+-- project_access: missing INSERT, DELETE (project owner manages access)
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'project_access' AND policyname = 'project_access_insert') THEN
     CREATE POLICY project_access_insert ON public.project_access FOR INSERT
-      WITH CHECK (auth.uid() IN (
-        SELECT om.user_id FROM org_members om WHERE om.org_id = (
-          SELECT p.user_id FROM projects p WHERE p.id = project_id
-        ) AND om.role IN ('owner', 'admin')
-      ));
+      WITH CHECK (auth.uid() = (SELECT p.user_id FROM projects p WHERE p.id = project_id));
   END IF;
 END $$;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'project_access' AND policyname = 'project_access_delete') THEN
     CREATE POLICY project_access_delete ON public.project_access FOR DELETE
-      USING (auth.uid() IN (
-        SELECT om.user_id FROM org_members om WHERE om.org_id = (
-          SELECT p.user_id FROM projects p WHERE p.id = project_id
-        ) AND om.role IN ('owner', 'admin')
-      ));
+      USING (auth.uid() = (SELECT p.user_id FROM projects p WHERE p.id = project_id));
   END IF;
 END $$;
 
