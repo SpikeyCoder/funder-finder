@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
-import { Plus, Trash2, UserPlus, Shield, Eye, Edit3, Clock, Mail } from 'lucide-react';
+import { Trash2, UserPlus, Shield, Eye, Edit3, Clock, Mail } from 'lucide-react';
 
 const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const TEAM_INVITE_URL = `${SUPABASE_URL}/functions/v1/team-invite`;

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
-import { Download, TrendingUp, DollarSign, Target, Award, Clock, BarChart3, PieChart, Filter } from 'lucide-react';
+import { Download, TrendingUp, DollarSign, Target, Award, Clock, BarChart3, PieChart } from 'lucide-react';
 
 const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const REPORTS_URL = `${SUPABASE_URL}/functions/v1/reports-portfolio`;

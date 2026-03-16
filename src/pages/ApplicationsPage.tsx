@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
-import { Plus, Trash2, FileText, BookOpen, Star, Upload } from 'lucide-react';
+import { Plus, Trash2, FileText, BookOpen } from 'lucide-react';
 
 const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const KB_URL = `${SUPABASE_URL}/functions/v1/knowledge-base`;
