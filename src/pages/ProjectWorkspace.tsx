@@ -1844,7 +1844,7 @@ export default function ProjectWorkspace() {
       {/* Share dialog */}
       {showShareDialog && shareUrl && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowShareDialog(false)}>
-          <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-6 max-w-md w-full mx-4" onClick={e => e.stopPropagation()}>
+          <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-6 w-[400px] max-w-[90vw]" onClick={e => e.stopPropagation()}>
             <h3 className="text-lg font-semibold mb-2">Share Link Created</h3>
             <p className="text-sm text-gray-400 mb-4">Anyone with this link can view the tracker (read-only).</p>
             <div className="flex gap-2">

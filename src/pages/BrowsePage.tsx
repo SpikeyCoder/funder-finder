@@ -213,7 +213,7 @@ const BrowsePage: React.FC = () => {
         <FilterPanel filters={filters} onChange={handleFilterChange} showPeerToggle={!!user} />
 
         {/* Main Content Area */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <main id="main-content" className="flex-1 flex flex-col overflow-hidden">
           {/* Results Header */}
           <div className="border-b border-[#30363d] p-4 bg-[#161b22]">
             {totalCount > 0 ? (
@@ -235,27 +235,28 @@ const BrowsePage: React.FC = () => {
           <div className="flex-1 overflow-auto">
             {results.length > 0 ? (
               <table className="w-full text-sm">
+                <caption className="sr-only">Funder search results table</caption>
                 <thead className="sticky top-0 bg-[#161b22] border-b border-[#30363d]">
                   <tr>
-                    <th className="px-4 py-3 text-left text-gray-400 font-medium">
+                    <th scope="col" className="px-4 py-3 text-left text-gray-400 font-medium">
                       <SortHeader field="name" label="Funder Name" />
                     </th>
-                    <th className="px-4 py-3 text-left text-gray-400 font-medium">
+                    <th scope="col" className="px-4 py-3 text-left text-gray-400 font-medium">
                       <SortHeader field="state" label="State" />
                     </th>
-                    <th className="px-4 py-3 text-left text-gray-400 font-medium">
+                    <th scope="col" className="px-4 py-3 text-left text-gray-400 font-medium">
                       <SortHeader field="entity_type" label="Type" />
                     </th>
-                    <th className="px-4 py-3 text-left text-gray-400 font-medium">
+                    <th scope="col" className="px-4 py-3 text-left text-gray-400 font-medium">
                       <SortHeader field="avg_grant_size" label="Avg Grant Size" />
                     </th>
-                    <th className="px-4 py-3 text-left text-gray-400 font-medium">
+                    <th scope="col" className="px-4 py-3 text-left text-gray-400 font-medium hidden md:table-cell">
                       <SortHeader field="total_giving" label="Total Giving" />
                     </th>
-                    <th className="px-4 py-3 text-left text-gray-400 font-medium">
+                    <th scope="col" className="px-4 py-3 text-left text-gray-400 font-medium hidden md:table-cell">
                       <SortHeader field="grant_count" label="Grants" />
                     </th>
-                    <th className="px-4 py-3 text-center text-gray-400 font-medium">Action</th>
+                    <th scope="col" className="px-4 py-3 text-center text-gray-400 font-medium">Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -280,12 +281,12 @@ const BrowsePage: React.FC = () => {
                           ? `$${(funder.avg_grant_size / 1000).toFixed(0)}K`
                           : '-'}
                       </td>
-                      <td className="px-4 py-3 text-gray-300">
+                      <td className="px-4 py-3 text-gray-300 hidden md:table-cell">
                         {funder.total_giving
                           ? `$${(funder.total_giving / 1000000).toFixed(1)}M`
                           : '-'}
                       </td>
-                      <td className="px-4 py-3 text-gray-300">
+                      <td className="px-4 py-3 text-gray-300 hidden md:table-cell">
                         {funder.grant_count || '-'}
                       </td>
                       <td className="px-4 py-3 text-center">
@@ -370,7 +371,7 @@ const BrowsePage: React.FC = () => {
               </button>
             </div>
           )}
-        </div>
+        </main>
       </div>
     </div>
   );

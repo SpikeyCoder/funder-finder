@@ -32,6 +32,9 @@ export default function NavBar() {
 
   return (
     <>
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-blue-600 focus:text-white focus:px-4 focus:py-2 focus:rounded">
+        Skip to main content
+      </a>
       <nav className="w-full bg-[#0d1117] border-b border-[#1b2130]">
         <div className="max-w-6xl mx-auto flex items-center justify-between h-16 px-6">
           {/* Logo — left */}

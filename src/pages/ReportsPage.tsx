@@ -95,13 +95,13 @@ export default function ReportsPage() {
   return (
     <div className="min-h-screen bg-[#0d1117] text-white">
       <NavBar />
-      <main className="max-w-6xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
+      <main id="main-content" className="max-w-6xl mx-auto px-4 py-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div>
             <h1 className="text-2xl font-bold">Reports</h1>
             <p className="text-gray-400 text-sm mt-1">Portfolio performance and analytics</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <select value={filterPeriod} onChange={e => setFilterPeriod(e.target.value)}
               className="bg-[#161b22] border border-[#30363d] rounded-lg px-3 py-2 text-sm text-white">
               <option value="all">All Time</option>
@@ -147,7 +147,7 @@ export default function ReportsPage() {
                 <div key={kpi.label} className="bg-[#161b22] border border-[#30363d] rounded-lg p-4">
                   <div className={`mb-2 ${kpi.color}`}>{kpi.icon}</div>
                   <p className="text-xl font-bold text-white">{kpi.value}</p>
-                  <p className="text-xs text-gray-500">{kpi.label}</p>
+                  <p className="text-xs text-gray-400">{kpi.label}</p>
                 </div>
               ))}
             </div>
@@ -161,7 +161,7 @@ export default function ReportsPage() {
                     <div key={item.name}>
                       <div className="flex justify-between text-xs mb-1">
                         <span className="text-gray-300">{item.name}</span>
-                        <span className="text-gray-500">{item.count} grant{item.count !== 1 ? 's' : ''}</span>
+                        <span className="text-gray-400">{item.count} grant{item.count !== 1 ? 's' : ''}</span>
                       </div>
                       <div className="h-2 bg-[#0d1117] rounded-full overflow-hidden">
                         <div className="h-full rounded-full transition-all" style={{
@@ -183,7 +183,7 @@ export default function ReportsPage() {
                     <div key={proj.name}>
                       <div className="flex justify-between text-xs mb-1">
                         <span className="text-gray-300">{proj.name}</span>
-                        <span className="text-gray-500">{fmt(proj.awarded)} awarded</span>
+                        <span className="text-gray-400">{fmt(proj.awarded)} awarded</span>
                       </div>
                       <div className="h-2 bg-[#0d1117] rounded-full overflow-hidden flex">
                         <div className="h-full bg-green-500 transition-all" style={{ width: `${(proj.awarded / maxProjectAmt) * 100}%` }} />
@@ -209,7 +209,7 @@ export default function ReportsPage() {
                           <div className="w-3 bg-blue-500 rounded-t" style={{ height: `${(q.submitted / max) * 80}px` }} />
                           <div className="w-3 bg-green-500 rounded-t" style={{ height: `${(q.awarded / max) * 80}px` }} />
                         </div>
-                        <p className="text-[10px] text-gray-500">{q.quarter}</p>
+                        <p className="text-[10px] text-gray-400">{q.quarter}</p>
                       </div>
                     );
                   })}
@@ -217,7 +217,7 @@ export default function ReportsPage() {
               ) : (
                 <p className="text-gray-500 text-sm">No timeline data yet</p>
               )}
-              <div className="flex gap-4 mt-3 text-xs text-gray-500">
+              <div className="flex gap-4 mt-3 text-xs text-gray-400">
                 <span className="flex items-center gap-1"><span className="w-2 h-2 bg-blue-500 rounded" /> Submitted</span>
                 <span className="flex items-center gap-1"><span className="w-2 h-2 bg-green-500 rounded" /> Awarded</span>
               </div>
@@ -231,7 +231,7 @@ export default function ReportsPage() {
                   <div key={item.type}>
                     <div className="flex justify-between text-xs mb-1">
                       <span className="text-gray-300">{item.type}</span>
-                      <span className="text-gray-500">{item.count} grant{item.count !== 1 ? 's' : ''} · {fmt(item.amount)}</span>
+                      <span className="text-gray-400">{item.count} grant{item.count !== 1 ? 's' : ''} · {fmt(item.amount)}</span>
                     </div>
                     <div className="h-2 bg-[#0d1117] rounded-full overflow-hidden">
                       <div className="h-full rounded-full bg-indigo-500 transition-all" style={{
@@ -247,11 +247,11 @@ export default function ReportsPage() {
             {compliance && (
               <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-5">
                 <h3 className="text-sm font-semibold mb-4">Compliance Summary</h3>
-                <div className="grid grid-cols-4 gap-4">
-                  <div className="text-center"><p className="text-lg font-bold">{compliance.total}</p><p className="text-xs text-gray-500">Total</p></div>
-                  <div className="text-center"><p className="text-lg font-bold text-green-400">{compliance.compliant}</p><p className="text-xs text-gray-500">Compliant</p></div>
-                  <div className="text-center"><p className="text-lg font-bold text-yellow-400">{compliance.upcoming}</p><p className="text-xs text-gray-500">Upcoming</p></div>
-                  <div className="text-center"><p className="text-lg font-bold text-red-400">{compliance.overdue}</p><p className="text-xs text-gray-500">Overdue</p></div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="text-center"><p className="text-lg font-bold">{compliance.total}</p><p className="text-xs text-gray-400">Total</p></div>
+                  <div className="text-center"><p className="text-lg font-bold text-green-400">{compliance.compliant}</p><p className="text-xs text-gray-400">Compliant</p></div>
+                  <div className="text-center"><p className="text-lg font-bold text-yellow-400">{compliance.upcoming}</p><p className="text-xs text-gray-400">Upcoming</p></div>
+                  <div className="text-center"><p className="text-lg font-bold text-red-400">{compliance.overdue}</p><p className="text-xs text-gray-400">Overdue</p></div>
                 </div>
               </div>
             )}

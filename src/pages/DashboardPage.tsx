@@ -93,7 +93,7 @@ export default function DashboardPage() {
     return (
       <>
         <NavBar />
-        <main className="min-h-screen bg-[#0d1117] pt-20 px-4 sm:px-6 lg:px-8">
+        <main id="main-content" className="min-h-screen bg-[#0d1117] pt-20 px-4 sm:px-6 lg:px-8">
           <div className="flex justify-center items-center py-12">
             <div className="text-gray-400">Loading your projects...</div>
           </div>
@@ -105,7 +105,7 @@ export default function DashboardPage() {
   return (
     <>
       <NavBar />
-      <main className="min-h-screen bg-[#0d1117] pt-20 px-4 sm:px-6 lg:px-8 pb-12">
+      <main id="main-content" className="min-h-screen bg-[#0d1117] pt-20 px-4 sm:px-6 lg:px-8 pb-12">
         <div className="max-w-7xl mx-auto">
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">

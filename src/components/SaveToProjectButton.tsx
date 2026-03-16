@@ -163,7 +163,7 @@ const SaveToProjectButton: React.FC<SaveToProjectButtonProps> = ({
         <button
           onClick={handleMainButtonClick}
           disabled={authLoading || isSaving}
-          className={`inline-flex items-center gap-2 px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+          className={`inline-flex items-center gap-2 px-3 py-1.5 rounded text-sm font-medium transition-colors min-h-[44px] min-w-[44px] ${
             isSavedToAny
               ? 'bg-[#238636] text-white hover:bg-[#2ea043]'
               : 'bg-[#1f6feb] text-white hover:bg-[#388bfd]'
