@@ -1,12 +1,12 @@
 -- =============================================================================
--- Supabase Security & Performance Advisor Fixes (comprehensive, idempotent)
--- Addresses ALL Security Advisor + Performance Advisor warnings.
--- Safe to re-run — uses CREATE OR REPLACE, IF NOT EXISTS, DO blocks.
+-- Supabase Security & Performance Advisor Fixes
+-- Applied via Supabase MCP apply_migration (4 batches)
+-- Resolves ALL security + performance warnings except unused_index (INFO)
 -- =============================================================================
 
 
 -- ═══════════════════════════════════════════════════════════════════════════════
--- SECTION 1: Fix SECURITY DEFINER functions (add SET search_path = 'public')
+-- 1. SECURITY: Fix ALL functions with mutable search_path
 -- ═══════════════════════════════════════════════════════════════════════════════
 
 CREATE OR REPLACE FUNCTION seed_pipeline_statuses()
@@ -56,18 +56,28 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public';
 
+CREATE OR REPLACE FUNCTION public.track_deadline_change()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = 'public'
+AS $function$
+BEGIN
+  IF OLD.deadline IS DISTINCT FROM NEW.deadline THEN
+    NEW.previous_deadline = OLD.deadline;
+  END IF;
+  RETURN NEW;
+END;
+$function$;
+
 
 -- ═══════════════════════════════════════════════════════════════════════════════
--- SECTION 2: Enable RLS on ALL public tables (including those created outside
---            migrations like projects and project_matches)
+-- 2. Enable RLS on all public tables
 -- ═══════════════════════════════════════════════════════════════════════════════
 
--- Core browse tables (public data — need public read policies)
 ALTER TABLE public.funders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.foundation_filings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.foundation_grants ENABLE ROW LEVEL SECURITY;
 
--- Tables created outside migrations (via Supabase dashboard)
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'projects') THEN
     EXECUTE 'ALTER TABLE public.projects ENABLE ROW LEVEL SECURITY';
@@ -80,7 +90,6 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- Conditional tables (may or may not exist)
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'foundation_history_features') THEN
     EXECUTE 'ALTER TABLE public.foundation_history_features ENABLE ROW LEVEL SECURITY';
@@ -101,153 +110,202 @@ END $$;
 
 
 -- ═══════════════════════════════════════════════════════════════════════════════
--- SECTION 3: RLS policies for browse tables (public read access)
--- ═══════════════════════════════════════════════════════════════════════════════
-
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'funders' AND policyname = 'public_read_funders') THEN
-    CREATE POLICY public_read_funders ON public.funders FOR SELECT USING (true);
-  END IF;
-END $$;
-
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'foundation_filings' AND policyname = 'public_read_filings') THEN
-    CREATE POLICY public_read_filings ON public.foundation_filings FOR SELECT USING (true);
-  END IF;
-END $$;
-
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'foundation_grants' AND policyname = 'public_read_grants') THEN
-    CREATE POLICY public_read_grants ON public.foundation_grants FOR SELECT USING (true);
-  END IF;
-END $$;
-
-DO $$ BEGIN
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'foundation_history_features') THEN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'foundation_history_features' AND policyname = 'public_read_history_features') THEN
-      CREATE POLICY public_read_history_features ON public.foundation_history_features FOR SELECT USING (true);
-    END IF;
-  END IF;
-END $$;
-
-DO $$ BEGIN
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'search_cache') THEN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'search_cache' AND policyname = 'public_read_search_cache') THEN
-      CREATE POLICY public_read_search_cache ON public.search_cache FOR SELECT USING (true);
-    END IF;
-  END IF;
-END $$;
-
-DO $$ BEGIN
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'recipient_organizations') THEN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'recipient_organizations' AND policyname = 'public_read_recipients') THEN
-      CREATE POLICY public_read_recipients ON public.recipient_organizations FOR SELECT USING (true);
-    END IF;
-  END IF;
-END $$;
-
-
--- ═══════════════════════════════════════════════════════════════════════════════
--- SECTION 4: RLS policies for projects (user-scoped)
--- ═══════════════════════════════════════════════════════════════════════════════
-
-DO $$ BEGIN
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'projects') THEN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'projects' AND policyname = 'projects_select_own') THEN
-      CREATE POLICY projects_select_own ON public.projects FOR SELECT USING (auth.uid() = user_id);
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'projects' AND policyname = 'projects_insert_own') THEN
-      CREATE POLICY projects_insert_own ON public.projects FOR INSERT WITH CHECK (auth.uid() = user_id);
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'projects' AND policyname = 'projects_update_own') THEN
-      CREATE POLICY projects_update_own ON public.projects FOR UPDATE USING (auth.uid() = user_id);
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'projects' AND policyname = 'projects_delete_own') THEN
-      CREATE POLICY projects_delete_own ON public.projects FOR DELETE USING (auth.uid() = user_id);
-    END IF;
-  END IF;
-END $$;
-
-
--- ═══════════════════════════════════════════════════════════════════════════════
--- SECTION 5: RLS policies for project_matches (user-scoped via project owner)
--- ═══════════════════════════════════════════════════════════════════════════════
-
-DO $$ BEGIN
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'project_matches') THEN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'project_matches' AND policyname = 'matches_select_own') THEN
-      CREATE POLICY matches_select_own ON public.project_matches FOR SELECT
-        USING (auth.uid() = (SELECT p.user_id FROM projects p WHERE p.id = project_id));
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'project_matches' AND policyname = 'matches_insert_own') THEN
-      CREATE POLICY matches_insert_own ON public.project_matches FOR INSERT
-        WITH CHECK (auth.uid() = (SELECT p.user_id FROM projects p WHERE p.id = project_id));
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'project_matches' AND policyname = 'matches_update_own') THEN
-      CREATE POLICY matches_update_own ON public.project_matches FOR UPDATE
-        USING (auth.uid() = (SELECT p.user_id FROM projects p WHERE p.id = project_id));
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'project_matches' AND policyname = 'matches_delete_own') THEN
-      CREATE POLICY matches_delete_own ON public.project_matches FOR DELETE
-        USING (auth.uid() = (SELECT p.user_id FROM projects p WHERE p.id = project_id));
-    END IF;
-  END IF;
-END $$;
-
-
--- ═══════════════════════════════════════════════════════════════════════════════
--- SECTION 6: Drop overly permissive calendar_feeds policy
+-- 3. Drop overly permissive calendar_feeds policy
 -- ═══════════════════════════════════════════════════════════════════════════════
 
 DROP POLICY IF EXISTS "Public can read by token" ON calendar_feeds;
 
 
 -- ═══════════════════════════════════════════════════════════════════════════════
--- SECTION 7: Add missing RLS policies for incomplete tables
+-- 4. Fix auth_rls_initplan: Rewrite policies to use (select auth.uid())
+--    This prevents per-row re-evaluation of auth.uid()
 -- ═══════════════════════════════════════════════════════════════════════════════
 
--- notification_preferences: missing DELETE
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'notification_preferences' AND policyname = 'Users can delete own notification preferences') THEN
-    CREATE POLICY "Users can delete own notification preferences"
-      ON notification_preferences FOR DELETE USING (auth.uid() = user_id);
-  END IF;
-END $$;
+-- bookmarked_passages
+DROP POLICY IF EXISTS bookmarks_select ON public.bookmarked_passages;
+CREATE POLICY bookmarks_select ON public.bookmarked_passages FOR SELECT
+  USING (user_id = (select auth.uid()));
 
--- project_access: missing INSERT (project owner manages access)
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'project_access' AND policyname = 'project_access_insert') THEN
-    CREATE POLICY project_access_insert ON public.project_access FOR INSERT
-      WITH CHECK (auth.uid() = (SELECT p.user_id FROM projects p WHERE p.id = project_id));
-  END IF;
-END $$;
+DROP POLICY IF EXISTS bookmarks_insert ON public.bookmarked_passages;
+CREATE POLICY bookmarks_insert ON public.bookmarked_passages FOR INSERT
+  WITH CHECK (user_id = (select auth.uid()));
 
--- project_access: missing DELETE
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'project_access' AND policyname = 'project_access_delete') THEN
-    CREATE POLICY project_access_delete ON public.project_access FOR DELETE
-      USING (auth.uid() = (SELECT p.user_id FROM projects p WHERE p.id = project_id));
-  END IF;
-END $$;
+DROP POLICY IF EXISTS bookmarks_update ON public.bookmarked_passages;
+CREATE POLICY bookmarks_update ON public.bookmarked_passages FOR UPDATE
+  USING (user_id = (select auth.uid()));
 
--- application_knowledge_base: missing UPDATE
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'application_knowledge_base' AND policyname = 'kb_update') THEN
-    CREATE POLICY kb_update ON public.application_knowledge_base FOR UPDATE USING (user_id = auth.uid());
-  END IF;
-END $$;
+DROP POLICY IF EXISTS bookmarks_delete ON public.bookmarked_passages;
+CREATE POLICY bookmarks_delete ON public.bookmarked_passages FOR DELETE
+  USING (user_id = (select auth.uid()));
+
+-- shareable_links
+DROP POLICY IF EXISTS shareable_links_select ON public.shareable_links;
+CREATE POLICY shareable_links_select ON public.shareable_links FOR SELECT
+  USING (created_by = (select auth.uid()));
+
+DROP POLICY IF EXISTS shareable_links_insert ON public.shareable_links;
+CREATE POLICY shareable_links_insert ON public.shareable_links FOR INSERT
+  WITH CHECK (created_by = (select auth.uid()));
+
+DROP POLICY IF EXISTS shareable_links_update ON public.shareable_links;
+CREATE POLICY shareable_links_update ON public.shareable_links FOR UPDATE
+  USING (created_by = (select auth.uid()));
+
+DROP POLICY IF EXISTS shareable_links_delete ON public.shareable_links;
+CREATE POLICY shareable_links_delete ON public.shareable_links FOR DELETE
+  USING (created_by = (select auth.uid()));
+
+-- onboarding_progress
+DROP POLICY IF EXISTS onboarding_select ON public.onboarding_progress;
+CREATE POLICY onboarding_select ON public.onboarding_progress FOR SELECT
+  USING (user_id = (select auth.uid()));
+
+DROP POLICY IF EXISTS onboarding_insert ON public.onboarding_progress;
+CREATE POLICY onboarding_insert ON public.onboarding_progress FOR INSERT
+  WITH CHECK (user_id = (select auth.uid()));
+
+DROP POLICY IF EXISTS onboarding_update ON public.onboarding_progress;
+CREATE POLICY onboarding_update ON public.onboarding_progress FOR UPDATE
+  USING (user_id = (select auth.uid()));
+
+-- org_members
+DROP POLICY IF EXISTS org_members_select ON public.org_members;
+CREATE POLICY org_members_select ON public.org_members FOR SELECT
+  USING ((user_id = (select auth.uid())) OR (invited_by = (select auth.uid())));
+
+DROP POLICY IF EXISTS org_members_insert ON public.org_members;
+CREATE POLICY org_members_insert ON public.org_members FOR INSERT
+  WITH CHECK (invited_by = (select auth.uid()));
+
+DROP POLICY IF EXISTS org_members_update ON public.org_members;
+CREATE POLICY org_members_update ON public.org_members FOR UPDATE
+  USING (EXISTS (
+    SELECT 1 FROM org_members om
+    WHERE om.user_id = (select auth.uid()) AND om.role = 'admin'
+  ));
+
+-- invitations
+DROP POLICY IF EXISTS invitations_select ON public.invitations;
+CREATE POLICY invitations_select ON public.invitations FOR SELECT
+  USING (invited_by = (select auth.uid()));
+
+DROP POLICY IF EXISTS invitations_insert ON public.invitations;
+CREATE POLICY invitations_insert ON public.invitations FOR INSERT
+  WITH CHECK (invited_by = (select auth.uid()));
+
+DROP POLICY IF EXISTS invitations_update ON public.invitations;
+CREATE POLICY invitations_update ON public.invitations FOR UPDATE
+  USING (invited_by = (select auth.uid()));
+
+-- project_access
+DROP POLICY IF EXISTS project_access_select ON public.project_access;
+CREATE POLICY project_access_select ON public.project_access FOR SELECT
+  USING ((user_id = (select auth.uid())) OR (granted_by = (select auth.uid())));
+
+DROP POLICY IF EXISTS project_access_insert ON public.project_access;
+CREATE POLICY project_access_insert ON public.project_access FOR INSERT
+  WITH CHECK ((select auth.uid()) = (SELECT p.user_id FROM projects p WHERE p.id = project_id));
+
+DROP POLICY IF EXISTS project_access_delete ON public.project_access;
+CREATE POLICY project_access_delete ON public.project_access FOR DELETE
+  USING ((select auth.uid()) = (SELECT p.user_id FROM projects p WHERE p.id = project_id));
+
+-- access_log
+DROP POLICY IF EXISTS access_log_select ON public.access_log;
+CREATE POLICY access_log_select ON public.access_log FOR SELECT
+  USING (EXISTS (
+    SELECT 1 FROM shareable_links sl
+    WHERE sl.id = access_log.link_id AND sl.created_by = (select auth.uid())
+  ));
+
+-- compliance_requirements
+DROP POLICY IF EXISTS compliance_select ON public.compliance_requirements;
+CREATE POLICY compliance_select ON public.compliance_requirements FOR SELECT
+  USING (user_id = (select auth.uid()));
+
+DROP POLICY IF EXISTS compliance_insert ON public.compliance_requirements;
+CREATE POLICY compliance_insert ON public.compliance_requirements FOR INSERT
+  WITH CHECK (user_id = (select auth.uid()));
+
+DROP POLICY IF EXISTS compliance_update ON public.compliance_requirements;
+CREATE POLICY compliance_update ON public.compliance_requirements FOR UPDATE
+  USING (user_id = (select auth.uid()));
+
+DROP POLICY IF EXISTS compliance_delete ON public.compliance_requirements;
+CREATE POLICY compliance_delete ON public.compliance_requirements FOR DELETE
+  USING (user_id = (select auth.uid()));
+
+-- application_knowledge_base
+DROP POLICY IF EXISTS kb_select ON public.application_knowledge_base;
+CREATE POLICY kb_select ON public.application_knowledge_base FOR SELECT
+  USING (user_id = (select auth.uid()));
+
+DROP POLICY IF EXISTS kb_insert ON public.application_knowledge_base;
+CREATE POLICY kb_insert ON public.application_knowledge_base FOR INSERT
+  WITH CHECK (user_id = (select auth.uid()));
+
+DROP POLICY IF EXISTS kb_update ON public.application_knowledge_base;
+CREATE POLICY kb_update ON public.application_knowledge_base FOR UPDATE
+  USING (user_id = (select auth.uid()));
+
+DROP POLICY IF EXISTS kb_delete ON public.application_knowledge_base;
+CREATE POLICY kb_delete ON public.application_knowledge_base FOR DELETE
+  USING (user_id = (select auth.uid()));
+
+-- notification_preferences (DELETE policy)
+DROP POLICY IF EXISTS "Users can delete own notification preferences" ON public.notification_preferences;
+CREATE POLICY "Users can delete own notification preferences"
+  ON public.notification_preferences FOR DELETE
+  USING ((select auth.uid()) = user_id);
+
+-- project_matches (UPDATE policy — only one without a dashboard equivalent)
+DROP POLICY IF EXISTS matches_update_own ON public.project_matches;
+CREATE POLICY matches_update_own ON public.project_matches FOR UPDATE
+  USING ((select auth.uid()) = (SELECT p.user_id FROM projects p WHERE p.id = project_id));
 
 
 -- ═══════════════════════════════════════════════════════════════════════════════
--- SECTION 8: Performance — ALL missing FK indexes (comprehensive)
+-- 5. Drop duplicate policies (dashboard already created equivalents)
 -- ═══════════════════════════════════════════════════════════════════════════════
 
--- Previously identified indexes
+-- projects: dashboard has "Users can view/create/update/delete own projects"
+DROP POLICY IF EXISTS projects_select_own ON public.projects;
+DROP POLICY IF EXISTS projects_insert_own ON public.projects;
+DROP POLICY IF EXISTS projects_update_own ON public.projects;
+DROP POLICY IF EXISTS projects_delete_own ON public.projects;
+
+-- project_matches: dashboard has "Users can view/insert/delete own project matches"
+DROP POLICY IF EXISTS matches_select_own ON public.project_matches;
+DROP POLICY IF EXISTS matches_insert_own ON public.project_matches;
+DROP POLICY IF EXISTS matches_delete_own ON public.project_matches;
+
+-- browse tables: dashboard already has "Allow public read access"
+DROP POLICY IF EXISTS public_read_funders ON public.funders;
+DROP POLICY IF EXISTS public_read_filings ON public.foundation_filings;
+DROP POLICY IF EXISTS public_read_grants ON public.foundation_grants;
+DROP POLICY IF EXISTS public_read_history_features ON public.foundation_history_features;
+DROP POLICY IF EXISTS public_read_recipients ON public.recipient_organizations;
+DROP POLICY IF EXISTS public_read_search_cache ON public.search_cache;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- 6. Fix duplicate index + add missing FK index
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+-- foundation_grants has identical idx_foundation_grants_filing and idx_foundation_grants_filing_id
+DROP INDEX IF EXISTS idx_foundation_grants_filing;
+
+-- project_access.user_id needs single-column index (composite doesn't cover FK)
+CREATE INDEX IF NOT EXISTS idx_project_access_user
+  ON public.project_access (user_id);
+
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- 7. Performance: All FK indexes (previously applied, kept for reference)
+-- ═══════════════════════════════════════════════════════════════════════════════
+
 CREATE INDEX IF NOT EXISTS idx_foundation_filings_foundation
   ON public.foundation_filings (foundation_id);
-
-CREATE INDEX IF NOT EXISTS idx_foundation_grants_filing
-  ON public.foundation_grants (filing_id);
 
 CREATE INDEX IF NOT EXISTS idx_grant_status_history_to_status
   ON public.grant_status_history (to_status_id);
@@ -264,7 +322,6 @@ CREATE INDEX IF NOT EXISTS idx_project_access_project_user
 CREATE INDEX IF NOT EXISTS idx_shareable_links_project
   ON public.shareable_links (project_id);
 
--- Additional missing FK indexes (newly identified)
 CREATE INDEX IF NOT EXISTS idx_grant_status_history_from_status
   ON public.grant_status_history (from_status_id);
 
