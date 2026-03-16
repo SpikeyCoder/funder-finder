@@ -54,7 +54,7 @@ Deno.serve(async (req: Request) => {
       .order('created_at', { ascending: false })
       .limit(5);
 
-    // Build context from KB
+    // Build context from KB with source tracking
     const kbContext = (kbEntries || []).map(e =>
       `--- ${e.title} ---\n${e.content.substring(0, 2000)}`
     ).join('\n\n');
@@ -63,7 +63,9 @@ Deno.serve(async (req: Request) => {
     const systemPrompt = `You are a grant writing assistant for nonprofit organizations.
 Generate professional, compelling grant proposal content based on the organization's mission,
 project details, and past application materials. Include specific, measurable outcomes.
-Use formal but accessible language appropriate for foundation program officers.`;
+Use formal but accessible language appropriate for foundation program officers.
+
+IMPORTANT: When using content or ideas from the provided knowledge base entries, include inline citations in the format [Source: entry_title] to properly attribute the ideas and maintain transparency about where content comes from.`;
 
     const userPrompt = `Organization: ${project?.name || 'Unknown'}
 Mission: ${project?.description || 'Not specified'}
@@ -74,10 +76,11 @@ ${prompt ? `Additional instructions: ${prompt}` : ''}
 Past application materials for reference:
 ${kbContext || 'No past materials available.'}
 
-Please generate a draft proposal section.`;
+Please generate a draft proposal section. Remember to include inline citations [Source: entry_title] when referencing the knowledge base materials.`;
 
     let draft = '';
     let quality = { relevance: 0, completeness: 0, readability: 0 };
+    let citedSources: string[] = [];
 
     if (OPENAI_API_KEY) {
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -96,16 +99,33 @@ Please generate a draft proposal section.`;
       const result = await response.json();
       draft = result.choices?.[0]?.message?.content || 'Failed to generate draft.';
       quality = { relevance: 85, completeness: 80, readability: 90 };
+
+      // Extract cited sources from the draft using regex
+      const sourcePattern = /\[Source:\s*([^\]]+)\]/g;
+      let match;
+      const foundSources = new Set<string>();
+      while ((match = sourcePattern.exec(draft)) !== null) {
+        foundSources.add(match[1].trim());
+      }
+      citedSources = Array.from(foundSources);
     } else {
       // Fallback: generate a template-based draft
       draft = `# Grant Proposal Draft\n\n## Organization Overview\n${project?.description || 'Our organization'} is committed to making a meaningful impact in our community.\n\n## Project Description\n${grantInfo?.grant_title ? `This proposal seeks funding from ${grantInfo.funder_name} for ${grantInfo.grant_title}.` : 'This proposal outlines our plan for community impact.'}\n\n## Goals and Objectives\n- Objective 1: [Specific, measurable outcome]\n- Objective 2: [Specific, measurable outcome]\n- Objective 3: [Specific, measurable outcome]\n\n## Budget Overview\n${grantInfo?.awarded_amount ? `Requested amount: $${grantInfo.awarded_amount.toLocaleString()}` : 'Budget to be determined.'}\n\n## Timeline\n${grantInfo?.deadline ? `Grant deadline: ${grantInfo.deadline}` : 'Timeline to be established.'}\n\n---\n*Note: Configure OPENAI_API_KEY in Supabase secrets for AI-powered draft generation.*`;
       quality = { relevance: 50, completeness: 40, readability: 80 };
     }
 
+    // Build sources list with cited status
+    const allSources = (kbEntries || []).map(e => ({
+      id: e.title,
+      title: e.title,
+      cited: citedSources.includes(e.title),
+    }));
+
     return json({
       draft,
       quality,
-      sources: (kbEntries || []).map(e => ({ id: e.title, title: e.title })),
+      sources: allSources,
+      citedSources,
     });
   } catch (err: any) {
     return json({ error: err.message }, 500);

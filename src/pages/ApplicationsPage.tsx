@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { getEdgeFunctionHeaders } from '../lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 import NavBar from '../components/NavBar';
-import { Plus, Trash2, FileText, BookOpen } from 'lucide-react';
+import { Plus, Trash2, FileText, BookOpen, Star } from 'lucide-react';
 
 const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const KB_URL = `${SUPABASE_URL}/functions/v1/knowledge-base`;
@@ -17,6 +18,14 @@ interface KBEntry {
   created_at: string;
 }
 
+interface BookmarkedPassage {
+  id: string;
+  kb_id: string;
+  passage_text: string;
+  rating: number;
+  created_at: string;
+}
+
 export default function ApplicationsPage() {
   const { user, loading } = useAuth();
   const [entries, setEntries] = useState<KBEntry[]>([]);
@@ -25,10 +34,25 @@ export default function ApplicationsPage() {
   const [newTitle, setNewTitle] = useState('');
   const [newContent, setNewContent] = useState('');
   const [selectedEntry, setSelectedEntry] = useState<KBEntry | null>(null);
+  const [bookmarks, setBookmarks] = useState<BookmarkedPassage[]>([]);
+  const [bookmarkText, setBookmarkText] = useState('');
+  const [showBookmarkForm, setShowBookmarkForm] = useState(false);
+
+  const supabaseUrl = 'https://tgtotjvdubhjxzybmdex.supabase.co';
+  const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRndG90anZkdWJoanhjeWJtZGV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDM4NzAyNjcsImV4cCI6MjAwOTQ0MDI2N30.DzNm6WIEm8TvU8ug8J6kcZWgK6oEIFR0-vIkbCBFLwI';
+  const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
   useEffect(() => {
-    if (!loading && user) loadEntries();
+    if (!loading && user) {
+      loadEntries();
+    }
   }, [user, loading]);
+
+  useEffect(() => {
+    if (selectedEntry) {
+      loadBookmarks(selectedEntry.id);
+    }
+  }, [selectedEntry]);
 
   const loadEntries = async () => {
     try {
@@ -71,6 +95,71 @@ export default function ApplicationsPage() {
       if (selectedEntry?.id === id) setSelectedEntry(null);
     } catch (err) {
       console.error('Error deleting entry:', err);
+    }
+  };
+
+  const loadBookmarks = async (kbId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('bookmarked_passages')
+        .select('*')
+        .eq('kb_id', kbId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error loading bookmarks:', error);
+        return;
+      }
+      setBookmarks(data || []);
+    } catch (err) {
+      console.error('Error loading bookmarks:', err);
+    }
+  };
+
+  const handleAddBookmark = async () => {
+    if (!selectedEntry || !bookmarkText.trim()) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('bookmarked_passages')
+        .insert({
+          kb_id: selectedEntry.id,
+          passage_text: bookmarkText.trim(),
+          rating: 3,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error adding bookmark:', error);
+        return;
+      }
+
+      setBookmarks([data, ...bookmarks]);
+      setBookmarkText('');
+      setShowBookmarkForm(false);
+    } catch (err) {
+      console.error('Error adding bookmark:', err);
+    }
+  };
+
+  const handleRatingChange = async (bookmarkId: string, newRating: number) => {
+    try {
+      const { error } = await supabase
+        .from('bookmarked_passages')
+        .update({ rating: newRating })
+        .eq('id', bookmarkId);
+
+      if (error) {
+        console.error('Error updating rating:', error);
+        return;
+      }
+
+      setBookmarks(prev =>
+        prev.map(b => (b.id === bookmarkId ? { ...b, rating: newRating } : b))
+      );
+    } catch (err) {
+      console.error('Error updating rating:', err);
     }
   };
 
@@ -146,18 +235,84 @@ export default function ApplicationsPage() {
           {/* Entry detail / preview */}
           <div className="md:col-span-2">
             {selectedEntry ? (
-              <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-5">
-                <h3 className="text-lg font-semibold mb-1">{selectedEntry.title}</h3>
-                <p className="text-xs text-gray-500 mb-4">{selectedEntry.source_type} · Added {new Date(selectedEntry.created_at).toLocaleDateString()}</p>
-                <div className="prose prose-invert text-sm whitespace-pre-wrap text-gray-300 leading-relaxed max-h-[500px] overflow-y-auto">
-                  {selectedEntry.content}
+              <div className="space-y-4">
+                <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-5">
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <h3 className="text-lg font-semibold mb-1">{selectedEntry.title}</h3>
+                      <p className="text-xs text-gray-500">{selectedEntry.source_type} · Added {new Date(selectedEntry.created_at).toLocaleDateString()}</p>
+                    </div>
+                    <button
+                      onClick={() => setShowBookmarkForm(!showBookmarkForm)}
+                      className="px-3 py-2 bg-yellow-600/20 hover:bg-yellow-600/30 border border-yellow-500/30 rounded text-sm text-yellow-400 transition-colors">
+                      <Star size={14} className="inline mr-1" />
+                      Bookmark
+                    </button>
+                  </div>
+
+                  {showBookmarkForm && (
+                    <div className="mb-4 p-3 bg-[#0d1117] border border-[#30363d] rounded-lg">
+                      <textarea
+                        value={bookmarkText}
+                        onChange={e => setBookmarkText(e.target.value)}
+                        placeholder="Select or paste the passage you want to bookmark..."
+                        rows={4}
+                        className="w-full mb-2 bg-[#0d1117] border border-[#30363d] rounded px-2 py-2 text-sm text-gray-300 focus:outline-none focus:border-yellow-500" />
+                      <div className="flex justify-end gap-2">
+                        <button
+                          onClick={() => setShowBookmarkForm(false)}
+                          className="px-3 py-1 text-gray-400 hover:text-white text-sm">
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleAddBookmark}
+                          disabled={!bookmarkText.trim()}
+                          className="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 disabled:opacity-50 rounded text-sm text-white transition-colors">
+                          Save Passage
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="prose prose-invert text-sm whitespace-pre-wrap text-gray-300 leading-relaxed max-h-[400px] overflow-y-auto border-t border-[#30363d] pt-4">
+                    {selectedEntry.content}
+                  </div>
+
+                  {selectedEntry.sections && selectedEntry.sections.length > 0 && (
+                    <div className="mt-4 border-t border-[#30363d] pt-4">
+                      <h4 className="text-sm font-semibold mb-2">Sections</h4>
+                      {selectedEntry.sections.map((s: any, i: number) => (
+                        <div key={i} className="mb-2 text-xs text-gray-400">{s.title || `Section ${i + 1}`}</div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                {selectedEntry.sections && selectedEntry.sections.length > 0 && (
-                  <div className="mt-4 border-t border-[#30363d] pt-4">
-                    <h4 className="text-sm font-semibold mb-2">Sections</h4>
-                    {selectedEntry.sections.map((s: any, i: number) => (
-                      <div key={i} className="mb-2 text-xs text-gray-400">{s.title || `Section ${i + 1}`}</div>
-                    ))}
+
+                {bookmarks.length > 0 && (
+                  <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-5">
+                    <h4 className="text-sm font-semibold mb-3">Bookmarked Passages ({bookmarks.length})</h4>
+                    <div className="space-y-3">
+                      {bookmarks.map(bookmark => (
+                        <div key={bookmark.id} className="bg-[#0d1117] border border-[#30363d] rounded-lg p-3">
+                          <p className="text-sm text-gray-300 mb-2 line-clamp-2">{bookmark.passage_text}</p>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-gray-500">{new Date(bookmark.created_at).toLocaleDateString()}</span>
+                            <div className="flex gap-0.5">
+                              {[1, 2, 3, 4, 5].map(star => (
+                                <button
+                                  key={star}
+                                  onClick={() => handleRatingChange(bookmark.id, star)}
+                                  className={`p-0.5 transition-colors ${
+                                    star <= bookmark.rating ? 'text-yellow-400' : 'text-gray-600 hover:text-gray-500'
+                                  }`}>
+                                  <Star size={12} fill={star <= bookmark.rating ? 'currentColor' : 'none'} />
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>

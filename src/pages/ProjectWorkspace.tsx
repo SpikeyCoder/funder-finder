@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Save, Loader, Users, RefreshCw, Plus, Download, Upload, X, CheckCircle, Clock, AlertTriangle, ExternalLink, Trash2, ClipboardList, Calendar } from 'lucide-react';
+import { ArrowLeft, Save, Loader, Users, RefreshCw, Plus, Download, Upload, X, CheckCircle, Clock, AlertTriangle, ExternalLink, Trash2, ClipboardList, Calendar, Paperclip } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
@@ -149,6 +149,7 @@ export default function ProjectWorkspace() {
   const [newCompType, setNewCompType] = useState('narrative_report');
   const [newCompDue, setNewCompDue] = useState('');
   const [newCompAssignee, setNewCompAssignee] = useState('');
+  const [compAttachment, setCompAttachment] = useState<File | null>(null);
 
   // Share link
   const [shareUrl, setShareUrl] = useState<string | null>(null);
@@ -583,6 +584,7 @@ export default function ProjectWorkspace() {
           type: newCompType,
           due_date: newCompDue || null,
           assignee_email: newCompAssignee.trim() || undefined,
+          attachment_name: compAttachment?.name || undefined,
         }),
       });
       if (res.ok) {
@@ -591,6 +593,7 @@ export default function ProjectWorkspace() {
         setNewCompTitle('');
         setNewCompDue('');
         setNewCompAssignee('');
+        setCompAttachment(null);
         setShowComplianceForm(false);
       }
     } catch (err) { console.error('Error adding compliance:', err); }
@@ -1767,6 +1770,17 @@ export default function ProjectWorkspace() {
                         <input type="email" placeholder="Assignee email (optional)"
                           value={newCompAssignee} onChange={e => setNewCompAssignee(e.target.value)}
                           className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500" />
+                        <div className="flex items-center gap-2">
+                          <label className="flex items-center gap-2 px-3 py-1.5 bg-[#0d1117] border border-[#30363d] rounded-lg text-sm text-gray-400 cursor-pointer hover:border-[#484f58]">
+                            <Paperclip size={14} />
+                            {compAttachment ? compAttachment.name : 'Attach file'}
+                            <input type="file" className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
+                              onChange={e => setCompAttachment(e.target.files?.[0] || null)} />
+                          </label>
+                          {compAttachment && (
+                            <button onClick={() => setCompAttachment(null)} className="text-gray-500 hover:text-red-400 text-xs">✕</button>
+                          )}
+                        </div>
                       </div>
                     )}
 

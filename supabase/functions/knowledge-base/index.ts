@@ -53,11 +53,20 @@ Deno.serve(async (req: Request) => {
           file_name,
           file_type,
           sections: sections || [],
+          embedding_status: 'pending',
         })
         .select()
         .single();
 
       if (error) throw error;
+
+      // Generate embeddings in background
+      if (data?.id) {
+        generateEmbedding(data.id, content, user.id, supabase).catch(err => {
+          console.error('Embedding generation error:', err);
+        });
+      }
+
       return json(data, 201);
     }
 
@@ -73,3 +82,71 @@ Deno.serve(async (req: Request) => {
     return json({ error: err.message }, 500);
   }
 });
+
+async function generateEmbedding(
+  kbId: string,
+  content: string,
+  userId: string,
+  supabase: any
+) {
+  const openaiKey = Deno.env.get('OPENAI_API_KEY');
+  if (!openaiKey) {
+    // Update status to failed if no API key
+    await supabase
+      .from('application_knowledge_base')
+      .update({ embedding_status: 'failed' })
+      .eq('id', kbId)
+      .eq('user_id', userId);
+    return;
+  }
+
+  try {
+    // Call OpenAI embeddings API
+    const embeddingRes = await fetch('https://api.openai.com/v1/embeddings', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openaiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'text-embedding-3-small',
+        input: content.substring(0, 8000),
+      }),
+    });
+
+    if (!embeddingRes.ok) {
+      const errorData = await embeddingRes.json();
+      console.error('OpenAI API error:', errorData);
+      await supabase
+        .from('application_knowledge_base')
+        .update({ embedding_status: 'failed' })
+        .eq('id', kbId)
+        .eq('user_id', userId);
+      return;
+    }
+
+    const embeddingData = await embeddingRes.json();
+    const embedding = embeddingData.data?.[0]?.embedding;
+
+    if (!embedding) {
+      throw new Error('No embedding data returned from OpenAI');
+    }
+
+    // Update the KB entry with the embedding and status
+    await supabase
+      .from('application_knowledge_base')
+      .update({
+        embedding,
+        embedding_status: 'complete',
+      })
+      .eq('id', kbId)
+      .eq('user_id', userId);
+  } catch (err: any) {
+    console.error('Error generating embedding:', err);
+    await supabase
+      .from('application_knowledge_base')
+      .update({ embedding_status: 'failed' })
+      .eq('id', kbId)
+      .eq('user_id', userId);
+  }
+}
