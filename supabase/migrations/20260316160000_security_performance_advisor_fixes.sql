@@ -1,13 +1,12 @@
 -- =============================================================================
--- Supabase Security & Performance Advisor Fixes
--- Addresses: RLS gaps, SECURITY DEFINER search_path, overly permissive
---            policies, missing FK indexes, and missing CRUD policies
+-- Supabase Security & Performance Advisor Fixes (idempotent, re-runnable)
+-- Run each numbered section separately in the Supabase SQL Editor if needed.
 -- =============================================================================
 
--- ─────────────────────────────────────────────────────────────────────────────
--- 1. SECURITY DEFINER functions: add SET search_path = 'public'
---    (Prevents search-path hijacking attacks per Supabase Security Advisor)
--- ─────────────────────────────────────────────────────────────────────────────
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- SECTION 1: Fix SECURITY DEFINER functions (add SET search_path = 'public')
+-- ═══════════════════════════════════════════════════════════════════════════════
 
 CREATE OR REPLACE FUNCTION seed_pipeline_statuses()
 RETURNS trigger AS $$
@@ -56,22 +55,20 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public';
 
--- ─────────────────────────────────────────────────────────────────────────────
--- 2. Enable RLS on public data tables
---    These are publicly browsable (no auth required) so they get read-all
---    policies, but RLS must be enabled to satisfy the Security Advisor.
---    Write access is restricted to service_role only.
--- ─────────────────────────────────────────────────────────────────────────────
 
-DO $$ BEGIN
-  -- Enable RLS (idempotent — no error if already enabled)
-  ALTER TABLE IF EXISTS public.funders ENABLE ROW LEVEL SECURITY;
-  ALTER TABLE IF EXISTS public.foundation_filings ENABLE ROW LEVEL SECURITY;
-  ALTER TABLE IF EXISTS public.foundation_grants ENABLE ROW LEVEL SECURITY;
-EXCEPTION WHEN others THEN NULL;
-END $$;
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- SECTION 2: Enable RLS on all public tables
+-- ═══════════════════════════════════════════════════════════════════════════════
 
--- Public read policies for browse data (unauthenticated access required by spec)
+ALTER TABLE public.funders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.foundation_filings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.foundation_grants ENABLE ROW LEVEL SECURITY;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- SECTION 3: Public read policies for browse data tables
+-- ═══════════════════════════════════════════════════════════════════════════════
+
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'funders' AND policyname = 'public_read_funders') THEN
     CREATE POLICY public_read_funders ON public.funders FOR SELECT USING (true);
@@ -90,16 +87,14 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- Enable RLS on tables that may exist
-DO $$ BEGIN
-  EXECUTE 'ALTER TABLE IF EXISTS public.foundation_history_features ENABLE ROW LEVEL SECURITY';
-  EXECUTE 'ALTER TABLE IF EXISTS public.search_cache ENABLE ROW LEVEL SECURITY';
-  EXECUTE 'ALTER TABLE IF EXISTS public.recipient_organizations ENABLE ROW LEVEL SECURITY';
-EXCEPTION WHEN others THEN NULL;
-END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- SECTION 4: Enable RLS on conditional tables (may or may not exist)
+-- ═══════════════════════════════════════════════════════════════════════════════
 
 DO $$ BEGIN
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'foundation_history_features' AND table_schema = 'public') THEN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'foundation_history_features') THEN
+    EXECUTE 'ALTER TABLE public.foundation_history_features ENABLE ROW LEVEL SECURITY';
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'foundation_history_features' AND policyname = 'public_read_history_features') THEN
       CREATE POLICY public_read_history_features ON public.foundation_history_features FOR SELECT USING (true);
     END IF;
@@ -107,7 +102,8 @@ DO $$ BEGIN
 END $$;
 
 DO $$ BEGIN
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'search_cache' AND table_schema = 'public') THEN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'search_cache') THEN
+    EXECUTE 'ALTER TABLE public.search_cache ENABLE ROW LEVEL SECURITY';
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'search_cache' AND policyname = 'public_read_search_cache') THEN
       CREATE POLICY public_read_search_cache ON public.search_cache FOR SELECT USING (true);
     END IF;
@@ -115,25 +111,25 @@ DO $$ BEGIN
 END $$;
 
 DO $$ BEGIN
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'recipient_organizations' AND table_schema = 'public') THEN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'recipient_organizations') THEN
+    EXECUTE 'ALTER TABLE public.recipient_organizations ENABLE ROW LEVEL SECURITY';
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'recipient_organizations' AND policyname = 'public_read_recipients') THEN
       CREATE POLICY public_read_recipients ON public.recipient_organizations FOR SELECT USING (true);
     END IF;
   END IF;
 END $$;
 
--- ─────────────────────────────────────────────────────────────────────────────
--- 3. Fix overly permissive calendar_feeds policy
---    The old "Public can read by token" used USING (true) which exposes ALL
---    feeds. The .ics endpoint uses service_role key so it bypasses RLS anyway.
---    Drop the dangerous policy.
--- ─────────────────────────────────────────────────────────────────────────────
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- SECTION 5: Drop overly permissive calendar_feeds policy
+-- ═══════════════════════════════════════════════════════════════════════════════
 
 DROP POLICY IF EXISTS "Public can read by token" ON calendar_feeds;
 
--- ─────────────────────────────────────────────────────────────────────────────
--- 4. Add missing RLS policies for incomplete tables
--- ─────────────────────────────────────────────────────────────────────────────
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- SECTION 6: Add missing RLS policies for incomplete tables
+-- ═══════════════════════════════════════════════════════════════════════════════
 
 -- notification_preferences: missing DELETE
 DO $$ BEGIN
@@ -143,7 +139,7 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- project_access: missing INSERT, DELETE (project owner manages access)
+-- project_access: missing INSERT (project owner manages access)
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'project_access' AND policyname = 'project_access_insert') THEN
     CREATE POLICY project_access_insert ON public.project_access FOR INSERT
@@ -151,6 +147,7 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+-- project_access: missing DELETE
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'project_access' AND policyname = 'project_access_delete') THEN
     CREATE POLICY project_access_delete ON public.project_access FOR DELETE
@@ -165,10 +162,10 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- ─────────────────────────────────────────────────────────────────────────────
--- 5. Performance: Add missing indexes on foreign key columns
---    (Prevents sequential scans on JOINs and CASCADE deletes)
--- ─────────────────────────────────────────────────────────────────────────────
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- SECTION 7: Performance — missing FK indexes
+-- ═══════════════════════════════════════════════════════════════════════════════
 
 CREATE INDEX IF NOT EXISTS idx_foundation_filings_foundation
   ON public.foundation_filings (foundation_id);
