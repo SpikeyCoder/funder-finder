@@ -97,8 +97,14 @@ Please generate a draft proposal section. Remember to include inline citations [
         }),
       });
       const result = await response.json();
-      draft = result.choices?.[0]?.message?.content || 'Failed to generate draft.';
-      quality = { relevance: 85, completeness: 80, readability: 90 };
+      if (!response.ok) {
+        console.error('OpenAI API error:', response.status, JSON.stringify(result));
+        draft = `AI generation failed: ${result.error?.message || response.statusText}. Please verify your OPENAI_API_KEY is valid.`;
+        quality = { relevance: 0, completeness: 0, readability: 0 };
+      } else {
+        draft = result.choices?.[0]?.message?.content || 'Failed to parse AI response.';
+        quality = { relevance: 85, completeness: 80, readability: 90 };
+      }
 
       // Extract cited sources from the draft using regex
       const sourcePattern = /\[Source:\s*([^\]]+)\]/g;
