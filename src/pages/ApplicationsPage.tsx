@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { getEdgeFunctionHeaders } from '../lib/supabase';
-import { createClient } from '@supabase/supabase-js';
+import { getEdgeFunctionHeaders, supabase } from '../lib/supabase';
 import NavBar from '../components/NavBar';
 import { Plus, Trash2, FileText, BookOpen, Star } from 'lucide-react';
 
@@ -20,7 +19,7 @@ interface KBEntry {
 
 interface BookmarkedPassage {
   id: string;
-  kb_id: string;
+  kb_entry_id: string;
   passage_text: string;
   rating: number;
   created_at: string;
@@ -37,10 +36,6 @@ export default function ApplicationsPage() {
   const [bookmarks, setBookmarks] = useState<BookmarkedPassage[]>([]);
   const [bookmarkText, setBookmarkText] = useState('');
   const [showBookmarkForm, setShowBookmarkForm] = useState(false);
-
-  const supabaseUrl = 'https://tgtotjvdubhjxzybmdex.supabase.co';
-  const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRndG90anZkdWJoanhjeWJtZGV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDM4NzAyNjcsImV4cCI6MjAwOTQ0MDI2N30.DzNm6WIEm8TvU8ug8J6kcZWgK6oEIFR0-vIkbCBFLwI';
-  const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
   useEffect(() => {
     if (!loading && user) {
@@ -103,7 +98,7 @@ export default function ApplicationsPage() {
       const { data, error } = await supabase
         .from('bookmarked_passages')
         .select('*')
-        .eq('kb_id', kbId)
+        .eq('kb_entry_id', kbId)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -120,10 +115,12 @@ export default function ApplicationsPage() {
     if (!selectedEntry || !bookmarkText.trim()) return;
 
     try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
       const { data, error } = await supabase
         .from('bookmarked_passages')
         .insert({
-          kb_id: selectedEntry.id,
+          kb_entry_id: selectedEntry.id,
+          user_id: currentUser?.id,
           passage_text: bookmarkText.trim(),
           rating: 3,
         })
