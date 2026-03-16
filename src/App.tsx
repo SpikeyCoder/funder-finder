@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import AnalyticsTracker from './components/AnalyticsTracker';
 import AuthGuard from './components/AuthGuard';
+import FeatureTooltips from './components/FeatureTooltip';
 import Landing from './pages/Landing';
 import MissionInput from './pages/MissionInput';
 import Results from './pages/Results';
@@ -129,6 +130,7 @@ function App() {
       <AuthProvider>
         <AnimatedRoutes />
         <BugReportButton />
+        <FeatureTooltips />
       </AuthProvider>
     </BrowserRouter>
   );

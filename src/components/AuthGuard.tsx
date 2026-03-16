@@ -20,6 +20,12 @@ export default function AuthGuard({ children }: AuthGuardProps) {
         // Save the current location for redirect after login
         sessionStorage.setItem('authRedirect', location.pathname);
         navigate('/login', { replace: true });
+      } else {
+        // Check if onboarding is complete
+        const onboardingComplete = localStorage.getItem('onboarding_complete');
+        if (!onboardingComplete && location.pathname === '/dashboard') {
+          navigate('/onboarding/welcome', { replace: true });
+        }
       }
       setIsChecking(false);
     }

@@ -666,6 +666,30 @@ function UserSettingsContent() {
                     </div>
                   </div>
 
+                  {/* Team Notifications */}
+                  <div className={`bg-[#161b22] border border-[#30363d] rounded-lg p-6 ${!emailEnabled ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <h2 className="text-lg font-semibold text-white mb-1">Team notifications</h2>
+                    <p className="text-sm text-gray-400 mb-4">Stay informed about team activity and collaboration events</p>
+                    <div className="space-y-3">
+                      {[
+                        { id: 'task_assigned', label: 'Task assigned to me', desc: 'When someone assigns a task to you' },
+                        { id: 'status_changed', label: 'Grant status changed', desc: 'When a tracked grant changes pipeline status' },
+                        { id: 'compliance_deadline', label: 'Compliance deadline approaching', desc: 'Reminders for upcoming compliance requirements' },
+                        { id: 'team_member_joined', label: 'Team member joined', desc: 'When a new member accepts an invitation' },
+                        { id: 'deadline_changed', label: 'Funder deadline changed', desc: 'When a tracked funder changes a grant deadline' },
+                      ].map(item => (
+                        <label key={item.id} className="flex items-start gap-3 cursor-pointer py-1">
+                          <input type="checkbox" defaultChecked
+                            className="w-4 h-4 rounded bg-[#0d1117] border border-[#30363d] text-blue-600 cursor-pointer mt-0.5" />
+                          <div>
+                            <span className="text-sm text-gray-300">{item.label}</span>
+                            <p className="text-xs text-gray-500">{item.desc}</p>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
                   <div>
                     <button onClick={handleSaveNotifications} disabled={saving}
                       className="flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-600/50 text-white rounded-lg font-medium transition-colors">

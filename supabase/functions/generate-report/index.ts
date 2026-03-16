@@ -19,10 +19,9 @@ Deno.serve(async (req: Request) => {
   }
 
   const authHeader = req.headers.get('authorization') || '';
-  const userClient = createClient(SUPABASE_URL, Deno.env.get('SUPABASE_ANON_KEY') || '', {
-    global: { headers: { authorization: authHeader } },
-  });
-  const { data: { user } } = await userClient.auth.getUser();
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+  const jwt = authHeader.replace('Bearer ', '');
+  const { data: { user }, error: authError } = await supabase.auth.getUser(jwt);
   if (!user) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401, headers: { ...CORS, 'Content-Type': 'application/json' },
@@ -30,7 +29,6 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
     const { format = 'csv' } = await req.json().catch(() => ({}));
 
     // Fetch all grants for export

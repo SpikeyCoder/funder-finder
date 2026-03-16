@@ -120,6 +120,37 @@ async function sendEmail(notification: any): Promise<void> {
       `;
       break;
 
+    case 'deadline_changed':
+      subject = `[FunderMatch] Deadline changed: ${payload.grant_name}`;
+      htmlContent = `
+        <h2>Grant Deadline Changed</h2>
+        <p><strong>${payload.grant_name}</strong></p>
+        <p>Previous deadline: <strong>${payload.old_deadline}</strong></p>
+        <p>New deadline: <strong>${payload.new_deadline}</strong></p>
+        <p><a href="${payload.link}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:white;text-decoration:none;border-radius:6px;">View in FunderMatch</a></p>
+      `;
+      break;
+
+    case 'compliance_reminder':
+      subject = `[FunderMatch] Compliance due: ${payload.title}`;
+      htmlContent = `
+        <h2>Compliance Deadline Reminder</h2>
+        <p><strong>${payload.title}</strong></p>
+        <p>Due: <strong>${payload.due_date}</strong> (${payload.days_until} day${payload.days_until !== 1 ? 's' : ''} away)</p>
+        <p><a href="${payload.link}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:white;text-decoration:none;border-radius:6px;">View in FunderMatch</a></p>
+      `;
+      break;
+
+    case 'status_changed':
+      subject = `[FunderMatch] Status updated: ${payload.grant_name}`;
+      htmlContent = `
+        <h2>Grant Status Changed</h2>
+        <p><strong>${payload.grant_name}</strong></p>
+        <p>Status: <strong>${payload.old_status}</strong> → <strong>${payload.new_status}</strong></p>
+        <p><a href="${payload.link}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:white;text-decoration:none;border-radius:6px;">View in FunderMatch</a></p>
+      `;
+      break;
+
     default:
       subject = `[FunderMatch] Notification`;
       htmlContent = `<p>You have a new notification. <a href="https://fundermatch.org/dashboard">View Dashboard</a></p>`;

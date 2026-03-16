@@ -34,10 +34,14 @@ Deno.serve(async (req: Request) => {
 
     const deadlineReminders = await scheduleDeadlineReminders(supabase);
     const taskReminders = await scheduleTaskReminders(supabase);
+    const externalReminders = await scheduleExternalAssigneeReminders(supabase);
+    const deadlineChanges = await detectDeadlineChanges(supabase);
 
     return jsonResponse({
       deadline_reminders_scheduled: deadlineReminders,
       task_reminders_scheduled: taskReminders,
+      external_assignee_reminders: externalReminders,
+      deadline_changes_detected: deadlineChanges,
     });
   } catch (err: any) {
     console.error('check-deadlines error:', err);
@@ -174,4 +178,103 @@ async function scheduleTaskReminders(supabase: any): Promise<number> {
   }
 
   return scheduled;
+}
+
+// Send task reminders to non-platform assignees (external emails)
+async function scheduleExternalAssigneeReminders(supabase: any): Promise<number> {
+  let scheduled = 0;
+  const today = new Date();
+
+  const { data: tasks } = await supabase
+    .from('tasks')
+    .select('id, title, due_date, assignee_email, project_id, tracked_grant_id, tracked_grants(funder_name)')
+    .neq('status', 'done')
+    .not('due_date', 'is', null)
+    .not('assignee_email', 'is', null);
+
+  if (!tasks) return 0;
+
+  for (const task of tasks) {
+    if (!task.assignee_email) continue;
+    const dueDate = new Date(task.due_date);
+    const daysUntil = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    if (daysUntil < 0 || ![3, 1].includes(daysUntil)) continue;
+
+    const { data: existing } = await supabase
+      .from('notification_queue')
+      .select('id')
+      .eq('email', task.assignee_email)
+      .eq('type', 'task_reminder')
+      .filter('payload->task_id', 'eq', task.id)
+      .filter('payload->days_until', 'eq', daysUntil)
+      .limit(1);
+
+    if (existing && existing.length > 0) continue;
+
+    await supabase.from('notification_queue').insert({
+      user_id: null,
+      email: task.assignee_email,
+      type: 'task_reminder',
+      payload: {
+        task_id: task.id,
+        task_title: task.title,
+        grant_name: (task as any).tracked_grants?.funder_name,
+        due_date: task.due_date,
+        days_until: daysUntil,
+        link: `https://fundermatch.org/projects/${task.project_id}/tracker`,
+      },
+      scheduled_for: new Date().toISOString(),
+    });
+    scheduled++;
+  }
+  return scheduled;
+}
+
+// Detect deadline changes on tracked grants and alert users
+async function detectDeadlineChanges(supabase: any): Promise<number> {
+  let detected = 0;
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+  const { data: grants } = await supabase
+    .from('tracked_grants')
+    .select('id, user_id, funder_name, grant_title, deadline, project_id, previous_deadline')
+    .not('deadline', 'is', null)
+    .gt('updated_at', oneDayAgo);
+
+  if (!grants) return 0;
+
+  for (const grant of grants) {
+    if (!grant.previous_deadline || grant.previous_deadline === grant.deadline) continue;
+
+    const { data: userData } = await supabase.auth.admin.getUserById(grant.user_id);
+    if (!userData?.user?.email) continue;
+
+    const { data: existing } = await supabase
+      .from('notification_queue')
+      .select('id')
+      .eq('user_id', grant.user_id)
+      .eq('type', 'deadline_changed')
+      .filter('payload->grant_id', 'eq', grant.id)
+      .filter('payload->new_deadline', 'eq', grant.deadline)
+      .limit(1);
+
+    if (existing && existing.length > 0) continue;
+
+    await supabase.from('notification_queue').insert({
+      user_id: grant.user_id,
+      email: userData.user.email,
+      type: 'deadline_changed',
+      payload: {
+        grant_id: grant.id,
+        grant_name: grant.grant_title || grant.funder_name,
+        funder_name: grant.funder_name,
+        old_deadline: grant.previous_deadline,
+        new_deadline: grant.deadline,
+        link: `https://fundermatch.org/projects/${grant.project_id}/tracker`,
+      },
+      scheduled_for: new Date().toISOString(),
+    });
+    detected++;
+  }
+  return detected;
 }

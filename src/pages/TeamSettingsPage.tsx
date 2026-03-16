@@ -135,6 +135,10 @@ export default function TeamSettingsPage() {
                 Send
               </button>
             </div>
+            <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer mt-3">
+              <input type="checkbox" className="w-4 h-4 rounded bg-[#0d1117] border border-[#30363d] text-blue-600 cursor-pointer" />
+              Restrict to assigned projects only
+            </label>
             <p className="text-xs text-gray-500 mt-2">Admin: full access. Editor: can modify grants/tasks. Viewer: read-only access.</p>
           </div>
         )}

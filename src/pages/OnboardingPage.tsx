@@ -66,6 +66,7 @@ export default function OnboardingPage() {
     if (currentStep >= 5) {
       // Complete onboarding
       await saveProgress(5, newCompleted);
+      localStorage.setItem('onboarding_complete', 'true');
       navigate('/dashboard');
       return;
     }
@@ -87,18 +88,10 @@ export default function OnboardingPage() {
         headers: { 'Content-Type': 'application/json', ...headers },
         body: JSON.stringify({ action: 'skip' }),
       });
+      localStorage.setItem('onboarding_complete', 'true');
       navigate('/dashboard');
     } catch (err) {
       console.error('Error skipping:', err);
-    }
-  };
-
-  const handleStepAction = () => {
-    switch (currentStep) {
-      case 2: navigate('/settings'); break;
-      case 3: navigate('/projects/new'); break;
-      case 4: navigate('/search'); break;
-      case 5: navigate('/dashboard'); break;
     }
   };
 
@@ -165,17 +158,100 @@ export default function OnboardingPage() {
             </div>
           )}
 
-          {currentStep > 1 && (
-            <button onClick={handleStepAction}
-              className="mb-6 px-6 py-3 bg-[#161b22] border border-[#30363d] hover:border-blue-500 rounded-lg text-sm transition-colors w-full text-left">
-              <p className="text-white font-medium">
-                {currentStep === 2 ? 'Go to Profile Settings' :
-                 currentStep === 3 ? 'Create Your First Project' :
-                 currentStep === 4 ? 'Search for Funders' :
-                 'Go to Dashboard'}
-              </p>
-              <p className="text-xs text-gray-500 mt-0.5">You can always come back to continue setup</p>
-            </button>
+          {currentStep === 2 && (
+            <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-5 mb-6 text-left space-y-4">
+              <p className="text-sm font-semibold text-white">Organization Profile</p>
+              <input type="text" placeholder="Organization name"
+                className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
+              <input type="text" placeholder="Mission statement"
+                className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
+              <div className="grid grid-cols-2 gap-3">
+                <input type="text" placeholder="City"
+                  className="bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
+                <input type="text" placeholder="State"
+                  className="bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
+              </div>
+              <select className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm">
+                <option value="">Select organization type...</option>
+                <option value="501c3">501(c)(3) Public Charity</option>
+                <option value="501c4">501(c)(4) Social Welfare</option>
+                <option value="foundation">Private Foundation</option>
+                <option value="fiscal">Fiscal Sponsorship</option>
+              </select>
+              <p className="text-xs text-gray-500">This info helps us match you with relevant funders. You can update it later in Settings.</p>
+            </div>
+          )}
+
+          {currentStep === 3 && (
+            <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-5 mb-6 text-left space-y-4">
+              <p className="text-sm font-semibold text-white">Create Your First Project</p>
+              <input type="text" placeholder="Project name (e.g., Youth STEM Education Program)"
+                className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
+              <textarea placeholder="Brief project description — what does it do and who does it serve?"
+                rows={3}
+                className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500 resize-none" />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">Target funding</label>
+                  <input type="text" placeholder="$50,000"
+                    className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">Focus area</label>
+                  <select className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm">
+                    <option value="">Select...</option>
+                    <option>Education</option>
+                    <option>Health</option>
+                    <option>Environment</option>
+                    <option>Arts & Culture</option>
+                    <option>Community Development</option>
+                    <option>Human Services</option>
+                  </select>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500">We'll use this to find funders that match your project's mission.</p>
+            </div>
+          )}
+
+          {currentStep === 4 && (
+            <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-5 mb-6 text-left space-y-4">
+              <p className="text-sm font-semibold text-white">Review Your Top Matches</p>
+              <p className="text-xs text-gray-500 mb-2">Based on your project, here are example funders our AI would find for you:</p>
+              {[
+                { name: 'Community Foundation', type: 'Foundation', match: '95%', focus: 'Education & Youth' },
+                { name: 'Regional Health Trust', type: 'Trust', match: '88%', focus: 'Community Health' },
+                { name: 'National Arts Council', type: 'Government', match: '82%', focus: 'Arts & Culture' },
+              ].map(funder => (
+                <div key={funder.name} className="flex items-center justify-between p-3 bg-[#0d1117] rounded-lg">
+                  <div>
+                    <p className="text-sm text-white font-medium">{funder.name}</p>
+                    <p className="text-xs text-gray-500">{funder.type} · {funder.focus}</p>
+                  </div>
+                  <span className="text-sm font-bold text-green-400">{funder.match}</span>
+                </div>
+              ))}
+              <p className="text-xs text-gray-500">After setup, you'll see real matches based on your organization's data.</p>
+            </div>
+          )}
+
+          {currentStep === 5 && (
+            <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-5 mb-6 text-left space-y-3">
+              <p className="text-sm font-semibold text-white">You're All Set!</p>
+              <div className="space-y-2">
+                {[
+                  'Track funders in your personalized pipeline',
+                  'Set deadlines and get automated reminders',
+                  'Generate AI-powered grant proposals',
+                  'Invite team members to collaborate',
+                  'Export reports and share progress',
+                ].map(tip => (
+                  <div key={tip} className="flex items-center gap-2 text-sm text-gray-400">
+                    <span className="w-1.5 h-1.5 bg-green-500 rounded-full flex-shrink-0" />
+                    {tip}
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
 
           <div className="flex items-center justify-between">

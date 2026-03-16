@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
-import { Download, TrendingUp, DollarSign, Target, Award, Clock, BarChart3, PieChart } from 'lucide-react';
+import { Download, Filter, TrendingUp, DollarSign, Target, Award, Clock, BarChart3, PieChart } from 'lucide-react';
 
 const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const REPORTS_URL = `${SUPABASE_URL}/functions/v1/reports-portfolio`;
@@ -21,6 +21,7 @@ interface PipelineItem { name: string; color: string; count: number; amount: num
 interface ProjectItem { name: string; count: number; awarded: number; pending: number; }
 interface TimelineItem { quarter: string; submitted: number; awarded: number; }
 interface ComplianceSummary { total: number; compliant: number; upcoming: number; overdue: number; }
+interface FunderTypeItem { type: string; count: number; amount: number; }
 
 export default function ReportsPage() {
   const { user, loading } = useAuth();
@@ -29,8 +30,11 @@ export default function ReportsPage() {
   const [byProject, setByProject] = useState<ProjectItem[]>([]);
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [compliance, setCompliance] = useState<ComplianceSummary | null>(null);
+  const [byFunderType, setByFunderType] = useState<FunderTypeItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filterPeriod, setFilterPeriod] = useState('all');
+  const [filterProject, setFilterProject] = useState('all');
+  const [filterStatus, setFilterStatus] = useState('all');
 
   useEffect(() => {
     if (!loading && user) loadReport();
@@ -48,6 +52,7 @@ export default function ReportsPage() {
         setByProject(data.byProject || []);
         setTimeline(data.timeline || []);
         setCompliance(data.compliance);
+        setByFunderType(data.byFunderType || []);
       }
     } catch (err) {
       console.error('Error loading report:', err);
@@ -77,6 +82,10 @@ export default function ReportsPage() {
     }
   };
 
+  const handleExportPDF = () => {
+    window.print();
+  };
+
   const fmt = (n: number) => n >= 1000000 ? `$${(n / 1000000).toFixed(1)}M` : n >= 1000 ? `$${(n / 1000).toFixed(0)}K` : `$${n.toLocaleString()}`;
   const maxPipelineCount = Math.max(...pipeline.map(p => p.count), 1);
   const maxProjectAmt = Math.max(...byProject.map(p => p.awarded + p.pending), 1);
@@ -100,9 +109,23 @@ export default function ReportsPage() {
               <option value="quarter">This Quarter</option>
               <option value="month">This Month</option>
             </select>
+            <select value={filterProject} onChange={e => setFilterProject(e.target.value)}
+              className="bg-[#161b22] border border-[#30363d] rounded-lg px-3 py-2 text-sm text-white">
+              <option value="all">All Projects</option>
+              {byProject.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
+            </select>
+            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+              className="bg-[#161b22] border border-[#30363d] rounded-lg px-3 py-2 text-sm text-white">
+              <option value="all">All Statuses</option>
+              {pipeline.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
+            </select>
             <button onClick={handleExportCSV}
               className="flex items-center gap-2 px-4 py-2 bg-[#161b22] border border-[#30363d] hover:border-blue-500 rounded-lg text-sm transition-colors">
               <Download size={16} /> Export CSV
+            </button>
+            <button onClick={handleExportPDF}
+              className="flex items-center gap-2 px-4 py-2 bg-[#161b22] border border-[#30363d] hover:border-blue-500 rounded-lg text-sm transition-colors">
+              <Filter size={16} /> Export PDF
             </button>
           </div>
         </div>
@@ -200,8 +223,28 @@ export default function ReportsPage() {
               </div>
             </div>
 
+            {/* Funding by Funder Type */}
+            <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-5 mb-8">
+              <h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><PieChart size={16} /> Funding by Funder Type</h3>
+              <div className="space-y-3">
+                {byFunderType.length > 0 ? byFunderType.map(item => (
+                  <div key={item.type}>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-gray-300">{item.type}</span>
+                      <span className="text-gray-500">{item.count} grant{item.count !== 1 ? 's' : ''} · {fmt(item.amount)}</span>
+                    </div>
+                    <div className="h-2 bg-[#0d1117] rounded-full overflow-hidden">
+                      <div className="h-full rounded-full bg-indigo-500 transition-all" style={{
+                        width: `${(item.count / Math.max(...byFunderType.map(b => b.count), 1)) * 100}%`,
+                      }} />
+                    </div>
+                  </div>
+                )) : <p className="text-gray-500 text-sm">No funder type data available</p>}
+              </div>
+            </div>
+
             {/* Compliance Summary */}
-            {compliance && compliance.total > 0 && (
+            {compliance && (
               <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-5">
                 <h3 className="text-sm font-semibold mb-4">Compliance Summary</h3>
                 <div className="grid grid-cols-4 gap-4">

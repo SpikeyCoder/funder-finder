@@ -148,6 +148,7 @@ export default function ProjectWorkspace() {
   const [newCompTitle, setNewCompTitle] = useState('');
   const [newCompType, setNewCompType] = useState('narrative_report');
   const [newCompDue, setNewCompDue] = useState('');
+  const [newCompAssignee, setNewCompAssignee] = useState('');
 
   // Share link
   const [shareUrl, setShareUrl] = useState<string | null>(null);
@@ -581,6 +582,7 @@ export default function ProjectWorkspace() {
           title: newCompTitle.trim(),
           type: newCompType,
           due_date: newCompDue || null,
+          assignee_email: newCompAssignee.trim() || undefined,
         }),
       });
       if (res.ok) {
@@ -588,6 +590,7 @@ export default function ProjectWorkspace() {
         setComplianceItems(prev => [...prev, item]);
         setNewCompTitle('');
         setNewCompDue('');
+        setNewCompAssignee('');
         setShowComplianceForm(false);
       }
     } catch (err) { console.error('Error adding compliance:', err); }
@@ -618,8 +621,15 @@ export default function ProjectWorkspace() {
         const link = await res.json();
         setShareUrl(`https://fundermatch.org/shared/${link.token}`);
         setShowShareDialog(true);
+      } else {
+        const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('Share link error:', res.status, err);
+        alert(`Failed to create share link: ${err.error || res.statusText}`);
       }
-    } catch (err) { console.error('Error creating share link:', err); }
+    } catch (err) {
+      console.error('Error creating share link:', err);
+      alert('Failed to create share link. Please try again.');
+    }
   };
 
   // AI Draft generation
@@ -1754,6 +1764,9 @@ export default function ProjectWorkspace() {
                             <Plus size={14} />
                           </button>
                         </div>
+                        <input type="email" placeholder="Assignee email (optional)"
+                          value={newCompAssignee} onChange={e => setNewCompAssignee(e.target.value)}
+                          className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500" />
                       </div>
                     )}
 
