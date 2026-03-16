@@ -1,6 +1,8 @@
 -- Phase 4: Team Collaboration & Role-Based Access
 -- Creates org_members, invitations, project_access, shareable_links, access_log tables
 
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 -- 4A: Organization members with roles
 CREATE TABLE IF NOT EXISTS public.org_members (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
