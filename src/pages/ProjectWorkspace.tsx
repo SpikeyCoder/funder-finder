@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Save, Loader, Users, RefreshCw, Plus, Download, Upload, X, CheckCircle, Clock, AlertTriangle, ExternalLink, Trash2, ClipboardList, Calendar, Paperclip } from 'lucide-react';
+import { ArrowLeft, Save, Loader, Users, RefreshCw, Plus, Download, Upload, X, CheckCircle, Clock, AlertTriangle, ExternalLink, Trash2, ClipboardList, Calendar, Paperclip, Sparkles } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
@@ -636,19 +636,28 @@ export default function ProjectWorkspace() {
   };
 
   // AI Draft generation
-  const handleGenerateDraft = async () => {
-    if (!selectedGrant) return;
+  const handleGenerateDraft = async (grant?: TrackedGrant) => {
+    const target = grant || selectedGrant;
+    if (!target) return;
+    if (!selectedGrant) {
+      setSelectedGrant(target);
+      setDrawerOpen(true);
+    }
     try {
       setAiDraftLoading(true);
+      setAiDraft('');
       const headers = await getEdgeFunctionHeaders();
       const res = await fetch(AI_DRAFT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...headers },
-        body: JSON.stringify({ grant_id: selectedGrant.id, project_id: id }),
+        body: JSON.stringify({ grant_id: target.id, project_id: id }),
       });
       if (res.ok) {
         const data = await res.json();
         setAiDraft(data.draft);
+      } else {
+        const err = await res.json().catch(() => null);
+        setAiDraft(`Draft generation failed: ${err?.error || res.statusText}`);
       }
     } catch (err) { console.error('Error generating draft:', err); }
     finally { setAiDraftLoading(false); }
@@ -1022,14 +1031,15 @@ export default function ProjectWorkspace() {
                 <div className="bg-[#161b22] border border-[#30363d] rounded-lg overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full">
+                      <caption className="sr-only">Tracked grants table</caption>
                       <thead className="bg-[#0d1117] border-b border-[#30363d]">
                         <tr>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Funder / Grant</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Status</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Amount</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Deadline</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Source</th>
-                          <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase">Actions</th>
+                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Funder / Grant</th>
+                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Status</th>
+                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Amount</th>
+                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Deadline</th>
+                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Source</th>
+                          <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[#30363d]">
@@ -1066,7 +1076,10 @@ export default function ProjectWorkspace() {
                               <td className="px-4 py-3 text-gray-500 text-xs uppercase">{grant.source}</td>
                               <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
                                 <div className="flex items-center justify-end gap-1">
-                                  <button onClick={() => openGrantDetail(grant)} className="p-1.5 text-gray-500 hover:text-green-400 transition-colors" title="Add Task">
+                                  <button onClick={() => handleGenerateDraft(grant)} className="p-1.5 text-gray-500 hover:text-purple-400 transition-colors" title="Generate AI Draft">
+                                    <Sparkles size={14} />
+                                  </button>
+                                  <button onClick={() => openGrantDetail(grant)} className="p-1.5 text-gray-500 hover:text-green-400 transition-colors" title="Tasks & Details">
                                     <ClipboardList size={14} />
                                   </button>
                                   {grant.funder_ein && (
@@ -1822,9 +1835,9 @@ export default function ProjectWorkspace() {
                 {/* AI Draft Button */}
                 {selectedGrant && (
                   <div className="border-t border-[#30363d] pt-4 mt-4">
-                    <button onClick={handleGenerateDraft} disabled={aiDraftLoading}
+                    <button onClick={() => handleGenerateDraft()} disabled={aiDraftLoading}
                       className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-purple-600/20 border border-purple-500/30 hover:border-purple-500 text-purple-300 rounded-lg text-sm transition-colors disabled:opacity-50">
-                      {aiDraftLoading ? <Loader size={14} className="animate-spin" /> : <ClipboardList size={14} />}
+                      {aiDraftLoading ? <Loader size={14} className="animate-spin" /> : <Sparkles size={14} />}
                       {aiDraftLoading ? 'Generating Draft...' : 'Generate AI Draft Proposal'}
                     </button>
                     {aiDraft && (

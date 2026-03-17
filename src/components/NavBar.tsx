@@ -24,7 +24,7 @@ export default function NavBar() {
   const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/');
 
   const linkClass = (path: string) =>
-    `px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+    `px-4 py-2 min-h-[44px] flex items-center text-sm font-medium rounded-lg transition-colors ${
       isActive(path)
         ? 'text-white bg-white/[0.08]'
         : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
@@ -74,7 +74,7 @@ export default function NavBar() {
                   <div ref={accountRef} className="relative ml-2">
                     <button
                       onClick={() => setAccountOpen(!accountOpen)}
-                      className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-400 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors"
+                      className="flex items-center gap-1.5 px-4 py-2 min-h-[44px] text-sm font-medium text-gray-400 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors"
                     >
                       <span className="max-w-[140px] truncate">
                         {user.email?.split('@')[0]}
@@ -106,7 +106,7 @@ export default function NavBar() {
               ) : (
                 <button
                   onClick={() => navigate('/login')}
-                  className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors"
+                  className="px-4 py-2 min-h-[44px] flex items-center text-sm font-medium text-gray-400 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors"
                 >
                   Sign In
                 </button>
