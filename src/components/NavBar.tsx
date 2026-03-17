@@ -88,6 +88,12 @@ export default function NavBar() {
                           <p className="text-xs text-gray-500 truncate">{user.email}</p>
                         </div>
                         <button
+                          onClick={() => { navigate('/settings/team'); setAccountOpen(false); }}
+                          className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/[0.06] transition-colors"
+                        >
+                          Team
+                        </button>
+                        <button
                           onClick={() => { navigate('/settings'); setAccountOpen(false); }}
                           className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/[0.06] transition-colors"
                         >
@@ -179,7 +185,23 @@ export default function NavBar() {
                   >
                     Tasks
                   </button>
-                  <div className="pt-2 border-t border-[#1b2130] mt-2">
+                  <div className="pt-2 border-t border-[#1b2130] mt-2 space-y-1">
+                    <button
+                      onClick={() => { navigate('/settings/team'); setMobileOpen(false); }}
+                      className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
+                        isActive('/settings/team') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
+                      }`}
+                    >
+                      Team
+                    </button>
+                    <button
+                      onClick={() => { navigate('/settings'); setMobileOpen(false); }}
+                      className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
+                        isActive('/settings') && !isActive('/settings/team') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
+                      }`}
+                    >
+                      Settings
+                    </button>
                     <div className="flex items-center justify-between px-3 py-2">
                       <span className="text-xs text-gray-500 truncate">{user.email}</span>
                       <button

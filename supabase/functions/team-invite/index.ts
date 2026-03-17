@@ -1,4 +1,4 @@
-// Phase 4A: Team invitation management
+// Phase 4A: Team invitation & member management
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
@@ -14,18 +14,42 @@ function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 }
 
+// Helper: verify the calling user is an admin (org owner or admin role)
+async function isAdmin(supabase: any, userId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from('org_members')
+    .select('role')
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .eq('role', 'admin')
+    .limit(1);
+  // Also consider the org creator (invited_by is null or is themselves) as admin
+  if (data && data.length > 0) return true;
+  // Check if user owns any projects (i.e. is the primary account holder)
+  const { data: projects } = await supabase
+    .from('projects')
+    .select('id')
+    .eq('user_id', userId)
+    .limit(1);
+  return !!(projects && projects.length > 0);
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
 
   const authHeader = req.headers.get('authorization') || '';
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
   const jwt = authHeader.replace('Bearer ', '');
-  const { data: { user }, error: authError } = await supabase.auth.getUser(jwt);
+  const { data: { user } } = await supabase.auth.getUser(jwt);
   if (!user) return json({ error: 'Unauthorized' }, 401);
 
   try {
+    // ─── GET: List team members, invitations, and member project summaries ───
     if (req.method === 'GET') {
-      // List team members and pending invitations
+      const url = new URL(req.url);
+      const includeProjects = url.searchParams.get('include_projects') === 'true';
+
+      // List team members
       const { data: members } = await supabase
         .from('org_members')
         .select('*')
@@ -38,19 +62,72 @@ Deno.serve(async (req: Request) => {
         .eq('invited_by', user.id)
         .eq('status', 'pending');
 
-      // Get emails for members
+      // Get emails and display names for members
       const memberDetails = [];
       for (const m of members || []) {
         const { data: ud } = await supabase.auth.admin.getUserById(m.user_id);
-        memberDetails.push({ ...m, email: ud?.user?.email || 'unknown' });
+        const email = ud?.user?.email || 'unknown';
+
+        // Get user profile for display_name
+        const { data: profile } = await supabase
+          .from('user_profiles')
+          .select('display_name, organization_name')
+          .eq('id', m.user_id)
+          .single();
+
+        let projectSummary = null;
+        if (includeProjects) {
+          // Get project count and details for this member
+          const { data: projects } = await supabase
+            .from('projects')
+            .select('id, name, created_at, updated_at')
+            .eq('user_id', m.user_id)
+            .order('updated_at', { ascending: false });
+
+          // Get tracked grant counts per project
+          const projectIds = (projects || []).map((p: any) => p.id);
+          let grantCounts: Record<string, number> = {};
+          if (projectIds.length > 0) {
+            const { data: grants } = await supabase
+              .from('tracked_grants')
+              .select('project_id')
+              .in('project_id', projectIds);
+            for (const g of grants || []) {
+              grantCounts[g.project_id] = (grantCounts[g.project_id] || 0) + 1;
+            }
+          }
+
+          projectSummary = {
+            total: (projects || []).length,
+            projects: (projects || []).slice(0, 5).map((p: any) => ({
+              id: p.id,
+              name: p.name,
+              created_at: p.created_at,
+              updated_at: p.updated_at,
+              grant_count: grantCounts[p.id] || 0,
+            })),
+          };
+        }
+
+        memberDetails.push({
+          ...m,
+          email,
+          display_name: profile?.display_name || null,
+          organization_name: profile?.organization_name || null,
+          project_summary: projectSummary,
+        });
       }
 
       return json({ members: memberDetails, invitations });
     }
 
+    // ─── POST: Send invitation ───────────────────────────────────────────────
     if (req.method === 'POST') {
       const { email, role = 'editor' } = await req.json();
       if (!email) return json({ error: 'Email is required' }, 400);
+      if (!['admin', 'editor', 'viewer'].includes(role)) {
+        return json({ error: 'Invalid role. Must be admin, editor, or viewer.' }, 400);
+      }
 
       // Check if already invited
       const { data: existing } = await supabase
@@ -63,6 +140,22 @@ Deno.serve(async (req: Request) => {
 
       if (existing && existing.length > 0) return json({ error: 'Already invited' }, 409);
 
+      // Check if already an active member
+      const { data: existingUsers } = await supabase.auth.admin.listUsers();
+      const existingUser = existingUsers?.users?.find((u: any) => u.email === email.toLowerCase());
+
+      if (existingUser) {
+        const { data: existingMember } = await supabase
+          .from('org_members')
+          .select('id')
+          .eq('user_id', existingUser.id)
+          .eq('status', 'active')
+          .limit(1);
+        if (existingMember && existingMember.length > 0) {
+          return json({ error: 'This person is already a team member' }, 409);
+        }
+      }
+
       // Create invitation
       const { data: invite, error } = await supabase
         .from('invitations')
@@ -73,9 +166,6 @@ Deno.serve(async (req: Request) => {
       if (error) throw error;
 
       // If user already exists, auto-add to org_members
-      const { data: existingUsers } = await supabase.auth.admin.listUsers();
-      const existingUser = existingUsers?.users?.find(u => u.email === email.toLowerCase());
-
       if (existingUser) {
         await supabase.from('org_members').upsert({
           user_id: existingUser.id,
@@ -90,6 +180,57 @@ Deno.serve(async (req: Request) => {
       return json(invite, 201);
     }
 
+    // ─── PUT: Update member role or status ───────────────────────────────────
+    if (req.method === 'PUT') {
+      const { member_id, role, action } = await req.json();
+      if (!member_id) return json({ error: 'member_id is required' }, 400);
+
+      // Verify caller is admin
+      const callerIsAdmin = await isAdmin(supabase, user.id);
+      if (!callerIsAdmin) return json({ error: 'Only admins can manage team members' }, 403);
+
+      // Get the target member
+      const { data: target } = await supabase
+        .from('org_members')
+        .select('*')
+        .eq('id', member_id)
+        .single();
+
+      if (!target) return json({ error: 'Member not found' }, 404);
+
+      // Prevent self-demotion from admin (must have at least one admin)
+      if (target.user_id === user.id && role && role !== 'admin') {
+        return json({ error: 'You cannot change your own role. Ask another admin to do this.' }, 400);
+      }
+
+      // Action: remove member
+      if (action === 'remove') {
+        if (target.user_id === user.id) {
+          return json({ error: 'You cannot remove yourself from the team' }, 400);
+        }
+        await supabase
+          .from('org_members')
+          .update({ status: 'removed', updated_at: new Date().toISOString() })
+          .eq('id', member_id);
+        return json({ success: true, message: 'Member removed' });
+      }
+
+      // Action: change role
+      if (role) {
+        if (!['admin', 'editor', 'viewer'].includes(role)) {
+          return json({ error: 'Invalid role' }, 400);
+        }
+        await supabase
+          .from('org_members')
+          .update({ role, updated_at: new Date().toISOString() })
+          .eq('id', member_id);
+        return json({ success: true, message: `Role updated to ${role}` });
+      }
+
+      return json({ error: 'No action specified' }, 400);
+    }
+
+    // ─── DELETE: Revoke invitation ───────────────────────────────────────────
     if (req.method === 'DELETE') {
       const url = new URL(req.url);
       const inviteId = url.searchParams.get('id');

@@ -171,10 +171,23 @@ export default function NewProjectPage() {
       setError('Project name is required');
       return;
     }
+    if (!form.description.trim()) {
+      setError('Mission description is required');
+      return;
+    }
 
     try {
       setCreating(true);
       setError(null);
+
+      // Verify session is still valid before attempting insert
+      const { data: sessionData } = await supabase.auth.getSession();
+      const activeUser = sessionData.session?.user;
+      if (!activeUser) {
+        setError('Your session has expired. Please sign in again.');
+        navigate('/');
+        return;
+      }
 
       // Map form search_criteria to the actual DB columns
       const locationScope = form.search_criteria.locations.length > 0
@@ -184,9 +197,9 @@ export default function NewProjectPage() {
       const { data, error: insertError } = await supabase
         .from('projects')
         .insert({
-          user_id: user!.id,
-          name: form.name,
-          description: form.description || null,
+          user_id: activeUser.id,
+          name: form.name.trim(),
+          description: form.description.trim() || null,
           location_scope: locationScope,
           fields_of_work: form.search_criteria.fields_of_work.length > 0 ? form.search_criteria.fields_of_work : null,
           funding_types: form.search_criteria.funding_types.length > 0 ? form.search_criteria.funding_types : null,
@@ -245,9 +258,14 @@ export default function NewProjectPage() {
       }
 
       navigate(`/projects/${data.id}`);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error creating project:', err);
-      setError('Failed to create project. Please try again.');
+      const msg = err?.message || err?.error_description || 'Unknown error';
+      if (msg.includes('JWT') || msg.includes('token') || msg.includes('auth')) {
+        setError('Your session has expired. Please sign in again.');
+      } else {
+        setError(`Failed to create project: ${msg}`);
+      }
     } finally {
       setCreating(false);
     }
@@ -317,12 +335,12 @@ export default function NewProjectPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-white mb-2">
-                    Project Description (Optional)
+                    Mission / Description *
                   </label>
                   <textarea
                     value={form.description}
                     onChange={(e) => setForm({ ...form, description: e.target.value })}
-                    placeholder="Briefly describe your project and its goals..."
+                    placeholder="Describe your project mission and goals — this is used to find matching funders..."
                     rows={4}
                     className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
                   />
@@ -485,12 +503,10 @@ export default function NewProjectPage() {
                     <h3 className="text-sm font-medium text-gray-400">Project Name</h3>
                     <p className="text-white mt-1">{form.name || '(Not provided)'}</p>
                   </div>
-                  {form.description && (
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-400">Description</h3>
-                      <p className="text-white mt-1">{form.description}</p>
-                    </div>
-                  )}
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-400">Mission / Description</h3>
+                    <p className="text-white mt-1">{form.description || '(Not provided)'}</p>
+                  </div>
                 </div>
 
                 <div className="bg-[#0d1117] rounded-lg p-4 space-y-3">
@@ -580,9 +596,15 @@ export default function NewProjectPage() {
             {step < 3 ? (
               <button
                 onClick={() => {
-                  if (step === 1 && !form.name.trim()) {
-                    setError('Project name is required');
-                    return;
+                  if (step === 1) {
+                    if (!form.name.trim()) {
+                      setError('Project name is required');
+                      return;
+                    }
+                    if (!form.description.trim()) {
+                      setError('Mission description is required — it\'s used to find matching funders');
+                      return;
+                    }
                   }
                   setError(null);
                   setStep(step + 1);
@@ -595,7 +617,7 @@ export default function NewProjectPage() {
             ) : (
               <button
                 onClick={handleCreateProject}
-                disabled={creating || !form.name.trim()}
+                disabled={creating || !form.name.trim() || !form.description.trim()}
                 className="ml-auto px-6 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-white font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {creating ? 'Creating...' : 'Create Project'}
