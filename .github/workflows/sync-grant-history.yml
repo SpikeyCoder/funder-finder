@@ -39,8 +39,14 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Verify secrets are configured
+        env:
+          HAS_SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY != '' }}
+        run: |
+          if [ "$HAS_SUPABASE_KEY" != "true" ]; then
+            echo "::error::SUPABASE_SERVICE_ROLE_KEY secret is not configured. Go to Settings > Secrets and variables > Actions to add it."
+            exit 1
+          fi
 
       - name: Sync grant history
         env:
