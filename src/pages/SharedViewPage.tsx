@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
-const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
+const SUPABASE_URL = 'https://auth.fundermatch.org';
 const SHARE_LINK_URL = `${SUPABASE_URL}/functions/v1/share-link`;
 
 interface SharedGrant {

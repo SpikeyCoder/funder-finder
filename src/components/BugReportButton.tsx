@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, Bug, Loader2, Camera, CheckCircle, AlertCircle, Lightbulb } from 'lucide-react';
 import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 
-const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
+const SUPABASE_URL = 'https://auth.fundermatch.org';
 
 interface CapturedError {
   message: string;

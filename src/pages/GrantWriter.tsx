@@ -9,7 +9,7 @@ import { getEdgeFunctionHeaders, supabase } from '../lib/supabase';
 import { formatGrantRange, formatTotalGiving } from '../utils/matching';
 
 const GRANT_WRITER_URL =
-  'https://tgtotjvdubhjxzybmdex.supabase.co/functions/v1/grant-writer';
+  'https://auth.fundermatch.org/functions/v1/grant-writer';
 
 const ACCEPTED_TYPES = [
   'application/pdf',

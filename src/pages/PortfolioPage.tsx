@@ -6,7 +6,7 @@ import { getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
 import type { PortfolioMetrics, PortfolioGrant } from '../types';
 
-const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
+const SUPABASE_URL = 'https://auth.fundermatch.org';
 const PORTFOLIO_URL = `${SUPABASE_URL}/functions/v1/portfolio`;
 
 function fmtCurrency(amount: number | null | undefined): string {

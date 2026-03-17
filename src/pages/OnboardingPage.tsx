@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getEdgeFunctionHeaders } from '../lib/supabase';
 import { ArrowRight, ArrowLeft, User, FolderPlus, Search, Bookmark, Sparkles } from 'lucide-react';
 
-const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
+const SUPABASE_URL = 'https://auth.fundermatch.org';
 const ONBOARDING_URL = `${SUPABASE_URL}/functions/v1/onboarding`;
 
 const STEPS = [

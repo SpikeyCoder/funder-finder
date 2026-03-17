@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
 
-const MATCH_FUNDERS_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co/functions/v1/match-funders';
+const MATCH_FUNDERS_URL = 'https://auth.fundermatch.org/functions/v1/match-funders';
 
 interface SearchCriteria {
   locations: string[];

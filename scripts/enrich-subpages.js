@@ -29,7 +29,7 @@
  *   ID=<funder-id> node scripts/enrich-subpages.js    # single funder by id
  */
 
-const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
+const SUPABASE_URL = 'https://auth.fundermatch.org';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const DRY_RUN  = process.env.DRY_RUN  === '1';
 const VERBOSE  = process.env.VERBOSE  === '1';

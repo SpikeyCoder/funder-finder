@@ -27,7 +27,7 @@
  *   VERBOSE                     (set 1 for detailed logs)
  */
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://tgtotjvdubhjxzybmdex.supabase.co';
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://auth.fundermatch.org';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const YEARS_BACK = Number.parseInt(process.env.YEARS_BACK || '5', 10);
 const LIMIT = Number.parseInt(process.env.LIMIT || '25', 10);

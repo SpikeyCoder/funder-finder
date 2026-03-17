@@ -3,7 +3,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { createClient } from '@supabase/supabase-js';
 
-const DEFAULT_SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
+const DEFAULT_SUPABASE_URL = 'https://auth.fundermatch.org';
 
 function parseArgs(argv) {
   const args = {

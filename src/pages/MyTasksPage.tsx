@@ -6,7 +6,7 @@ import { getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
 import type { GrantTask } from '../types';
 
-const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
+const SUPABASE_URL = 'https://auth.fundermatch.org';
 const GRANT_TASKS_URL = `${SUPABASE_URL}/functions/v1/grant-tasks`;
 
 interface GroupedTasks {

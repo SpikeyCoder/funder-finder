@@ -12,7 +12,7 @@ import {
   defaultWeights,
 } from './lib/ranker-eval-core.js';
 
-const DEFAULT_SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
+const DEFAULT_SUPABASE_URL = 'https://auth.fundermatch.org';
 
 function parseArgs(argv) {
   const args = {

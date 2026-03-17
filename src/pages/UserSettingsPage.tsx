@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import NavBar from '../components/NavBar';
 import type { NotificationPreferences, CalendarFeed } from '../types';
 
-const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
+const SUPABASE_URL = 'https://auth.fundermatch.org';
 const CALENDAR_FEED_URL = `${SUPABASE_URL}/functions/v1/calendar-feed`;
 
 const US_STATES = [

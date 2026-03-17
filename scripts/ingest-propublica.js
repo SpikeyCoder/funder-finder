@@ -6,7 +6,7 @@
  * ProPublica's free API and upserts them into the Supabase `funders` table.
  *
  * Usage:
- *   SUPABASE_URL=https://tgtotjvdubhjxzybmdex.supabase.co \
+ *   SUPABASE_URL=https://auth.fundermatch.org \
  *   SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key> \
  *   node scripts/ingest-propublica.js
  *
@@ -18,7 +18,7 @@
  * Re-running is safe — it upserts by EIN.
  */
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://tgtotjvdubhjxzybmdex.supabase.co';
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://auth.fundermatch.org';
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const PROPUBLICA_BASE = 'https://projects.propublica.org/nonprofits/api/v2';
 

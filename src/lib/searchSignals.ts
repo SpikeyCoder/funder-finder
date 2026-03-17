@@ -1,7 +1,7 @@
 import { BudgetBand } from '../types';
 import { getEdgeFunctionHeaders } from './supabase';
 
-const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
+const SUPABASE_URL = 'https://auth.fundermatch.org';
 const SIGNAL_ENDPOINT = `${SUPABASE_URL}/functions/v1/log-search-signal`;
 const SEARCH_SESSION_ID_KEY = 'ff_search_session_id';
 const SCORING_VERSION = 'grantee-fit-v8';
