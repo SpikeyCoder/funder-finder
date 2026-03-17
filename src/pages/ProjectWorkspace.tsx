@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Save, Loader, Users, RefreshCw, Plus, Download, Upload, X, CheckCircle, Clock, AlertTriangle, ExternalLink, Trash2, ClipboardList, Calendar, Paperclip, Sparkles } from 'lucide-react';
+import { ArrowLeft, Save, Loader, Users, RefreshCw, Plus, Download, Upload, X, CheckCircle, Clock, AlertTriangle, ExternalLink, Trash2, ClipboardList, Calendar, Paperclip, Sparkles, ChevronDown } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
@@ -158,6 +158,15 @@ export default function ProjectWorkspace() {
   // AI Draft
   const [aiDraft, setAiDraft] = useState<string | null>(null);
   const [aiDraftLoading, setAiDraftLoading] = useState(false);
+  const [aiDraftEditable, setAiDraftEditable] = useState(false);
+
+  // Reference documents for AI draft
+  const [refDocs, setRefDocs] = useState<{ id: string; title: string; file_name: string | null; source_type: string; created_at: string; storage_path: string | null }[]>([]);
+  const [refUploading, setRefUploading] = useState(false);
+  const refFileInput = useRef<HTMLInputElement>(null);
+
+  // Drawer accordion sections
+  const [drawerSection, setDrawerSection] = useState<string>('overview');
 
   // Editable fields for settings tab
   const [editName, setEditName] = useState('');
@@ -504,6 +513,9 @@ export default function ProjectWorkspace() {
   const openGrantDetail = async (grant: TrackedGrant) => {
     setSelectedGrant(grant);
     setDrawerOpen(true);
+    setDrawerSection('overview');
+    setAiDraft(null);
+    setAiDraftEditable(false);
     // Load tasks
     try {
       const headers = await getEdgeFunctionHeaders();
@@ -515,6 +527,10 @@ export default function ProjectWorkspace() {
     } catch (err) {
       console.error('Error loading tasks:', err);
     }
+    // Load reference docs
+    loadRefDocs(grant.id);
+    // Load compliance
+    loadCompliance(grant.id);
   };
 
   // Add task to grant
@@ -646,21 +662,92 @@ export default function ProjectWorkspace() {
     try {
       setAiDraftLoading(true);
       setAiDraft('');
+      setAiDraftEditable(false);
       const headers = await getEdgeFunctionHeaders();
       const res = await fetch(AI_DRAFT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...headers },
-        body: JSON.stringify({ grant_id: target.id, project_id: id }),
+        body: JSON.stringify({
+          grant_id: target.id,
+          project_id: id,
+          include_research: true,
+          reference_doc_ids: refDocs.map(d => d.id),
+        }),
       });
       if (res.ok) {
         const data = await res.json();
         setAiDraft(data.draft);
+        setDrawerSection('draft');
       } else {
         const err = await res.json().catch(() => null);
         setAiDraft(`Draft generation failed: ${err?.error || res.statusText}`);
       }
     } catch (err) { console.error('Error generating draft:', err); }
     finally { setAiDraftLoading(false); }
+  };
+
+  // Reference document management
+  const loadRefDocs = useCallback(async (grantId: string) => {
+    const { data } = await supabase
+      .from('application_knowledge_base')
+      .select('id, title, file_name, source_type, created_at, storage_path')
+      .eq('user_id', user!.id)
+      .eq('tracked_grant_id', grantId)
+      .order('created_at', { ascending: false });
+    setRefDocs(data || []);
+  }, [user]);
+
+  const handleRefDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedGrant || !user) return;
+    try {
+      setRefUploading(true);
+      const ext = file.name.split('.').pop();
+      const storagePath = `reference-docs/${user.id}/${selectedGrant.id}/${Date.now()}.${ext}`;
+
+      // Upload to storage
+      const { error: uploadErr } = await supabase.storage
+        .from('grant-uploads')
+        .upload(storagePath, file, { cacheControl: '3600', upsert: false });
+      if (uploadErr) throw uploadErr;
+
+      // Read text content for .txt files; for other types, store placeholder
+      let content = `[Uploaded file: ${file.name}]`;
+      if (file.type === 'text/plain') {
+        content = await file.text();
+      }
+
+      // Create KB entry
+      const { error: dbErr } = await supabase
+        .from('application_knowledge_base')
+        .insert({
+          user_id: user.id,
+          project_id: id,
+          tracked_grant_id: selectedGrant.id,
+          title: file.name.replace(/\.[^/.]+$/, ''),
+          source_type: 'reference_doc',
+          content,
+          file_name: file.name,
+          file_type: file.type,
+          storage_path: storagePath,
+        });
+      if (dbErr) throw dbErr;
+
+      loadRefDocs(selectedGrant.id);
+    } catch (err) {
+      console.error('Upload failed:', err);
+    } finally {
+      setRefUploading(false);
+      if (refFileInput.current) refFileInput.current.value = '';
+    }
+  };
+
+  const handleDeleteRefDoc = async (docId: string, storagePath: string | null) => {
+    if (storagePath) {
+      await supabase.storage.from('grant-uploads').remove([storagePath]);
+    }
+    await supabase.from('application_knowledge_base').delete().eq('id', docId);
+    if (selectedGrant) loadRefDocs(selectedGrant.id);
   };
 
   // CSV Import
@@ -1640,215 +1727,351 @@ export default function ProjectWorkspace() {
         </div>
       )}
 
-      {/* Grant Detail Drawer */}
+      {/* Grant Detail Drawer — Redesigned */}
       {drawerOpen && selectedGrant && (
         <div className="fixed inset-0 bg-black/40 z-50 flex justify-end" onClick={() => setDrawerOpen(false)}>
-          <div className="w-full max-w-md bg-[#161b22] border-l border-[#30363d] h-full overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="p-6">
-              {/* Header */}
-              <div className="flex items-start justify-between mb-6">
-                <div>
-                  <h3 className="text-lg font-semibold text-white">{selectedGrant.funder_name}</h3>
-                  {selectedGrant.grant_title && <p className="text-sm text-gray-400 mt-1">{selectedGrant.grant_title}</p>}
-                </div>
-                <button onClick={() => setDrawerOpen(false)} className="text-gray-400 hover:text-white"><X size={20} /></button>
-              </div>
+          <div className="w-full max-w-lg bg-[#161b22] border-l border-[#30363d] h-full flex flex-col" onClick={e => e.stopPropagation()}>
 
-              {/* Status */}
-              <div className="mb-4">
-                <label className="block text-xs text-gray-500 mb-1">Status</label>
+            {/* ─── Sticky Header ─── */}
+            <div className="flex-shrink-0 px-5 py-4 border-b border-[#30363d] bg-[#161b22]">
+              <div className="flex items-start justify-between">
+                <div className="min-w-0 flex-1 mr-3">
+                  <h3 className="text-lg font-semibold text-white truncate">{selectedGrant.funder_name}</h3>
+                  {selectedGrant.grant_title && <p className="text-sm text-gray-400 mt-0.5 truncate">{selectedGrant.grant_title}</p>}
+                </div>
+                <button onClick={() => setDrawerOpen(false)} className="text-gray-400 hover:text-white flex-shrink-0 p-1"><X size={18} /></button>
+              </div>
+              {/* Quick status row */}
+              <div className="flex items-center gap-3 mt-3">
                 <select value={selectedGrant.status_id}
                   onChange={e => { handleUpdateGrantStatus(selectedGrant.id, e.target.value); setSelectedGrant(prev => prev ? { ...prev, status_id: e.target.value } : prev); }}
-                  className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm">
+                  className="bg-[#0d1117] border border-[#30363d] rounded-lg px-2.5 py-1.5 text-white text-xs font-medium">
                   {pipelineStatuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
-              </div>
-
-              {/* Details grid */}
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Amount</label>
-                  <p className="text-white text-sm">{fmtCurrency(selectedGrant.amount)}</p>
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Deadline</label>
-                  <p className="text-white text-sm">{selectedGrant.deadline ? new Date(selectedGrant.deadline).toLocaleDateString() : '—'}</p>
-                </div>
-                {selectedGrant.grant_url && (
-                  <div className="col-span-2">
-                    <label className="block text-xs text-gray-500 mb-1">URL</label>
-                    <a href={selectedGrant.grant_url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 text-sm truncate block">{selectedGrant.grant_url}</a>
-                  </div>
+                <span className="text-sm text-white font-medium">{fmtCurrency(selectedGrant.amount)}</span>
+                {selectedGrant.deadline && (
+                  <span className="text-xs text-gray-400 flex items-center gap-1">
+                    <Calendar size={11} />
+                    {new Date(selectedGrant.deadline).toLocaleDateString()}
+                  </span>
                 )}
               </div>
+            </div>
 
-              {/* Notes */}
-              <div className="mb-6">
-                <label className="block text-xs text-gray-500 mb-1">Notes</label>
-                <textarea
-                  value={selectedGrant.notes || ''}
-                  onChange={e => setSelectedGrant(prev => prev ? { ...prev, notes: e.target.value } : prev)}
-                  onBlur={() => selectedGrant && handleUpdateGrant(selectedGrant.id, { notes: selectedGrant.notes } as any)}
-                  rows={3}
-                  className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
-                  placeholder="Add notes..."
-                />
-              </div>
+            {/* ─── Scrollable Body ─── */}
+            <div className="flex-1 overflow-y-auto">
 
-              {/* Tasks Section */}
-              <div className="border-t border-[#30363d] pt-4">
-                <h4 className="text-sm font-semibold text-white mb-3">Tasks</h4>
+              {/* ═══ Section 1: Grant Overview ═══ */}
+              <button onClick={() => setDrawerSection(drawerSection === 'overview' ? '' : 'overview')}
+                className="w-full flex items-center justify-between px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider hover:bg-white/[0.02] transition-colors border-b border-[#30363d]">
+                <span>Grant Overview</span>
+                <ChevronDown size={14} className={`transition-transform ${drawerSection === 'overview' ? '' : '-rotate-90'}`} />
+              </button>
+              {drawerSection === 'overview' && (
+                <div className="px-5 py-4 space-y-4 border-b border-[#30363d]">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Amount</p>
+                      <p className="text-sm text-white font-medium">{fmtCurrency(selectedGrant.amount)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Deadline</p>
+                      <p className="text-sm text-white">{selectedGrant.deadline ? new Date(selectedGrant.deadline).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Project</p>
+                      <p className="text-sm text-white truncate">{project?.name || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Source</p>
+                      <p className="text-sm text-gray-300 capitalize">{selectedGrant.source || 'manual'}</p>
+                    </div>
+                  </div>
+                  {selectedGrant.grant_url && (
+                    <div>
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Grant URL</p>
+                      <a href={selectedGrant.grant_url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 text-sm truncate block flex items-center gap-1">
+                        {selectedGrant.grant_url.replace(/^https?:\/\//, '').split('/')[0]}
+                        <ExternalLink size={11} />
+                      </a>
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Notes</p>
+                    <textarea
+                      value={selectedGrant.notes || ''}
+                      onChange={e => setSelectedGrant(prev => prev ? { ...prev, notes: e.target.value } : prev)}
+                      onBlur={() => selectedGrant && handleUpdateGrant(selectedGrant.id, { notes: selectedGrant.notes } as any)}
+                      rows={2}
+                      className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500 resize-none"
+                      placeholder="Add notes about this grant..."
+                    />
+                  </div>
+                </div>
+              )}
 
-                {/* Task list */}
-                <div className="space-y-2 mb-4">
-                  {grantTasks.length === 0 && <p className="text-xs text-gray-500">No tasks yet.</p>}
+              {/* ═══ Section 2: Tasks ═══ */}
+              <button onClick={() => setDrawerSection(drawerSection === 'tasks' ? '' : 'tasks')}
+                className="w-full flex items-center justify-between px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider hover:bg-white/[0.02] transition-colors border-b border-[#30363d]">
+                <span className="flex items-center gap-2">
+                  Tasks
+                  {grantTasks.length > 0 && (
+                    <span className="text-[10px] font-normal bg-[#30363d] text-gray-300 rounded-full px-1.5 py-0.5">
+                      {grantTasks.filter(t => t.status !== 'done').length} open
+                    </span>
+                  )}
+                </span>
+                <ChevronDown size={14} className={`transition-transform ${drawerSection === 'tasks' ? '' : '-rotate-90'}`} />
+              </button>
+              {drawerSection === 'tasks' && (
+                <div className="px-5 py-4 space-y-3 border-b border-[#30363d]">
+                  {grantTasks.length === 0 && <p className="text-xs text-gray-500">No tasks yet. Add one below.</p>}
                   {grantTasks.map(task => (
-                    <div key={task.id} className={`flex items-start gap-2 p-2 rounded-lg ${task.is_overdue ? 'bg-red-900/10 border border-red-900/30' : 'bg-[#0d1117]'}`}>
+                    <div key={task.id} className={`flex items-start gap-2.5 p-2.5 rounded-lg ${task.is_overdue ? 'bg-red-900/10 border border-red-900/30' : 'bg-[#0d1117]'}`}>
                       <button onClick={() => handleToggleTask(task.id, task.status)}
                         className={`mt-0.5 flex-shrink-0 ${task.status === 'done' ? 'text-green-400' : 'text-gray-500 hover:text-gray-300'}`}>
-                        <CheckCircle size={16} />
+                        <CheckCircle size={15} />
                       </button>
                       <div className="flex-1 min-w-0">
                         <p className={`text-sm ${task.status === 'done' ? 'line-through text-gray-500' : 'text-white'}`}>{task.title}</p>
                         <div className="flex gap-3 mt-0.5">
                           {task.due_date && (
                             <p className={`text-xs ${task.is_overdue ? 'text-red-400' : 'text-gray-500'}`}>
-                              <Clock size={10} className="inline mr-1" />
-                              Due {new Date(task.due_date).toLocaleDateString()}
+                              <Clock size={10} className="inline mr-0.5" />
+                              {new Date(task.due_date).toLocaleDateString()}
                             </p>
                           )}
-                          {task.assignee_email && (
-                            <p className="text-xs text-gray-500">
-                              Assigned: {task.assignee_email}
-                            </p>
-                          )}
+                          {task.assignee_email && <p className="text-xs text-gray-500 truncate">{task.assignee_email}</p>}
                         </div>
                       </div>
                     </div>
                   ))}
-                </div>
-
-                {/* Add task */}
-                <div className="flex flex-col gap-2">
-                  <div className="flex gap-2">
-                    <input type="text" value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)}
-                      placeholder="Add a task..." onKeyDown={e => e.key === 'Enter' && handleAddTask()}
-                      className="flex-1 bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500" />
-                    <input type="date" value={newTaskDueDate} onChange={e => setNewTaskDueDate(e.target.value)}
-                      className="bg-[#0d1117] border border-[#30363d] rounded-lg px-2 py-1.5 text-white text-sm w-[130px]" />
-                    <button onClick={handleAddTask} disabled={!newTaskTitle.trim()}
-                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm transition-colors">
-                      <Plus size={16} />
-                    </button>
-                  </div>
-                  <input type="email" value={newTaskAssignee} onChange={e => setNewTaskAssignee(e.target.value)}
-                    placeholder="Assignee email (optional)"
-                    className="bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500" />
-                </div>
-
-                {/* Compliance Section (for Awarded grants) */}
-                {selectedGrant && (
-                  <div className="border-t border-[#30363d] pt-4 mt-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <h4 className="text-sm font-semibold text-white">Compliance Requirements</h4>
-                      <button onClick={() => { setShowComplianceForm(!showComplianceForm); loadCompliance(selectedGrant.id); }}
-                        className="text-xs text-blue-400 hover:text-blue-300">
-                        {showComplianceForm ? 'Cancel' : '+ Add Requirement'}
+                  {/* Add task form */}
+                  <div className="pt-1 space-y-2">
+                    <div className="flex gap-2">
+                      <input type="text" value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)}
+                        placeholder="New task..." onKeyDown={e => e.key === 'Enter' && handleAddTask()}
+                        className="flex-1 bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500" />
+                      <button onClick={handleAddTask} disabled={!newTaskTitle.trim()}
+                        className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm transition-colors">
+                        <Plus size={14} />
                       </button>
                     </div>
-
-                    {showComplianceForm && (
-                      <div className="mb-3 space-y-2">
-                        <input type="text" value={newCompTitle} onChange={e => setNewCompTitle(e.target.value)}
-                          placeholder="Requirement title..."
-                          className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500" />
-                        <div className="flex gap-2">
-                          <select value={newCompType} onChange={e => setNewCompType(e.target.value)}
-                            className="bg-[#0d1117] border border-[#30363d] rounded-lg px-2 py-1.5 text-white text-sm flex-1">
-                            <option value="narrative_report">Narrative Report</option>
-                            <option value="financial_report">Financial Report</option>
-                            <option value="progress_report">Progress Report</option>
-                            <option value="site_visit">Site Visit</option>
-                            <option value="audit">Audit</option>
-                            <option value="final_report">Final Report</option>
-                            <option value="other">Other</option>
-                          </select>
-                          <input type="date" value={newCompDue} onChange={e => setNewCompDue(e.target.value)}
-                            className="bg-[#0d1117] border border-[#30363d] rounded-lg px-2 py-1.5 text-white text-sm" />
-                          <button onClick={handleAddCompliance} disabled={!newCompTitle.trim()}
-                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm">
-                            <Plus size={14} />
-                          </button>
-                        </div>
-                        <input type="email" placeholder="Assignee email (optional)"
-                          value={newCompAssignee} onChange={e => setNewCompAssignee(e.target.value)}
-                          className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500" />
-                        <div className="flex items-center gap-2">
-                          <label className="flex items-center gap-2 px-3 py-1.5 bg-[#0d1117] border border-[#30363d] rounded-lg text-sm text-gray-400 cursor-pointer hover:border-[#484f58]">
-                            <Paperclip size={14} />
-                            {compAttachment ? compAttachment.name : 'Attach file'}
-                            <input type="file" className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
-                              onChange={e => setCompAttachment(e.target.files?.[0] || null)} />
-                          </label>
-                          {compAttachment && (
-                            <button onClick={() => setCompAttachment(null)} className="text-gray-500 hover:text-red-400 text-xs">✕</button>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="space-y-2">
-                      {complianceItems.map(item => (
-                        <div key={item.id} className={`flex items-center justify-between p-2 rounded-lg text-sm ${
-                          item.is_overdue ? 'bg-red-900/10 border border-red-900/30' : 'bg-[#0d1117]'
-                        }`}>
-                          <div>
-                            <p className={`text-white ${item.status === 'submitted' || item.status === 'approved' ? 'line-through text-gray-500' : ''}`}>
-                              {item.title}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              {item.type.replace(/_/g, ' ')}
-                              {item.due_date && ` · Due ${new Date(item.due_date).toLocaleDateString()}`}
-                            </p>
-                          </div>
-                          <select value={item.status} onChange={e => handleUpdateComplianceStatus(item.id, e.target.value)}
-                            className={`text-xs rounded px-2 py-1 border-0 ${
-                              item.status === 'approved' ? 'bg-green-900/30 text-green-400' :
-                              item.status === 'submitted' ? 'bg-blue-900/30 text-blue-400' :
-                              item.is_overdue ? 'bg-red-900/30 text-red-400' :
-                              'bg-[#161b22] text-gray-400'
-                            }`}>
-                            <option value="upcoming">Upcoming</option>
-                            <option value="in_progress">In Progress</option>
-                            <option value="submitted">Submitted</option>
-                            <option value="approved">Approved</option>
-                          </select>
-                        </div>
-                      ))}
-                      {complianceItems.length === 0 && !showComplianceForm && (
-                        <p className="text-xs text-gray-500">No compliance requirements added.</p>
-                      )}
+                    <div className="flex gap-2">
+                      <input type="date" value={newTaskDueDate} onChange={e => setNewTaskDueDate(e.target.value)}
+                        className="bg-[#0d1117] border border-[#30363d] rounded-lg px-2 py-1.5 text-white text-xs flex-1" />
+                      <input type="email" value={newTaskAssignee} onChange={e => setNewTaskAssignee(e.target.value)}
+                        placeholder="Assignee (optional)"
+                        className="bg-[#0d1117] border border-[#30363d] rounded-lg px-2 py-1.5 text-white text-xs flex-1" />
                     </div>
                   </div>
-                )}
+                </div>
+              )}
 
-                {/* AI Draft Button */}
-                {selectedGrant && (
-                  <div className="border-t border-[#30363d] pt-4 mt-4">
-                    <button onClick={() => handleGenerateDraft()} disabled={aiDraftLoading}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-purple-600/20 border border-purple-500/30 hover:border-purple-500 text-purple-300 rounded-lg text-sm transition-colors disabled:opacity-50">
-                      {aiDraftLoading ? <Loader size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                      {aiDraftLoading ? 'Generating Draft...' : 'Generate AI Draft Proposal'}
-                    </button>
-                    {aiDraft && (
-                      <div className="mt-3 bg-[#0d1117] border border-[#30363d] rounded-lg p-3 max-h-64 overflow-y-auto">
-                        <p className="text-xs text-gray-500 mb-2">AI-Generated Draft</p>
-                        <div className="text-sm text-gray-300 whitespace-pre-wrap">{aiDraft}</div>
+              {/* ═══ Section 3: Post-Award Requirements ═══ */}
+              <button onClick={() => setDrawerSection(drawerSection === 'compliance' ? '' : 'compliance')}
+                className="w-full flex items-center justify-between px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider hover:bg-white/[0.02] transition-colors border-b border-[#30363d]">
+                <span className="flex items-center gap-2">
+                  Post-Award Requirements
+                  {complianceItems.length > 0 && (
+                    <span className="text-[10px] font-normal bg-[#30363d] text-gray-300 rounded-full px-1.5 py-0.5">
+                      {complianceItems.filter(c => c.status !== 'approved' && c.status !== 'submitted').length} pending
+                    </span>
+                  )}
+                </span>
+                <ChevronDown size={14} className={`transition-transform ${drawerSection === 'compliance' ? '' : '-rotate-90'}`} />
+              </button>
+              {drawerSection === 'compliance' && (
+                <div className="px-5 py-4 space-y-3 border-b border-[#30363d]">
+                  <p className="text-xs text-gray-500 -mt-1">
+                    Reporting and deliverables required after the grant is awarded.
+                  </p>
+                  {complianceItems.map(item => (
+                    <div key={item.id} className={`flex items-center justify-between p-2.5 rounded-lg text-sm ${
+                      item.is_overdue ? 'bg-red-900/10 border border-red-900/30' : 'bg-[#0d1117]'
+                    }`}>
+                      <div className="min-w-0 flex-1">
+                        <p className={`text-white text-sm ${item.status === 'submitted' || item.status === 'approved' ? 'line-through text-gray-500' : ''}`}>
+                          {item.title}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {item.type.replace(/_/g, ' ')}
+                          {item.due_date && ` · Due ${new Date(item.due_date).toLocaleDateString()}`}
+                        </p>
                       </div>
-                    )}
-                  </div>
-                )}
-              </div>
+                      <select value={item.status} onChange={e => handleUpdateComplianceStatus(item.id, e.target.value)}
+                        className={`text-xs rounded px-2 py-1 border-0 ml-2 flex-shrink-0 ${
+                          item.status === 'approved' ? 'bg-green-900/30 text-green-400' :
+                          item.status === 'submitted' ? 'bg-blue-900/30 text-blue-400' :
+                          item.is_overdue ? 'bg-red-900/30 text-red-400' :
+                          'bg-[#161b22] text-gray-400'
+                        }`}>
+                        <option value="upcoming">Upcoming</option>
+                        <option value="in_progress">In Progress</option>
+                        <option value="submitted">Submitted</option>
+                        <option value="approved">Approved</option>
+                      </select>
+                    </div>
+                  ))}
+                  {complianceItems.length === 0 && !showComplianceForm && (
+                    <p className="text-xs text-gray-500">No requirements added yet.</p>
+                  )}
+                  {/* Add requirement form */}
+                  {showComplianceForm ? (
+                    <div className="space-y-2 pt-1">
+                      <input type="text" value={newCompTitle} onChange={e => setNewCompTitle(e.target.value)}
+                        placeholder="Requirement title..."
+                        className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500" />
+                      <div className="flex gap-2">
+                        <select value={newCompType} onChange={e => setNewCompType(e.target.value)}
+                          className="bg-[#0d1117] border border-[#30363d] rounded-lg px-2 py-1.5 text-white text-xs flex-1">
+                          <option value="narrative_report">Narrative Report</option>
+                          <option value="financial_report">Financial Report</option>
+                          <option value="progress_report">Progress Report</option>
+                          <option value="site_visit">Site Visit</option>
+                          <option value="audit">Audit</option>
+                          <option value="final_report">Final Report</option>
+                          <option value="other">Other</option>
+                        </select>
+                        <input type="date" value={newCompDue} onChange={e => setNewCompDue(e.target.value)}
+                          className="bg-[#0d1117] border border-[#30363d] rounded-lg px-2 py-1.5 text-white text-xs" />
+                        <button onClick={handleAddCompliance} disabled={!newCompTitle.trim()}
+                          className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-xs"><Plus size={13} /></button>
+                      </div>
+                      <input type="email" placeholder="Assignee email (optional)"
+                        value={newCompAssignee} onChange={e => setNewCompAssignee(e.target.value)}
+                        className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-1.5 text-white text-xs focus:outline-none focus:border-blue-500" />
+                      <div className="flex items-center gap-2">
+                        <label className="flex items-center gap-2 px-3 py-1.5 bg-[#0d1117] border border-[#30363d] rounded-lg text-xs text-gray-400 cursor-pointer hover:border-[#484f58]">
+                          <Paperclip size={12} />
+                          {compAttachment ? compAttachment.name : 'Attach file'}
+                          <input type="file" className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
+                            onChange={e => setCompAttachment(e.target.files?.[0] || null)} />
+                        </label>
+                        {compAttachment && <button onClick={() => setCompAttachment(null)} className="text-xs text-gray-500 hover:text-red-400">remove</button>}
+                        <button onClick={() => setShowComplianceForm(false)} className="ml-auto text-xs text-gray-500 hover:text-white">Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button onClick={() => setShowComplianceForm(true)}
+                      className="w-full flex items-center justify-center gap-1.5 px-3 py-2 border border-dashed border-[#30363d] rounded-lg text-xs text-gray-400 hover:text-white hover:border-blue-500/40 transition-colors">
+                      <Plus size={13} /> Add Requirement
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* ═══ Section 4: Reference Documents ═══ */}
+              <button onClick={() => setDrawerSection(drawerSection === 'refdocs' ? '' : 'refdocs')}
+                className="w-full flex items-center justify-between px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider hover:bg-white/[0.02] transition-colors border-b border-[#30363d]">
+                <span className="flex items-center gap-2">
+                  Reference Documents
+                  {refDocs.length > 0 && (
+                    <span className="text-[10px] font-normal bg-purple-500/20 text-purple-300 rounded-full px-1.5 py-0.5">
+                      {refDocs.length}
+                    </span>
+                  )}
+                </span>
+                <ChevronDown size={14} className={`transition-transform ${drawerSection === 'refdocs' ? '' : '-rotate-90'}`} />
+              </button>
+              {drawerSection === 'refdocs' && (
+                <div className="px-5 py-4 space-y-3 border-b border-[#30363d]">
+                  <p className="text-xs text-gray-500 -mt-1">
+                    Upload past proposals and writing samples. The AI will study your style, tone, and structure to generate a proposal that sounds like your organization.
+                  </p>
+                  {refDocs.map(doc => (
+                    <div key={doc.id} className="flex items-center gap-2.5 p-2.5 bg-[#0d1117] rounded-lg group">
+                      <Paperclip size={14} className="text-purple-400 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-white truncate">{doc.title}</p>
+                        <p className="text-xs text-gray-500">
+                          {doc.file_name || 'text entry'}
+                          <span className="mx-1">·</span>
+                          {new Date(doc.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <button onClick={() => handleDeleteRefDoc(doc.id, doc.storage_path)}
+                        className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 transition-all p-1">
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  ))}
+                  {refDocs.length === 0 && (
+                    <div className="text-center py-3">
+                      <Upload size={20} className="mx-auto text-gray-600 mb-1.5" />
+                      <p className="text-xs text-gray-500">No reference documents yet</p>
+                    </div>
+                  )}
+                  <button onClick={() => refFileInput.current?.click()} disabled={refUploading}
+                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2 border border-dashed border-purple-500/30 rounded-lg text-xs text-purple-300 hover:border-purple-500 hover:bg-purple-500/5 transition-colors disabled:opacity-50">
+                    {refUploading ? <Loader size={13} className="animate-spin" /> : <Upload size={13} />}
+                    {refUploading ? 'Uploading...' : 'Upload Document'}
+                  </button>
+                  <input ref={refFileInput} type="file" className="hidden"
+                    accept=".pdf,.doc,.docx,.txt,.rtf,.md"
+                    onChange={handleRefDocUpload} />
+                  <p className="text-[10px] text-gray-600 text-center">PDF, Word, TXT, RTF, or Markdown</p>
+                </div>
+              )}
+
+              {/* ═══ Section 5: AI Draft Proposal ═══ */}
+              <button onClick={() => setDrawerSection(drawerSection === 'draft' ? '' : 'draft')}
+                className="w-full flex items-center justify-between px-5 py-3 text-xs font-semibold text-purple-300 uppercase tracking-wider hover:bg-white/[0.02] transition-colors border-b border-[#30363d]">
+                <span className="flex items-center gap-2">
+                  <Sparkles size={13} />
+                  AI Draft Proposal
+                  {aiDraft && <span className="text-[10px] font-normal bg-purple-500/20 text-purple-300 rounded-full px-1.5 py-0.5">Ready</span>}
+                </span>
+                <ChevronDown size={14} className={`transition-transform ${drawerSection === 'draft' ? '' : '-rotate-90'}`} />
+              </button>
+              {drawerSection === 'draft' && (
+                <div className="px-5 py-4 space-y-3 border-b border-[#30363d]">
+                  {!aiDraft && !aiDraftLoading && (
+                    <p className="text-xs text-gray-500 -mt-1">
+                      The AI will use your uploaded reference documents to match your writing style, research the grant topic with current data, and include MLA citations throughout.
+                    </p>
+                  )}
+                  {refDocs.length > 0 && !aiDraft && !aiDraftLoading && (
+                    <div className="flex items-center gap-2 p-2.5 bg-purple-500/10 border border-purple-500/20 rounded-lg">
+                      <CheckCircle size={14} className="text-purple-400 flex-shrink-0" />
+                      <p className="text-xs text-purple-300">{refDocs.length} reference document{refDocs.length !== 1 ? 's' : ''} will guide the AI's writing style</p>
+                    </div>
+                  )}
+                  <button onClick={() => handleGenerateDraft()} disabled={aiDraftLoading}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60">
+                    {aiDraftLoading ? <Loader size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                    {aiDraftLoading ? 'Researching & generating...' : aiDraft ? 'Regenerate Draft' : 'Generate AI Draft Proposal'}
+                  </button>
+                  {aiDraft && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-gray-500">Generated proposal</p>
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => setAiDraftEditable(!aiDraftEditable)}
+                            className="text-xs text-blue-400 hover:text-blue-300">
+                            {aiDraftEditable ? 'Done editing' : 'Edit draft'}
+                          </button>
+                          <button onClick={() => { navigator.clipboard.writeText(aiDraft); }}
+                            className="text-xs text-gray-400 hover:text-white">
+                            Copy
+                          </button>
+                        </div>
+                      </div>
+                      {aiDraftEditable ? (
+                        <textarea
+                          value={aiDraft}
+                          onChange={e => setAiDraft(e.target.value)}
+                          className="w-full bg-[#0d1117] border border-blue-500/30 rounded-lg p-3 text-sm text-gray-200 focus:outline-none focus:border-blue-500 min-h-[300px] resize-y"
+                        />
+                      ) : (
+                        <div className="bg-[#0d1117] border border-[#30363d] rounded-lg p-3 max-h-[400px] overflow-y-auto">
+                          <div className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{aiDraft}</div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
