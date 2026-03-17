@@ -948,6 +948,43 @@ function buildInFilter(ids: string[]): string {
   return encodeURIComponent(`(${quoted.join(',')})`);
 }
 
+/**
+ * Batched sbFetch: splits a large `in.{filter}` query into smaller batches
+ * to avoid exceeding HTTP/2 URL length limits (~8KB).
+ *
+ * @param pathTemplate  e.g. "foundation_filings?select=foundation_id&foundation_id=in.{{IN_FILTER}}&parse_status=eq.parsed&limit=50000"
+ *                      Must contain {{IN_FILTER}} as a placeholder for the `in` filter value.
+ * @param ids           The full array of IDs to filter on.
+ * @param batchSize     Max IDs per request (default 60, keeps URLs safely under 4KB).
+ * @returns             Merged JSON array from all batches.
+ */
+async function sbFetchBatched<T>(pathTemplate: string, ids: string[], batchSize = 60): Promise<T[]> {
+  if (ids.length === 0) return [];
+
+  // If small enough for a single request, just do it
+  if (ids.length <= batchSize) {
+    const path = pathTemplate.replace('{{IN_FILTER}}', buildInFilter(ids));
+    const res = await sbFetch(path);
+    return res.json() as Promise<T[]>;
+  }
+
+  // Split into batches and fetch in parallel
+  const batches: string[][] = [];
+  for (let i = 0; i < ids.length; i += batchSize) {
+    batches.push(ids.slice(i, i + batchSize));
+  }
+
+  const results = await Promise.all(
+    batches.map(async (batch) => {
+      const path = pathTemplate.replace('{{IN_FILTER}}', buildInFilter(batch));
+      const res = await sbFetch(path);
+      return res.json() as Promise<T[]>;
+    })
+  );
+
+  return results.flat();
+}
+
 function normalizeBudgetBand(input: unknown): BudgetBand {
   if (input === 'under_250k' || input === '250k_1m' || input === '1m_5m' || input === 'over_5m' || input === 'prefer_not_to_say') {
     return input;
@@ -2842,25 +2879,23 @@ Deno.serve(async (req) => {
         });
       }
 
-      const inFilter = buildInFilter(foundationIds);
-      const [fundersRes, filingsRes] = await Promise.all([
-        sbFetch(
+      const [funders, filings] = await Promise.all([
+        sbFetchBatched<FunderRow>(
           `funders?select=id,name,type,foundation_ein,description,focus_areas,ntee_code,city,state,` +
           `website,contact_url,programs_url,apply_url,discovered_apply_url,news_url,total_giving,asset_amount,` +
           `grant_range_min,grant_range_max,contact_name,contact_title,contact_email,next_step` +
-          `&id=in.${inFilter}` +
+          `&id=in.{{IN_FILTER}}` +
           `&limit=50000`,
+          foundationIds,
         ),
-        sbFetch(
+        sbFetchBatched<FilingRow>(
           `foundation_filings?select=foundation_id` +
-          `&foundation_id=in.${inFilter}` +
+          `&foundation_id=in.{{IN_FILTER}}` +
           `&parse_status=eq.parsed` +
           `&limit=50000`,
+          foundationIds,
         ),
       ]);
-
-      const funders = await fundersRes.json() as FunderRow[];
-      const filings = await filingsRes.json() as FilingRow[];
       const parsedFoundationIds = new Set(filings.map((row) => row.foundation_id));
       const funderById = new Map<string, FunderRow>();
       for (const funder of funders) funderById.set(funder.id, funder);
@@ -3062,31 +3097,28 @@ Deno.serve(async (req) => {
         ? 'id,foundation_id,grant_year,grant_amount,grantee_name,grantee_ein,grantee_city,grantee_state,grantee_country,purpose_text,ntee_code,mission_signal_text,grantee_budget_band,mission_embedding'
         : 'id,foundation_id,grant_year,grant_amount,grantee_name,grantee_ein,grantee_city,grantee_state,grantee_country,purpose_text,ntee_code,mission_signal_text,grantee_budget_band';
 
-      const inFilter = buildInFilter(candidateIds);
-
-      const [grantsRes, featuresRes, filingsRes] = await Promise.all([
-        sbFetch(
+      const [grants, features, filings] = await Promise.all([
+        sbFetchBatched<GrantRow>(
           `foundation_grants?select=${selectColumns}` +
-          `&foundation_id=in.${inFilter}` +
+          `&foundation_id=in.{{IN_FILTER}}` +
           `&grant_year=gte.${MIN_GRANT_YEAR}` +
           `&order=grant_year.desc,grant_amount.desc` +
           `&limit=50000`,
+          candidateIds,
         ),
-        sbFetch(
+        sbFetchBatched<HistoryFeatureRow>(
           `foundation_history_features?select=foundation_id,grants_last_5y_count,data_completeness_score,median_grantee_budget_band` +
-          `&foundation_id=in.${inFilter}`,
+          `&foundation_id=in.{{IN_FILTER}}`,
+          candidateIds,
         ),
-        sbFetch(
+        sbFetchBatched<FilingRow>(
           `foundation_filings?select=foundation_id` +
-          `&foundation_id=in.${inFilter}` +
+          `&foundation_id=in.{{IN_FILTER}}` +
           `&parse_status=eq.parsed` +
           `&limit=50000`,
+          candidateIds,
         ),
       ]);
-
-      const grants = await grantsRes.json() as GrantRow[];
-      const features = await featuresRes.json() as HistoryFeatureRow[];
-      const filings = await filingsRes.json() as FilingRow[];
 
       for (const row of grants) {
         const arr = grantsByFoundation.get(row.foundation_id) || [];

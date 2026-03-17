@@ -1,55 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowRight, Sparkles, X, Plus, MapPin } from 'lucide-react';
+import { ArrowRight, Sparkles, MapPin } from 'lucide-react';
 import { BudgetBand } from '../types';
-
-const SUGGESTED_KEYWORDS = [
-  'early childhood education',
-  'pre-k readiness',
-  'kindergarten readiness',
-  'elementary reading intervention',
-  'middle school tutoring',
-  'high school college readiness',
-  'adult literacy',
-  'english language learning',
-  'special education inclusion',
-  'college access',
-  'college persistence',
-  'after-school stem',
-  'workforce development',
-  'career and technical education',
-  'mental health counseling',
-  'substance use recovery',
-  'housing assistance',
-  'homeless services',
-  'food insecurity',
-  'maternal health',
-  'disability services',
-  'domestic violence prevention',
-  'immigrant legal aid',
-  'climate adaptation',
-  'land conservation',
-  'arts education',
-  'criminal legal reform',
-];
+import LocationAutocomplete from '../components/LocationAutocomplete';
 
 const EXAMPLES = [
   'We empower underserved youth through accessible education programs and mentorship opportunities that build skills for future success.',
   'Our organization provides mental health services to low-income families in rural communities, reducing barriers to care.',
   'We protect and restore natural ecosystems by engaging local communities in environmental stewardship and advocacy.',
-];
-
-const LOCATION_SUGGESTIONS = [
-  'National (United States)',
-  'International / Global',
-  'New York, NY',
-  'Los Angeles, CA',
-  'Chicago, IL',
-  'Seattle, WA',
-  'Texas',
-  'California',
-  'Northeast United States',
-  'Rural communities',
 ];
 
 const BUDGET_BANDS: { key: BudgetBand; label: string; hint: string }[] = [
@@ -90,29 +48,9 @@ export default function MissionInput() {
     }
     return 'prefer_not_to_say';
   });
-  const [keywords, setKeywords] = useState<string[]>(returnState?.keywords ?? []);
-  const [keywordInput, setKeywordInput] = useState('');
+  const [keywords] = useState<string[]>(returnState?.keywords ?? []);
   const [errors, setErrors] = useState<{ mission?: string; location?: string }>({});
   const [showExamples, setShowExamples] = useState(false);
-  const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
-
-  const addKeyword = (kw: string) => {
-    const trimmed = kw.trim().toLowerCase();
-    if (trimmed && !keywords.includes(trimmed)) {
-      setKeywords([...keywords, trimmed]);
-    }
-    setKeywordInput('');
-  };
-
-  const removeKeyword = (kw: string) => {
-    setKeywords(keywords.filter(k => k !== kw));
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && keywordInput.trim()) {
-      addKeyword(keywordInput);
-    }
-  };
 
   const handleSubmit = () => {
     const newErrors: { mission?: string; location?: string } = {};
@@ -188,38 +126,14 @@ export default function MissionInput() {
             Where does your nonprofit primarily operate or serve communities?
             Funders with geographic alignment will be ranked higher.
           </p>
-          <div className="relative">
-            <input
-              value={locationServed}
-              onChange={e => {
-                setLocationServed(e.target.value);
-                setErrors(prev => ({ ...prev, location: undefined }));
-                setShowLocationSuggestions(true);
-              }}
-              onFocus={() => setShowLocationSuggestions(true)}
-              onBlur={() => setTimeout(() => setShowLocationSuggestions(false), 150)}
-              placeholder="e.g. Seattle, WA · Chicago, IL · Rural Appalachia · National"
-              className={`w-full bg-[#0d1117] border rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.location ? 'border-red-500' : 'border-[#30363d]'}`}
-            />
-            {showLocationSuggestions && !locationServed && (
-              <div className="absolute z-10 w-full mt-1 bg-[#21262d] border border-[#30363d] rounded-xl overflow-hidden shadow-lg">
-                {LOCATION_SUGGESTIONS.map(suggestion => (
-                  <button
-                    key={suggestion}
-                    onMouseDown={() => {
-                      setLocationServed(suggestion);
-                      setShowLocationSuggestions(false);
-                      setErrors(prev => ({ ...prev, location: undefined }));
-                    }}
-                    className="flex items-center gap-2 w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-[#30363d] transition-colors"
-                  >
-                    <MapPin size={12} className="text-gray-400 shrink-0" />
-                    {suggestion}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <LocationAutocomplete
+            value={locationServed}
+            onChange={(val) => {
+              setLocationServed(val);
+              setErrors(prev => ({ ...prev, location: undefined }));
+            }}
+            hasError={!!errors.location}
+          />
           {errors.location && <p className="text-red-400 text-sm mt-1">{errors.location}</p>}
         </div>
 
@@ -248,58 +162,6 @@ export default function MissionInput() {
                 </button>
               );
             })}
-          </div>
-        </div>
-
-        {/* Exclusion Keywords */}
-        <div>
-          <label className="block text-base font-semibold mb-1">Keywords to Exclude from Search</label>
-          <p className="text-sm text-gray-400 mb-3">
-            Add funding areas you do not want. Funder matches with overlap will be downweighted.
-          </p>
-
-          <div className="flex gap-2">
-            <input
-              value={keywordInput}
-              onChange={e => setKeywordInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Type an exclusion keyword and press Enter"
-              className="flex-1 bg-[#0d1117] border border-[#30363d] rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <button
-              onClick={() => addKeyword(keywordInput)}
-              className="bg-[#21262d] border border-[#30363d] rounded-xl p-3 hover:bg-[#30363d] transition-colors"
-            >
-              <Plus size={20} />
-            </button>
-          </div>
-
-          {keywords.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-3">
-              {keywords.map(kw => (
-                <span key={kw} className="flex items-center gap-1 bg-blue-900/50 border border-blue-700 text-blue-300 px-3 py-1 rounded-full text-sm">
-                  {kw}
-                  <button onClick={() => removeKeyword(kw)} className="hover:text-white ml-1">
-                    <X size={12} />
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-
-          <div className="mt-4">
-            <p className="text-xs text-gray-300 mb-2">Suggested granular exclusions:</p>
-            <div className="flex flex-wrap gap-2">
-              {SUGGESTED_KEYWORDS.filter(k => !keywords.includes(k)).map(kw => (
-                <button
-                  key={kw}
-                  onClick={() => addKeyword(kw)}
-                  className="text-sm text-gray-400 border border-[#30363d] rounded-full px-3 py-1 hover:border-blue-500 hover:text-blue-300 transition-colors"
-                >
-                  + {kw}
-                </button>
-              ))}
-            </div>
           </div>
         </div>
       </div>
