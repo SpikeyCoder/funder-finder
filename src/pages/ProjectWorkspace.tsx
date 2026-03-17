@@ -125,6 +125,7 @@ export default function ProjectWorkspace() {
   const [selectedGrant, setSelectedGrant] = useState<TrackedGrant | null>(null);
   const [grantTasks, setGrantTasks] = useState<GrantTask[]>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerVisible, setDrawerVisible] = useState(false); // for slide animation
 
   // External grant modal
   const [addGrantOpen, setAddGrantOpen] = useState(false);
@@ -167,6 +168,21 @@ export default function ProjectWorkspace() {
 
   // Drawer accordion sections
   const [drawerSection, setDrawerSection] = useState<string>('overview');
+
+  // Animated drawer open/close helpers
+  const openDrawer = useCallback(() => {
+    setDrawerOpen(true);
+    // Allow the DOM to mount, then trigger the slide-in on next frame
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => setDrawerVisible(true));
+    });
+  }, []);
+
+  const closeDrawer = useCallback(() => {
+    setDrawerVisible(false);
+    // Wait for the CSS transition to finish before unmounting
+    setTimeout(() => setDrawerOpen(false), 300);
+  }, []);
 
   // Editable fields for settings tab
   const [editName, setEditName] = useState('');
@@ -472,7 +488,7 @@ export default function ProjectWorkspace() {
       const headers = await getEdgeFunctionHeaders();
       await fetch(`${TRACKED_GRANTS_URL}?grant_id=${grantId}`, { method: 'DELETE', headers });
       setTrackedGrants(prev => prev.filter(g => g.id !== grantId));
-      if (selectedGrant?.id === grantId) { setSelectedGrant(null); setDrawerOpen(false); }
+      if (selectedGrant?.id === grantId) { setSelectedGrant(null); closeDrawer(); }
     } catch (err) {
       console.error('Error deleting grant:', err);
     }
@@ -512,7 +528,7 @@ export default function ProjectWorkspace() {
   // Open grant detail drawer
   const openGrantDetail = async (grant: TrackedGrant) => {
     setSelectedGrant(grant);
-    setDrawerOpen(true);
+    openDrawer();
     setDrawerSection('overview');
     setAiDraft(null);
     setAiDraftEditable(false);
@@ -657,7 +673,7 @@ export default function ProjectWorkspace() {
     if (!target) return;
     if (!selectedGrant) {
       setSelectedGrant(target);
-      setDrawerOpen(true);
+      openDrawer();
     }
     try {
       setAiDraftLoading(true);
@@ -1350,7 +1366,7 @@ export default function ProjectWorkspace() {
                                   <button key={grant.id}
                                     onClick={() => {
                                       setSelectedGrant(grant);
-                                      setDrawerOpen(true);
+                                      openDrawer();
                                     }}
                                     className="block w-full text-left px-1.5 py-0.5 bg-blue-900/40 text-blue-200 rounded hover:bg-blue-900/60 transition-colors truncate border border-blue-800/50">
                                     <span className="inline-block w-1.5 h-1.5 bg-blue-400 rounded-full mr-1"></span>
@@ -1729,8 +1745,14 @@ export default function ProjectWorkspace() {
 
       {/* Grant Detail Drawer — Redesigned */}
       {drawerOpen && selectedGrant && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex justify-end" onClick={() => setDrawerOpen(false)}>
-          <div className="w-full max-w-lg bg-[#161b22] border-l border-[#30363d] h-full flex flex-col" onClick={e => e.stopPropagation()}>
+        <div
+          className={`fixed inset-0 z-50 flex justify-end transition-colors duration-300 ease-in-out ${drawerVisible ? 'bg-black/40' : 'bg-black/0'}`}
+          onClick={() => closeDrawer()}
+        >
+          <div
+            className={`w-full max-w-lg bg-[#161b22] border-l border-[#30363d] h-full flex flex-col transform transition-transform duration-300 ease-in-out ${drawerVisible ? 'translate-x-0' : 'translate-x-full'}`}
+            onClick={e => e.stopPropagation()}
+          >
 
             {/* ─── Sticky Header ─── */}
             <div className="flex-shrink-0 px-5 py-4 border-b border-[#30363d] bg-[#161b22]">
@@ -1739,7 +1761,7 @@ export default function ProjectWorkspace() {
                   <h3 className="text-lg font-semibold text-white truncate">{selectedGrant.funder_name}</h3>
                   {selectedGrant.grant_title && <p className="text-sm text-gray-400 mt-0.5 truncate">{selectedGrant.grant_title}</p>}
                 </div>
-                <button onClick={() => setDrawerOpen(false)} className="text-gray-400 hover:text-white flex-shrink-0 p-1"><X size={18} /></button>
+                <button onClick={() => closeDrawer()} className="text-gray-400 hover:text-white flex-shrink-0 p-1"><X size={18} /></button>
               </div>
               {/* Quick status row */}
               <div className="flex items-center gap-3 mt-3">
@@ -1767,8 +1789,9 @@ export default function ProjectWorkspace() {
                 <span>Grant Overview</span>
                 <ChevronDown size={14} className={`transition-transform ${drawerSection === 'overview' ? '' : '-rotate-90'}`} />
               </button>
-              {drawerSection === 'overview' && (
-                <div className="px-5 py-4 space-y-4 border-b border-[#30363d]">
+              <div className={`grid transition-all duration-300 ease-in-out border-b border-[#30363d] ${drawerSection === 'overview' ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                <div className="overflow-hidden">
+                <div className="px-5 py-4 space-y-4">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Amount</p>
@@ -1808,7 +1831,8 @@ export default function ProjectWorkspace() {
                     />
                   </div>
                 </div>
-              )}
+                </div>
+              </div>
 
               {/* ═══ Section 2: Tasks ═══ */}
               <button onClick={() => setDrawerSection(drawerSection === 'tasks' ? '' : 'tasks')}
@@ -1823,8 +1847,9 @@ export default function ProjectWorkspace() {
                 </span>
                 <ChevronDown size={14} className={`transition-transform ${drawerSection === 'tasks' ? '' : '-rotate-90'}`} />
               </button>
-              {drawerSection === 'tasks' && (
-                <div className="px-5 py-4 space-y-3 border-b border-[#30363d]">
+              <div className={`grid transition-all duration-300 ease-in-out border-b border-[#30363d] ${drawerSection === 'tasks' ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                <div className="overflow-hidden">
+                <div className="px-5 py-4 space-y-3">
                   {grantTasks.length === 0 && <p className="text-xs text-gray-500">No tasks yet. Add one below.</p>}
                   {grantTasks.map(task => (
                     <div key={task.id} className={`flex items-start gap-2.5 p-2.5 rounded-lg ${task.is_overdue ? 'bg-red-900/10 border border-red-900/30' : 'bg-[#0d1117]'}`}>
@@ -1866,7 +1891,8 @@ export default function ProjectWorkspace() {
                     </div>
                   </div>
                 </div>
-              )}
+                </div>
+              </div>
 
               {/* ═══ Section 3: Post-Award Requirements ═══ */}
               <button onClick={() => setDrawerSection(drawerSection === 'compliance' ? '' : 'compliance')}
@@ -1881,8 +1907,9 @@ export default function ProjectWorkspace() {
                 </span>
                 <ChevronDown size={14} className={`transition-transform ${drawerSection === 'compliance' ? '' : '-rotate-90'}`} />
               </button>
-              {drawerSection === 'compliance' && (
-                <div className="px-5 py-4 space-y-3 border-b border-[#30363d]">
+              <div className={`grid transition-all duration-300 ease-in-out border-b border-[#30363d] ${drawerSection === 'compliance' ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                <div className="overflow-hidden">
+                <div className="px-5 py-4 space-y-3">
                   <p className="text-xs text-gray-500 -mt-1">
                     Reporting and deliverables required after the grant is awarded.
                   </p>
@@ -1959,7 +1986,8 @@ export default function ProjectWorkspace() {
                     </button>
                   )}
                 </div>
-              )}
+                </div>
+              </div>
 
               {/* ═══ Section 4: Reference Documents ═══ */}
               <button onClick={() => setDrawerSection(drawerSection === 'refdocs' ? '' : 'refdocs')}
@@ -1974,8 +2002,9 @@ export default function ProjectWorkspace() {
                 </span>
                 <ChevronDown size={14} className={`transition-transform ${drawerSection === 'refdocs' ? '' : '-rotate-90'}`} />
               </button>
-              {drawerSection === 'refdocs' && (
-                <div className="px-5 py-4 space-y-3 border-b border-[#30363d]">
+              <div className={`grid transition-all duration-300 ease-in-out border-b border-[#30363d] ${drawerSection === 'refdocs' ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                <div className="overflow-hidden">
+                <div className="px-5 py-4 space-y-3">
                   <p className="text-xs text-gray-500 -mt-1">
                     Upload past proposals and writing samples. The AI will study your style, tone, and structure to generate a proposal that sounds like your organization.
                   </p>
@@ -2012,7 +2041,8 @@ export default function ProjectWorkspace() {
                     onChange={handleRefDocUpload} />
                   <p className="text-[10px] text-gray-600 text-center">PDF, Word, TXT, RTF, or Markdown</p>
                 </div>
-              )}
+                </div>
+              </div>
 
               {/* ═══ Section 5: AI Draft Proposal ═══ */}
               <button onClick={() => setDrawerSection(drawerSection === 'draft' ? '' : 'draft')}
@@ -2024,8 +2054,9 @@ export default function ProjectWorkspace() {
                 </span>
                 <ChevronDown size={14} className={`transition-transform ${drawerSection === 'draft' ? '' : '-rotate-90'}`} />
               </button>
-              {drawerSection === 'draft' && (
-                <div className="px-5 py-4 space-y-3 border-b border-[#30363d]">
+              <div className={`grid transition-all duration-300 ease-in-out border-b border-[#30363d] ${drawerSection === 'draft' ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                <div className="overflow-hidden">
+                <div className="px-5 py-4 space-y-3">
                   {!aiDraft && !aiDraftLoading && (
                     <p className="text-xs text-gray-500 -mt-1">
                       The AI will use your uploaded reference documents to match your writing style, research the grant topic with current data, and include MLA citations throughout.
@@ -2071,7 +2102,8 @@ export default function ProjectWorkspace() {
                     </div>
                   )}
                 </div>
-              )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
