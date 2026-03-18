@@ -10,6 +10,9 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     // Use sessionStorage so the session is cleared when the browser is closed.
     // Users must log in again each new browser session — localStorage is NOT used.
     storage: window.sessionStorage,
+    // Pin the storage key to the project ref so it stays consistent regardless of
+    // whether the client URL is the Supabase default or a custom domain.
+    storageKey: 'sb-tgtotjvdubhjxzybmdex-auth-token',
     // Still persist within the same browser session (across page reloads / navigation)
     persistSession: true,
     // Automatically refresh tokens before they expire
