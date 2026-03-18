@@ -4,7 +4,7 @@ import { getEdgeFunctionHeaders, supabase } from '../lib/supabase';
 import NavBar from '../components/NavBar';
 import { Plus, Trash2, FileText, BookOpen, Star } from 'lucide-react';
 
-const SUPABASE_URL = 'https://auth.fundermatch.org';
+const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const KB_URL = `${SUPABASE_URL}/functions/v1/knowledge-base`;
 
 interface KBEntry {

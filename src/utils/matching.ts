@@ -1,7 +1,7 @@
 import { BudgetBand, Funder, FunderInsights, OrgSearchResult, PeerEntry, RecipientProfile } from '../types';
 import { getEdgeFunctionHeaders } from '../lib/supabase';
 
-const SUPABASE_URL = 'https://auth.fundermatch.org';
+const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const EDGE_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/match-funders`;
 const SUGGEST_PEERS_URL = `${SUPABASE_URL}/functions/v1/suggest-peers`;
 const FUNDER_INSIGHTS_URL = `${SUPABASE_URL}/functions/v1/get-funder-990-insights`;

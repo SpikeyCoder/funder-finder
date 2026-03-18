@@ -9,7 +9,7 @@
  *   node scripts/clear-cache.js
  */
 
-const SUPABASE_URL = 'https://auth.fundermatch.org';
+const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!SUPABASE_KEY) {

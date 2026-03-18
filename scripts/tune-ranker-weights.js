@@ -12,7 +12,7 @@ import {
   regionForState,
 } from './lib/ranker-eval-core.js';
 
-const DEFAULT_SUPABASE_URL = 'https://auth.fundermatch.org';
+const DEFAULT_SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 
 function parseArgs(argv) {
   const args = {

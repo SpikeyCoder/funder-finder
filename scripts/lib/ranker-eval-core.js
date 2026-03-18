@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const DEFAULT_SUPABASE_URL = 'https://auth.fundermatch.org';
+const DEFAULT_SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const NOW_YEAR = new Date().getUTCFullYear();
 
 const STOP_WORDS = new Set([

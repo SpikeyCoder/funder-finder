@@ -7,7 +7,7 @@ import FilterPanel, { FilterState, EMPTY_FILTERS } from '../components/FilterPan
 import SaveToProjectButton from '../components/SaveToProjectButton';
 import { getEdgeFunctionHeaders } from '../lib/supabase';
 
-const EDGE_FUNCTION_URL = 'https://auth.fundermatch.org/functions/v1/filter-funders';
+const EDGE_FUNCTION_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co/functions/v1/filter-funders';
 
 interface FunderResult {
   ein: string;

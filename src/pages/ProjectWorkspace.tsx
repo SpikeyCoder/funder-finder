@@ -6,7 +6,7 @@ import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
 import type { PipelineStatus, TrackedGrant, GrantTask, ComplianceRequirement } from '../types';
 
-const SUPABASE_URL = 'https://auth.fundermatch.org';
+const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const MATCH_FUNDERS_URL = `${SUPABASE_URL}/functions/v1/match-funders`;
 const SUGGEST_PEERS_URL = `${SUPABASE_URL}/functions/v1/suggest-peers`;
 const TRACKED_GRANTS_URL = `${SUPABASE_URL}/functions/v1/tracked-grants`;

@@ -38,7 +38,7 @@ interface BugReportPayload {
   technicalContext: TechnicalContext;
 }
 
-const SUPABASE_STORAGE_URL = 'https://auth.fundermatch.org/storage/v1/object/public/bug-screenshots/';
+const SUPABASE_STORAGE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co/storage/v1/object/public/bug-screenshots/';
 
 const MAX_DESCRIPTION_LENGTH = 2000;
 

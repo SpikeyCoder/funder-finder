@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
+import { supabase, SUPABASE_CUSTOM_DOMAIN } from '../lib/supabase';
 import { Funder, FunderStatus, SavedFunderEntry } from '../types';
 
 // The OAuth redirect URL must match what is registered in Supabase dashboard
@@ -188,11 +188,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   ) => {
     // Stash the pending funder in sessionStorage before the OAuth redirect
     storePendingFunder(pendingFunderArg);
-    const { error } = await supabase.auth.signInWithOAuth({
+
+    // Get the OAuth URL without redirecting. The Supabase client builds the
+    // authorize URL using the default project domain. We then swap it to the
+    // branded custom domain so users see "auth.fundermatch.org" on the
+    // provider consent screen instead of the raw Supabase project ID.
+    // API calls (including the PKCE token exchange) still go through the
+    // default domain which has reliable CORS support.
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider,
-      options: { redirectTo: REDIRECT_URL },
+      options: {
+        redirectTo: REDIRECT_URL,
+        skipBrowserRedirect: true,
+      },
     });
     if (error) throw error;
+
+    if (data?.url) {
+      const branded = data.url.replace(
+        'tgtotjvdubhjxzybmdex.supabase.co',
+        new URL(SUPABASE_CUSTOM_DOMAIN).hostname,
+      );
+      window.location.href = branded;
+    }
   };
 
   const signInWithGoogle = (pendingFunder?: Funder) => signInWith('google', pendingFunder);

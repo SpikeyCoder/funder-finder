@@ -9,7 +9,7 @@ import {
   CheckCircle, Loader, X, Search
 } from 'lucide-react';
 
-const SUPABASE_URL = 'https://auth.fundermatch.org';
+const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const TEAM_INVITE_URL = `${SUPABASE_URL}/functions/v1/team-invite`;
 
 // ── Types ────────────────────────────────────────────────────────────────────
