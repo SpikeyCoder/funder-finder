@@ -205,10 +205,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
 
     if (data?.url) {
-      const branded = data.url.replace(
-        'tgtotjvdubhjxzybmdex.supabase.co',
-        new URL(SUPABASE_CUSTOM_DOMAIN).hostname,
-      );
+      // Swap to the branded custom domain for Google & LinkedIn so users see
+      // "auth.fundermatch.org" on the consent screen. Skip the swap for
+      // Microsoft/Azure — Azure's callback routing causes OAuth state cookie
+      // mismatches when the authorize and callback domains differ.
+      const branded = provider === 'azure'
+        ? data.url
+        : data.url.replace(
+            'tgtotjvdubhjxzybmdex.supabase.co',
+            new URL(SUPABASE_CUSTOM_DOMAIN).hostname,
+          );
       window.location.href = branded;
     }
   };

@@ -90,6 +90,9 @@ export default function BugReportButton() {
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
 
+  // Pre-captured screenshot taken before the overlay opens
+  const preScreenshotRef = useRef<Blob | null>(null);
+
   // Console error capture
   const errorsRef = useRef<CapturedError[]>([]);
 
@@ -128,7 +131,10 @@ export default function BugReportButton() {
     };
   }, []);
 
-  const handleOpen = useCallback(() => {
+  const handleOpen = useCallback(async () => {
+    // Capture the screenshot BEFORE the overlay is shown so it reflects
+    // the actual page state the user sees when they click the bug button.
+    preScreenshotRef.current = await captureScreenshot();
     setIsOpen(true);
     setSubmitStatus('idle');
     setErrorMessage('');
@@ -144,6 +150,7 @@ export default function BugReportButton() {
       setIncludeScreenshot(true);
       setSubmitStatus('idle');
       setErrorMessage('');
+      preScreenshotRef.current = null;
     }, 200);
   }, [isSubmitting]);
 
@@ -158,13 +165,10 @@ export default function BugReportButton() {
     try {
       const context = getTechnicalContext(errorsRef.current);
 
-      // Capture & upload screenshot
+      // Upload the pre-captured screenshot (taken before the overlay opened)
       let screenshotUrl: string | null = null;
-      if (includeScreenshot) {
-        const blob = await captureScreenshot();
-        if (blob) {
-          screenshotUrl = await uploadScreenshot(blob);
-        }
+      if (includeScreenshot && preScreenshotRef.current) {
+        screenshotUrl = await uploadScreenshot(preScreenshotRef.current);
       }
 
       // Call edge function
