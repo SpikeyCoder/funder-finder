@@ -216,6 +216,24 @@ export default function FunderDetail() {
                 NTEE {funder.ntee_code}
               </span>
             )}
+            {/* Data freshness indicator */}
+            {(() => {
+              const latestYear = funder.similar_past_grantees?.reduce(
+                (max, g) => (g.year && g.year > max ? g.year : max), 0
+              ) ?? 0;
+              const currentYear = new Date().getFullYear();
+              const isStale = latestYear > 0 && (currentYear - latestYear) > 2;
+              if (latestYear > 0) return (
+                <span className={`inline-block text-sm px-3 py-1 rounded-full border ${
+                  isStale
+                    ? 'bg-amber-900/30 border-amber-700 text-amber-300'
+                    : 'bg-[#21262d] border-[#30363d] text-gray-400'
+                }`}>
+                  {isStale ? '⚠ ' : ''}Data as of {latestYear}
+                </span>
+              );
+              return null;
+            })()}
           </div>
 
           {/* AI match reason */}
@@ -252,7 +270,13 @@ export default function FunderDetail() {
                   {funder.similar_past_grantees.slice(0, 3).map((grantee, idx) => (
                     <div key={`${funder.id}-detail-grantee-${idx}`} className="border border-[#30363d] rounded-lg p-3 bg-[#0d1117]">
                       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                        <p className="text-sm font-semibold text-white">{grantee.name}</p>
+                        <button
+                          onClick={() => navigate('/mission', { state: { prefillMission: grantee.name, prefillLocation: funder.state || '' } })}
+                          className="text-sm font-semibold text-blue-400 hover:text-blue-300 hover:underline text-left transition-colors"
+                          title="Search for funders aligned with this grantee"
+                        >
+                          {grantee.name} →
+                        </button>
                         <p className="text-xs text-gray-300">
                           {(grantee.year ? String(grantee.year) : 'Year n/a')} · {formatGrantAmount(grantee.amount)}
                         </p>
@@ -595,7 +619,7 @@ export default function FunderDetail() {
                     //  - Strip stale cached GitHub Pages funder paths (e.g. https://...github.io/.../funder/cct.org)
                     //  - Reject internal routes starting with '/'
                     //  - Prepend https:// for bare domains (e.g. cct.org)
-                    const STALE_RE = /^https?:\/\/[^/]*\.github\.io\/[^/]+\/funder\//;
+                    const STALE_RE = /^https?:\/\/[^\/]*\.github\.io\/[^\/]+\/funder\//;
                     const toExtUrl = (u: string | null | undefined) => {
                       let s = u?.trim();
                       if (!s) return null;
