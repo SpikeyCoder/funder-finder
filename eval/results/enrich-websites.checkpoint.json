@@ -1,14 +1,14 @@
 {
   "version": 2,
-  "updated_at": "2026-03-18T07:47:06.425Z",
-  "last_id": "392230717",
-  "processed": 160000,
-  "updated": 4611,
-  "not_found": 155376,
+  "updated_at": "2026-03-18T23:45:56.021Z",
+  "last_id": "453554793",
+  "processed": 185600,
+  "updated": 5275,
+  "not_found": 180309,
   "errors": 0,
   "sources": {
     "ProPublica": 0,
-    "KnowledgeGraph": 4621,
+    "KnowledgeGraph": 5288,
     "WebSearch": 3
   },
   "dry_run": false

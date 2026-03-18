@@ -2961,6 +2961,7 @@ Deno.serve(async (req) => {
             .slice(0, 3)
             .map((grant) => ({
               name: grant.grantee_name,
+              ein: grant.grantee_ein || null,
               year: grant.grant_year || null,
               amount: grant.grant_amount,
               match_reasons: [
@@ -3303,6 +3304,7 @@ Deno.serve(async (req) => {
 
         const similaritySummary = topGrantsForDisplay.map((row) => ({
           name: row.grant.grantee_name,
+          ein: row.grant.grantee_ein || null,
           year: row.grant.grant_year || null,
           amount: row.grant.grant_amount,
           match_reasons: grantMatchReasons(row, userLocation, userBudgetBandNumeric, userMaxGrantAmount),
