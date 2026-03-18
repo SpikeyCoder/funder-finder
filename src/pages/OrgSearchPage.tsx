@@ -1,10 +1,12 @@
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Database } from 'lucide-react';
 import OrgSearch from '../components/OrgSearch';
 
 export default function OrgSearchPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const initialQuery = searchParams.get('q') || '';
 
   useEffect(() => {
     document.title = 'Search Organizations | FunderMatch';
@@ -36,7 +38,7 @@ export default function OrgSearchPage() {
           </p>
         </div>
 
-        <OrgSearch autoFocus placeholder="Search by organization name or EIN..." />
+        <OrgSearch autoFocus placeholder="Search by organization name or EIN..." initialQuery={initialQuery} />
 
         <div className="mt-12 grid grid-cols-2 gap-4">
           <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-5">
