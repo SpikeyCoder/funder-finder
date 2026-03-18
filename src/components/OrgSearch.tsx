@@ -8,11 +8,12 @@ import { fmtDollar } from './InsightCharts';
 interface OrgSearchProps {
   autoFocus?: boolean;
   placeholder?: string;
+  initialQuery?: string;
 }
 
-export default function OrgSearch({ autoFocus = false, placeholder = 'Search funders & recipients by name or EIN...' }: OrgSearchProps) {
+export default function OrgSearch({ autoFocus = false, placeholder = 'Search funders & recipients by name or EIN...', initialQuery = '' }: OrgSearchProps) {
   const navigate = useNavigate();
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<OrgSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
