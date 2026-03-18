@@ -270,13 +270,17 @@ export default function FunderDetail() {
                   {funder.similar_past_grantees.slice(0, 3).map((grantee, idx) => (
                     <div key={`${funder.id}-detail-grantee-${idx}`} className="border border-[#30363d] rounded-lg p-3 bg-[#0d1117]">
                       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                        <button
-                          onClick={() => navigate(`/search?q=${encodeURIComponent(grantee.name)}`)}
-                          className="text-sm font-semibold text-blue-400 hover:text-blue-300 hover:underline text-left transition-colors"
-                          title="View this organization's profile"
-                        >
-                          {grantee.name} →
-                        </button>
+                        {grantee.ein ? (
+                          <button
+                            onClick={() => navigate(`/recipient/${grantee.ein}`)}
+                            className="text-sm font-semibold text-blue-400 hover:text-blue-300 hover:underline text-left transition-colors"
+                            title="View this organization's profile"
+                          >
+                            {grantee.name} →
+                          </button>
+                        ) : (
+                          <p className="text-sm font-semibold text-white">{grantee.name}</p>
+                        )}
                         <p className="text-xs text-gray-300">
                           {(grantee.year ? String(grantee.year) : 'Year n/a')} · {formatGrantAmount(grantee.amount)}
                         </p>
@@ -768,4 +772,4 @@ export default function FunderDetail() {
       )}
     </div>
   );
-          }
+}
