@@ -35,6 +35,9 @@ export interface Funder {
   contact_title: string | null;
   contact_email: string | null;
   next_step: string | null;
+  // Data freshness — from the DB's last_synced / most recent filing year
+  last_synced?: string | null;
+  latest_filing_year?: number | null;
   // Added by the Edge Function (Claude ranking)
   score?: number;
   reason?: string;
