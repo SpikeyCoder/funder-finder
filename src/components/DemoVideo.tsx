@@ -57,7 +57,7 @@ export default function DemoVideo() {
     const scheduleSteps = () => {
       let elapsed = 0;
 
-      // ── Step 0: Landing ──────────────────────────────────────
+      // ── Step 0: Landing ──────────────────────────────────────────
       timers.push(
         setTimeout(() => {
           setStep(0);
@@ -74,7 +74,7 @@ export default function DemoVideo() {
       timers.push(setTimeout(() => setGetStartedClicked(true), elapsed + 1200));
       elapsed += STEP_DURATION[0];
 
-      // ── Step 1: Mission input (typing) ───────────────────────
+      // ── Step 1: Mission input (typing) ─────────────────────────
       timers.push(
         setTimeout(() => {
           setStep(1);
@@ -84,20 +84,20 @@ export default function DemoVideo() {
       );
       elapsed += STEP_DURATION[1];
 
-      // ── Step 2: Form submit ──────────────────────────────────
+      // ── Step 2: Form submit ────────────────────────────────────
       timers.push(setTimeout(() => { setStep(2); setSearchClicked(false); }, elapsed));
       timers.push(setTimeout(() => setSearchClicked(true), elapsed + 700));
       elapsed += STEP_DURATION[2];
 
-      // ── Step 3: Results ──────────────────────────────────────
+      // ── Step 3: Results ────────────────────────────────────────
       timers.push(setTimeout(() => { setStep(3); setSaved(false); }, elapsed));
       elapsed += STEP_DURATION[3];
 
-      // ── Step 4: Saved Funders list ───────────────────────────
+      // ── Step 4: Saved Funders list ─────────────────────────────
       timers.push(setTimeout(() => { setStep(4); setSaved(true); }, elapsed));
       elapsed += STEP_DURATION[4];
 
-      // ── Step 5: Write Grant highlighted ──────────────────────
+      // ── Step 5: Write Grant highlighted ────────────────────────
       timers.push(setTimeout(() => setStep(5), elapsed));
       elapsed += STEP_DURATION[5];
 
@@ -157,7 +157,6 @@ export default function DemoVideo() {
   }, [step]);
 
   const missionDone = missionChars >= MISSION_TEXT.length;
-
   return (
     <div className="w-full flex justify-center px-4 py-8">
       {/* Outer wrapper — max width, aspect ratio preserved */}
@@ -213,7 +212,7 @@ export default function DemoVideo() {
                 <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">Tell us about your mission</p>
 
                 <div className="space-y-1">
-                  <label className="text-xs text-gray-400">Your Mission</label>
+                  <label className="text-xs text-gray-400 font-semibold">Your Mission Statement <span className="text-red-400">*</span></label>
                   <div className="bg-[#161b22] border border-blue-700/60 rounded-xl px-3 py-2 text-sm leading-snug min-h-[56px]">
                     {MISSION_TEXT.slice(0, missionChars)}
                     {!missionDone && (
@@ -222,40 +221,48 @@ export default function DemoVideo() {
                   </div>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs text-gray-400 flex items-center gap-1">
-                    <MapPin size={11} /> Location
+                <div className="space-y-1 relative">
+                  <label className="text-xs text-gray-400 font-semibold flex items-center gap-1">
+                    <MapPin size={11} /> Location Served <span className="text-red-400">*</span>
                   </label>
                   <div className={`bg-[#161b22] border rounded-xl px-3 py-2 text-sm transition-colors duration-300 ${
                     missionDone ? 'border-blue-700/60' : 'border-[#30363d]'
                   }`}>
                     {locationChars > 0
                       ? LOCATION_TEXT.slice(0, locationChars)
-                      : <span className="text-gray-600">City, State</span>
+                      : <span className="text-gray-600">e.g. King County, WA · Chicago, IL · National</span>
                     }
                     {missionDone && locationChars < LOCATION_TEXT.length && (
                       <span className="inline-block w-0.5 h-3.5 bg-blue-400 animate-pulse ml-px align-middle" />
                     )}
                   </div>
+                  {/* Autocomplete dropdown hint — visible while typing location */}
+                  {missionDone && locationChars > 0 && locationChars < LOCATION_TEXT.length && (
+                    <div className="absolute left-0 right-0 top-full mt-1 bg-[#161b22] border border-[#30363d] rounded-xl overflow-hidden shadow-lg z-10">
+                      <div className="px-3 py-1.5 text-xs text-white bg-blue-900/30 flex items-center gap-1.5">
+                        <MapPin size={10} className="text-blue-400" /> Chicago, IL
+                      </div>
+                      <div className="px-3 py-1.5 text-xs text-gray-400">Chicago Heights, IL</div>
+                    </div>
+                  )}
                 </div>
               </div>
             </ScreenSlide>
-
             {/* ── Step 2: Form complete + Find Matching Funders ── */}
             <ScreenSlide visible={step === 2}>
               <div className="p-5 space-y-3">
                 <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">Tell us about your mission</p>
 
                 <div className="space-y-1">
-                  <label className="text-xs text-gray-400">Your Mission</label>
+                  <label className="text-xs text-gray-400 font-semibold">Your Mission Statement <span className="text-red-400">*</span></label>
                   <div className="bg-[#161b22] border border-[#30363d] rounded-xl px-3 py-2 text-sm leading-snug">
                     {MISSION_TEXT}
                   </div>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs text-gray-400 flex items-center gap-1">
-                    <MapPin size={11} /> Location
+                  <label className="text-xs text-gray-400 font-semibold flex items-center gap-1">
+                    <MapPin size={11} /> Location Served <span className="text-red-400">*</span>
                   </label>
                   <div className="bg-[#161b22] border border-[#30363d] rounded-xl px-3 py-2 text-sm">
                     {LOCATION_TEXT}
@@ -343,7 +350,6 @@ export default function DemoVideo() {
                 </div>
               </div>
             </ScreenSlide>
-
             {/* ── Step 7: Score + done ── */}
             <ScreenSlide visible={step === 7}>
               <div className="p-5 flex flex-col items-center justify-center h-full gap-4">
@@ -395,7 +401,7 @@ export default function DemoVideo() {
   );
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
+// ── Sub-components ──────────────────────────────────────────────────────────
 
 function ScreenSlide({ visible, children }: { visible: boolean; children: React.ReactNode }) {
   return (
