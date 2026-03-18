@@ -10,6 +10,7 @@ export interface SavedFunderEntry {
 
 export interface SimilarPastGrantee {
   name: string;
+  ein: string | null;
   year: number | null;
   amount: number | null;
   match_reasons: string[];
