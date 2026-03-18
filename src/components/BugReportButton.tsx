@@ -41,15 +41,39 @@ function getTechnicalContext(recentErrors: CapturedError[]): TechnicalContext {
   };
 }
 
+/**
+ * Capture a screenshot of document.body while temporarily hiding the bug-report
+ * overlay, backdrop, and floating button so the image shows the clean page.
+ */
 async function captureScreenshot(): Promise<Blob | null> {
   try {
     const html2canvas = (await import('html2canvas')).default;
+
+    // Collect every element we need to hide: the modal backdrop, the floating
+    // bug button, and any other portal overlays rendered by this component.
+    // They all live inside portals or are fixed-position children of <body>.
+    const elemsToHide: HTMLElement[] = [];
+    document.querySelectorAll<HTMLElement>(
+      '[data-bug-report-overlay], [data-bug-report-button]',
+    ).forEach((el) => elemsToHide.push(el));
+
+    // Hide them
+    const savedStyles = elemsToHide.map((el) => el.style.display);
+    elemsToHide.forEach((el) => { el.style.display = 'none'; });
+
+    // Wait one frame so the browser repaints without those elements
+    await new Promise((r) => requestAnimationFrame(r));
+
     const canvas = await html2canvas(document.body, {
       useCORS: true,
       scale: 1,
       logging: false,
       backgroundColor: '#0d1117',
     });
+
+    // Restore visibility
+    elemsToHide.forEach((el, i) => { el.style.display = savedStyles[i]; });
+
     return new Promise((resolve) => {
       canvas.toBlob((blob) => resolve(blob), 'image/png', 0.85);
     });
@@ -58,7 +82,6 @@ async function captureScreenshot(): Promise<Blob | null> {
     return null;
   }
 }
-
 async function uploadScreenshot(blob: Blob): Promise<string | null> {
   try {
     const fileName = `bug-reports/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.png`;
@@ -89,9 +112,6 @@ export default function BugReportButton() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
-
-  // Pre-captured screenshot taken before the overlay opens
-  const preScreenshotRef = useRef<Blob | null>(null);
 
   // Console error capture
   const errorsRef = useRef<CapturedError[]>([]);
@@ -131,10 +151,7 @@ export default function BugReportButton() {
     };
   }, []);
 
-  const handleOpen = useCallback(async () => {
-    // Capture the screenshot BEFORE the overlay is shown so it reflects
-    // the actual page state the user sees when they click the bug button.
-    preScreenshotRef.current = await captureScreenshot();
+  const handleOpen = useCallback(() => {
     setIsOpen(true);
     setSubmitStatus('idle');
     setErrorMessage('');
@@ -150,7 +167,6 @@ export default function BugReportButton() {
       setIncludeScreenshot(true);
       setSubmitStatus('idle');
       setErrorMessage('');
-      preScreenshotRef.current = null;
     }, 200);
   }, [isSubmitting]);
 
@@ -165,12 +181,15 @@ export default function BugReportButton() {
     try {
       const context = getTechnicalContext(errorsRef.current);
 
-      // Upload the pre-captured screenshot (taken before the overlay opened)
+      // Capture & upload screenshot.  captureScreenshot() temporarily hides the
+      // bug-report overlay and button so the image shows the clean page beneath.
       let screenshotUrl: string | null = null;
-      if (includeScreenshot && preScreenshotRef.current) {
-        screenshotUrl = await uploadScreenshot(preScreenshotRef.current);
+      if (includeScreenshot) {
+        const blob = await captureScreenshot();
+        if (blob) {
+          screenshotUrl = await uploadScreenshot(blob);
+        }
       }
-
       // Call edge function
       const headers = await getEdgeFunctionHeaders();
       const response = await fetch(`${SUPABASE_URL}/functions/v1/report-bug`, {
@@ -205,6 +224,7 @@ export default function BugReportButton() {
   const floatingButton = (
     <button
       onClick={handleOpen}
+      data-bug-report-button
       className="fixed bottom-6 right-6 z-40 bg-[#1f6feb] hover:bg-[#388bfd] text-white rounded-full p-3 shadow-lg shadow-black/40 transition-all duration-200 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-[#0d1117] group"
       aria-label="Report a bug or request a feature"
       title="Report a bug or request a feature"
@@ -218,6 +238,7 @@ export default function BugReportButton() {
   const modal = isOpen
     ? createPortal(
         <div
+          data-bug-report-overlay
           className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm px-4 pb-4 sm:items-center sm:pb-0"
           onClick={(e) => {
             if (e.target === e.currentTarget) handleClose();
@@ -233,7 +254,6 @@ export default function BugReportButton() {
             >
               <X size={18} />
             </button>
-
             {/* Header */}
             <div className="flex items-center gap-3 mb-4">
               <div className="bg-blue-900/30 border border-blue-800/50 rounded-lg p-2">
