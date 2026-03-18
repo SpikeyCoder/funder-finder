@@ -131,7 +131,7 @@ export default function Results() {
   useEffect(() => {
     document.title = 'Funder Matches | FunderMatch';
     const desc = document.querySelector<HTMLMetaElement>('meta[name="description"]');
-    if (desc) desc.content = 'Your AI-ranked list of foundations, DAFs, and corporate giving programs matched to your nonprofit’s mission.';
+    if (desc) desc.content = 'Your AI-ranked list of foundations, DAFs, and corporate giving programs matched to your nonprofit's mission.';
   }, []);
 
   const logResultSignal = (
@@ -656,415 +656,314 @@ export default function Results() {
           </div>
         )}
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // RENDER
-  // ─────────────────────────────────────────────────────────────────────────
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#0d1117] text-white">
-        <NavBar />
-        <div className="flex items-center justify-center pt-32">
-          <div className="text-center">
-            <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-gray-400">Searching for matching funders...</p>
+        {/* Loading state */}
+        {loading && (
+          <div className="flex flex-col items-center justify-center py-24 text-gray-400">
+            <Loader2 size={40} className="animate-spin mb-4 text-blue-400" />
+            <p className="text-lg font-medium">
+              {isPeerSearchMode ? 'Finding foundations based on peer nonprofit grant history...' : 'Analyzing your mission and fit signals...'}
+            </p>
+            <p className="text-sm mt-2">
+              {isPeerSearchMode ? 'Using only 990 grant history from the last 5 years' : 'Ranking by mission, geography, and similar prior grantees'}
+            </p>
           </div>
-        </div>
-      </div>
-    );
-  }
+        )}
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-[#0d1117] text-white">
-        <NavBar />
-        <div className="flex items-center justify-center pt-32">
-          <div className="text-center max-w-md">
-            <AlertCircle size={48} className="mx-auto mb-4 text-red-500" />
-            <h2 className="text-2xl font-bold mb-2">Something went wrong</h2>
-            <p className="text-gray-400 mb-6">{error}</p>
+        {/* Error state */}
+        {!loading && error && (
+          <div className="bg-red-900/20 border border-red-800 rounded-2xl p-8 text-center">
+            <p className="text-red-400 font-semibold mb-2">Something went wrong</p>
+            <p className="text-gray-400 text-sm mb-4">{error}</p>
             <button
-              onClick={() => navigate('/mission')}
-              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+              onClick={() => loadMatches(true)}
+              className="flex items-center gap-2 mx-auto border border-red-800 text-red-400 rounded-xl px-4 py-2 text-sm hover:bg-red-900/30 transition-colors"
             >
+              <RefreshCw size={14} />
               Try Again
             </button>
           </div>
-        </div>
-      </div>
-    );
-  }
+        )}
 
-  if (deduplicatedMatches.length === 0 && !loading) {
-    return (
-      <div className="min-h-screen bg-[#0d1117] text-white">
-        <NavBar />
-        <div className="flex items-center justify-center pt-32">
-          <div className="text-center max-w-md">
-            <Search size={48} className="mx-auto mb-4 text-gray-600" />
-            <h2 className="text-2xl font-bold mb-2">No matching funders found</h2>
-            <p className="text-gray-400 mb-6">Try adjusting your search criteria or updating your mission statement.</p>
-            <button
-              onClick={() => navigate('/mission')}
-              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
-            >
-              Update Search
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const startIdx = (currentPage - 1) * RESULTS_PER_PAGE;
-  const endIdx = startIdx + RESULTS_PER_PAGE;
-  const paginatedResults = filteredMatches.slice(startIdx, endIdx);
-  const totalPages = Math.ceil(filteredMatches.length / RESULTS_PER_PAGE);
-
-  return (
-    <div className="min-h-screen bg-[#0d1117] text-white">
-      <NavBar />
-      
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        {/* Header with search info & filters */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Matching Funders</h1>
-          <p className="text-gray-400 mb-4">
-            Found <strong>{deduplicatedMatches.length}</strong> matching funders for your mission
-          </p>
-
-          {/* Filter controls */}
-          <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-4 space-y-4">
-            {/* Grant size filter */}
-            <div>
-              <p className="text-sm font-medium text-gray-300 mb-2">Grant Size Range</p>
-              <div className="flex flex-wrap gap-2">
-                {GRANT_SIZE_FILTERS.map(filter => (
-                  <button
-                    key={filter.key}
-                    onClick={() => setGrantSizeFilter(grantSizeFilter === filter.key ? null : filter.key)}
-                    className={`px-4 py-2 rounded-lg text-sm transition-colors ${
-                      grantSizeFilter === filter.key
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-[#0d1117] text-gray-300 border border-[#30363d] hover:border-gray-500'
-                    }`}
-                  >
-                    {filter.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* DAF toggle */}
-            <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                id="hideDAFs"
-                checked={hideDAFs}
-                onChange={() => setHideDAFs(!hideDAFs)}
-                className="w-4 h-4 cursor-pointer"
-              />
-              <label htmlFor="hideDAFs" className="text-sm text-gray-300 cursor-pointer flex items-center gap-2">
-                Hide Donor Advised Funds (DAFs)
-                <info
-                  className="text-gray-500"
-                  title="DAFs like Fidelity, Schwab, and Vanguard Charitable are typically for individuals, not organizations"
-                />
-              </label>
-            </div>
-
-            {/* University toggle */}
-            <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                id="hideUniversities"
-                checked={hideUniversities}
-                onChange={() => setHideUniversities(!hideUniversities)}
-                className="w-4 h-4 cursor-pointer"
-              />
-              <label htmlFor="hideUniversities" className="text-sm text-gray-300 cursor-pointer flex items-center gap-2">
-                Hide Universities
-              </label>
-            </div>
-
-            {/* Peer search */}
-            <div>
-              <p className="text-sm font-medium text-gray-300 mb-2">Find Similar Organizations</p>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={peerSearchInput}
-                  onChange={(e) => setPeerSearchInput(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && runPeerSearch()}
-                  placeholder="Enter organization name..."
-                  className="flex-1 bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+        {/* No results */}
+        {!loading && !error && filteredMatches.length === 0 && (
+          <div className="text-center py-24 text-gray-400">
+            {grantSizeFilter !== 'any' && matches.length > 0 ? (
+              <>
+                <p className="text-2xl mb-3">No funders in this size range</p>
+                <p className="mb-4 text-sm">Try a different grant size filter or view all results.</p>
                 <button
-                  onClick={runPeerSearch}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+                  onClick={() => { setGrantSizeFilter('any'); setCurrentPage(1); }}
+                  className="bg-white text-gray-900 font-semibold px-6 py-3 rounded-xl hover:bg-gray-100 transition-colors"
                 >
-                  Search
+                  Show All Sizes
                 </button>
-                {peerMatches.length > 0 && (
-                  <button
-                    onClick={clearPeerSearch}
-                    className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors text-sm"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-              {peerMatches.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {peerMatches.map((peer) => (
-                    <span
-                      key={peer.id}
-                      className="inline-flex items-center gap-1 px-2 py-1 bg-green-900/40 border border-green-700 text-green-300 rounded text-xs"
+              </>
+            ) : (
+              <>
+                {isPeerSearchMode ? (
+                  <>
+                    <p className="text-2xl mb-3">No peer-based matches found</p>
+                    <p className="mb-4 text-sm">Try alternate nonprofit names or abbreviations for your peer list.</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-2xl mb-3">No funders found</p>
+                    <p className="mb-4 text-sm">The database may be empty. Run the ingestion script first.</p>
+                    <button
+                      onClick={() => navigate('/mission')}
+                      className="bg-white text-gray-900 font-semibold px-6 py-3 rounded-xl hover:bg-gray-100 transition-colors"
                     >
-                      {peer.name} ({peer.score.toFixed(0)}%)
-                      {peer.totalFunding && ` - ${(peer.totalFunding / 1e6).toFixed(1)}M`}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Export CSV */}
-            <button
-              onClick={exportCSV}
-              className="w-full px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
-            >
-              <Download size={16} />
-              Export Results as CSV
-            </button>
+                      Update Mission
+                    </button>
+                  </>
+                )}
+              </>
+            )}
           </div>
-        </div>
+        )}
 
-        {/* Results grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {paginatedResults.map((funder) => {
-            const lastSyncYear = funder.latest_filing_year || 0;
-            const currentYear = new Date().getFullYear();
-            const isStale = lastSyncYear > 0 && (currentYear - lastSyncYear) > 2;
-
-            return (
-              <div key={funder.id} className="bg-[#161b22] border border-[#30363d] rounded-lg p-6 hover:border-blue-500/50 transition-colors">
-                {/* Header with save button */}
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-white mb-1">{funder.name}</h3>
-                    <p className="text-sm text-gray-400">{funder.type}</p>
-                  </div>
-                  <button
-                    onClick={() => toggleSave(funder)}
-                    className={`p-2 rounded transition-colors ${
-                      savedIds.has(funder.id) ? 'bg-yellow-900/40 text-yellow-400' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-                    }`}
-                    title={savedIds.has(funder.id) ? 'Remove from saved' : 'Save for later'}
-                  >
-                    <Star size={20} fill={savedIds.has(funder.id) ? 'currentColor' : 'none'} />
-                  </button>
-                </div>
-
-                {/* Data freshness badge */}
-                {isStale && (
-                  <div className="mb-3 p-2 bg-yellow-900/20 border border-yellow-700 rounded text-xs text-yellow-300">
-                    <strong>⚠️ Data outdated:</strong> Last filing from {lastSyncYear}
-                  </div>
-                )}
-
-                {/* Description */}
-                {funder.description && (
-                  <p className="text-sm text-gray-300 mb-3 line-clamp-2">{funder.description}</p>
-                )}
-
-                {/* Focus areas */}
-                {funder.focus_areas && funder.focus_areas.length > 0 && (
-                  <div className="mb-3">
-                    <p className="text-xs text-gray-400 mb-1">Focus Areas:</p>
-                    <div className="flex flex-wrap gap-1">
-                      {funder.focus_areas.slice(0, 3).map((area, i) => (
-                        <span key={i} className="inline-block px-2 py-1 bg-blue-900/30 border border-blue-700 text-blue-300 rounded text-xs">
-                          {area}
-                        </span>
-                      ))}
-                      {funder.focus_areas.length > 3 && (
-                        <span className="inline-block px-2 py-1 text-xs text-gray-400">+{funder.focus_areas.length - 3} more</span>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Grant range */}
-                {(funder.grant_range_min || funder.grant_range_max) && (
-                  <div className="mb-3 text-sm text-gray-300">
-                    <strong>Grant Range:</strong> {funder.grant_range_min ? `$${(funder.grant_range_min / 1000).toFixed(0)}K` : 'N/A'} - {funder.grant_range_max ? `$${(funder.grant_range_max / 1000).toFixed(0)}K` : 'N/A'}
-                  </div>
-                )}
-
-                {/* Total giving */}
-                {funder.total_giving && (
-                  <div className="mb-3 text-sm text-gray-300">
-                    <strong>Total Giving:</strong> ${(funder.total_giving / 1e6).toFixed(1)}M
-                  </div>
-                )}
-
-                {/* Similar grantees */}
-                {funder.similar_past_grantees && funder.similar_past_grantees.length > 0 && (
-                  <div className="mb-3">
-                    <p className="text-xs text-gray-400 mb-1">Similar Grantees:</p>
-                    <div className="space-y-1">
-                      {funder.similar_past_grantees.slice(0, 3).map((grantee, i) => (
-                        <button
-                          key={i}
-                          onClick={() => navigate('/mission', { state: { prefillMission: grantee.name, prefillLocation: funder.state || '' } })}
-                          className="block w-full text-left text-xs text-blue-400 hover:text-blue-300 hover:underline"
-                        >
-                          • {grantee.name} ({grantee.year || 'N/A'}) - ${grantee.amount ? (grantee.amount / 1000).toFixed(0) : 'N/A'}K
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Match reason */}
-                {funder.reason && (
-                  <div className="mb-4 p-3 bg-green-900/20 border border-green-700 rounded text-sm text-green-300">
-                    <strong>Why matched:</strong> {funder.reason}
-                  </div>
-                )}
-
-                {/* Contact info */}
-                {(funder.contact_name || funder.contact_email) && (
-                  <div className="mb-3 text-sm text-gray-300">
-                    {funder.contact_name && <p><strong>Contact:</strong> {funder.contact_name}</p>}
-                    {funder.contact_email && (
-                      <p className="flex items-center gap-2 mt-1">
-                        <strong>Email:</strong>
-                        <button
-                          onClick={() => copyEmail(funder.contact_email!)}
-                          className="text-blue-400 hover:text-blue-300 transition-colors"
-                          title="Copy email"
-                        >
-                          {funder.contact_email}
-                        </button>
-                        {copied === funder.contact_email && (
-                          <span className="text-xs text-green-400 ml-1">✓ Copied</span>
-                        )}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {/* Next steps */}
-                {funder.next_step && (
-                  <div className="mb-4">
-                    <a
-                      href={funder.next_step_url || '#'}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-block px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm transition-colors"
-                    >
-                      {funder.next_step}
-                    </a>
-                  </div>
-                )}
-
-                {/* Website link */}
-                {funder.website && (
-                  <div>
-                    <a
-                      href={funder.website}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 transition-colors text-sm"
-                    >
-                      Visit Website
-                      <ExternalLink size={14} />
-                    </a>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2 mb-8">
-            <button
-              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-              disabled={currentPage === 1}
-              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-600 rounded-lg transition-colors"
-            >
-              Previous
-            </button>
-            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-              let page;
-              if (totalPages <= 5) {
-                page = i + 1;
-              } else if (currentPage <= 3) {
-                page = i + 1;
-              } else if (currentPage >= totalPages - 2) {
-                page = totalPages - 4 + i;
-              } else {
-                page = currentPage - 2 + i;
-              }
+        {/* Funder Cards */}
+        {!loading && !error && filteredMatches.length > 0 && (
+          <div className="space-y-6">
+            {paginatedMatches.map((funder, index) => {
+              const globalIndex = (currentPage - 1) * RESULTS_PER_PAGE + index;
+              const isSaved = savedIds.includes(funder.id);
+              const fitScore = funder.fit_score ?? funder.score;
+              const scorePercent = typeof fitScore === 'number' ? Math.round(fitScore * 100) : null;
+              const fitExplanation = funder.fit_explanation || funder.reason;
               return (
-                <button
-                  key={page}
-                  onClick={() => setCurrentPage(page)}
-                  className={`px-3 py-2 rounded-lg transition-colors ${
-                    currentPage === page ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600'
-                  }`}
-                >
-                  {page}
-                </button>
+                <div key={funder.id} className="bg-[#161b22] border border-[#30363d] rounded-2xl p-6">
+                  <div className="flex items-start gap-3 mb-3">
+                    <span className="text-blue-400 font-bold text-lg">#{globalIndex + 1}</span>
+                    <div className="flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <h2 className="text-xl font-bold">{funder.name}</h2>
+                        {scorePercent !== null && (
+                          <span className={`text-xs font-semibold px-2 py-1 rounded-full whitespace-nowrap ${scorePercent >= 80 ? 'bg-green-900/40 text-green-400' : scorePercent >= 60 ? 'bg-blue-900/40 text-blue-400' : 'bg-gray-800 text-gray-400'}`}>
+                            {scorePercent}% fit score
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        <span className="inline-block bg-[#21262d] border border-[#30363d] text-gray-300 text-xs px-3 py-1 rounded-full capitalize">
+                          {funder.type}
+                        </span>
+                        {funder.state && (
+                          <span className="inline-block bg-[#21262d] border border-[#30363d] text-gray-300 text-xs px-3 py-1 rounded-full">
+                            {funder.city ? `${funder.city}, ${funder.state}` : funder.state}
+                          </span>
+                        )}
+                        {funder.total_giving && (
+                          <span className="inline-block bg-[#21262d] border border-[#30363d] text-gray-300 text-xs px-3 py-1 rounded-full">
+                            {formatTotalGiving(funder.total_giving)} in grants
+                          </span>
+                        )}
+                        {/* Data freshness indicator */}
+                        {(() => {
+                          const latestYear = funder.similar_past_grantees?.reduce(
+                            (max, g) => (g.year && g.year > max ? g.year : max), 0
+                          ) ?? 0;
+                          const currentYear = new Date().getFullYear();
+                          const isStale = latestYear > 0 && (currentYear - latestYear) > 2;
+                          if (latestYear > 0) return (
+                            <span className={`inline-block text-xs px-3 py-1 rounded-full border ${
+                              isStale
+                                ? 'bg-amber-900/30 border-amber-700 text-amber-300'
+                                : 'bg-[#21262d] border-[#30363d] text-gray-300'
+                            }`}>
+                              {isStale ? '⚠ ' : ''}Data as of {latestYear}
+                            </span>
+                          );
+                          if (funder.limited_grant_history_data) return (
+                            <span className="inline-block bg-amber-900/30 border border-amber-700 text-amber-300 text-xs px-3 py-1 rounded-full">
+                              ⚠ Limited data
+                            </span>
+                          );
+                          return null;
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Fit explanation */}
+                  {fitExplanation && (
+                    <div className="mb-4 bg-[#0d1117] border border-blue-900/50 rounded-xl px-4 py-3">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <p className="text-xs text-blue-400 font-semibold">Why this foundation fits</p>
+                        {funder.limited_grant_history_data && (
+                          <span className="text-[10px] px-2 py-1 rounded-full bg-amber-900/40 text-amber-300 border border-amber-800">
+                            Limited grant history data
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-gray-300 text-sm">{fitExplanation}</p>
+                    </div>
+                  )}
+
+                  {/* Similar prior grantees */}
+                  {funder.similar_past_grantees && funder.similar_past_grantees.length > 0 && (
+                    <div className="mb-4 bg-[#0d1117] border border-[#30363d] rounded-xl px-4 py-3">
+                      <p className="text-xs text-blue-400 font-semibold mb-3">Similar past grantees</p>
+                      <div className="space-y-3">
+                        {funder.similar_past_grantees.slice(0, 3).map((grantee, idx) => (
+                          <div key={`${funder.id}-grantee-${idx}`} className="border border-[#30363d] rounded-lg p-3 bg-[#111723]">
+                            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                              <button
+                                onClick={() => navigate(`/search?q=${encodeURIComponent(grantee.name)}`)}
+                                className="text-sm font-semibold text-blue-400 hover:text-blue-300 hover:underline text-left transition-colors"
+                                title="View this organization's profile"
+                              >
+                                {grantee.name} →
+                              </button>
+                              <p className="text-xs text-gray-300">
+                                {(grantee.year ? String(grantee.year) : 'Year n/a')} · {formatGrantAmount(grantee.amount)}
+                              </p>
+                            </div>
+                            {grantee.match_reasons.length > 0 && (
+                              <ul className="list-disc ml-4 text-xs text-gray-300 space-y-1">
+                                {grantee.match_reasons.slice(0, 2).map((reason, reasonIdx) => (
+                                  <li key={`${funder.id}-grantee-${idx}-reason-${reasonIdx}`}>{reason}</li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Focus areas */}
+                  {funder.focus_areas && funder.focus_areas.length > 0 && (
+                    <div className="mb-4">
+                      <div className="flex flex-wrap gap-2">
+                        {funder.focus_areas.map(tag => (
+                          <span key={tag} className="bg-[#21262d] text-gray-400 text-xs px-3 py-1 rounded-full capitalize">
+                            {tag.replace(/_/g, ' ')}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Grant range */}
+                  {(funder.grant_range_min || funder.grant_range_max) && (
+                    <p className="text-sm text-gray-400 mb-4">
+                      <strong className="text-white">Typical grant range:</strong> {formatGrantRange(funder)}
+                    </p>
+                  )}
+
+                  {/* Next step */}
+                  {funder.next_step && (
+                    <div className="bg-[#0d1117] border border-[#30363d] rounded-xl px-4 py-3 mb-4 text-sm">
+                      <span className="text-gray-400">Best next step: </span>
+                      {(() => {
+                        const linkUrl = resolveNextStepUrl(funder.next_step_url, funder.website);
+                        return linkUrl ? (
+                          <a
+                            href={linkUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => logResultSignal('result_outbound_click', funder, { url: linkUrl })}
+                            className="text-blue-400 hover:text-blue-300 underline underline-offset-2 transition-colors"
+                          >
+                            {funder.next_step}
+                          </a>
+                        ) : (
+                          <span className="text-blue-400">{funder.next_step}</span>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  <div className="flex gap-3">
+                    {funder.contact_email && (
+                      <button
+                        onClick={() => copyEmail(funder.contact_email!, funder.id)}
+                        className="flex items-center gap-2 border border-[#30363d] rounded-xl px-4 py-2 text-sm hover:bg-[#21262d] transition-colors"
+                      >
+                        <Copy size={14} />
+                        {copied === funder.id ? 'Copied!' : 'Copy Email'}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => toggleSave(funder)}
+                      className={`flex items-center gap-2 border rounded-xl px-4 py-2 text-sm transition-colors ${isSaved ? 'border-blue-600 text-blue-400 bg-blue-900/20' : 'border-[#30363d] hover:bg-[#21262d]'}`}
+                    >
+                      {isSaved ? <BookmarkCheck size={14} /> : <Bookmark size={14} />}
+                      {isSaved ? 'Saved' : 'Save'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        logResultSignal('result_view_details', funder);
+                        navigate(`/funder/${funder.id}`, { state: { funder, mission, keywords, budgetBand } });
+                      }}
+                      className="flex items-center gap-2 bg-white text-gray-900 font-semibold rounded-xl px-4 py-2 text-sm hover:bg-gray-100 transition-colors ml-auto"
+                    >
+                      View Details
+                      <ChevronRight size={14} />
+                    </button>
+                  </div>
+                </div>
               );
             })}
-            <button
-              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-              disabled={currentPage === totalPages}
-              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-600 rounded-lg transition-colors"
-            >
-              Next
-            </button>
+
+            {/* Pagination controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-4 pt-4">
+                <button
+                  onClick={() => {
+                    setCurrentPage((p) => Math.max(1, p - 1));
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  disabled={currentPage <= 1}
+                  className="px-4 py-2 rounded-lg bg-[#21262d] text-gray-300 text-sm font-medium hover:bg-[#30363d] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  ← Previous
+                </button>
+                <span className="text-gray-400 text-sm">
+                  Page {currentPage} of {totalPages}
+                  {' '}({(currentPage - 1) * RESULTS_PER_PAGE + 1}–{Math.min(currentPage * RESULTS_PER_PAGE, filteredMatches.length)} of {filteredMatches.length})
+                </span>
+                <button
+                  onClick={() => {
+                    setCurrentPage((p) => Math.min(totalPages, p + 1));
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  disabled={currentPage >= totalPages}
+                  className="px-4 py-2 rounded-lg bg-[#21262d] text-gray-300 text-sm font-medium hover:bg-[#30363d] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Next →
+                </button>
+              </div>
+            )}
+
+            {/* Refresh button at bottom */}
+            <div className="flex justify-center pt-4">
+              <button
+                onClick={() => loadMatches(true)}
+                className="flex items-center gap-2 text-gray-300 hover:text-white text-sm transition-colors"
+              >
+                <RefreshCw size={14} />
+                {isPeerSearchMode ? 'Refresh results (re-run peer lookup)' : 'Refresh results (re-run AI matching)'}
+              </button>
+            </div>
           </div>
         )}
       </div>
 
-      {/* Toast messages */}
-      {toastMessage && (
-        <Toast
-          message={toastMessage}
-          type={toastType}
-          onClose={() => setToastMessage('')}
-        />
+      {/* Login modal — shown when user explicitly clicks login */}
+      {loginModalFunder && (
+        <LoginModal pendingFunder={loginModalFunder} onClose={() => setLoginModalFunder(null)} />
       )}
 
-      {/* Login modal - show if user not authenticated */}
-      {!authenticated && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-8 max-w-md">
-            <h2 className="text-2xl font-bold mb-4">Sign in to Save Funders</h2>
-            <p className="text-gray-400 mb-6">Create a free account to save and track your favorite funders.</p>
-            <div className="flex gap-4">
-              <button
-                onClick={() => navigate('/auth')}
-                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors"
-              >
-                Sign In
-              </button>
-              <button
-                onClick={() => setAuthenticated(true)}
-                className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium transition-colors"
-              >
-                Continue as Guest
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Toast — non-blocking hint to log in for cloud sync */}
+      {toastMsg && (
+        <Toast
+          message={toastMsg}
+          action={{ label: 'Log in', onClick: handleToastLogin }}
+          onClose={() => setToastMsg(null)}
+        />
       )}
     </div>
   );
-        }
+                  }
