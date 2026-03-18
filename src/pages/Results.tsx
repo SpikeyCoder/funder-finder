@@ -131,7 +131,7 @@ export default function Results() {
   useEffect(() => {
     document.title = 'Funder Matches | FunderMatch';
     const desc = document.querySelector<HTMLMetaElement>('meta[name="description"]');
-    if (desc) desc.content = 'Your AI-ranked list of foundations, DAFs, and corporate giving programs matched to your nonprofit's mission.';
+    if (desc) desc.content = 'Your AI-ranked list of foundations, DAFs, and corporate giving programs matched to your nonprofit\'s mission.';
   }, []);
 
   const logResultSignal = (
