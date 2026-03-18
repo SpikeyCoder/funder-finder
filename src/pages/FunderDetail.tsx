@@ -271,9 +271,9 @@ export default function FunderDetail() {
                     <div key={`${funder.id}-detail-grantee-${idx}`} className="border border-[#30363d] rounded-lg p-3 bg-[#0d1117]">
                       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                         <button
-                          onClick={() => navigate('/mission', { state: { prefillMission: grantee.name, prefillLocation: funder.state || '' } })}
+                          onClick={() => navigate(`/search?q=${encodeURIComponent(grantee.name)}`)}
                           className="text-sm font-semibold text-blue-400 hover:text-blue-300 hover:underline text-left transition-colors"
-                          title="Search for funders aligned with this grantee"
+                          title="View this organization's profile"
                         >
                           {grantee.name} →
                         </button>
@@ -768,4 +768,4 @@ export default function FunderDetail() {
       )}
     </div>
   );
-}
+          }
