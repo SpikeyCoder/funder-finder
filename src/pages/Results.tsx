@@ -102,7 +102,7 @@ export default function Results() {
     : [];
 
   // Restore cached results on back-navigation so the page doesn't re-fetch
-  const RESULTS_CACHE_KEY = 'ff_results_cache';
+  const RESULTS_CACHE_KEY = 'ff_results_cache_v2';
   const cachedResultsOnMount = (() => {
     try {
       const raw = sessionStorage.getItem(RESULTS_CACHE_KEY);
