@@ -101,12 +101,27 @@ export default function Results() {
     ? state.peerNonprofits.filter((value: unknown) => typeof value === 'string')
     : [];
 
-  const [matches, setMatches] = useState<Funder[]>([]);
+  // Restore cached results on back-navigation so the page doesn't re-fetch
+  const RESULTS_CACHE_KEY = 'ff_results_cache';
+  const cachedResultsOnMount = (() => {
+    try {
+      const raw = sessionStorage.getItem(RESULTS_CACHE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      // Only use cache if the search params match
+      if (parsed.mission === mission && parsed.locationServed === locationServed) {
+        return parsed.results as Funder[];
+      }
+    } catch { /* ignore */ }
+    return null;
+  })();
+
+  const [matches, setMatches] = useState<Funder[]>(cachedResultsOnMount ?? []);
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [copied, setCopied] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!cachedResultsOnMount);
   const [error, setError] = useState<string | null>(null);
-  const [cached, setCached] = useState(false);
+  const [cached, setCached] = useState(!!cachedResultsOnMount);
   const [grantSizeFilter, setGrantSizeFilter] = useState<'any' | 'small' | 'medium' | 'large'>('any');
   const [hideDAFs, setHideDAFs] = useState(true);
   const [hideUniversities, setHideUniversities] = useState(false);
@@ -116,6 +131,7 @@ export default function Results() {
   const [currentPage, setCurrentPage] = useState(1);
   const RESULTS_PER_PAGE = 20;
   const autoPeerSearchDoneRef = useRef(false);
+  const usedCacheOnMountRef = useRef(!!cachedResultsOnMount);
   const searchTelemetryRef = useRef<SearchTelemetryContext | null>(null);
   const searchSessionIdRef = useRef<string>(getOrCreateSearchSessionId());
 
@@ -225,6 +241,13 @@ export default function Results() {
       setMatches(rankedResults);
       setCached(isPeerSearch ? false : response.cached);
 
+      // Cache results so back-navigation doesn't trigger a re-fetch
+      try {
+        sessionStorage.setItem(RESULTS_CACHE_KEY, JSON.stringify({
+          mission, locationServed, results: rankedResults,
+        }));
+      } catch { /* sessionStorage full or unavailable — ignore */ }
+
       // If server returned suggested peers, adopt them in the UI
       if (response.peers?.length && !peerNonprofits.length) {
         setSuggestedPeers(response.peers);
@@ -280,6 +303,12 @@ export default function Results() {
     // the peerKey dependency will change and re-trigger this effect. Skip that re-run.
     if (autoPeerSearchDoneRef.current) {
       autoPeerSearchDoneRef.current = false;
+      return;
+    }
+
+    // Skip re-fetching on mount if we restored cached results (back-navigation)
+    if (usedCacheOnMountRef.current) {
+      usedCacheOnMountRef.current = false;
       return;
     }
 
