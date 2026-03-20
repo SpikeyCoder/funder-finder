@@ -1,9 +1,9 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { ArrowLeft, MapPin, Calendar, Building2, Users, Bookmark, BookmarkCheck } from 'lucide-react';
-import { RecipientProfile as RecipientProfileType, PeerEntry, Funder } from '../types';
+import { ArrowLeft, MapPin, Calendar, Building2, Users, Bookmark, BookmarkCheck, GraduationCap, DollarSign } from 'lucide-react';
+import { RecipientProfile as RecipientProfileType, PeerEntry, Funder, GeoEntry } from '../types';
 import { fetchRecipientProfile, fetchPeers } from '../utils/matching';
-import { GivingTrendsChart, StatCard, fmtDollar } from '../components/InsightCharts';
+import { GivingTrendsChart, GeoBarChart, StatCard, fmtDollar } from '../components/InsightCharts';
 import { useAuth } from '../contexts/AuthContext';
 import { isSaved, saveFunder, unsaveFunder } from '../utils/storage';
 import LoginModal from '../components/LoginModal';
@@ -21,6 +21,7 @@ export default function RecipientProfile() {
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [filterDafs, setFilterDafs] = useState(false);
+  const [filterUniversities, setFilterUniversities] = useState(false);
 
   // Sync saved funder IDs from localStorage
   useEffect(() => {
@@ -128,6 +129,48 @@ export default function RecipientProfile() {
     avgGrant: t.grantCount > 0 ? Math.round(t.totalAmount / t.grantCount) : 0,
   }));
 
+  // Build funder state geographic data for bar chart
+  const funderStateGeo: GeoEntry[] = (() => {
+    const stateMap = new Map<string, number>();
+    let totalWithState = 0;
+    for (const f of profile.topFunders) {
+      const st = f.funderState;
+      if (st) {
+        stateMap.set(st, (stateMap.get(st) || 0) + f.grantCount);
+        totalWithState += f.grantCount;
+      }
+    }
+    if (totalWithState === 0) return [];
+    return Array.from(stateMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([st, count]) => ({
+        state: st,
+        grantCount: count,
+        totalAmount: 0,
+        pctOfGrants: Math.round((count / totalWithState) * 100),
+      }));
+  })();
+
+  // Helper: detect university/college names
+  const isUniversityOrCollege = (name: string): boolean => {
+    const lower = name.toLowerCase();
+    return (
+      lower.includes('university') ||
+      lower.includes('college') ||
+      lower.includes(' univ ') ||
+      lower.endsWith(' univ') ||
+      lower.includes('universidad')
+    );
+  };
+
+  // Count universities in peers for filter label
+  const uniCount = peers.filter(p => isUniversityOrCollege(p.name || '')).length;
+
+  // Filter peers based on university toggle
+  const visiblePeers = filterUniversities
+    ? peers.filter(p => !isUniversityOrCollege(p.name || ''))
+    : peers;
+
   return (
     <div className="min-h-screen bg-[#0d1117] text-white py-12 px-6">
       <div className="max-w-2xl mx-auto">
@@ -166,7 +209,7 @@ export default function RecipientProfile() {
 
           {/* Funding Summary */}
           <h2 className="text-lg font-semibold mb-3">Funding Summary</h2>
-          <div className="grid grid-cols-2 gap-3 mb-6">
+          <div className="grid grid-cols-2 gap-3 mb-3">
             <StatCard label="Total Funding" value={fmtDollar(profile.fundingSummary.totalFunding)} color="text-green-400" />
             <StatCard label="Total Grants" value={profile.fundingSummary.grantCount.toLocaleString()} />
             <StatCard label="Unique Funders" value={profile.fundingSummary.funderCount.toLocaleString()} color="text-blue-400" />
@@ -180,6 +223,33 @@ export default function RecipientProfile() {
               </div>
             </div>
           </div>
+
+          {/* 990 Budget from latest filing */}
+          {profile.budget && (profile.budget.totalRevenue || profile.budget.totalExpenses) && (
+            <div className="bg-[#0d1117] border border-[#30363d] rounded-xl p-4 mb-3">
+              <div className="flex items-center gap-2 mb-2">
+                <DollarSign size={14} className="text-purple-400" />
+                <p className="text-xs text-gray-400">
+                  Annual Budget (990 Filing{profile.budget.taxYear ? `, ${profile.budget.taxYear}` : ''})
+                </p>
+              </div>
+              <div className="flex gap-6">
+                {profile.budget.totalRevenue != null && (
+                  <div>
+                    <p className="text-xs text-gray-500">Total Revenue</p>
+                    <p className="text-lg font-bold text-purple-400">{fmtDollar(profile.budget.totalRevenue)}</p>
+                  </div>
+                )}
+                {profile.budget.totalExpenses != null && (
+                  <div>
+                    <p className="text-xs text-gray-500">Total Expenses</p>
+                    <p className="text-lg font-bold text-white">{fmtDollar(profile.budget.totalExpenses)}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           <hr className="border-[#30363d] mb-6" />
 
           {/* Funding Trends Chart */}
@@ -190,6 +260,21 @@ export default function RecipientProfile() {
                 <GivingTrendsChart data={chartData} />
               </div>
               <p className="text-xs text-gray-500 mb-6">Source: IRS 990-PF filings, 2015–present</p>
+              <hr className="border-[#30363d] mb-6" />
+            </>
+          )}
+
+          {/* Funder States Bar Chart */}
+          {funderStateGeo.length > 0 && (
+            <>
+              <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                <MapPin size={16} className="text-blue-400" />
+                Where Funders Are Based
+              </h2>
+              <div className="bg-[#0d1117] border border-[#30363d] rounded-xl p-4 mb-2">
+                <GeoBarChart data={funderStateGeo} />
+              </div>
+              <p className="text-xs text-gray-500 mb-6">Based on top funders by grant volume</p>
               <hr className="border-[#30363d] mb-6" />
             </>
           )}
@@ -296,8 +381,6 @@ export default function RecipientProfile() {
           })()}
 
           {/* Similar Recipients (Peers) */}
-          {/* Decode common HTML entities that may be stored in DB names */}
-          {/* Safety net in case upstream data contains &amp; etc. */}
           {(peers.length > 0 || peersLoading) && (
             <>
               <hr className="border-[#30363d] my-6" />
@@ -305,6 +388,20 @@ export default function RecipientProfile() {
                 <Users size={16} className="text-cyan-400" />
                 Similar Organizations
               </h2>
+              {/* University/college filter */}
+              {uniCount > 0 && !peersLoading && (
+                <button
+                  onClick={() => setFilterUniversities(prev => !prev)}
+                  className={`mb-3 text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1.5 ${
+                    filterUniversities
+                      ? 'bg-purple-900/30 border-purple-700/50 text-purple-400 hover:bg-purple-900/50'
+                      : 'bg-[#21262d] border-[#30363d] text-gray-400 hover:text-gray-200 hover:border-gray-500'
+                  }`}
+                >
+                  <GraduationCap size={12} />
+                  {filterUniversities ? `Showing without universities (${uniCount} hidden)` : 'Filter out universities & colleges'}
+                </button>
+              )}
               {peersLoading ? (
                 <div className="space-y-2">
                   {[1,2,3].map(i => <div key={i} className="h-12 bg-[#21262d] rounded-xl animate-pulse" />)}
@@ -321,7 +418,7 @@ export default function RecipientProfile() {
                       </tr>
                     </thead>
                     <tbody>
-                      {peers.map((p, i) => (
+                      {visiblePeers.map((p, i) => (
                         <tr
                           key={`${p.id}-${i}`}
                           className="border-b border-[#30363d]/50 hover:bg-[#21262d]/30 cursor-pointer"

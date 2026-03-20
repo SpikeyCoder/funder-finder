@@ -160,6 +160,7 @@ export interface RecipientFunderEntry {
   totalAmount: number;
   lastYear: number;
   isDaf?: boolean;
+  funderState?: string | null;
 }
 
 export interface RecipientYearTrend {
@@ -184,6 +185,11 @@ export interface RecipientProfile {
   yearlyTrends: RecipientYearTrend[];
   topFunders: RecipientFunderEntry[];
   ntee_codes: string[];
+  budget?: {
+    totalRevenue: number | null;
+    totalExpenses: number | null;
+    taxYear: number | null;
+  } | null;
 }
 
 // ── Phase 3: Pipeline & Grant Tracking types ────────────────────────────────
