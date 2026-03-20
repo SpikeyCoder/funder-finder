@@ -159,7 +159,9 @@ export default function RecipientProfile() {
       lower.includes('college') ||
       lower.includes(' univ ') ||
       lower.endsWith(' univ') ||
-      lower.includes('universidad')
+      lower.includes('universidad') ||
+      lower.includes('institute of technology') ||
+      lower.includes('polytechnic')
     );
   };
 
@@ -224,8 +226,8 @@ export default function RecipientProfile() {
             </div>
           </div>
 
-          {/* 990 Budget from latest filing */}
-          {profile.budget && (profile.budget.totalRevenue || profile.budget.totalExpenses) && (
+          {/* 990 Budget from latest filing — show total expenses as the annual budget */}
+          {profile.budget && profile.budget.totalExpenses != null && (
             <div className="bg-[#0d1117] border border-[#30363d] rounded-xl p-4 mb-3">
               <div className="flex items-center gap-2 mb-2">
                 <DollarSign size={14} className="text-purple-400" />
@@ -233,20 +235,7 @@ export default function RecipientProfile() {
                   Annual Budget (990 Filing{profile.budget.taxYear ? `, ${profile.budget.taxYear}` : ''})
                 </p>
               </div>
-              <div className="flex gap-6">
-                {profile.budget.totalRevenue != null && (
-                  <div>
-                    <p className="text-xs text-gray-500">Total Revenue</p>
-                    <p className="text-lg font-bold text-purple-400">{fmtDollar(profile.budget.totalRevenue)}</p>
-                  </div>
-                )}
-                {profile.budget.totalExpenses != null && (
-                  <div>
-                    <p className="text-xs text-gray-500">Total Expenses</p>
-                    <p className="text-lg font-bold text-white">{fmtDollar(profile.budget.totalExpenses)}</p>
-                  </div>
-                )}
-              </div>
+              <p className="text-lg font-bold text-purple-400">{fmtDollar(profile.budget.totalExpenses)}</p>
             </div>
           )}
 
