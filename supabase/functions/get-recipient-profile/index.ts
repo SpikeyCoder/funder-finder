@@ -60,6 +60,7 @@ interface FunderRow {
   id: string;
   name: string;
   ntee_code: string | null;
+  state: string | null;
 }
 
 // Known Donor-Advised Fund (DAF) sponsor EINs — these are intermediaries, not direct funders
@@ -89,6 +90,45 @@ function isDonorAdvisedFund(funderId: string, funderName: string, nteeCode: stri
   if (lower.includes('charitable gift fund')) return true;
   if (lower.includes('charitable giving fund')) return true;
   return false;
+}
+
+/**
+ * Fetch the grantee's latest 990 financial data from ProPublica API.
+ * Returns { totalRevenue, totalExpenses, taxYear } or null if unavailable.
+ */
+async function fetchGrantee990Budget(ein: string): Promise<{
+  totalRevenue: number | null;
+  totalExpenses: number | null;
+  taxYear: number | null;
+} | null> {
+  try {
+    const resp = await fetch(
+      `https://projects.propublica.org/nonprofits/api/v2/organizations/${ein}.json`,
+      { headers: { 'User-Agent': 'FunderMatch/1.0' } },
+    );
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const org = data?.organization;
+    if (!org) return null;
+
+    // ProPublica returns total_revenue and total_expenses at the org level
+    // from their most recent filing
+    const totalRevenue = typeof org.income_amount === 'number' ? org.income_amount : null;
+    const totalExpenses = typeof org.expense_amount === 'number' ? org.expense_amount : null;
+
+    // Find the most recent tax year from filings_with_data
+    let taxYear: number | null = null;
+    const filings = data?.filings_with_data;
+    if (Array.isArray(filings) && filings.length > 0) {
+      taxYear = filings[0]?.tax_prd_yr ?? null;
+    }
+
+    if (totalRevenue === null && totalExpenses === null) return null;
+
+    return { totalRevenue, totalExpenses, taxYear };
+  } catch (_e) {
+    return null; // non-critical
+  }
 }
 
 Deno.serve(async (req) => {
@@ -134,11 +174,14 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Fetch all grants where this org is the grantee
-    const grants = (await restQuery(
-      'foundation_grants',
-      `grantee_ein=eq.${encodeURIComponent(lookupEin)}&select=foundation_id,grant_year,grant_amount,grantee_name,grantee_ein,grantee_city,grantee_state&order=grant_year.desc&limit=10000`,
-    )) as GrantRow[];
+    // Fetch grants and 990 budget concurrently
+    const [grants, budget990] = await Promise.all([
+      restQuery(
+        'foundation_grants',
+        `grantee_ein=eq.${encodeURIComponent(lookupEin)}&select=foundation_id,grant_year,grant_amount,grantee_name,grantee_ein,grantee_city,grantee_state&order=grant_year.desc&limit=10000`,
+      ) as Promise<GrantRow[]>,
+      fetchGrantee990Budget(lookupEin),
+    ]);
 
     if (grants.length === 0) {
       return new Response(
@@ -199,19 +242,19 @@ Deno.serve(async (req) => {
       .sort((a, b) => b[1].total - a[1].total)
       .slice(0, 30); // fetch extra to compensate for filtered DAFs
 
-    // Enrich with funder names and NTEE codes
+    // Enrich with funder names, NTEE codes, and states
     const funderIds = allFunderIds.map(([id]) => id);
     let funderLookup = new Map<string, FunderRow>();
     if (funderIds.length > 0) {
       const idFilter = `(${funderIds.map((id) => `"${id}"`).join(',')})`;
       const funderRows = (await restQuery(
         'funders',
-        `id=in.${idFilter}&select=id,name,ntee_code`,
+        `id=in.${idFilter}&select=id,name,ntee_code,state`,
       )) as FunderRow[];
       funderLookup = new Map(funderRows.map((f) => [f.id, f]));
     }
 
-    // Return top 25 funders with isDaf flag (frontend handles filtering)
+    // Return top 25 funders with isDaf flag and funderState (frontend handles filtering)
     const topFunders = allFunderIds
       .map(([fId, agg]) => {
         const funder = funderLookup.get(fId);
@@ -224,6 +267,7 @@ Deno.serve(async (req) => {
           totalAmount: Math.round(agg.total),
           lastYear: agg.lastYear,
           isDaf: isDonorAdvisedFund(fId, funderName, nteeCode),
+          funderState: funder?.state || null,
         };
       })
       .slice(0, 25);
@@ -243,6 +287,8 @@ Deno.serve(async (req) => {
       yearlyTrends,
       topFunders,
       ntee_codes: [],
+      // 990 budget data from ProPublica (null if unavailable)
+      budget: budget990,
     };
 
     return new Response(JSON.stringify(result), {
