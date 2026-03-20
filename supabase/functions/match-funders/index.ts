@@ -79,6 +79,44 @@ const ALLOWED_ORIGINS = new Set([
   'http://localhost:5173',
 ]);
 
+/**
+ * Enrich similar_past_grantees with ein from recipient_organizations
+ * when grantee_ein is missing from foundation_grants.
+ */
+async function enrichGranteeEins(results: any[]): Promise<void> {
+  const missingNames = new Set<string>();
+  for (const funder of results) {
+    for (const g of funder.similar_past_grantees || []) {
+      if (!g.ein && g.name) missingNames.add(g.name.toUpperCase());
+    }
+  }
+  if (missingNames.size === 0) return;
+
+  const nameList = [...missingNames].slice(0, 150);
+  const nameFilter = nameList.map((n) => `"${n.replace(/"/g, '\\"')}"`).join(',');
+  const url = `${SUPABASE_URL}/rest/v1/recipient_organizations?select=ein,name&name=in.(${encodeURIComponent(nameFilter)})&limit=300`;
+  try {
+    const resp = await fetch(url, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+    });
+    if (!resp.ok) return;
+    const rows: { ein: string; name: string }[] = await resp.json();
+    const einMap = new Map<string, string>();
+    for (const row of rows) {
+      const key = row.name.toUpperCase();
+      if (!einMap.has(key) && row.ein) einMap.set(key, row.ein);
+    }
+    for (const funder of results) {
+      for (const g of funder.similar_past_grantees || []) {
+        if (!g.ein && g.name) {
+          const found = einMap.get(g.name.toUpperCase());
+          if (found) g.ein = found;
+        }
+      }
+    }
+  } catch (_e) { /* non-critical — skip silently */ }
+}
+
 const STOP_WORDS = new Set([
   'the', 'and', 'for', 'that', 'this', 'with', 'from', 'your', 'their', 'they', 'them', 'our',
   'are', 'was', 'were', 'have', 'has', 'had', 'into', 'about', 'through', 'within', 'without',
@@ -3009,6 +3047,9 @@ Deno.serve(async (req) => {
       // Fire-and-forget: cache any newly discovered grant page URLs
       cacheDiscoveredUrls(discoveredUrls, SUPABASE_URL, SUPABASE_KEY);
 
+      // Enrich grantee EINs from recipient_organizations where missing
+      await enrichGranteeEins(results);
+
       return new Response(JSON.stringify({
         results,
         cached: false,
@@ -3397,6 +3438,9 @@ Deno.serve(async (req) => {
 
     // Fire-and-forget: cache any newly discovered grant page URLs
     cacheDiscoveredUrls(missionDiscoveredUrls, SUPABASE_URL, SUPABASE_KEY);
+
+    // Enrich grantee EINs from recipient_organizations where missing
+    await enrichGranteeEins(results);
 
     return new Response(JSON.stringify({ results, cached: false }), {
       headers: { ...headers, 'Content-Type': 'application/json' },
