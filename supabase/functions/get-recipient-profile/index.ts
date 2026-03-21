@@ -111,16 +111,26 @@ async function fetchGrantee990Budget(ein: string): Promise<{
     const org = data?.organization;
     if (!org) return null;
 
-    // ProPublica returns total_revenue and total_expenses at the org level
-    // from their most recent filing
-    const totalRevenue = typeof org.income_amount === 'number' ? org.income_amount : null;
-    const totalExpenses = typeof org.expense_amount === 'number' ? org.expense_amount : null;
+    // Org-level fields (available for most orgs)
+    const orgIncome = typeof org.income_amount === 'number' ? org.income_amount : null;
 
-    // Find the most recent tax year from filings_with_data
+    // Filing-level fields have more detail (totfuncexpns = total functional expenses)
+    let totalExpenses: number | null = null;
+    let totalRevenue: number | null = orgIncome;
     let taxYear: number | null = null;
+
     const filings = data?.filings_with_data;
     if (Array.isArray(filings) && filings.length > 0) {
-      taxYear = filings[0]?.tax_prd_yr ?? null;
+      const latest = filings[0];
+      taxYear = latest?.tax_prd_yr ?? null;
+      // Pull expenses from the filing if available
+      if (typeof latest?.totfuncexpns === 'number') {
+        totalExpenses = latest.totfuncexpns;
+      }
+      // Filing-level revenue is more accurate than org-level
+      if (typeof latest?.totrevenue === 'number') {
+        totalRevenue = latest.totrevenue;
+      }
     }
 
     if (totalRevenue === null && totalExpenses === null) return null;

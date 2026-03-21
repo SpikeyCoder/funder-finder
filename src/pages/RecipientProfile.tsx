@@ -173,6 +173,10 @@ export default function RecipientProfile() {
     ? peers.filter(p => !isUniversityOrCollege(p.name || ''))
     : peers;
 
+  // Determine budget display: prefer expenses, fall back to revenue
+  const budgetAmount = profile.budget?.totalExpenses ?? profile.budget?.totalRevenue ?? null;
+  const budgetLabel = profile.budget?.totalExpenses != null ? 'Total Expenses' : 'Total Revenue';
+
   return (
     <div className="min-h-screen bg-[#0d1117] text-white py-12 px-6">
       <div className="max-w-2xl mx-auto">
@@ -226,8 +230,8 @@ export default function RecipientProfile() {
             </div>
           </div>
 
-          {/* 990 Budget from latest filing — show total expenses as the annual budget */}
-          {profile.budget && profile.budget.totalExpenses != null && (
+          {/* 990 Budget from latest filing */}
+          {profile.budget && budgetAmount != null && (
             <div className="bg-[#0d1117] border border-[#30363d] rounded-xl p-4 mb-3">
               <div className="flex items-center gap-2 mb-2">
                 <DollarSign size={14} className="text-purple-400" />
@@ -235,7 +239,10 @@ export default function RecipientProfile() {
                   Annual Budget (990 Filing{profile.budget.taxYear ? `, ${profile.budget.taxYear}` : ''})
                 </p>
               </div>
-              <p className="text-lg font-bold text-purple-400">{fmtDollar(profile.budget.totalExpenses)}</p>
+              <div>
+                <p className="text-xs text-gray-500">{budgetLabel}</p>
+                <p className="text-lg font-bold text-purple-400">{fmtDollar(budgetAmount)}</p>
+              </div>
             </div>
           )}
 
