@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { ArrowLeft, MapPin, Calendar, Building2, Users, Bookmark, BookmarkCheck, GraduationCap, DollarSign } from 'lucide-react';
 import { RecipientProfile as RecipientProfileType, PeerEntry, Funder, GeoEntry } from '../types';
 import { fetchRecipientProfile, fetchPeers } from '../utils/matching';
-import { GivingTrendsChart, GeoBarChart, StatCard, fmtDollar } from '../components/InsightCharts';
+import { GeoBarChart, StatCard, fmtDollar } from '../components/InsightCharts';
 import { useAuth } from '../contexts/AuthContext';
 import { isSaved, saveFunder, unsaveFunder } from '../utils/storage';
 import LoginModal from '../components/LoginModal';
@@ -120,14 +120,6 @@ export default function RecipientProfile() {
       </div>
     );
   }
-
-  // Adapt yearlyTrends to the YearTrend shape expected by GivingTrendsChart
-  const chartData = profile.yearlyTrends.map(t => ({
-    year: t.year,
-    grantCount: t.grantCount,
-    totalAmount: t.totalAmount,
-    avgGrant: t.grantCount > 0 ? Math.round(t.totalAmount / t.grantCount) : 0,
-  }));
 
   // Build funder state geographic data for bar chart
   const funderStateGeo: GeoEntry[] = (() => {
@@ -248,18 +240,7 @@ export default function RecipientProfile() {
 
           <hr className="border-[#30363d] mb-6" />
 
-          {/* Funding Trends Chart */}
-          {chartData.length > 0 && (
-            <>
-              <h2 className="text-lg font-semibold mb-3">Funding Trends</h2>
-              <div className="bg-[#0d1117] border border-[#30363d] rounded-xl p-4 mb-2">
-                <GivingTrendsChart data={chartData} />
-              </div>
-              <p className="text-xs text-gray-500 mb-6">Source: IRS 990-PF filings, 2015–present</p>
-              <hr className="border-[#30363d] mb-6" />
-            </>
-          )}
-
+  
           {/* Funder States Bar Chart */}
           {funderStateGeo.length > 0 && (
             <>
