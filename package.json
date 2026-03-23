@@ -13,7 +13,7 @@
     "eval:export-signals": "node scripts/export-search-signal-labels.js"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.99.2",
+    "@supabase/supabase-js": "^2.100.0",
     "html2canvas": "^1.4.1",
     "lucide-react": "^0.577.0",
     "react": "^18.3.1",
