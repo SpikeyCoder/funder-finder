@@ -4,7 +4,14 @@
 @tailwind utilities;
 
 @layer base {
-  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  /* Visible focus rings on all interactive elements (WCAG 2.4.7) */
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  [role="radio"]:focus-visible,
+  [tabindex]:focus-visible {
     outline: 2px solid #3b82f6;
     outline-offset: 2px;
   }
@@ -19,6 +26,68 @@ body {
   color: #ffffff;
   font-family: 'Inter', system-ui, sans-serif;
   margin: 0;
+}
+
+/* Improved contrast for placeholder text (WCAG 1.4.3) */
+::placeholder {
+  color: #8b949e;
+  opacity: 1;
+}
+
+/* Light mode theme overrides */
+html.light-mode body {
+  background-color: #ffffff;
+  color: #1f2328;
+}
+
+html.light-mode nav,
+html.light-mode footer {
+  background-color: #f6f8fa !important;
+  border-color: #d1d9e0 !important;
+}
+
+html.light-mode .bg-\[\#0d1117\] {
+  background-color: #ffffff;
+}
+
+html.light-mode .bg-\[\#161b22\] {
+  background-color: #f6f8fa;
+}
+
+html.light-mode .bg-\[\#21262d\] {
+  background-color: #eaeef2;
+}
+
+html.light-mode .border-\[\#30363d\] {
+  border-color: #d1d9e0;
+}
+
+html.light-mode .border-\[\#1b2130\] {
+  border-color: #d1d9e0;
+}
+
+html.light-mode .text-white {
+  color: #1f2328;
+}
+
+html.light-mode .text-gray-400 {
+  color: #656d76;
+}
+
+html.light-mode .text-gray-300 {
+  color: #424a53;
+}
+
+html.light-mode .text-gray-500 {
+  color: #6e7681;
+}
+
+html.light-mode .text-gray-600 {
+  color: #57606a;
+}
+
+html.light-mode .placeholder-gray-600::placeholder {
+  color: #6e7681;
 }
 
 @keyframes pageFadeIn {
