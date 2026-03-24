@@ -28,6 +28,7 @@ import ApplicationsPage from './pages/ApplicationsPage';
 import OnboardingPage from './pages/OnboardingPage';
 import NotFound from './pages/NotFound';
 import BugReportButton from './components/BugReportButton';
+import ThemeToggle from './components/ThemeToggle';
 
 // Must match the key used in AuthContext.storePendingFunder
 const REDIRECT_AFTER_LOGIN_KEY = 'ff_redirect_after_login';
@@ -131,6 +132,7 @@ function App() {
         <AnimatedRoutes />
         <BugReportButton />
         <FeatureTooltips />
+        <ThemeToggle />
       </AuthProvider>
     </BrowserRouter>
   );
