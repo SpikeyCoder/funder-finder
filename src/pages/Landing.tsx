@@ -8,7 +8,7 @@ export default function Landing() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    document.title = 'Non-Profit Funder Finder — Free AI Funder Matching for 501(c)(3)s';
+    document.title = 'Non-Profit Funder Finder â Free AI Funder Matching for 501(c)(3)s';
   }, []);
 
   return (
@@ -16,7 +16,7 @@ export default function Landing() {
       <NavBar />
 
       {/* Hero */}
-      <div className="flex flex-col items-center justify-center text-center px-6 pt-24 pb-12">
+      <div id="main-content" className="flex flex-col items-center justify-center text-center px-6 pt-24 pb-12">
         <h1 className="text-5xl md:text-7xl font-bold leading-tight tracking-tight max-w-4xl">
           Find Funders Aligned to Your Mission
         </h1>
@@ -93,7 +93,7 @@ export default function Landing() {
               'No account required to start searching',
             ].map(item => (
               <div key={item} className="flex items-start gap-3">
-                <span className="text-green-400 mt-0.5 font-bold text-lg">✓</span>
+                <span className="text-green-400 mt-0.5 font-bold text-lg">â</span>
                 <span className="text-gray-200">{item}</span>
               </div>
             ))}
@@ -118,7 +118,7 @@ export default function Landing() {
 
       {/* Footer */}
       <footer className="border-t border-[#21262d] py-8 text-center text-sm text-gray-500">
-        © {new Date().getFullYear()} FunderMatch &middot; Built for nonprofits
+        Â© {new Date().getFullYear()} FunderMatch &middot; Built for nonprofits
       </footer>
     </div>
   );
