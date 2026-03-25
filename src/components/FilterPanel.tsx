@@ -97,6 +97,7 @@ const Accordion: React.FC<{
   <div className="border-b border-[#30363d]">
     <button
       onClick={onToggle}
+      aria-expanded={isOpen}
       className="w-full px-4 py-3 flex items-center justify-between hover:bg-[#161b22] transition-colors"
     >
       <span className="font-medium text-white">{title}</span>
@@ -295,6 +296,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
           <input
             type="text"
             placeholder="Search keywords..."
+            aria-label="Search keywords"
             value={filters.keyword}
             onChange={(e) => onChange({ ...filters, keyword: e.target.value })}
             className="w-full pl-10 pr-4 py-2 bg-[#0d1117] border border-[#30363d] rounded text-white placeholder-gray-500 focus:outline-none focus:border-[#58a6ff]"
@@ -329,6 +331,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
             <input
               type="text"
               placeholder="Search states..."
+              aria-label="Search states"
               value={stateSearchTerm}
               onChange={(e) => setStateSearchTerm(e.target.value)}
               className="w-full px-3 py-2 bg-[#0d1117] border border-[#30363d] rounded text-white placeholder-gray-500 focus:outline-none focus:border-[#58a6ff] text-sm"
