@@ -39,7 +39,7 @@ export default function MissionInput() {
   useEffect(() => {
     document.title = 'Find Funders for Your Nonprofit | FunderMatch';
     const desc = document.querySelector<HTMLMetaElement>('meta[name="description"]');
-    if (desc) desc.content = 'Describe your nonprofit’s mission and get an instant AI-ranked list of foundations, DAFs, and corporate giving programs aligned to your work.';
+    if (desc) desc.content = 'Describe your nonprofitâs mission and get an instant AI-ranked list of foundations, DAFs, and corporate giving programs aligned to your work.';
   }, []);
 
   const [mission, setMission] = useState(returnState?.prefillMission || returnState?.mission || '');
@@ -98,7 +98,7 @@ export default function MissionInput() {
           <div className="flex items-center justify-between mt-2">
             <span className="text-xs text-gray-300">{mission.length} characters</span>
           </div>
-          {errors.mission && <p className="text-red-400 text-sm mt-1" role="alert">{errors.mission}</p>}
+          {errors.mission && <p className="text-red-400 text-sm mt-1" aria-live="polite" role="alert">{errors.mission}</p>}
 
           <button
             onClick={() => setShowExamples(!showExamples)}
@@ -125,13 +125,13 @@ export default function MissionInput() {
 
         {/* Location Served */}
         <div>
-          <label className="block text-base font-semibold mb-1">
+          <label htmlFor="location-input" className="block text-base font-semibold mb-1">
             <span className="flex items-center gap-2">
               <MapPin size={16} className="text-blue-400" />
               Location Served <span className="text-red-400" aria-hidden="true">*</span>
             </span>
           </label>
-          <p className="text-sm text-gray-400 mb-3">
+          <p id="location-desc" className="text-sm text-gray-400 mb-3">
             Where does your nonprofit primarily operate or serve communities?
             Funders with geographic alignment will be ranked higher.
           </p>
@@ -142,8 +142,11 @@ export default function MissionInput() {
               setErrors(prev => ({ ...prev, location: undefined }));
             }}
             hasError={!!errors.location}
+            id="location-input"
+            required
+            ariaDescribedBy="location-desc"
           />
-          {errors.location && <p className="text-red-400 text-sm mt-1" role="alert">{errors.location}</p>}
+          {errors.location && <p className="text-red-400 text-sm mt-1" aria-live="polite" role="alert">{errors.location}</p>}
         </div>
 
         {/* Budget band */}
