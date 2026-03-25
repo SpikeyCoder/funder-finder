@@ -1,6 +1,7 @@
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Bookmark, BookmarkCheck, Copy, Globe, MapPin, User, Mail, TrendingUp, ChevronDown, ChevronUp, BarChart3, Users, Map, Loader2, FileText, Info } from 'lucide-react';
+import GlossaryTooltip from '../components/GlossaryTooltip';
 import { Funder, FunderInsights, PeerEntry } from '../types';
 import { isSaved, saveFunder, unsaveFunder } from '../utils/storage';
 import { formatGrantRange, formatTotalGiving, fetchFunderInsights, fetchPeers, fetchFunderByEin } from '../utils/matching';
@@ -64,7 +65,7 @@ export default function FunderDetail() {
   const [peers, setPeers] = useState<PeerEntry[]>([]);
   const [peersLoading, setPeersLoading] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
-    trends: true, grantees: false, geo: false, recipients: false, purposes: false, peers: false,
+    trends: true, grantees: true, geo: false, recipients: false, purposes: false, peers: false,
   });
 
   const [showAllRecipients, setShowAllRecipients] = useState(false);
@@ -212,8 +213,8 @@ export default function FunderDetail() {
               {funder.type}
             </span>
             {funder.ntee_code && (
-              <span className="inline-block bg-[#21262d] border border-[#30363d] text-gray-400 text-sm px-3 py-1 rounded-full">
-                NTEE {funder.ntee_code}
+              <span className="inline-flex items-center gap-1 bg-[#21262d] border border-[#30363d] text-gray-400 text-sm px-3 py-1 rounded-full">
+                NTEE {funder.ntee_code} <GlossaryTooltip term="NTEE" />
               </span>
             )}
             {/* Data freshness indicator */}
@@ -242,7 +243,9 @@ export default function FunderDetail() {
               <p className="text-xs text-blue-400 font-semibold mb-1">Why this funder matches your mission</p>
               <p className="text-gray-300 text-sm">{funder.fit_explanation || funder.reason}</p>
               {funder.score && (
-                <p className="text-xs text-gray-300 mt-2">Match score: {Math.round(funder.score * 100)}%</p>
+                <p className="text-xs text-gray-300 mt-2 inline-flex items-center gap-1">
+                  Match score: {Math.round(funder.score * 100)}% <GlossaryTooltip term="fit score" />
+                </p>
               )}
             </div>
           )}
@@ -361,7 +364,7 @@ export default function FunderDetail() {
                 >
                   <div className="flex items-center gap-2">
                     <BarChart3 size={16} className="text-blue-400" />
-                    <h2 className="text-lg font-semibold">990 Giving Trends</h2>
+                    <h2 className="text-lg font-semibold inline-flex items-center gap-1">990 Giving Trends <GlossaryTooltip term="990" /></h2>
                     {(() => {
                       const trend = classifyTrend(insights.grantHistory.yearTrend);
                       return trend ? (
