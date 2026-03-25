@@ -11,7 +11,7 @@ const STALE_GH_FUNDER_RE = /^https?:\/\/[^\/]*\.github\.io\/[^\/]+\/funder\//;
 
 /** Normalise a URL string to a fully-qalified external URL, or null.
  *  - Stale GitHub Pages internal funder URLs: prefix stripped, domain extracted
- *  - Starts with '/': internal app route → rejected (returns null)
+ *  - Starts with '/': internal app route â rejected (returns null)
  *  - Bare domain like "cct.org": https:// prepended
  *  - Already http(s) and external: returned as-is
  *  - Empty / null: returns null
@@ -19,11 +19,11 @@ const STALE_GH_FUNDER_RE = /^https?:\/\/[^\/]*\.github\.io\/[^\/]+\/funder\//;
 function toExternalUrl(url: string | null | undefined): string | null {
   let s = url?.trim();
   if (!s) return null;
-  // Strip legacy cached GitHub Pages funder paths → leaves bare domain like "cct.org"
+  // Strip legacy cached GitHub Pages funder paths â leaves bare domain like "cct.org"
   s = s.replace(STALE_GH_FUNDER_RE, '');
-  if (!s || s.startsWith('/')) return null;    // internal route — never use
+  if (!s || s.startsWith('/')) return null;    // internal route â never use
   if (s.startsWith('http')) return s;          // already absolute external URL
-  return `https://${s}`;                        // bare domain e.g. cct.org → https://cct.org
+  return `https://${s}`;                        // bare domain e.g. cct.org â https://cct.org
 }
 
 /** Best external link for a funder's next step: prefers next_step_url, falls back to website. */
@@ -183,7 +183,7 @@ export default function Results() {
     const isPeerSearch = peerNonprofits.length > 0;
 
     if (!mission && !isPeerSearch) {
-      setError('No mission found — please go back and enter your mission statement.');
+      setError('No mission found â please go back and enter your mission statement.');
       setLoading(false);
       return;
     }
@@ -251,7 +251,7 @@ export default function Results() {
         sessionStorage.setItem(RESULTS_CACHE_KEY, JSON.stringify({
           mission, locationServed, results: rankedResults,
         }));
-      } catch { /* sessionStorage full or unavailable — ignore */ }
+      } catch { /* sessionStorage full or unavailable â ignore */ }
 
       // If server returned suggested peers, adopt them in the UI
       if (response.peers?.length && !peerNonprofits.length) {
@@ -285,7 +285,7 @@ export default function Results() {
     setPeerSearchInput('');
   };
 
-  // Load saved IDs — from DB if logged in, from localStorage if not
+  // Load saved IDs â from DB if logged in, from localStorage if not
   const loadSavedIds = async () => {
     if (user) {
       try {
@@ -300,7 +300,7 @@ export default function Results() {
   };
 
   // Single-call flow: match-funders now handles peer suggestion internally.
-  // Just call loadMatches() once — it will return peers + results in one response.
+  // Just call loadMatches() once â it will return peers + results in one response.
   useEffect(() => {
     loadSavedIds();
 
@@ -325,7 +325,7 @@ export default function Results() {
     const alreadySaved = savedIds.includes(funder.id);
 
     if (user) {
-      // Authenticated path — use DB
+      // Authenticated path â use DB
       if (alreadySaved) {
         try {
           await unsaveFunderFromDB(funder.id);
@@ -344,7 +344,7 @@ export default function Results() {
         }
       }
     } else {
-      // Anonymous path — save to localStorage immediately, suggest login for sync
+      // Anonymous path â save to localStorage immediately, suggest login for sync
       if (alreadySaved) {
         unsaveFunder(funder.id);
         setSavedIds(prev => prev.filter(i => i !== funder.id));
@@ -391,7 +391,7 @@ export default function Results() {
     a.click();
   };
 
-  // Exclude donor-advised funds (DAFs) — these are pass-through vehicles, not direct grantmakers
+  // Exclude donor-advised funds (DAFs) â these are pass-through vehicles, not direct grantmakers
   const DAF_NAMES = new Set([
     // Major brokerage/financial DAF sponsors
     'FIDELITY INVESTMENTS CHARITABLE GIFT FUND',
@@ -466,7 +466,7 @@ export default function Results() {
       /\bcharitable gift fund\b/i.test(name);
   };
 
-  // University detection — NTEE B40-B50 range or name heuristic
+  // University detection â NTEE B40-B50 range or name heuristic
   const isUniversity = (f: Funder) => {
     if (f.ntee_code) {
       const code = f.ntee_code.toUpperCase();
@@ -489,14 +489,14 @@ export default function Results() {
     return [...einMap.values()];
   })();
 
-  // Grant size filter — uses grant_range_max as primary signal, falls back to grant_range_min
+  // Grant size filter â uses grant_range_max as primary signal, falls back to grant_range_min
   const filteredMatches = deduplicatedMatches
     .filter(f => !hideDAFs || (f.type !== 'daf' && !isDAF(f.name)))
     .filter(f => !hideUniversities || !isUniversity(f))
     .filter(f => {
       if (grantSizeFilter === 'any') return true;
       const effectiveMax = f.grant_range_max ?? f.grant_range_min;
-      if (effectiveMax === null) return false; // no grant range data → exclude from size-specific filters
+      if (effectiveMax === null) return false; // no grant range data â exclude from size-specific filters
       if (grantSizeFilter === 'small')  return effectiveMax <= 25_000;
       if (grantSizeFilter === 'medium') return effectiveMax > 25_000 && effectiveMax <= 250_000;
       if (grantSizeFilter === 'large')  return effectiveMax > 250_000;
@@ -532,7 +532,7 @@ export default function Results() {
   const GRANT_SIZE_FILTERS: { key: 'any' | 'small' | 'medium' | 'large'; label: string }[] = [
     { key: 'any',    label: 'Any size' },
     { key: 'small',  label: '< $25K' },
-    { key: 'medium', label: '$25K – $250K' },
+    { key: 'medium', label: '$25K â $250K' },
     { key: 'large',  label: '$250K+' },
   ];
 
@@ -703,7 +703,7 @@ export default function Results() {
             </button>
             {(grantSizeFilter !== 'any' || hideUniversities || deduplicatedMatches.length < matches.length) && (
               <span className="text-xs text-gray-300 ml-1">
-                — showing {filteredMatches.length} of {deduplicatedMatches.length}{deduplicatedMatches.length < matches.length ? ` (${matches.length - deduplicatedMatches.length} duplicates removed)` : ''}
+                â showing {filteredMatches.length} of {deduplicatedMatches.length}{deduplicatedMatches.length < matches.length ? ` (${matches.length - deduplicatedMatches.length} duplicates removed)` : ''}
               </span>
             )}
           </div>
@@ -719,7 +719,7 @@ export default function Results() {
                 <option value="score">Match Score</option>
                 <option value="grant_amount">Grant Amount</option>
                 <option value="total_giving">Total Giving</option>
-                <option value="name">Name (A–Z)</option>
+                <option value="name">Name (AâZ)</option>
               </select>
             </div>
             <div className="flex items-center gap-1.5">
@@ -739,6 +739,7 @@ export default function Results() {
         )}
 
         {/* Loading state */}
+        <div role="status" aria-live="polite">
         {loading && (
           <div className="flex flex-col items-center justify-center py-24 text-gray-400">
             <Loader2 size={40} className="animate-spin mb-4 text-blue-400" />
@@ -750,6 +751,7 @@ export default function Results() {
             </p>
           </div>
         )}
+        </div>
 
         {/* Error state */}
         {!loading && error && (
@@ -853,12 +855,12 @@ export default function Results() {
                                 ? 'bg-amber-900/30 border-amber-700 text-amber-300'
                                 : 'bg-[#21262d] border-[#30363d] text-gray-300'
                             }`}>
-                              {isStale ? '⚠ ' : ''}Data as of {latestYear}
+                              {isStale ? 'â  ' : ''}Data as of {latestYear}
                             </span>
                           );
                           if (funder.limited_grant_history_data) return (
                             <span className="inline-block bg-amber-900/30 border border-amber-700 text-amber-300 text-xs px-3 py-1 rounded-full">
-                              ⚠ Limited data
+                              â  Limited data
                             </span>
                           );
                           return null;
@@ -896,13 +898,13 @@ export default function Results() {
                                   className="text-sm font-semibold text-blue-400 hover:text-blue-300 hover:underline text-left transition-colors"
                                   title="View this organization's profile"
                                 >
-                                  {grantee.name} →
+                                  {grantee.name} â
                                 </button>
                               ) : (
                                 <p className="text-sm font-semibold text-white">{grantee.name}</p>
                               )}
                               <p className="text-xs text-gray-300">
-                                {(grantee.year ? String(grantee.year) : 'Year n/a')} · {formatGrantAmount(grantee.amount)}
+                                {(grantee.year ? String(grantee.year) : 'Year n/a')} Â· {formatGrantAmount(grantee.amount)}
                               </p>
                             </div>
                             {grantee.match_reasons.length > 0 && (
@@ -1004,11 +1006,11 @@ export default function Results() {
                   disabled={currentPage <= 1}
                   className="px-4 py-2 rounded-lg bg-[#21262d] text-gray-300 text-sm font-medium hover:bg-[#30363d] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
-                  ← Previous
+                  â Previous
                 </button>
                 <span className="text-gray-400 text-sm">
                   Page {currentPage} of {totalPages}
-                  {' '}({(currentPage - 1) * RESULTS_PER_PAGE + 1}–{Math.min(currentPage * RESULTS_PER_PAGE, filteredMatches.length)} of {filteredMatches.length})
+                  {' '}({(currentPage - 1) * RESULTS_PER_PAGE + 1}â{Math.min(currentPage * RESULTS_PER_PAGE, filteredMatches.length)} of {filteredMatches.length})
                 </span>
                 <button
                   onClick={() => {
@@ -1018,7 +1020,7 @@ export default function Results() {
                   disabled={currentPage >= totalPages}
                   className="px-4 py-2 rounded-lg bg-[#21262d] text-gray-300 text-sm font-medium hover:bg-[#30363d] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
-                  Next →
+                  Next â
                 </button>
               </div>
             )}
@@ -1037,12 +1039,12 @@ export default function Results() {
         )}
       </div>
 
-      {/* Login modal — shown when user explicitly clicks login */}
+      {/* Login modal â shown when user explicitly clicks login */}
       {loginModalFunder && (
         <LoginModal pendingFunder={loginModalFunder} onClose={() => setLoginModalFunder(null)} />
       )}
 
-      {/* Toast — non-blocking hint to log in for cloud sync */}
+      {/* Toast â non-blocking hint to log in for cloud sync */}
       {toastMsg && (
         <Toast
           message={toastMsg}
