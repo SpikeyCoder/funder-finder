@@ -365,22 +365,28 @@ export default function GrantWriter() {
 
   const exportToWord = async () => {
     // Build a clean HTML document from the markdown output
-    const htmlContent = renderMarkdown(output);
+    // Strip Tailwind classes from the rendered HTML since Word won't understand them
+    const rawHtml = renderMarkdown(output);
+    const cleanedHtml = rawHtml
+      .replace(/ class="[^"]*"/g, '')
+      .replace(/<div><\/div>/g, '<br>');
     const fullHtml = `<!DOCTYPE html>
 <html><head><meta charset="utf-8">
 <style>
-  body { font-family: 'Calibri', 'Arial', sans-serif; font-size: 11pt; line-height: 1.6; color: #1a1a1a; margin: 1in; }
-  h2 { font-size: 16pt; color: #1a3a5c; margin-top: 24pt; margin-bottom: 8pt; border-bottom: 1pt solid #ccc; padding-bottom: 4pt; }
-  h3 { font-size: 13pt; color: #2a2a2a; margin-top: 18pt; margin-bottom: 6pt; }
-  p { margin: 6pt 0; }
+  body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; line-height: 1.5; color: #000; margin: 0; padding: 0; }
+  h2 { font-size: 15pt; font-weight: bold; color: #1a3a5c; margin: 18pt 0 6pt 0; padding: 0; }
+  h3 { font-size: 12pt; font-weight: bold; color: #000; margin: 14pt 0 4pt 0; padding: 0; }
+  p { font-size: 11pt; margin: 4pt 0; padding: 0; }
   strong { font-weight: bold; }
-  hr { border: none; border-top: 1pt solid #ccc; margin: 18pt 0; }
+  hr { border: none; border-top: 1px solid #999; margin: 12pt 0; }
+  span { font-size: 11pt; }
+  div { font-size: 11pt; margin: 2pt 0; padding: 0; }
 </style>
-</head><body>${htmlContent}</body></html>`;
+</head><body>${cleanedHtml}</body></html>`;
 
     try {
       const blob = await asBlob(fullHtml, {
-        orientation: 'portrait',
+        orientation: 'portrait' as const,
         margins: { top: 1440, right: 1440, bottom: 1440, left: 1440 },
       }) as Blob;
 
