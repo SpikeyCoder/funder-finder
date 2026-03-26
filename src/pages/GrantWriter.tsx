@@ -1,9 +1,11 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ArrowLeft, Check, CheckCircle2, ChevronDown, ChevronUp, Copy,
+  ArrowLeft, Check, CheckCircle2, ChevronDown, ChevronUp, Copy, Download,
   FileText, Loader2, RefreshCw, Trash2, Upload, Wand2, X,
 } from 'lucide-react';
+import { asBlob } from 'html-docx-js-typescript';
+import { saveAs } from 'file-saver';
 import { Funder, GenerationPhase, OrgDetails, UploadedGrantFile } from '../types';
 import { getEdgeFunctionHeaders, supabase } from '../lib/supabase';
 import { formatGrantRange, formatTotalGiving } from '../utils/matching';
@@ -359,6 +361,37 @@ export default function GrantWriter() {
     await navigator.clipboard.writeText(output);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const exportToWord = async () => {
+    // Build a clean HTML document from the markdown output
+    const htmlContent = renderMarkdown(output);
+    const fullHtml = `<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+  body { font-family: 'Calibri', 'Arial', sans-serif; font-size: 11pt; line-height: 1.6; color: #1a1a1a; margin: 1in; }
+  h2 { font-size: 16pt; color: #1a3a5c; margin-top: 24pt; margin-bottom: 8pt; border-bottom: 1pt solid #ccc; padding-bottom: 4pt; }
+  h3 { font-size: 13pt; color: #2a2a2a; margin-top: 18pt; margin-bottom: 6pt; }
+  p { margin: 6pt 0; }
+  strong { font-weight: bold; }
+  hr { border: none; border-top: 1pt solid #ccc; margin: 18pt 0; }
+</style>
+</head><body>${htmlContent}</body></html>`;
+
+    try {
+      const blob = await asBlob(fullHtml, {
+        orientation: 'portrait',
+        margins: { top: 1440, right: 1440, bottom: 1440, left: 1440 },
+      }) as Blob;
+
+      const safeFileName = funder?.name
+        ? `Grant_Draft_${funder.name.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, '_')}.docx`
+        : 'Grant_Draft.docx';
+
+      saveAs(blob, safeFileName);
+    } catch (err) {
+      console.error('Export to Word failed:', err);
+    }
   };
 
   const reset = () => {
@@ -863,6 +896,13 @@ export default function GrantWriter() {
               <h2 className="text-lg font-semibold">Your Grant Draft</h2>
               {phase === 'done' && (
                 <div className="flex gap-2">
+                  <button
+                    onClick={exportToWord}
+                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-4 py-2 text-sm font-medium transition-colors"
+                  >
+                    <Download size={14} />
+                    Export to Word
+                  </button>
                   <button
                     onClick={copyOutput}
                     className="flex items-center gap-2 border border-[#30363d] rounded-xl px-4 py-2 text-sm hover:bg-[#161b22] transition-colors"
