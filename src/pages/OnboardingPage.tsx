@@ -187,7 +187,7 @@ export default function OnboardingPage() {
               <p className="text-sm font-semibold text-white">Create Your First Project</p>
               <input type="text" placeholder="Project name (e.g., Youth STEM Education Program)"
                 className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
-              <textarea placeholder="Brief project description — what does it do and who does it serve?"
+              <textarea placeholder="Brief project description - what does it do and who does it serve?"
                 rows={3}
                 className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500 resize-none" />
               <div className="grid grid-cols-2 gap-3">

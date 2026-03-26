@@ -12,7 +12,7 @@ interface TooltipConfig {
 const TOOLTIPS: TooltipConfig[] = [
   { id: 'tracker', target: '[data-tooltip="tracker"]', title: 'Grant Tracker', description: 'Track your grant applications through every pipeline stage. Click any grant to see details and manage tasks.', position: 'bottom' },
   { id: 'calendar', target: '[data-tooltip="calendar"]', title: 'Deadline Calendar', description: 'View all grant deadlines in a monthly calendar. Never miss an important date.', position: 'bottom' },
-  { id: 'reports', target: '[data-tooltip="reports"]', title: 'Portfolio Reports', description: 'See your grant performance at a glance — win rates, pipeline status, and funding trends.', position: 'bottom' },
+  { id: 'reports', target: '[data-tooltip="reports"]', title: 'Portfolio Reports', description: 'See your grant performance at a glance - win rates, pipeline status, and funding trends.', position: 'bottom' },
   { id: 'ai-draft', target: '[data-tooltip="ai-draft"]', title: 'AI Draft Assistant', description: 'Generate grant proposal drafts powered by AI. Build your knowledge base for better results.', position: 'bottom' },
 ];
 

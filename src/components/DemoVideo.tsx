@@ -30,15 +30,15 @@ const LOCATION_CHAR_MS = 80;  // 11 chars × 80 ms = 880 ms
 const STREAMING_LINES = [
   '## 📊 Funder-Fit Summary',
   'Strong alignment with youth education focus areas...',
-  '## ✅ Compliance Checklist',
-  '✓ 501(c)(3) status required',
-  '✓ Geographic match: Chicago, IL',
+  '## + Compliance Checklist',
+  '+ 501(c)(3) status required',
+  '+ Geographic match: Chicago, IL',
   '## 📝 Grant Application Draft',
   '### 1. Executive Summary',
   'The Community Youth Alliance requests $50,000...',
 ];
 
-const STEP_LABELS = ['Start', 'Mission', 'Search', 'Save', 'Pipeline', 'Write Grant', 'Generating', 'Done ✓'];
+const STEP_LABELS = ['Start', 'Mission', 'Search', 'Save', 'Pipeline', 'Write Grant', 'Generating', 'Done +'];
 
 export default function DemoVideo() {
   const [step, setStep] = useState(0);
@@ -324,7 +324,7 @@ export default function DemoVideo() {
                   <p className="text-sm font-semibold">AI Grant Writer</p>
                   <span className="ml-auto flex gap-1 items-center text-xs text-blue-400">
                     <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-                    Generating…
+                    Generating...
                   </span>
                 </div>
                 <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-3 space-y-1 text-xs font-mono">
@@ -334,7 +334,7 @@ export default function DemoVideo() {
                       className={
                         line.startsWith('##')
                           ? 'text-blue-400 font-bold'
-                          : line.startsWith('✓')
+                          : line.startsWith('+')
                           ? 'text-green-400'
                           : line.startsWith('###')
                           ? 'text-white font-semibold'

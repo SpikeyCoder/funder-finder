@@ -313,9 +313,9 @@ export default function TeamSettingsPage() {
                   onChange={e => setInviteRole(e.target.value)}
                   className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-4 py-2.5 text-white text-sm"
                 >
-                  <option value="admin">Admin — full access</option>
-                  <option value="editor">Editor — can modify</option>
-                  <option value="viewer">Viewer — read only</option>
+                  <option value="admin">Admin - full access</option>
+                  <option value="editor">Editor - can modify</option>
+                  <option value="viewer">Viewer - read only</option>
                 </select>
               </div>
               <div className="sm:self-end">

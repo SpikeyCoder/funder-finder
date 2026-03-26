@@ -340,7 +340,7 @@ export default function NewProjectPage() {
                   <textarea
                     value={form.description}
                     onChange={(e) => setForm({ ...form, description: e.target.value })}
-                    placeholder="Describe your project mission and goals — this is used to find matching funders..."
+                    placeholder="Describe your project mission and goals - this is used to find matching funders..."
                     rows={4}
                     className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
                   />
@@ -602,7 +602,7 @@ export default function NewProjectPage() {
                       return;
                     }
                     if (!form.description.trim()) {
-                      setError('Mission description is required — it\'s used to find matching funders');
+                      setError('Mission description is required - it\'s used to find matching funders');
                       return;
                     }
                   }

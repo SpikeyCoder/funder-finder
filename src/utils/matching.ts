@@ -155,7 +155,7 @@ export function formatGrantRange(funder: Funder): string {
   const fmt = (n: number) =>
     n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(1)}M` : `$${(n / 1000).toFixed(0)}K`;
   if (funder.grant_range_min && funder.grant_range_max) {
-    return `${fmt(funder.grant_range_min)} – ${fmt(funder.grant_range_max)}`;
+    return `${fmt(funder.grant_range_min)} - ${fmt(funder.grant_range_max)}`;
   }
   return funder.grant_range_max ? `Up to ${fmt(funder.grant_range_max)}` : '';
 }

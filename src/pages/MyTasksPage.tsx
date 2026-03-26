@@ -90,7 +90,7 @@ export default function MyTasksPage() {
                 <p className={`text-sm font-medium ${task.status === 'done' ? 'line-through text-gray-500' : 'text-white'}`}>{task.title}</p>
                 <div className="flex flex-wrap items-center gap-3 mt-1">
                   {task.tracked_grants && (
-                    <span className="text-xs text-gray-500">{task.tracked_grants.funder_name}{task.tracked_grants.grant_title ? ` — ${task.tracked_grants.grant_title}` : ''}</span>
+                    <span className="text-xs text-gray-500">{task.tracked_grants.funder_name}{task.tracked_grants.grant_title ? ` - ${task.tracked_grants.grant_title}` : ''}</span>
                   )}
                   {task.projects && (
                     <span className="text-xs text-blue-400 cursor-pointer hover:text-blue-300" onClick={() => navigate(`/projects/${task.project_id}/tracker`)}>

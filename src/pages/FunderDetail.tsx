@@ -285,7 +285,7 @@ export default function FunderDetail() {
                             className="text-sm font-semibold text-blue-400 hover:text-blue-300 hover:underline text-left transition-colors"
                             title="View this organization's profile"
                           >
-                            {grantee.name} →
+                            {grantee.name} {'>'}
                           </button>
                         ) : (
                           <p className="text-sm font-semibold text-white">{grantee.name}</p>
@@ -400,7 +400,7 @@ export default function FunderDetail() {
                       <GivingTrendsChart data={insights.grantHistory.yearTrend} />
                     </div>
                     <p className="text-xs text-gray-500">
-                      Data through {insights.dataAsOf || 'IRS 990-PF filings, 2015–present'}
+                      Data through {insights.dataAsOf || 'IRS 990-PF filings, 2015-present'}
                     </p>
                   </div>
                 )}
@@ -602,7 +602,7 @@ export default function FunderDetail() {
                             >
                               <td className="py-2 pr-3 text-gray-200 max-w-[200px] truncate">{p.name}</td>
                               <td className="py-2 px-2 text-right text-gray-400">{p.sharedCount}</td>
-                              <td className="py-2 px-2 text-right text-gray-400">{p.state || '—'}</td>
+                              <td className="py-2 px-2 text-right text-gray-400">{p.state || '-'}</td>
                               <td className="py-2 pl-2 text-right">
                                 <span className={`text-xs font-medium ${p.score >= 0.3 ? 'text-green-400' : p.score >= 0.15 ? 'text-yellow-400' : 'text-gray-400'}`}>
                                   {Math.round(p.score * 100)}%
@@ -752,7 +752,7 @@ export default function FunderDetail() {
             }}
             className="flex-1 border border-[#30363d] rounded-xl py-3 text-sm hover:bg-[#161b22] transition-colors"
           >
-            {mission ? '← Back to Results' : '← Back to Search'}
+            {mission ? '< Back to Results' : '< Back to Search'}
           </button>
           <button
             onClick={() => navigate('/saved')}

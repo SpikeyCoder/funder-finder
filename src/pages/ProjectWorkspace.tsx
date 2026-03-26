@@ -98,7 +98,7 @@ type TabType = 'matches' | 'tracker' | 'calendar' | 'peers' | 'settings';
 
 // Format currency amounts
 function fmtCurrency(amount: number | null | undefined): string {
-  if (!amount) return '—';
+  if (!amount) return '-';
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(amount);
 }
 
@@ -1062,7 +1062,7 @@ export default function ProjectWorkspace() {
                                 {Math.round(Number(m.match_score))}%
                               </span>
                             </td>
-                            <td className="px-6 py-4 text-gray-400">{m.gives_to_peers ? 'Yes' : '—'}</td>
+                            <td className="px-6 py-4 text-gray-400">{m.gives_to_peers ? 'Yes' : '-'}</td>
                             <td className="px-6 py-4 text-right">
                               <button onClick={(e) => { e.stopPropagation(); handleSaveFunder(m.funder_ein, m.funder_name || m.funder_ein); }}
                                 disabled={trackedGrants.some(tg => tg.funder_ein === m.funder_ein)}
@@ -1174,7 +1174,7 @@ export default function ProjectWorkspace() {
                                     {isOverdue && <AlertTriangle size={12} className="inline mr-1" />}
                                     {new Date(grant.deadline).toLocaleDateString()}
                                   </span>
-                                ) : <span className="text-gray-600 text-sm">—</span>}
+                                ) : <span className="text-gray-600 text-sm">-</span>}
                               </td>
                               <td className="px-4 py-3 text-gray-500 text-xs uppercase">{grant.source}</td>
                               <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
@@ -1247,11 +1247,11 @@ export default function ProjectWorkspace() {
                         {peers.map((peer, idx) => (
                           <tr key={peer.ein || `peer-${idx}`} className="hover:bg-[#0d1117] transition-colors cursor-pointer" onClick={() => peer.ein && navigate(`/recipient/${peer.ein}`)}>
                             <td className="px-6 py-4 text-blue-400 hover:text-blue-300 font-medium text-sm">{peer.name}</td>
-                            <td className="px-6 py-4 text-gray-400 text-sm">{peer.state || '—'}</td>
+                            <td className="px-6 py-4 text-gray-400 text-sm">{peer.state || '-'}</td>
                             <td className="px-6 py-4 text-gray-400 text-sm">
-                              {NTEE_CATEGORIES.find(c => peer.ntee_code?.startsWith(c.code))?.label || peer.ntee_code || '—'}
+                              {NTEE_CATEGORIES.find(c => peer.ntee_code?.startsWith(c.code))?.label || peer.ntee_code || '-'}
                             </td>
-                            <td className="px-6 py-4 text-right text-gray-300 text-sm">{peer.shared_funders ?? '—'}</td>
+                            <td className="px-6 py-4 text-right text-gray-300 text-sm">{peer.shared_funders ?? '-'}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -1494,7 +1494,7 @@ export default function ProjectWorkspace() {
                           <div className="flex flex-col">
                             <span className="text-sm font-medium text-white">{status.name}</span>
                             <span className="text-xs text-gray-500">
-                              {status.is_default ? 'Default' : 'Custom'}{status.is_terminal ? ' • Terminal' : ''}
+                              {status.is_default ? 'Default' : 'Custom'}{status.is_terminal ? ' - Terminal' : ''}
                             </span>
                           </div>
                         </div>
@@ -1699,7 +1699,7 @@ export default function ProjectWorkspace() {
                       <label className="block text-xs text-gray-500 mb-1 capitalize">{field.replace('_', ' ')}</label>
                       <select value={csvMapping[field] || ''} onChange={e => setCsvMapping(p => ({ ...p, [field]: e.target.value }))}
                         className="w-full bg-[#0d1117] border border-[#30363d] rounded px-2 py-1.5 text-white text-sm">
-                        <option value="">— Skip —</option>
+                        <option value="">- Skip -</option>
                         {csvData.length > 0 && Object.keys(csvData[0]).map(col => (
                           <option key={col} value={col}>{col}</option>
                         ))}
@@ -1799,11 +1799,11 @@ export default function ProjectWorkspace() {
                     </div>
                     <div>
                       <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Deadline</p>
-                      <p className="text-sm text-white">{selectedGrant.deadline ? new Date(selectedGrant.deadline).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—'}</p>
+                      <p className="text-sm text-white">{selectedGrant.deadline ? new Date(selectedGrant.deadline).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '-'}</p>
                     </div>
                     <div>
                       <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Project</p>
-                      <p className="text-sm text-white truncate">{project?.name || '—'}</p>
+                      <p className="text-sm text-white truncate">{project?.name || '-'}</p>
                     </div>
                     <div>
                       <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Source</p>

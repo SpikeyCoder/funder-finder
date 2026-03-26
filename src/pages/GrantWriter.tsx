@@ -56,19 +56,19 @@ function renderMarkdown(text: string): string {
       parts.push('<hr class="border-[#30363d] my-6">');
     } else if (rawLine.startsWith('- [x] ')) {
       parts.push(
-        `<div class="flex items-start gap-2 my-1.5 text-sm"><span class="text-green-400 font-bold shrink-0 mt-0.5">✓</span><span class="text-gray-300">${inl.slice(6)}</span></div>`,
+        `<div class="flex items-start gap-2 my-1.5 text-sm"><span class="text-green-400 font-bold shrink-0 mt-0.5" style="font-family:sans-serif">+</span><span class="text-gray-300">${inl.slice(6)}</span></div>`,
       );
     } else if (rawLine.startsWith('- [ ] ')) {
       parts.push(
-        `<div class="flex items-start gap-2 my-1.5 text-sm"><span class="text-gray-400 shrink-0 mt-0.5">○</span><span class="text-gray-300">${inl.slice(6)}</span></div>`,
+        `<div class="flex items-start gap-2 my-1.5 text-sm"><span class="w-3 h-3 shrink-0 mt-1 rounded-full border border-gray-500"></span><span class="text-gray-300">${inl.slice(6)}</span></div>`,
       );
     } else if (rawLine.startsWith('  - ')) {
       parts.push(
-        `<div class="flex items-start gap-2 ml-5 my-1 text-sm"><span class="text-gray-400 shrink-0 mt-0.5">–</span><span class="text-gray-400">${inl.slice(4)}</span></div>`,
+        `<div class="flex items-start gap-2 ml-5 my-1 text-sm"><span class="text-gray-400 shrink-0 mt-0.5" style="font-family:sans-serif">-</span><span class="text-gray-400">${inl.slice(4)}</span></div>`,
       );
     } else if (rawLine.startsWith('- ')) {
       parts.push(
-        `<div class="flex items-start gap-2 my-1.5 text-sm"><span class="text-gray-400 shrink-0 mt-0.5">•</span><span class="text-gray-300">${inl.slice(2)}</span></div>`,
+        `<div class="flex items-start gap-2 my-1.5 text-sm"><span class="w-1.5 h-1.5 shrink-0 mt-1.5 rounded-full bg-gray-400"></span><span class="text-gray-300">${inl.slice(2)}</span></div>`,
       );
     } else if (rawLine === '') {
       parts.push('<div class="h-1.5"></div>');
@@ -91,7 +91,7 @@ export default function GrantWriter() {
   // Page title
   useEffect(() => {
     const name = funder?.name
-      ? `AI Grant Writer — ${funder.name} | FunderMatch`
+      ? `AI Grant Writer  - ${funder.name} | FunderMatch`
       : 'AI Grant Writer | FunderMatch';
     document.title = name;
     const desc = document.querySelector<HTMLMetaElement>(
@@ -497,7 +497,7 @@ export default function GrantWriter() {
               <textarea
                 className="w-full bg-[#161b22] border border-[#30363d] rounded-xl px-4 py-3 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-600 resize-none"
                 rows={4}
-                placeholder="Describe your nonprofit's mission and the communities you serve…"
+                placeholder="Describe your nonprofit's mission and the communities you serve..."
                 value={mission}
                 onChange={(e) => setMission(e.target.value)}
               />
@@ -512,7 +512,7 @@ export default function GrantWriter() {
                 <span className="text-gray-300">
                   Past Successful Grants{' '}
                   <span className="text-gray-400 font-normal">
-                    (optional — matches your writing style)
+                    (optional  - matches your writing style)
                   </span>
                   {uploadedFiles.length > 0 && (
                     <span className="ml-2 text-xs bg-blue-600/20 text-blue-400 px-2 py-0.5 rounded-full">
@@ -530,7 +530,7 @@ export default function GrantWriter() {
               {showPastGrants && (
                 <div className="px-5 pb-5 bg-[#0d1117]">
                   <p className="text-xs text-gray-400 mb-3">
-                    Upload 1–3 past successful grant proposals. The AI will
+                    Upload 1-3 past successful grant proposals. The AI will
                     analyze your writing style, tone, and structure to match it
                     in the new draft. Files are used for this session only and
                     automatically deleted.
@@ -559,7 +559,7 @@ export default function GrantWriter() {
                       {uploading ? (
                         <span className="flex items-center justify-center gap-2">
                           <Loader2 size={14} className="animate-spin" />
-                          Uploading…
+                          Uploading...
                         </span>
                       ) : (
                         <>
@@ -571,7 +571,7 @@ export default function GrantWriter() {
                       )}
                     </p>
                     <p className="text-xs text-gray-500 mt-1">
-                      PDF, DOCX, or TXT — max 10 MB each
+                      PDF, DOCX, or TXT  - max 10 MB each
                     </p>
                   </div>
                   <input
@@ -640,7 +640,7 @@ export default function GrantWriter() {
                 <span className="text-gray-300">
                   Organization Details{' '}
                   <span className="text-gray-400 font-normal">
-                    (optional — improves quality)
+                    (optional  - improves quality)
                   </span>
                 </span>
                 {showOrg ? (
@@ -679,7 +679,7 @@ export default function GrantWriter() {
                     <input
                       type="text"
                       className={inputClass}
-                      placeholder="e.g. Youth ages 12–18 in low-income communities"
+                      placeholder="e.g. Youth ages 12-18 in low-income communities"
                       value={orgDetails.targetPop}
                       onChange={(e) => updateOrg('targetPop', e.target.value)}
                     />
@@ -701,7 +701,7 @@ export default function GrantWriter() {
                     <textarea
                       className={`${inputClass} resize-none`}
                       rows={2}
-                      placeholder="Brief description of your organization's history, programs, and impact…"
+                      placeholder="Brief description of your organization's history, programs, and impact..."
                       value={orgDetails.orgDesc}
                       onChange={(e) => updateOrg('orgDesc', e.target.value)}
                     />
@@ -719,7 +719,7 @@ export default function GrantWriter() {
                 <span className="text-gray-300">
                   Program / Project Details{' '}
                   <span className="text-gray-400 font-normal">
-                    (optional — improves specificity)
+                    (optional  - improves specificity)
                   </span>
                 </span>
                 {showProgram ? (
@@ -762,7 +762,7 @@ export default function GrantWriter() {
                     <input
                       type="text"
                       className={inputClass}
-                      placeholder="e.g. 12-month program, July 2025 – June 2026"
+                      placeholder="e.g. 12-month program, July 2025 - June 2026"
                       value={orgDetails.timeline}
                       onChange={(e) => updateOrg('timeline', e.target.value)}
                     />
@@ -782,7 +782,7 @@ export default function GrantWriter() {
                     <textarea
                       className={`${inputClass} resize-none`}
                       rows={3}
-                      placeholder="Describe the specific program or project you're seeking funding for…"
+                      placeholder="Describe the specific program or project you're seeking funding for..."
                       value={orgDetails.programDesc}
                       onChange={(e) =>
                         updateOrg('programDesc', e.target.value)
@@ -822,7 +822,7 @@ export default function GrantWriter() {
         {isProcessing && !output && (
           <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-6 space-y-4">
             <h3 className="text-sm font-medium text-gray-300 mb-4">
-              Preparing your grant draft…
+              Preparing your grant draft...
             </h3>
 
             {/* Phase: Analyzing past grants */}
@@ -841,7 +841,7 @@ export default function GrantWriter() {
                   }`}
                 >
                   Analyzing {uploadedFiles.length} past grant
-                  {uploadedFiles.length !== 1 ? 's' : ''} for writing style…
+                  {uploadedFiles.length !== 1 ? 's' : ''} for writing style...
                 </span>
               </div>
             )}
@@ -866,7 +866,7 @@ export default function GrantWriter() {
               >
                 {researchStats
                   ? `Found ${researchStats.statsFound} statistics and ${researchStats.sourcesFound} sources${researchStats.fallback ? ' (using AI knowledge)' : ''}`
-                  : 'Researching context, statistics, and trends…'}
+                  : 'Researching context, statistics, and trends...'}
               </span>
             </div>
 
@@ -884,7 +884,7 @@ export default function GrantWriter() {
                     : 'text-gray-600'
                 }`}
               >
-                Writing your grant draft for {funder.name}…
+                Writing your grant draft for {funder.name}...
               </span>
             </div>
           </div>
@@ -894,7 +894,7 @@ export default function GrantWriter() {
         {phase === 'generating' && output && (
           <div className="flex items-center gap-3 py-2 text-blue-400 text-sm">
             <Loader2 size={16} className="animate-spin" />
-            Writing your grant application for {funder.name}…
+            Writing your grant application for {funder.name}...
           </div>
         )}
 
@@ -953,7 +953,7 @@ export default function GrantWriter() {
             {phase === 'generating' && (
               <div className="flex items-center gap-2 mt-3 text-sm text-blue-400">
                 <Loader2 size={14} className="animate-spin" />
-                Generating…
+                Generating...
               </div>
             )}
             <div ref={outputEndRef} />
