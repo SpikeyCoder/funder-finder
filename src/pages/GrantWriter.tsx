@@ -394,12 +394,12 @@ export default function GrantWriter() {
     const fullHtml = `<!DOCTYPE html>
 <html><head><meta charset="utf-8">
 <style>
-  body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; line-height: 1.5; color: #000; margin: 0; padding: 0; }
-  h2 { font-size: 15pt; font-weight: bold; color: #1a3a5c; margin: 18pt 0 6pt 0; padding: 0; }
-  h3 { font-size: 12pt; font-weight: bold; color: #000; margin: 14pt 0 4pt 0; padding: 0; }
-  p { font-size: 11pt; margin: 4pt 0; padding: 0; }
+  body { font-family: 'Calibri', 'Arial', sans-serif; font-size: 11pt; line-height: 1.6; color: #1a1a1a; margin: 1in; }
+  h2 { font-size: 16pt; font-weight: bold; color: #1a3a5c; margin-top: 24pt; margin-bottom: 8pt; border-bottom: 1pt solid #ccc; padding-bottom: 4pt; }
+  h3 { font-size: 13pt; font-weight: bold; color: #2a2a2a; margin-top: 18pt; margin-bottom: 6pt; }
+  p { font-size: 11pt; margin: 6pt 0; padding: 0; }
   strong { font-weight: bold; }
-  hr { border: none; border-top: 1px solid #999; margin: 12pt 0; }
+  hr { border: none; border-top: 1pt solid #ccc; margin: 18pt 0; }
   span { font-size: 11pt; }
   div { font-size: 11pt; margin: 2pt 0; padding: 0; }
 </style>
