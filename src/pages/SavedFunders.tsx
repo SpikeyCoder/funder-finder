@@ -11,6 +11,7 @@ import { formatTotalGiving, fetchPeers } from '../utils/matching';
 import { fmtDollar } from '../components/InsightCharts';
 import { useAuth } from '../contexts/AuthContext';
 import LoginModal from '../components/LoginModal';
+import NavBar from '../components/NavBar';
 
 // ── Status config ──────────────────────────────────────────────────────────────
 
@@ -213,7 +214,9 @@ export default function SavedFunders() {
   // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-[#0d1117] text-white py-12 px-6">
+    <div className="min-h-screen bg-[#0d1117] text-white">
+      <NavBar />
+      <div className="py-12 px-6">
       <div className="max-w-3xl mx-auto">
 
         {/* Header */}
@@ -520,6 +523,7 @@ export default function SavedFunders() {
             )}
           </div>
         )}
+      </div>
       </div>
 
       {showLoginModal && (

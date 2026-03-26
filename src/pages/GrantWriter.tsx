@@ -9,6 +9,7 @@ import { saveAs } from 'file-saver';
 import { Funder, GenerationPhase, OrgDetails, UploadedGrantFile } from '../types';
 import { getEdgeFunctionHeaders, supabase } from '../lib/supabase';
 import { formatGrantRange, formatTotalGiving } from '../utils/matching';
+import NavBar from '../components/NavBar';
 
 const GRANT_WRITER_URL =
   'https://tgtotjvdubhjxzybmdex.supabase.co/functions/v1/grant-writer';
@@ -428,7 +429,9 @@ export default function GrantWriter() {
   // ── Render ──────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-[#0d1117] text-white py-12 px-6">
+    <div className="min-h-screen bg-[#0d1117] text-white">
+      <NavBar />
+      <div className="py-12 px-6">
       <div className="max-w-3xl mx-auto">
         {/* Back */}
         <button
@@ -965,6 +968,7 @@ export default function GrantWriter() {
             )}
           </div>
         )}
+      </div>
       </div>
     </div>
   );

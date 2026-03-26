@@ -1,7 +1,6 @@
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Bookmark, BookmarkCheck, Copy, Globe, MapPin, User, Mail, TrendingUp, ChevronDown, ChevronUp, BarChart3, Users, Map, Loader2, FileText, Info } from 'lucide-react';
-import GlossaryTooltip from '../components/GlossaryTooltip';
 import { Funder, FunderInsights, PeerEntry } from '../types';
 import { isSaved, saveFunder, unsaveFunder } from '../utils/storage';
 import { formatGrantRange, formatTotalGiving, fetchFunderInsights, fetchPeers, fetchFunderByEin } from '../utils/matching';
@@ -9,6 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 import LoginModal from '../components/LoginModal';
 import Toast from '../components/Toast';
 import { GivingTrendsChart, GeoBarChart, GeoHeatMap, StatCard, InsightsSkeleton, fmtDollar } from '../components/InsightCharts';
+import NavBar from '../components/NavBar';
 
 /** Classify giving trend as increasing / stable / decreasing (FEAT-006) */
 function classifyTrend(yearTrend: { year: number; totalAmount: number }[]): { label: string; color: string } | null {
@@ -49,7 +49,7 @@ export default function FunderDetail() {
     setFunderLoading(true);
     fetchFunderByEin(id)
       .then(data => { if (!cancelled) setFunder(data); })
-      .catch(() => { /* leave null â shows not-found */ })
+      .catch(() => { /* leave null — shows not-found */ })
       .finally(() => { if (!cancelled) setFunderLoading(false); });
     return () => { cancelled = true; };
   }, [id, funder]);
@@ -65,7 +65,7 @@ export default function FunderDetail() {
   const [peers, setPeers] = useState<PeerEntry[]>([]);
   const [peersLoading, setPeersLoading] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
-    trends: true, grantees: true, geo: false, recipients: false, purposes: false, peers: false,
+    trends: true, grantees: false, geo: false, recipients: false, purposes: false, peers: false,
   });
 
   const [showAllRecipients, setShowAllRecipients] = useState(false);
@@ -73,7 +73,7 @@ export default function FunderDetail() {
   const toggleSection = (key: string) =>
     setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }));
 
-  // Page title â use funder name when available
+  // Page title — use funder name when available
   useEffect(() => {
     const name = funder?.name ? `${funder.name} | FunderMatch` : 'Funder Details | FunderMatch';
     document.title = name;
@@ -122,24 +122,30 @@ export default function FunderDetail() {
   }, [funder?.id]);
 
   if (funderLoading) return (
-    <div className="min-h-screen bg-[#0d1117] text-white flex items-center justify-center">
-      <Loader2 size={28} className="animate-spin text-gray-400" />
+    <div className="min-h-screen bg-[#0d1117] text-white">
+      <NavBar />
+      <div className="flex items-center justify-center" style={{ minHeight: 'calc(100vh - 64px)' }}>
+        <Loader2 size={28} className="animate-spin text-gray-400" />
+      </div>
     </div>
   );
 
   if (!funder) return (
-    <div className="min-h-screen bg-[#0d1117] text-white flex items-center justify-center">
+    <div className="min-h-screen bg-[#0d1117] text-white">
+      <NavBar />
+      <div className="flex items-center justify-center" style={{ minHeight: 'calc(100vh - 64px)' }}>
       <div className="text-center">
         <p className="text-2xl font-bold mb-4">Funder not found</p>
         <p className="text-gray-400 text-sm mb-6">This funder may not be in our database yet.</p>
         <button onClick={() => navigate('/search')} className="text-blue-400 hover:underline">Search organizations</button>
+      </div>
       </div>
     </div>
   );
 
   const toggleSave = async () => {
     if (user) {
-      // Authenticated path â use DB
+      // Authenticated path — use DB
       if (saved) {
         try {
           await unsaveFunderFromDB(funder.id);
@@ -158,7 +164,7 @@ export default function FunderDetail() {
         }
       }
     } else {
-      // Anonymous path â save to localStorage immediately, suggest login for sync
+      // Anonymous path — save to localStorage immediately, suggest login for sync
       if (saved) {
         unsaveFunder(funder.id);
         setSaved(false);
@@ -178,7 +184,9 @@ export default function FunderDetail() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0d1117] text-white py-12 px-6">
+    <div className="min-h-screen bg-[#0d1117] text-white">
+      <NavBar />
+      <div className="py-12 px-6">
       <div className="max-w-2xl mx-auto">
         <button
           onClick={() => {
@@ -213,8 +221,8 @@ export default function FunderDetail() {
               {funder.type}
             </span>
             {funder.ntee_code && (
-              <span className="inline-flex items-center gap-1 bg-[#21262d] border border-[#30363d] text-gray-400 text-sm px-3 py-1 rounded-full">
-                NTEE {funder.ntee_code} <GlossaryTooltip term="NTEE" />
+              <span className="inline-block bg-[#21262d] border border-[#30363d] text-gray-400 text-sm px-3 py-1 rounded-full">
+                NTEE {funder.ntee_code}
               </span>
             )}
             {/* Data freshness indicator */}
@@ -230,7 +238,7 @@ export default function FunderDetail() {
                     ? 'bg-amber-900/30 border-amber-700 text-amber-300'
                     : 'bg-[#21262d] border-[#30363d] text-gray-400'
                 }`}>
-                  {isStale ? 'â  ' : ''}Data as of {latestYear}
+                  {isStale ? '⚠ ' : ''}Data as of {latestYear}
                 </span>
               );
               return null;
@@ -243,9 +251,7 @@ export default function FunderDetail() {
               <p className="text-xs text-blue-400 font-semibold mb-1">Why this funder matches your mission</p>
               <p className="text-gray-300 text-sm">{funder.fit_explanation || funder.reason}</p>
               {funder.score && (
-                <p className="text-xs text-gray-300 mt-2 inline-flex items-center gap-1">
-                  Match score: {Math.round(funder.score * 100)}% <GlossaryTooltip term="fit score" />
-                </p>
+                <p className="text-xs text-gray-300 mt-2">Match score: {Math.round(funder.score * 100)}%</p>
               )}
             </div>
           )}
@@ -279,13 +285,13 @@ export default function FunderDetail() {
                             className="text-sm font-semibold text-blue-400 hover:text-blue-300 hover:underline text-left transition-colors"
                             title="View this organization's profile"
                           >
-                            {grantee.name} â
+                            {grantee.name} →
                           </button>
                         ) : (
                           <p className="text-sm font-semibold text-white">{grantee.name}</p>
                         )}
                         <p className="text-xs text-gray-300">
-                          {(grantee.year ? String(grantee.year) : 'Year n/a')} Â· {formatGrantAmount(grantee.amount)}
+                          {(grantee.year ? String(grantee.year) : 'Year n/a')} · {formatGrantAmount(grantee.amount)}
                         </p>
                       </div>
                       {grantee.match_reasons.length > 0 && (
@@ -347,7 +353,7 @@ export default function FunderDetail() {
             </>
           )}
 
-          {/* ââ 990 Intelligence Sections ââ */}
+          {/* ── 990 Intelligence Sections ── */}
           {insightsLoading && <InsightsSkeleton />}
           {insightsError && (
             <div className="mb-6 text-sm text-gray-500 italic">
@@ -358,11 +364,9 @@ export default function FunderDetail() {
             <>
               {/* Section 1: Giving Trends */}
               <div className="mb-6">
-                <div className="flex items-center justify-between w-full mb-3">
                 <button
                   onClick={() => toggleSection('trends')}
-                  aria-expanded={expandedSections.trends}
-                  className="flex items-center gap-2 group flex-1 text-left"
+                  className="flex items-center justify-between w-full mb-3 group"
                 >
                   <div className="flex items-center gap-2">
                     <BarChart3 size={16} className="text-blue-400" />
@@ -378,14 +382,6 @@ export default function FunderDetail() {
                   </div>
                   {expandedSections.trends ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
                 </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); }}
-                  className="ml-2 shrink-0"
-                  aria-label="What is a 990?"
-                >
-                  <GlossaryTooltip term="990" />
-                </button>
-                </div>
                 {expandedSections.trends && (
                   <div className="space-y-4">
                     <div className="grid grid-cols-3 gap-3">
@@ -404,7 +400,7 @@ export default function FunderDetail() {
                       <GivingTrendsChart data={insights.grantHistory.yearTrend} />
                     </div>
                     <p className="text-xs text-gray-500">
-                      Data through {insights.dataAsOf || 'IRS 990-PF filings, 2015âpresent'}
+                      Data through {insights.dataAsOf || 'IRS 990-PF filings, 2015–present'}
                     </p>
                   </div>
                 )}
@@ -415,7 +411,6 @@ export default function FunderDetail() {
               <div className="mb-6">
                 <button
                   onClick={() => toggleSection('grantees')}
-                  aria-expanded={expandedSections.grantees}
                   className="flex items-center justify-between w-full mb-3 group"
                 >
                   <div className="flex items-center gap-2">
@@ -445,7 +440,6 @@ export default function FunderDetail() {
                   <div className="mb-6">
                     <button
                       onClick={() => toggleSection('geo')}
-                      aria-expanded={expandedSections.geo}
                       className="flex items-center justify-between w-full mb-3 group"
                     >
                       <div className="flex items-center gap-2">
@@ -476,7 +470,6 @@ export default function FunderDetail() {
                   <div className="mb-6">
                     <button
                       onClick={() => toggleSection('recipients')}
-                      aria-expanded={expandedSections.recipients}
                       className="flex items-center justify-between w-full mb-3 group"
                     >
                       <div className="flex items-center gap-2">
@@ -535,7 +528,6 @@ export default function FunderDetail() {
                   <div className="mb-6">
                     <button
                       onClick={() => toggleSection('purposes')}
-                      aria-expanded={expandedSections.purposes}
                       className="flex items-center justify-between w-full mb-3 group"
                     >
                       <div className="flex items-center gap-2">
@@ -577,7 +569,6 @@ export default function FunderDetail() {
               <div className="mb-6">
                 <button
                   onClick={() => toggleSection('peers')}
-                  aria-expanded={expandedSections.peers}
                   className="flex items-center justify-between w-full mb-3 group"
                 >
                   <div className="flex items-center gap-2">
@@ -611,7 +602,7 @@ export default function FunderDetail() {
                             >
                               <td className="py-2 pr-3 text-gray-200 max-w-[200px] truncate">{p.name}</td>
                               <td className="py-2 px-2 text-right text-gray-400">{p.sharedCount}</td>
-                              <td className="py-2 px-2 text-right text-gray-400">{p.state || 'â'}</td>
+                              <td className="py-2 px-2 text-right text-gray-400">{p.state || '—'}</td>
                               <td className="py-2 pl-2 text-right">
                                 <span className={`text-xs font-medium ${p.score >= 0.3 ? 'text-green-400' : p.score >= 0.15 ? 'text-yellow-400' : 'text-gray-400'}`}>
                                   {Math.round(p.score * 100)}%
@@ -732,7 +723,7 @@ export default function FunderDetail() {
                     rel="noopener noreferrer"
                     className="text-blue-400 hover:underline break-all"
                   >
-                    {funder.website} â
+                    {funder.website} ↗
                   </a>
                 </div>
               ) : (
@@ -761,7 +752,7 @@ export default function FunderDetail() {
             }}
             className="flex-1 border border-[#30363d] rounded-xl py-3 text-sm hover:bg-[#161b22] transition-colors"
           >
-            {mission ? 'â Back to Results' : 'â Back to Search'}
+            {mission ? '← Back to Results' : '← Back to Search'}
           </button>
           <button
             onClick={() => navigate('/saved')}
@@ -772,7 +763,7 @@ export default function FunderDetail() {
         </div>
       </div>
 
-      {/* Login modal â shown when user explicitly clicks login */}
+      {/* Login modal — shown when user explicitly clicks login */}
       {showLoginModal && (
         <LoginModal
           pendingFunder={funder}
@@ -780,7 +771,7 @@ export default function FunderDetail() {
         />
       )}
 
-      {/* Toast â non-blocking hint to log in for cloud sync */}
+      {/* Toast — non-blocking hint to log in for cloud sync */}
       {toastMsg && (
         <Toast
           message={toastMsg}
@@ -788,6 +779,7 @@ export default function FunderDetail() {
           onClose={() => setToastMsg(null)}
         />
       )}
+      </div>
     </div>
   );
 }

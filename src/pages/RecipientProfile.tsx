@@ -3,10 +3,11 @@ import { useEffect, useState } from 'react';
 import { ArrowLeft, MapPin, Calendar, Building2, Users, Bookmark, BookmarkCheck, GraduationCap, DollarSign } from 'lucide-react';
 import { RecipientProfile as RecipientProfileType, PeerEntry, Funder, GeoEntry } from '../types';
 import { fetchRecipientProfile, fetchPeers } from '../utils/matching';
-import { GeoBarChart, StatCard, fmtDollar } from '../components/InsightCharts';
+import { GivingTrendsChart, GeoBarChart, StatCard, fmtDollar } from '../components/InsightCharts';
 import { useAuth } from '../contexts/AuthContext';
 import { isSaved, saveFunder, unsaveFunder } from '../utils/storage';
 import LoginModal from '../components/LoginModal';
+import NavBar from '../components/NavBar';
 
 export default function RecipientProfile() {
   const { id } = useParams<{ id: string }>();
@@ -96,7 +97,9 @@ export default function RecipientProfile() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0d1117] text-white flex items-center justify-center">
+      <div className="min-h-screen bg-[#0d1117] text-white">
+        <NavBar />
+        <div className="flex items-center justify-center py-12">
         <div className="animate-pulse space-y-4 w-full max-w-2xl px-6">
           <div className="h-8 bg-[#21262d] rounded w-64" />
           <div className="h-4 bg-[#21262d] rounded w-40" />
@@ -105,21 +108,33 @@ export default function RecipientProfile() {
           </div>
           <div className="h-48 bg-[#21262d] rounded-xl mt-4" />
         </div>
+        </div>
       </div>
     );
   }
 
   if (error || !profile) {
     return (
-      <div className="min-h-screen bg-[#0d1117] text-white flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-2xl font-bold mb-4">Recipient not found</p>
-          <p className="text-gray-400 text-sm mb-6">{error || 'No data available for this organization.'}</p>
-          <button onClick={() => navigate('/search')} className="text-blue-400 hover:underline">Search organizations</button>
+      <div className="min-h-screen bg-[#0d1117] text-white">
+        <NavBar />
+        <div className="flex items-center justify-center" style={{ minHeight: 'calc(100vh - 64px)' }}>
+          <div className="text-center">
+            <p className="text-2xl font-bold mb-4">Recipient not found</p>
+            <p className="text-gray-400 text-sm mb-6">{error || 'No data available for this organization.'}</p>
+            <button onClick={() => navigate('/search')} className="text-blue-400 hover:underline">Search organizations</button>
+          </div>
         </div>
       </div>
     );
   }
+
+  // Adapt yearlyTrends to the YearTrend shape expected by GivingTrendsChart
+  const chartData = profile.yearlyTrends.map(t => ({
+    year: t.year,
+    grantCount: t.grantCount,
+    totalAmount: t.totalAmount,
+    avgGrant: t.grantCount > 0 ? Math.round(t.totalAmount / t.grantCount) : 0,
+  }));
 
   // Build funder state geographic data for bar chart
   const funderStateGeo: GeoEntry[] = (() => {
@@ -170,7 +185,9 @@ export default function RecipientProfile() {
   const budgetLabel = profile.budget?.totalExpenses != null ? 'Total Expenses' : 'Total Revenue';
 
   return (
-    <div className="min-h-screen bg-[#0d1117] text-white py-12 px-6">
+    <div className="min-h-screen bg-[#0d1117] text-white">
+      <NavBar />
+      <div className="py-12 px-6">
       <div className="max-w-2xl mx-auto">
         <button
           onClick={() => navigate(-1)}
@@ -240,7 +257,18 @@ export default function RecipientProfile() {
 
           <hr className="border-[#30363d] mb-6" />
 
-  
+          {/* Funding Trends Chart */}
+          {chartData.length > 0 && (
+            <>
+              <h2 className="text-lg font-semibold mb-3">Funding Trends</h2>
+              <div className="bg-[#0d1117] border border-[#30363d] rounded-xl p-4 mb-2">
+                <GivingTrendsChart data={chartData} />
+              </div>
+              <p className="text-xs text-gray-500 mb-6">Source: IRS 990-PF filings, 2015–present</p>
+              <hr className="border-[#30363d] mb-6" />
+            </>
+          )}
+
           {/* Funder States Bar Chart */}
           {funderStateGeo.length > 0 && (
             <>
@@ -439,6 +467,7 @@ export default function RecipientProfile() {
         </div>
       </div>
       {showLoginModal && <LoginModal onClose={() => setShowLoginModal(false)} />}
+      </div>
     </div>
   );
 }

@@ -4,7 +4,6 @@ import { ArrowRight, Sparkles, MapPin } from 'lucide-react';
 import { BudgetBand } from '../types';
 import LocationAutocomplete from '../components/LocationAutocomplete';
 import NavBar from '../components/NavBar';
-import Footer from '../components/Footer';
 
 const EXAMPLES = [
   'We empower underserved youth through accessible education programs and mentorship opportunities that build skills for future success.',
@@ -39,7 +38,7 @@ export default function MissionInput() {
   useEffect(() => {
     document.title = 'Find Funders for Your Nonprofit | FunderMatch';
     const desc = document.querySelector<HTMLMetaElement>('meta[name="description"]');
-    if (desc) desc.content = 'Describe your nonprofitâs mission and get an instant AI-ranked list of foundations, DAFs, and corporate giving programs aligned to your work.';
+    if (desc) desc.content = 'Describe your nonprofit’s mission and get an instant AI-ranked list of foundations, DAFs, and corporate giving programs aligned to your work.';
   }, []);
 
   const [mission, setMission] = useState(returnState?.prefillMission || returnState?.mission || '');
@@ -71,7 +70,7 @@ export default function MissionInput() {
   return (
     <div className="min-h-screen bg-[#0d1117] text-white flex flex-col">
       <NavBar />
-      <main id="main-content" className="flex-1 flex flex-col items-center justify-start py-16 px-6">
+      <div className="flex flex-col items-center justify-start flex-1 py-16 px-6">
       <h1 className="text-4xl font-bold mb-3 text-center">Tell Us About Your Mission</h1>
       <p className="text-gray-400 mb-10 text-center">We'll match you with funders who share your vision</p>
 
@@ -79,26 +78,21 @@ export default function MissionInput() {
 
         {/* Mission Statement */}
         <div>
-          <label htmlFor="mission-input" className="block text-base font-semibold mb-1">
-            Your Mission Statement <span className="text-red-400" aria-hidden="true">*</span>
+          <label className="block text-base font-semibold mb-1">
+            Your Mission Statement <span className="text-red-400">*</span>
           </label>
-          <p id="mission-desc" className="text-sm text-gray-400 mb-3">Describe what your nonprofit does and who you serve</p>
+          <p className="text-sm text-gray-400 mb-3">Describe what your nonprofit does and who you serve</p>
           <textarea
-            id="mission-input"
             value={mission}
             onChange={e => { setMission(e.target.value); setErrors(prev => ({ ...prev, mission: undefined })); }}
             placeholder="Example: We empower underserved youth through accessible education programs and mentorship opportunities that build skills for future success."
             rows={4}
-            required
-            aria-required="true"
-            aria-describedby="mission-desc"
-            aria-invalid={!!errors.mission}
             className={`w-full bg-[#0d1117] border rounded-xl px-4 py-3 text-white placeholder-gray-600 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.mission ? 'border-red-500' : 'border-[#30363d]'}`}
           />
           <div className="flex items-center justify-between mt-2">
             <span className="text-xs text-gray-300">{mission.length} characters</span>
           </div>
-          {errors.mission && <p className="text-red-400 text-sm mt-1" aria-live="polite" role="alert">{errors.mission}</p>}
+          {errors.mission && <p className="text-red-400 text-sm mt-1">{errors.mission}</p>}
 
           <button
             onClick={() => setShowExamples(!showExamples)}
@@ -125,13 +119,13 @@ export default function MissionInput() {
 
         {/* Location Served */}
         <div>
-          <label htmlFor="location-input" className="block text-base font-semibold mb-1">
+          <label className="block text-base font-semibold mb-1">
             <span className="flex items-center gap-2">
               <MapPin size={16} className="text-blue-400" />
-              Location Served <span className="text-red-400" aria-hidden="true">*</span>
+              Location Served <span className="text-red-400">*</span>
             </span>
           </label>
-          <p id="location-desc" className="text-sm text-gray-400 mb-3">
+          <p className="text-sm text-gray-400 mb-3">
             Where does your nonprofit primarily operate or serve communities?
             Funders with geographic alignment will be ranked higher.
           </p>
@@ -142,11 +136,8 @@ export default function MissionInput() {
               setErrors(prev => ({ ...prev, location: undefined }));
             }}
             hasError={!!errors.location}
-            id="location-input"
-            required
-            ariaDescribedBy="location-desc"
           />
-          {errors.location && <p className="text-red-400 text-sm mt-1" aria-live="polite" role="alert">{errors.location}</p>}
+          {errors.location && <p className="text-red-400 text-sm mt-1">{errors.location}</p>}
         </div>
 
         {/* Budget band */}
@@ -155,17 +146,14 @@ export default function MissionInput() {
           <p className="text-sm text-gray-400 mb-3">
             We use this to prioritize funders that have supported nonprofits of similar size.
           </p>
-          <div role="radiogroup" aria-label="Annual Operating Budget" className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {BUDGET_BANDS.map((band) => {
               const selected = budgetBand === band.key;
               return (
-                <div
+                <button
                   key={band.key}
-                  role="radio"
-                  aria-checked={selected}
-                  tabIndex={selected ? 0 : -1}
+                  type="button"
                   onClick={() => setBudgetBand(band.key)}
-                  onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); setBudgetBand(band.key); } }}
                   className={`text-left border rounded-xl px-4 py-3 transition-colors ${
                     selected
                       ? 'border-blue-500 bg-blue-900/30'
@@ -174,7 +162,7 @@ export default function MissionInput() {
                 >
                   <p className={`text-sm font-medium ${selected ? 'text-blue-200' : 'text-white'}`}>{band.label}</p>
                   <p className="text-xs text-gray-400 mt-1">{band.hint}</p>
-                </div>
+                </button>
               );
             })}
           </div>
@@ -188,8 +176,7 @@ export default function MissionInput() {
         Find Matching Funders
         <ArrowRight size={20} />
       </button>
-      </main>
-      <Footer />
+      </div>
     </div>
   );
 }

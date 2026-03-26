@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Database } from 'lucide-react';
 import OrgSearch from '../components/OrgSearch';
+import NavBar from '../components/NavBar';
 
 export default function OrgSearchPage() {
   const navigate = useNavigate();
@@ -15,7 +16,9 @@ export default function OrgSearchPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#0d1117] text-white py-12 px-6">
+    <div className="min-h-screen bg-[#0d1117] text-white">
+      <NavBar />
+      <div className="py-12 px-6">
       <div className="max-w-2xl mx-auto">
         <button
           onClick={() => navigate(-1)}
@@ -58,6 +61,7 @@ export default function OrgSearchPage() {
             <p className="text-xs text-gray-400 mt-1">990 filings</p>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );
