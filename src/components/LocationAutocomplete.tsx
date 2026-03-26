@@ -18,7 +18,7 @@ declare namespace google.maps.places {
 }
 
 /**
- * LocationAutocomplete â Google Places-powered location search.
+ * LocationAutocomplete — Google Places-powered location search.
  *
  * Falls back to a curated local suggestion list when the Google Maps script
  * hasn't loaded (e.g. missing API key or blocked by browser).
@@ -130,9 +130,6 @@ interface Props {
   onChange: (value: string) => void;
   hasError?: boolean;
   placeholder?: string;
-  id?: string;
-  required?: boolean;
-  ariaDescribedBy?: string;
 }
 
 // Track Google Maps script loading state globally
@@ -168,7 +165,7 @@ function loadGoogleMaps(): Promise<void> {
   });
 }
 
-export default function LocationAutocomplete({ value, onChange, hasError, placeholder, id, required, ariaDescribedBy }: Props) {
+export default function LocationAutocomplete({ value, onChange, hasError, placeholder }: Props) {
   const [suggestions, setSuggestions] = useState<{ label: string; placeId?: string; type: string }[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -266,7 +263,6 @@ export default function LocationAutocomplete({ value, onChange, hasError, placeh
       <div className="relative">
         <input
           ref={inputRef}
-          id={id}
           value={value}
           onChange={e => {
             onChange(e.target.value);
@@ -274,10 +270,7 @@ export default function LocationAutocomplete({ value, onChange, hasError, placeh
           }}
           onFocus={handleFocus}
           onBlur={() => setTimeout(() => setOpen(false), 200)}
-          placeholder={placeholder || 'e.g. King County, WA Â· Chicago, IL Â· National'}
-          required={required}
-          aria-required={required ? 'true' : undefined}
-          aria-describedby={ariaDescribedBy}
+          placeholder={placeholder || 'e.g. King County, WA | Chicago, IL | National'}
           className={`w-full bg-[#0d1117] border rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 ${hasError ? 'border-red-500' : 'border-[#30363d]'}`}
         />
         {loading && (

@@ -849,7 +849,7 @@ export default function Results() {
                                 <p className="text-sm font-semibold text-white">{grantee.name}</p>
                               )}
                               <p className="text-xs text-gray-300">
-                                {(grantee.year ? String(grantee.year) : 'Year n/a')} · {formatGrantAmount(grantee.amount)}
+                                {(grantee.year ? String(grantee.year) : 'Year n/a')} | {formatGrantAmount(grantee.amount)}
                               </p>
                             </div>
                             {grantee.match_reasons.length > 0 && (

@@ -217,7 +217,7 @@ export default function ApplicationsPage() {
                       <div>
                         <p className="text-sm font-medium text-white">{entry.title}</p>
                         <p className="text-xs text-gray-500 mt-0.5">
-                          {entry.source_type} · {new Date(entry.created_at).toLocaleDateString()}
+                          {entry.source_type} | {new Date(entry.created_at).toLocaleDateString()}
                         </p>
                       </div>
                     </div>
@@ -237,7 +237,7 @@ export default function ApplicationsPage() {
                   <div className="flex items-start justify-between mb-4">
                     <div>
                       <h3 className="text-lg font-semibold mb-1">{selectedEntry.title}</h3>
-                      <p className="text-xs text-gray-500">{selectedEntry.source_type} · Added {new Date(selectedEntry.created_at).toLocaleDateString()}</p>
+                      <p className="text-xs text-gray-500">{selectedEntry.source_type} | Added {new Date(selectedEntry.created_at).toLocaleDateString()}</p>
                     </div>
                     <button
                       onClick={() => setShowBookmarkForm(!showBookmarkForm)}

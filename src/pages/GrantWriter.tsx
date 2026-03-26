@@ -609,7 +609,7 @@ export default function GrantWriter() {
                                 {f.name}
                               </p>
                               <p className="text-xs text-gray-500">
-                                {FILE_TYPE_LABELS[f.type] || 'File'} ·{' '}
+                                {FILE_TYPE_LABELS[f.type] || 'File'} |{' '}
                                 {formatSize(f.size)}
                               </p>
                             </div>

@@ -230,7 +230,7 @@ export default function DemoVideo() {
                   }`}>
                     {locationChars > 0
                       ? LOCATION_TEXT.slice(0, locationChars)
-                      : <span className="text-gray-600">e.g. King County, WA · Chicago, IL · National</span>
+                      : <span className="text-gray-600">e.g. King County, WA | Chicago, IL | National</span>
                     }
                     {missionDone && locationChars < LOCATION_TEXT.length && (
                       <span className="inline-block w-0.5 h-3.5 bg-blue-400 animate-pulse ml-px align-middle" />
@@ -288,13 +288,13 @@ export default function DemoVideo() {
                 <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">Funder Matches</p>
                 <FunderCard
                   name="Gates Foundation"
-                  type="foundation · National"
+                  type="foundation | National"
                   score={92}
                   saved={saved}
                   onSave={() => setSaved(true)}
                   highlight={!saved}
                 />
-                <FunderCard name="Knight Foundation" type="foundation · Miami, FL" score={78} saved={false} />
+                <FunderCard name="Knight Foundation" type="foundation | Miami, FL" score={78} saved={false} />
               </div>
             </ScreenSlide>
 
@@ -370,7 +370,7 @@ export default function DemoVideo() {
                   <p className="text-xs text-gray-400 mt-1">/ 100</p>
                 </div>
                 <p className="text-xs text-gray-400 text-center max-w-xs">
-                  Complete 8-section narrative · Compliance checklist · Personalized to Gates Foundation
+                  Complete 8-section narrative | Compliance checklist | Personalized to Gates Foundation
                 </p>
               </div>
             </ScreenSlide>

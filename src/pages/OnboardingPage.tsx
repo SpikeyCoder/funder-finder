@@ -225,7 +225,7 @@ export default function OnboardingPage() {
                 <div key={funder.name} className="flex items-center justify-between p-3 bg-[#0d1117] rounded-lg">
                   <div>
                     <p className="text-sm text-white font-medium">{funder.name}</p>
-                    <p className="text-xs text-gray-500">{funder.type} · {funder.focus}</p>
+                    <p className="text-xs text-gray-500">{funder.type} | {funder.focus}</p>
                   </div>
                   <span className="text-sm font-bold text-green-400">{funder.match}</span>
                 </div>

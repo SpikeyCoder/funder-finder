@@ -1923,7 +1923,7 @@ export default function ProjectWorkspace() {
                         </p>
                         <p className="text-xs text-gray-500">
                           {item.type.replace(/_/g, ' ')}
-                          {item.due_date && ` · Due ${new Date(item.due_date).toLocaleDateString()}`}
+                          {item.due_date && ` | Due ${new Date(item.due_date).toLocaleDateString()}`}
                         </p>
                       </div>
                       <select value={item.status} onChange={e => handleUpdateComplianceStatus(item.id, e.target.value)}
@@ -2015,7 +2015,7 @@ export default function ProjectWorkspace() {
                         <p className="text-sm text-white truncate">{doc.title}</p>
                         <p className="text-xs text-gray-500">
                           {doc.file_name || 'text entry'}
-                          <span className="mx-1">·</span>
+                          <span className="mx-1">|</span>
                           {new Date(doc.created_at).toLocaleDateString()}
                         </p>
                       </div>

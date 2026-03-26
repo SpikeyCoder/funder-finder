@@ -596,7 +596,7 @@ export default function TeamSettingsPage() {
                                         </p>
                                         <p className="text-xs text-gray-500 mt-0.5">
                                           {project.grant_count} grant{project.grant_count !== 1 ? 's' : ''} tracked
-                                          <span className="mx-1.5">·</span>
+                                          <span className="mx-1.5">|</span>
                                           Updated {timeAgo(project.updated_at)}
                                         </p>
                                       </div>
@@ -654,7 +654,7 @@ export default function TeamSettingsPage() {
                           <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
                             <Icon size={10} className={rc.color} />
                             <span>{rc.label}</span>
-                            <span className="mx-0.5">·</span>
+                            <span className="mx-0.5">|</span>
                             {isExpired ? (
                               <span className="text-red-400">Expired</span>
                             ) : (
