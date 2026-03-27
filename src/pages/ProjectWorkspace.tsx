@@ -2169,7 +2169,7 @@ export default function ProjectWorkspace() {
                   )}
                   {/* Word limit control */}
                   <div className="flex items-center gap-2">
-                    <label className="text-xs text-gray-400 whitespace-nowrap">Word limit:</label>
+                    <label className="text-sm text-gray-200 whitespace-nowrap font-medium">Word limit:</label>
                     <input
                       type="number"
                       min={100}
@@ -2177,9 +2177,9 @@ export default function ProjectWorkspace() {
                       step={100}
                       value={draftWordLimit}
                       onChange={e => setDraftWordLimit(Math.max(100, Math.min(5000, parseInt(e.target.value) || 500)))}
-                      className="w-20 bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-purple-500"
+                      className="w-24 bg-[#0d1117] border border-[#30363d] rounded px-2 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-purple-500"
                     />
-                    <span className="text-[10px] text-gray-600">words (100–5000)</span>
+                    <span className="text-sm text-gray-400">words (100–5000)</span>
                   </div>
                   <button onClick={() => handleGenerateDraft()} disabled={aiDraftLoading}
                     className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60">
