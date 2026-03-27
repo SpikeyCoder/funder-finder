@@ -50,6 +50,11 @@ export default function NavBar() {
             <button onClick={() => navigate('/mission')} className={linkClass('/mission')}>
               Find Funders
             </button>
+            {!loading && user && (
+              <button onClick={() => navigate('/saved')} className={linkClass('/saved')}>
+                Saved Funders
+              </button>
+            )}
             <button onClick={() => navigate('/browse')} className={linkClass('/browse')}>
               Browse Grants
             </button>
@@ -60,9 +65,6 @@ export default function NavBar() {
             {!loading && (
               user ? (
                 <>
-                  <button onClick={() => navigate('/saved')} className={linkClass('/saved')}>
-                    Saved
-                  </button>
                   <button onClick={() => navigate('/portfolio')} className={linkClass('/portfolio')}>
                     Dashboard
                   </button>
@@ -144,6 +146,16 @@ export default function NavBar() {
             >
               Find Funders
             </button>
+            {!loading && user && (
+              <button
+                onClick={() => { navigate('/saved'); setMobileOpen(false); }}
+                className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
+                  isActive('/saved') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
+                }`}
+              >
+                Saved Funders
+              </button>
+            )}
             <button
               onClick={() => { navigate('/browse'); setMobileOpen(false); }}
               className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
@@ -164,14 +176,6 @@ export default function NavBar() {
             {!loading && (
               user ? (
                 <>
-                  <button
-                    onClick={() => { navigate('/saved'); setMobileOpen(false); }}
-                    className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
-                      isActive('/saved') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
-                    }`}
-                  >
-                    Saved Funders
-                  </button>
                   <button
                     onClick={() => { navigate('/portfolio'); setMobileOpen(false); }}
                     className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
