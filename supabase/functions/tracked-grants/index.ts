@@ -233,6 +233,21 @@ Deno.serve(async (req: Request) => {
         return errorResponse('project_id and funder_name are required');
       }
 
+      // If funder_ein is provided, check for existing entry to prevent duplicates
+      if (funder_ein) {
+        const { data: existing } = await supabase
+          .from('tracked_grants')
+          .select('*, pipeline_statuses(name, slug, color, is_terminal)')
+          .eq('project_id', project_id)
+          .eq('funder_ein', funder_ein)
+          .eq('user_id', user.id)
+          .maybeSingle();
+        if (existing) {
+          // Already tracked — return the existing row (idempotent)
+          return jsonResponse(existing, 200);
+        }
+      }
+
       // Resolve status_slug to status_id
       let statusId: string;
       if (body.status_id) {

@@ -439,9 +439,33 @@ export default function ProjectWorkspace() {
     }
   };
 
-  // Save a funder to the tracker (tracked_grants)
+  // Save a funder to the tracker (tracked_grants) — optimistic UI
   const handleSaveFunder = async (funderEin: string, funderName: string) => {
     if (trackedGrants.some(tg => tg.funder_ein === funderEin)) return;
+
+    // Optimistic: mark as tracked immediately so the button updates instantly
+    const optimistic: TrackedGrant = {
+      id: `temp-${funderEin}`,
+      project_id: id!,
+      user_id: '',
+      funder_ein: funderEin,
+      funder_name: funderName,
+      grant_title: null,
+      status_id: '',
+      amount: null,
+      deadline: null,
+      grant_url: null,
+      notes: null,
+      source: 'ai_match',
+      is_external: false,
+      awarded_amount: null,
+      awarded_date: null,
+      added_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      pipeline_statuses: { name: 'Researching', slug: 'researching', color: '#6b7280', is_terminal: false },
+    } as TrackedGrant;
+    setTrackedGrants(prev => [...prev, optimistic]);
+
     try {
       const headers = await getEdgeFunctionHeaders();
       const res = await fetch(TRACKED_GRANTS_URL, {
@@ -456,10 +480,16 @@ export default function ProjectWorkspace() {
         }),
       });
       if (res.ok) {
-        await loadTrackerData();
+        const real = await res.json();
+        // Replace optimistic entry with the real server data
+        setTrackedGrants(prev => prev.map(tg => tg.id === optimistic.id ? real : tg));
+      } else {
+        // Rollback on failure
+        setTrackedGrants(prev => prev.filter(tg => tg.id !== optimistic.id));
       }
     } catch (err) {
       console.error('Error saving funder:', err);
+      setTrackedGrants(prev => prev.filter(tg => tg.id !== optimistic.id));
     }
   };
 
