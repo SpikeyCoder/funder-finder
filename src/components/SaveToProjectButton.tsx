@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Bookmark, BookmarkCheck, ChevronDown } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
+import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import LoginModal from './LoginModal';
+
+const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
+const TRACKED_GRANTS_URL = `${SUPABASE_URL}/functions/v1/tracked-grants`;
 
 interface Project {
   id: string;
@@ -113,6 +116,17 @@ const SaveToProjectButton: React.FC<SaveToProjectButtonProps> = ({
           return;
         }
 
+        // Also remove from tracked_grants so the Tracker stays in sync
+        try {
+          await supabase
+            .from('tracked_grants')
+            .delete()
+            .eq('project_id', projectId)
+            .eq('funder_ein', funderEin);
+        } catch (err) {
+          console.warn('Failed to remove from tracked_grants:', err);
+        }
+
         // Update local state
         const newSavedProjects = new Set(savedToProjects);
         newSavedProjects.delete(projectId);
@@ -130,6 +144,24 @@ const SaveToProjectButton: React.FC<SaveToProjectButtonProps> = ({
         if (error) {
           console.error('Error saving funder:', error);
           return;
+        }
+
+        // Also add to tracked_grants so it appears in the project Tracker
+        try {
+          const headers = await getEdgeFunctionHeaders();
+          await fetch(TRACKED_GRANTS_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...headers },
+            body: JSON.stringify({
+              project_id: projectId,
+              funder_ein: funderEin,
+              funder_name: funderName,
+              source: 'browse',
+              status_slug: 'researching',
+            }),
+          });
+        } catch (err) {
+          console.warn('Failed to add to tracked_grants:', err);
         }
 
         // Update local state
