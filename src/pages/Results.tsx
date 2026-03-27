@@ -653,7 +653,7 @@ export default function Results() {
         )}
 
         {/* Grant size filter pills */}
-        {!loading && !error && matches.length > 0 && !isPeerSearchMode && (
+        {!loading && !error && matches.length > 0 && (
           <div className="flex items-center gap-2 mt-4 mb-8 flex-wrap">
             <span className="text-xs text-gray-300 mr-1">Grant size:</span>
             {GRANT_SIZE_FILTERS.map(({ key, label }) => (
