@@ -843,7 +843,7 @@ export default function Results() {
                                   className="text-sm font-semibold text-blue-400 hover:text-blue-300 hover:underline text-left transition-colors"
                                   title="View this organization's profile"
                                 >
-                                  {grantee.name} &gt;
+                                  {grantee.name}
                                 </button>
                               ) : (
                                 <p className="text-sm font-semibold text-white">{grantee.name}</p>
