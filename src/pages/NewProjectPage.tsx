@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, ChevronLeft, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -74,7 +74,7 @@ const GRANT_SIZE_PRESETS = [
 
 export default function NewProjectPage() {
   const navigate = useNavigate();
-  const { user, loading } = useAuth();
+  const { loading } = useAuth();
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<FormState>({
     name: '',
