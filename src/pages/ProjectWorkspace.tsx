@@ -1,6 +1,8 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Save, Loader, Users, RefreshCw, Plus, Download, Upload, X, CheckCircle, Clock, AlertTriangle, ExternalLink, Trash2, ClipboardList, Calendar, Paperclip, Sparkles, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Save, Loader, Users, RefreshCw, Plus, Download, Upload, X, CheckCircle, Clock, AlertTriangle, ExternalLink, Trash2, ClipboardList, Calendar, Paperclip, Sparkles, ChevronDown, FileText } from 'lucide-react';
+import { asBlob } from 'html-docx-js-typescript';
+import { saveAs } from 'file-saver';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
@@ -100,6 +102,34 @@ type TabType = 'matches' | 'tracker' | 'calendar' | 'peers' | 'settings';
 function fmtCurrency(amount: number | null | undefined): string {
   if (!amount) return '-';
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(amount);
+}
+
+// Simple markdown-to-HTML for Word export
+function markdownToHtml(text: string): string {
+  const lines = text.split('\n');
+  const parts: string[] = [];
+  for (const raw of lines) {
+    const esc = raw.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const inl = esc.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    if (raw.startsWith('### ')) parts.push(`<h3>${inl.slice(4)}</h3>`);
+    else if (raw.startsWith('## ')) parts.push(`<h2>${inl.slice(3)}</h2>`);
+    else if (raw.startsWith('# ')) parts.push(`<h1>${inl.slice(2)}</h1>`);
+    else if (raw === '---') parts.push('<hr>');
+    else if (raw.startsWith('- ')) parts.push(`<li>${inl.slice(2)}</li>`);
+    else if (raw.startsWith('| ')) {
+      // Table rows — pass through as-is for simple rendering
+      const cells = raw.split('|').filter(c => c.trim()).map(c => `<td style="border:1px solid #ccc;padding:4pt 8pt">${c.trim()}</td>`);
+      parts.push(`<tr>${cells.join('')}</tr>`);
+    } else if (raw === '') parts.push('<br>');
+    else parts.push(`<p>${inl}</p>`);
+  }
+  // Wrap consecutive <li> in <ul>, <tr> in <table>
+  let html = parts.join('\n');
+  html = html.replace(/(<li>[\s\S]*?<\/li>\n?)+/g, (m) => `<ul>${m}</ul>`);
+  html = html.replace(/(<tr>[\s\S]*?<\/tr>\n?)+/g, (m) => `<table style="border-collapse:collapse;width:100%">${m}</table>`);
+  // Remove separator rows (|---|---|)
+  html = html.replace(/<tr>(<td[^>]*>-+<\/td>)+<\/tr>/g, '');
+  return html;
 }
 
 export default function ProjectWorkspace() {
@@ -2127,6 +2157,36 @@ export default function ProjectWorkspace() {
                           <button onClick={() => { navigator.clipboard.writeText(aiDraft); }}
                             className="text-xs text-gray-400 hover:text-white">
                             Copy
+                          </button>
+                          <button onClick={async () => {
+                            try {
+                              const cleanedHtml = markdownToHtml(aiDraft);
+                              const fullHtml = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>
+  body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; line-height: 1.5; color: #000; }
+  h1 { font-size: 18pt; font-weight: bold; color: #1a3a5c; margin: 20pt 0 8pt 0; }
+  h2 { font-size: 15pt; font-weight: bold; color: #1a3a5c; margin: 18pt 0 6pt 0; }
+  h3 { font-size: 12pt; font-weight: bold; color: #000; margin: 14pt 0 4pt 0; }
+  p { font-size: 11pt; margin: 4pt 0; }
+  li { font-size: 11pt; margin: 2pt 0; }
+  strong { font-weight: bold; }
+  hr { border: none; border-top: 1px solid #999; margin: 12pt 0; }
+  table { border-collapse: collapse; width: 100%; margin: 8pt 0; }
+  td { border: 1px solid #ccc; padding: 4pt 8pt; font-size: 10pt; }
+</style></head><body>${cleanedHtml}</body></html>`;
+                              const blob = await asBlob(fullHtml, {
+                                orientation: 'portrait' as const,
+                                margins: { top: 1440, right: 1440, bottom: 1440, left: 1440 },
+                              }) as Blob;
+                              const safeName = project?.name
+                                ? `Proposal_${project.name.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, '_')}.docx`
+                                : 'Grant_Proposal.docx';
+                              saveAs(blob, safeName);
+                            } catch (err) { console.error('Export to Word failed:', err); }
+                          }}
+                            className="text-xs text-green-400 hover:text-green-300 flex items-center gap-1">
+                            <FileText size={12} />
+                            Export .docx
                           </button>
                         </div>
                       </div>
