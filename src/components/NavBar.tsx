@@ -64,10 +64,10 @@ export default function NavBar() {
                     <Heart size={14} className="mr-1.5" />
                     Saved
                   </button>
-                  <button onClick={() => navigate('/dashboard')} className={linkClass('/dashboard')}>
+                  <button onClick={() => navigate('/portfolio')} className={linkClass('/portfolio')}>
                     Dashboard
                   </button>
-                  <button onClick={() => navigate('/portfolio')} className={linkClass('/portfolio')}>
+                  <button onClick={() => navigate('/dashboard')} className={linkClass('/dashboard')}>
                     Portfolio
                   </button>
                   <button onClick={() => navigate('/tasks')} className={linkClass('/tasks')}>
@@ -175,17 +175,17 @@ export default function NavBar() {
                     Saved Funders
                   </button>
                   <button
-                    onClick={() => { navigate('/dashboard'); setMobileOpen(false); }}
+                    onClick={() => { navigate('/portfolio'); setMobileOpen(false); }}
                     className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
-                      isActive('/dashboard') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
+                      isActive('/portfolio') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
                     }`}
                   >
                     Dashboard
                   </button>
                   <button
-                    onClick={() => { navigate('/portfolio'); setMobileOpen(false); }}
+                    onClick={() => { navigate('/dashboard'); setMobileOpen(false); }}
                     className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
-                      isActive('/portfolio') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
+                      isActive('/dashboard') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
                     }`}
                   >
                     Portfolio
