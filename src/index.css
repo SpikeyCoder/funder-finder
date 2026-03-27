@@ -37,85 +37,112 @@ body {
 }
 
 /* ── Light-mode overrides ──────────────────────────────────────────────
-   The site is designed dark-first. When an external accessibility widget
-   (e.g. Cloudflare) switches to light mode, these rules flip text and
-   background colours so contrast is preserved.
+   The ThemeToggle component adds .light-mode to <html> when the user
+   clicks the sun/moon button. These rules flip every dark-first colour
+   so text, backgrounds, and borders stay readable on a light canvas.
    ──────────────────────────────────────────────────────────────────── */
-@media (prefers-color-scheme: light) {
-  /* Base body */
-  body {
-    background-color: #ffffff !important;
-    color: #1a1a2e !important;
-  }
-
-  /* ── Text colours ─────────────────────────────────────────────────── */
-  .text-white          { color: #1a1a2e !important; }
-  .text-gray-100       { color: #222 !important; }
-  .text-gray-200       { color: #333 !important; }
-  .text-gray-300       { color: #444 !important; }
-  .text-gray-400       { color: #555 !important; }
-  .text-gray-500       { color: #666 !important; }
-  .text-blue-300       { color: #1d4ed8 !important; }
-  .text-blue-400       { color: #2563eb !important; }
-  .text-green-400      { color: #16a34a !important; }
-  .text-yellow-400     { color: #ca8a04 !important; }
-  .text-red-400        { color: #dc2626 !important; }
-  .text-red-300        { color: #b91c1c !important; }
-  .text-blue-100       { color: #1e40af !important; }
-  .text-blue-200       { color: #1e3a8a !important; }
-
-  /* ── Background colours ───────────────────────────────────────────── */
-  .bg-\[\#0d1117\]     { background-color: #ffffff !important; }
-  .bg-\[\#161b22\]     { background-color: #f6f8fa !important; }
-  .bg-\[\#1c2128\]     { background-color: #f0f2f5 !important; }
-  .bg-\[\#21262d\]     { background-color: #e8eaed !important; }
-  .bg-\[\#111723\]     { background-color: #f0f2f5 !important; }
-  .bg-\[\#0f1d2e\]     { background-color: #e8f0fe !important; }
-  .bg-gray-900         { background-color: #f6f8fa !important; }
-  .bg-gray-800         { background-color: #f0f2f5 !important; }
-
-  /* ── Border colours ───────────────────────────────────────────────── */
-  .border-\[\#30363d\] { border-color: #d0d7de !important; }
-  .border-\[\#1f3a5f\] { border-color: #a8c8f0 !important; }
-  .border-gray-700     { border-color: #d0d7de !important; }
-  .border-gray-600     { border-color: #d0d7de !important; }
-
-  /* ── Hover states ─────────────────────────────────────────────────── */
-  .hover\:bg-\[\#21262d\]:hover  { background-color: #e0e3e6 !important; }
-  .hover\:bg-\[\#161b22\]:hover  { background-color: #eaecef !important; }
-  .hover\:text-white:hover       { color: #1a1a2e !important; }
-  .hover\:text-gray-200:hover    { color: #333 !important; }
-
-  /* ── Placeholder colours ──────────────────────────────────────────── */
-  .placeholder-gray-500::placeholder { color: #888 !important; }
-  .placeholder-gray-400::placeholder { color: #777 !important; }
-
-  /* ── Input / textarea backgrounds ─────────────────────────────────── */
-  input, textarea, select {
-    background-color: #ffffff !important;
-    color: #1a1a2e !important;
-    border-color: #d0d7de !important;
-  }
-
-  /* ── Cards, panels, modals ────────────────────────────────────────── */
-  .shadow-lg  { box-shadow: 0 4px 12px rgba(0,0,0,0.08) !important; }
-  .shadow-2xl { box-shadow: 0 8px 24px rgba(0,0,0,0.12) !important; }
-
-  /* ── NavBar ───────────────────────────────────────────────────────── */
-  nav, header {
-    background-color: #ffffff !important;
-    border-bottom-color: #d0d7de !important;
-  }
-
-  /* ── Blue accent buttons (keep legible) ───────────────────────────── */
-  .bg-blue-600 { background-color: #2563eb !important; }
-  .bg-\[\#1f6feb\] { background-color: #2563eb !important; }
-
-  /* ── Divider / ring colours ───────────────────────────────────────── */
-  .ring-blue-400    { --tw-ring-color: #2563eb !important; }
-  .divide-gray-700 > :not([hidden]) ~ :not([hidden]) { border-color: #d0d7de !important; }
-
-  /* ── Scrollbar (Webkit) ───────────────────────────────────────────── */
-  ::-webkit-scrollbar-track { background: #f6f8fa !important; }
-  ::-webkit-scrollbar-thumb { background: #c1c8d0 !important; }
+html.light-mode body {
+  background-color: #ffffff !important;
+  color: #1a1a2e !important;
 }
+
+/* ── Text colours ─────────────────────────────────────────────────── */
+html.light-mode .text-white          { color: #1a1a2e !important; }
+html.light-mode .text-gray-100       { color: #222 !important; }
+html.light-mode .text-gray-200       { color: #333 !important; }
+html.light-mode .text-gray-300       { color: #444 !important; }
+html.light-mode .text-gray-400       { color: #555 !important; }
+html.light-mode .text-gray-500       { color: #666 !important; }
+html.light-mode .text-blue-300       { color: #1d4ed8 !important; }
+html.light-mode .text-blue-400       { color: #2563eb !important; }
+html.light-mode .text-green-400      { color: #16a34a !important; }
+html.light-mode .text-green-300      { color: #15803d !important; }
+html.light-mode .text-yellow-400     { color: #ca8a04 !important; }
+html.light-mode .text-yellow-300     { color: #a16207 !important; }
+html.light-mode .text-red-400        { color: #dc2626 !important; }
+html.light-mode .text-red-300        { color: #b91c1c !important; }
+html.light-mode .text-blue-100       { color: #1e40af !important; }
+html.light-mode .text-blue-200       { color: #1e3a8a !important; }
+html.light-mode .text-gray-600       { color: #444 !important; }
+html.light-mode .text-gray-900       { color: #111 !important; }
+html.light-mode .text-orange-400     { color: #c2410c !important; }
+html.light-mode .text-purple-400     { color: #7c3aed !important; }
+html.light-mode .text-purple-300     { color: #6d28d9 !important; }
+html.light-mode .text-amber-300      { color: #b45309 !important; }
+html.light-mode .text-amber-400      { color: #92400e !important; }
+html.light-mode .text-red-200        { color: #991b1b !important; }
+html.light-mode .text-blue-500       { color: #1d4ed8 !important; }
+html.light-mode .text-blue-600       { color: #1e40af !important; }
+
+/* ── Background colours ───────────────────────────────────────────── */
+html.light-mode .bg-\[\#0d1117\]     { background-color: #ffffff !important; }
+html.light-mode .bg-\[\#161b22\]     { background-color: #f6f8fa !important; }
+html.light-mode .bg-\[\#1c2128\]     { background-color: #f0f2f5 !important; }
+html.light-mode .bg-\[\#21262d\]     { background-color: #e8eaed !important; }
+html.light-mode .bg-\[\#111723\]     { background-color: #f0f2f5 !important; }
+html.light-mode .bg-\[\#0f1d2e\]     { background-color: #e8f0fe !important; }
+html.light-mode .bg-\[\#1a1f2e\]     { background-color: #f0f2f5 !important; }
+html.light-mode .bg-gray-900         { background-color: #f6f8fa !important; }
+html.light-mode .bg-gray-800         { background-color: #f0f2f5 !important; }
+html.light-mode .bg-black            { background-color: #f6f8fa !important; }
+html.light-mode .bg-blue-900\/30     { background-color: #dbeafe !important; }
+html.light-mode .bg-red-900\/20      { background-color: #fee2e2 !important; }
+html.light-mode .bg-green-900\/20    { background-color: #dcfce7 !important; }
+html.light-mode .bg-yellow-900\/20   { background-color: #fef9c3 !important; }
+html.light-mode .bg-\[\#30363d\]     { background-color: #d8dce0 !important; }
+html.light-mode .bg-\[\#3d444d\]     { background-color: #ccd1d6 !important; }
+html.light-mode .bg-\[\#1a202e\]     { background-color: #f0f2f5 !important; }
+html.light-mode .bg-\[\#1f2937\]     { background-color: #f0f2f5 !important; }
+
+/* ── Border colours ───────────────────────────────────────────────── */
+html.light-mode .border-\[\#30363d\] { border-color: #d0d7de !important; }
+html.light-mode .border-\[\#1f3a5f\] { border-color: #a8c8f0 !important; }
+html.light-mode .border-gray-700     { border-color: #d0d7de !important; }
+html.light-mode .border-gray-600     { border-color: #d0d7de !important; }
+html.light-mode .border-blue-800\/50 { border-color: #93c5fd !important; }
+
+/* ── Hover states ─────────────────────────────────────────────────── */
+html.light-mode .hover\:bg-\[\#21262d\]:hover  { background-color: #e0e3e6 !important; }
+html.light-mode .hover\:bg-\[\#161b22\]:hover  { background-color: #eaecef !important; }
+html.light-mode .hover\:bg-\[\#30363d\]:hover  { background-color: #d8dce0 !important; }
+html.light-mode .hover\:text-white:hover       { color: #1a1a2e !important; }
+html.light-mode .hover\:text-gray-200:hover    { color: #333 !important; }
+
+/* ── Placeholder colours ──────────────────────────────────────────── */
+html.light-mode .placeholder-gray-500::placeholder { color: #888 !important; }
+html.light-mode .placeholder-gray-400::placeholder { color: #777 !important; }
+
+/* ── Input / textarea backgrounds ─────────────────────────────────── */
+html.light-mode input,
+html.light-mode textarea,
+html.light-mode select {
+  background-color: #ffffff !important;
+  color: #1a1a2e !important;
+  border-color: #d0d7de !important;
+}
+
+/* ── Cards, panels, modals ────────────────────────────────────────── */
+html.light-mode .shadow-lg  { box-shadow: 0 4px 12px rgba(0,0,0,0.08) !important; }
+html.light-mode .shadow-2xl { box-shadow: 0 8px 24px rgba(0,0,0,0.12) !important; }
+
+/* ── NavBar ───────────────────────────────────────────────────────── */
+html.light-mode nav,
+html.light-mode header {
+  background-color: #ffffff !important;
+  border-bottom-color: #d0d7de !important;
+}
+
+/* ── Blue accent buttons (keep legible) ───────────────────────────── */
+html.light-mode .bg-blue-600 { background-color: #2563eb !important; }
+html.light-mode .bg-\[\#1f6feb\] { background-color: #2563eb !important; }
+
+/* ── Divider / ring colours ───────────────────────────────────────── */
+html.light-mode .ring-blue-400    { --tw-ring-color: #2563eb !important; }
+html.light-mode .divide-gray-700 > :not([hidden]) ~ :not([hidden]) { border-color: #d0d7de !important; }
+
+/* ── Scrollbar (Webkit) ───────────────────────────────────────────── */
+html.light-mode ::-webkit-scrollbar-track { background: #f6f8fa !important; }
+html.light-mode ::-webkit-scrollbar-thumb { background: #c1c8d0 !important; }
+
+/* ── Theme toggle button itself — keep visible in light mode ──────── */
+html.light-mode .bg-\[\#21262d\] { background-color: #e8eaed !important; }
