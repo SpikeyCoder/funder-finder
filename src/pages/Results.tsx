@@ -484,18 +484,31 @@ export default function Results() {
     return [...einMap.values()];
   })();
 
-  // Grant size filter — uses grant_range_max as primary signal, falls back to grant_range_min
+  // Grant size filter — checks if any similar past grantee amounts fall in the selected range,
+  // falling back to the funder-level grant_range_min/max if no grantee data exists
   const filteredMatches = deduplicatedMatches
     .filter(f => !hideDAFs || (f.type !== 'daf' && !isDAF(f.name)))
     .filter(f => !hideUniversities || !isUniversity(f))
     .filter(f => {
       if (grantSizeFilter === 'any') return true;
+
+      const inRange = (amount: number) => {
+        if (grantSizeFilter === 'small')  return amount <= 25_000;
+        if (grantSizeFilter === 'medium') return amount > 25_000 && amount <= 250_000;
+        if (grantSizeFilter === 'large')  return amount > 250_000;
+        return true;
+      };
+
+      // Check individual grantee amounts first
+      const grantees = f.similar_past_grantees ?? [];
+      if (grantees.length > 0) {
+        return grantees.some(g => g.amount != null && inRange(g.amount));
+      }
+
+      // Fall back to funder-level grant range
       const effectiveMax = f.grant_range_max ?? f.grant_range_min;
-      if (effectiveMax === null) return false; // no grant range data → exclude from size-specific filters
-      if (grantSizeFilter === 'small')  return effectiveMax <= 25_000;
-      if (grantSizeFilter === 'medium') return effectiveMax > 25_000 && effectiveMax <= 250_000;
-      if (grantSizeFilter === 'large')  return effectiveMax > 250_000;
-      return true;
+      if (effectiveMax === null) return false;
+      return inRange(effectiveMax);
     });
 
   // Pagination
@@ -677,11 +690,6 @@ export default function Results() {
             >
               Hide Universities
             </button>
-            {(grantSizeFilter !== 'any' || hideUniversities || deduplicatedMatches.length < matches.length) && (
-              <span className="text-xs text-gray-300 ml-1">
-                - showing {filteredMatches.length} of {deduplicatedMatches.length}{deduplicatedMatches.length < matches.length ? ` (${matches.length - deduplicatedMatches.length} duplicates removed)` : ''}
-              </span>
-            )}
           </div>
         )}
 
