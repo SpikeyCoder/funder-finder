@@ -148,6 +148,7 @@ export default function GrantWriter() {
   // ── Generation state ────────────────────────────────────────────────────
 
   const [output, setOutput] = useState('');
+  const [wordLimit, setWordLimit] = useState(500);
   const [phase, setPhase] = useState<GenerationPhase>('idle');
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -276,6 +277,7 @@ export default function GrantWriter() {
           orgDetails,
           uploadedFilePaths: uploadedFiles.map((f) => f.path),
           sessionId: sessionId.current,
+          word_limit: wordLimit,
         }),
       });
 
@@ -799,6 +801,21 @@ export default function GrantWriter() {
                 {error}
               </div>
             )}
+
+            {/* Word limit control */}
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-gray-400 whitespace-nowrap">Word limit:</label>
+              <input
+                type="number"
+                min={100}
+                max={5000}
+                step={100}
+                value={wordLimit}
+                onChange={e => setWordLimit(Math.max(100, Math.min(5000, parseInt(e.target.value) || 500)))}
+                className="w-20 bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+              />
+              <span className="text-[10px] text-gray-600">words (100–5000)</span>
+            </div>
 
             {/* Generate button */}
             <button

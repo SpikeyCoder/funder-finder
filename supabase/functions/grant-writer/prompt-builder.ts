@@ -45,7 +45,7 @@ function formatCurrency(n: number | null | undefined): string {
 
 // ── System prompt ───────────────────────────────────────────────────────────
 
-function buildSystemPrompt(styleGuide: StyleGuide | null): string {
+function buildSystemPrompt(styleGuide: StyleGuide | null, wordLimit = 500): string {
   let system = `You are an expert grant writer with 20+ years of experience securing foundation funding for nonprofits. You write compelling, data-backed grant narratives that align organizational strengths with funder priorities.
 
 Your task: Generate a complete, ready-to-customize grant proposal draft.
@@ -59,7 +59,7 @@ Guidelines:
 - Include section headers using ## for major sections
 - End with a Works Cited section listing all sources referenced in MLA format
 - End with a compliance checklist of items to verify before submission
-- Target 2000-3000 words for a thorough draft
+- Target approximately ${wordLimit} words. Be concise and impactful. Every sentence should earn its place.
 
 CRITICAL WRITING STYLE RULES — HUMAN-SOUNDING PROSE:
 You must write like an experienced human grant writer, NOT like an AI. Strictly follow every rule below:
@@ -211,9 +211,10 @@ export function buildPrompt(
   orgDetails: OrgDetails,
   styleGuide: StyleGuide | null,
   research: ResearchData | null,
+  wordLimit = 500,
 ): { system: string; userMessage: string } {
   return {
-    system: buildSystemPrompt(styleGuide),
+    system: buildSystemPrompt(styleGuide, wordLimit),
     userMessage: buildUserMessage(funder, mission, orgDetails, research),
   };
 }

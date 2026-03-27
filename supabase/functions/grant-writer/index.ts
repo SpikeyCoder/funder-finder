@@ -112,6 +112,7 @@ Deno.serve(async (req) => {
     const mission = typeof body.mission === 'string' ? body.mission.trim() : '';
     const orgDetails = body.orgDetails || {};
     const uploadedFilePaths: string[] = body.uploadedFilePaths || [];
+    const wordLimit: number = body.word_limit || 500;
 
     if (!funder || !mission) {
       return new Response(
@@ -196,6 +197,7 @@ Deno.serve(async (req) => {
             orgDetails,
             styleGuide,
             research,
+            wordLimit,
           );
 
           const claudeResponse = await fetch(
