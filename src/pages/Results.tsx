@@ -484,6 +484,15 @@ export default function Results() {
     return [...einMap.values()];
   })();
 
+  // Grant size helper — reused for filtering funders AND individual grantees
+  const grantInRange = (amount: number) => {
+    if (grantSizeFilter === 'any')    return true;
+    if (grantSizeFilter === 'small')  return amount <= 25_000;
+    if (grantSizeFilter === 'medium') return amount > 25_000 && amount <= 250_000;
+    if (grantSizeFilter === 'large')  return amount > 250_000;
+    return true;
+  };
+
   // Grant size filter — checks if any similar past grantee amounts fall in the selected range,
   // falling back to the funder-level grant_range_min/max if no grantee data exists
   const filteredMatches = deduplicatedMatches
@@ -492,23 +501,16 @@ export default function Results() {
     .filter(f => {
       if (grantSizeFilter === 'any') return true;
 
-      const inRange = (amount: number) => {
-        if (grantSizeFilter === 'small')  return amount <= 25_000;
-        if (grantSizeFilter === 'medium') return amount > 25_000 && amount <= 250_000;
-        if (grantSizeFilter === 'large')  return amount > 250_000;
-        return true;
-      };
-
       // Check individual grantee amounts first
       const grantees = f.similar_past_grantees ?? [];
       if (grantees.length > 0) {
-        return grantees.some(g => g.amount != null && inRange(g.amount));
+        return grantees.some(g => g.amount != null && grantInRange(g.amount));
       }
 
       // Fall back to funder-level grant range
       const effectiveMax = f.grant_range_max ?? f.grant_range_min;
       if (effectiveMax === null) return false;
-      return inRange(effectiveMax);
+      return grantInRange(effectiveMax);
     });
 
   // Pagination
@@ -842,7 +844,9 @@ export default function Results() {
                     <div className="mb-4 bg-[#0d1117] border border-[#30363d] rounded-xl px-4 py-3">
                       <p className="text-xs text-blue-400 font-semibold mb-3">Similar past grantees</p>
                       <div className="space-y-3">
-                        {funder.similar_past_grantees.slice(0, 3).map((grantee, idx) => (
+                        {funder.similar_past_grantees
+                          .filter(g => grantSizeFilter === 'any' || (g.amount != null && grantInRange(g.amount)))
+                          .slice(0, 3).map((grantee, idx) => (
                           <div key={`${funder.id}-grantee-${idx}`} className="border border-[#30363d] rounded-lg p-3 bg-[#111723]">
                             <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                               {grantee.ein ? (
