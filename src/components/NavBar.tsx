@@ -1,6 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useState, useRef, useEffect } from 'react';
-import { Menu, X, ChevronDown, Heart } from 'lucide-react';
+import { Menu, X, ChevronDown } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 export default function NavBar() {
   const navigate = useNavigate();
@@ -61,7 +61,6 @@ export default function NavBar() {
               user ? (
                 <>
                   <button onClick={() => navigate('/saved')} className={linkClass('/saved')}>
-                    <Heart size={14} className="mr-1.5" />
                     Saved
                   </button>
                   <button onClick={() => navigate('/portfolio')} className={linkClass('/portfolio')}>
@@ -167,11 +166,10 @@ export default function NavBar() {
                 <>
                   <button
                     onClick={() => { navigate('/saved'); setMobileOpen(false); }}
-                    className={`w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
+                    className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
                       isActive('/saved') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
                     }`}
                   >
-                    <Heart size={14} />
                     Saved Funders
                   </button>
                   <button
