@@ -5,6 +5,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || '';
+const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') || '';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -191,52 +192,154 @@ ${kbContext}` : ''}
 
 Please generate a complete, professional grant proposal. ${include_research ? 'Include recent data with MLA citations and a Works Cited section.' : ''}`;
 
-    // ── Generate with OpenAI ──────────────────────────────────────────────
+    // ── Generate with AI (multi-model fallback chain) ──────────────────────
 
     let draft = '';
     let citedSources: string[] = [];
+    let modelUsed = 'template';
 
-    if (OPENAI_API_KEY) {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt },
-          ],
-          max_tokens: 4000,
-          temperature: 0.65,
-        }),
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        console.error('OpenAI API error:', response.status, JSON.stringify(result));
-        draft = `AI generation failed: ${result.error?.message || response.statusText}. Please verify your OPENAI_API_KEY is valid.`;
-      } else {
-        draft = result.choices?.[0]?.message?.content || 'Failed to parse AI response.';
+    // Helper: try an OpenAI-compatible model
+    async function tryOpenAI(model: string): Promise<string | null> {
+      if (!OPENAI_API_KEY) return null;
+      try {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt },
+            ],
+            max_tokens: 4000,
+            temperature: 0.65,
+          }),
+        });
+        const result = await response.json();
+        if (!response.ok) {
+          console.warn(`OpenAI ${model} failed (${response.status}):`, result.error?.message);
+          return null;
+        }
+        const text = result.choices?.[0]?.message?.content;
+        return text || null;
+      } catch (err) {
+        console.warn(`OpenAI ${model} network error:`, err);
+        return null;
       }
+    }
 
-      // Extract cited sources
+    // Helper: try Anthropic Claude
+    async function tryAnthropic(): Promise<string | null> {
+      if (!ANTHROPIC_API_KEY) return null;
+      try {
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': ANTHROPIC_API_KEY,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 4000,
+            system: systemPrompt,
+            messages: [{ role: 'user', content: userPrompt }],
+          }),
+        });
+        const result = await response.json();
+        if (!response.ok) {
+          console.warn(`Anthropic failed (${response.status}):`, result.error?.message);
+          return null;
+        }
+        const text = result.content?.[0]?.text;
+        return text || null;
+      } catch (err) {
+        console.warn('Anthropic network error:', err);
+        return null;
+      }
+    }
+
+    // Fallback chain: try models in order until one succeeds
+    const fallbackChain: Array<{ name: string; fn: () => Promise<string | null> }> = [
+      { name: 'gpt-4o-mini', fn: () => tryOpenAI('gpt-4o-mini') },
+      { name: 'gpt-3.5-turbo', fn: () => tryOpenAI('gpt-3.5-turbo') },
+      { name: 'claude-sonnet', fn: () => tryAnthropic() },
+    ];
+
+    for (const { name, fn } of fallbackChain) {
+      const result = await fn();
+      if (result) {
+        draft = result;
+        modelUsed = name;
+        break;
+      }
+    }
+
+    // Ultimate fallback: generate a structured template (never show raw errors)
+    if (!draft) {
+      const mission = userProfile?.mission_statement || project?.description || 'making a meaningful impact in our community';
+      const locationStr = orgLocation ? ` based in ${orgLocation}` : '';
+      const budgetStr = grantInfo?.amount ? `$${Number(grantInfo.amount).toLocaleString()}` : '[amount to be determined]';
+      const deadlineStr = grantInfo?.deadline || '[deadline to be established]';
+
+      draft = `# Grant Proposal: ${grantInfo?.grant_title || orgName}\n\n` +
+        `## Executive Summary\n\n` +
+        `${orgName}${locationStr} respectfully requests funding${funderName ? ` from ${funderName}` : ''} to advance our mission of ${mission}. ` +
+        `This proposal outlines our evidence-based approach, organizational capacity, and measurable outcomes for the proposed project.\n\n` +
+        `## Statement of Need\n\n` +
+        `[This section should include recent, locally-relevant statistics about the issue your project addresses. ` +
+        `Cite reputable sources such as Census data, CDC reports, or peer-reviewed studies to establish the urgency and scale of the need.]\n\n` +
+        `${fieldsOfWork ? `Our work spans ${fieldsOfWork}, where we have identified significant unmet needs in the communities we serve.\n\n` : ''}` +
+        `## Project Description and Goals\n\n` +
+        `**Goal 1:** [Specific, measurable outcome — e.g., "Serve 500 individuals in Year 1"]\n\n` +
+        `**Goal 2:** [Specific, measurable outcome — e.g., "Achieve 80% participant completion rate"]\n\n` +
+        `**Goal 3:** [Specific, measurable outcome]\n\n` +
+        `## Methods and Implementation Plan\n\n` +
+        `| Phase | Timeline | Activities | Deliverables |\n` +
+        `|-------|----------|------------|--------------|\n` +
+        `| Planning | Months 1-2 | Hire staff, establish partnerships | Staffing plan, MOUs |\n` +
+        `| Launch | Months 3-4 | Begin program delivery | Enrollment targets met |\n` +
+        `| Full Operations | Months 5-10 | Ongoing service delivery | Quarterly reports |\n` +
+        `| Evaluation | Months 11-12 | Data analysis, final reporting | Final report, outcomes data |\n\n` +
+        `## Expected Outcomes and Evaluation\n\n` +
+        `We will measure success through:\n\n` +
+        `- **Output metrics:** Number of participants served, services delivered\n` +
+        `- **Outcome metrics:** Changes in knowledge, behavior, or conditions\n` +
+        `- **Impact metrics:** Long-term community-level changes\n\n` +
+        `## Organizational Capacity\n\n` +
+        `${orgName} has the experience, staffing, and infrastructure to execute this project successfully. ` +
+        `[Add details about your organization's track record, key staff qualifications, and relevant past projects.]\n\n` +
+        `## Budget Overview\n\n` +
+        `**Total Request:** ${budgetStr}\n\n` +
+        `| Category | Amount | % of Total |\n` +
+        `|----------|--------|------------|\n` +
+        `| Personnel | [amount] | [%] |\n` +
+        `| Program Supplies | [amount] | [%] |\n` +
+        `| Travel | [amount] | [%] |\n` +
+        `| Indirect Costs | [amount] | [%] |\n\n` +
+        `## Timeline\n\n` +
+        `**Submission Deadline:** ${deadlineStr}\n\n` +
+        `---\n` +
+        `*This is a structured template. To generate a fully written AI-powered draft, please ensure your OpenAI or Anthropic API key is configured and has available credits.*`;
+      modelUsed = 'template';
+    }
+
+    // Extract cited sources from AI-generated drafts
+    if (modelUsed !== 'template') {
       const sourcePattern = /\[Source:\s*([^\]]+)\]/g;
       let match;
       const foundSources = new Set<string>();
       while ((match = sourcePattern.exec(draft)) !== null) {
         foundSources.add(match[1].trim());
       }
-      // Also extract MLA-style inline citations
       const mlaPattern = /\(([^)]{5,80},\s*(?:"|')[^"']+(?:"|'),?\s*\d{4})\)/g;
       while ((match = mlaPattern.exec(draft)) !== null) {
         foundSources.add(match[1].trim());
       }
       citedSources = Array.from(foundSources);
-    } else {
-      // Fallback template
-      draft = `# Grant Proposal Draft\n\n## Executive Summary\n${orgName} ${userProfile?.mission_statement ? `is dedicated to: ${userProfile.mission_statement}` : 'is committed to making a meaningful impact in our community.'}\n\n## Statement of Need\n${grantInfo?.grant_title ? `This proposal seeks funding from ${funderName} for ${grantInfo.grant_title}.` : 'This proposal outlines our plan for community impact.'}\n\n[Include relevant statistics and citations here]\n\n## Project Description\n- Goal 1: [Specific, measurable outcome]\n- Goal 2: [Specific, measurable outcome]\n\n## Implementation Plan\n[Describe methods and timeline]\n\n## Expected Outcomes\n[Describe evaluation metrics]\n\n## Budget Overview\n${grantInfo?.amount ? `Requested amount: $${grantInfo.amount.toLocaleString()}` : 'Budget to be determined.'}\n\n## Timeline\n${grantInfo?.deadline ? `Grant deadline: ${grantInfo.deadline}` : 'Timeline to be established.'}\n\n---\n*Note: Configure OPENAI_API_KEY in Supabase secrets for AI-powered draft generation with research and citations.*`;
     }
 
     // Build sources list
@@ -255,6 +358,7 @@ Please generate a complete, professional grant proposal. ${include_research ? 'I
       citedSources,
       referenceDocsUsed: reference_doc_ids.length,
       researchIncluded: include_research,
+      modelUsed,
     });
   } catch (err: any) {
     console.error('AI draft error:', err);
