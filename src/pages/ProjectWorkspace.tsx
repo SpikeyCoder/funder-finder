@@ -190,6 +190,8 @@ export default function ProjectWorkspace() {
   const [aiDraft, setAiDraft] = useState<string | null>(null);
   const [aiDraftLoading, setAiDraftLoading] = useState(false);
   const [aiDraftEditable, setAiDraftEditable] = useState(false);
+  const [draftWordLimit, setDraftWordLimit] = useState(500);
+  const [draftChecklist, setDraftChecklist] = useState<{ text: string; checked: boolean; source?: string }[]>([]);
 
   // Reference documents for AI draft
   const [refDocs, setRefDocs] = useState<{ id: string; title: string; file_name: string | null; source_type: string; created_at: string; storage_path: string | null }[]>([]);
@@ -760,11 +762,36 @@ export default function ProjectWorkspace() {
           project_id: id,
           include_research: true,
           reference_doc_ids: refDocs.map(d => d.id),
+          word_limit: draftWordLimit,
         }),
       });
       if (res.ok) {
         const data = await res.json();
-        setAiDraft(data.draft);
+        // Separate checklist from proposal body
+        let proposalBody = data.draft || '';
+        const checklistItems: { text: string; checked: boolean; source?: string }[] = [];
+
+        // Parse checklist from response (returned as separate field or embedded)
+        if (data.checklist && Array.isArray(data.checklist)) {
+          data.checklist.forEach((item: any) => {
+            checklistItems.push({ text: item.text || item, checked: !!item.checked, source: item.source });
+          });
+        }
+
+        // Also extract any checklist-like lines from the draft itself (- [ ] or - [x] patterns)
+        const checklistRegex = /^[-*]\s*\[([ xX])\]\s*(.+)$/gm;
+        let match;
+        const checklistSection = proposalBody.match(/##?\s*(?:Checklist|Compliance|Requirements|Pre-?Submission)[\s\S]*$/i);
+        if (checklistSection) {
+          while ((match = checklistRegex.exec(checklistSection[0])) !== null) {
+            checklistItems.push({ text: match[2].trim(), checked: match[1] !== ' ' });
+          }
+          // Remove the checklist section from the proposal body
+          proposalBody = proposalBody.replace(/\n*##?\s*(?:Checklist|Compliance|Requirements|Pre-?Submission)[\s\S]*$/i, '').trimEnd();
+        }
+
+        setAiDraft(proposalBody);
+        if (checklistItems.length > 0) setDraftChecklist(checklistItems);
         setDrawerSection('draft');
       } else {
         const err = await res.json().catch(() => null);
@@ -2140,11 +2167,78 @@ export default function ProjectWorkspace() {
                       <p className="text-xs text-purple-300">{refDocs.length} reference document{refDocs.length !== 1 ? 's' : ''} will guide the AI's writing style</p>
                     </div>
                   )}
+                  {/* Word limit control */}
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-gray-400 whitespace-nowrap">Word limit:</label>
+                    <input
+                      type="number"
+                      min={100}
+                      max={5000}
+                      step={100}
+                      value={draftWordLimit}
+                      onChange={e => setDraftWordLimit(Math.max(100, Math.min(5000, parseInt(e.target.value) || 500)))}
+                      className="w-20 bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-purple-500"
+                    />
+                    <span className="text-[10px] text-gray-600">words (100–5000)</span>
+                  </div>
                   <button onClick={() => handleGenerateDraft()} disabled={aiDraftLoading}
                     className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60">
                     {aiDraftLoading ? <Loader size={14} className="animate-spin" /> : <Sparkles size={14} />}
                     {aiDraftLoading ? 'Researching & generating...' : aiDraft ? 'Regenerate Draft' : 'Generate AI Draft Proposal'}
                   </button>
+
+                  {/* Dynamic Checklist */}
+                  {(draftChecklist.length > 0 || aiDraft) && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold text-yellow-300/80 uppercase tracking-wider flex items-center gap-1.5">
+                          <ClipboardList size={12} />
+                          Submission Checklist
+                        </p>
+                        <button
+                          onClick={() => setDraftChecklist(prev => [...prev, { text: '', checked: false }])}
+                          className="text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-1"
+                        >
+                          <Plus size={10} /> Add item
+                        </button>
+                      </div>
+                      {draftChecklist.length === 0 && (
+                        <p className="text-[10px] text-gray-600 italic">Generate a draft to auto-populate, or add items manually.</p>
+                      )}
+                      <div className="space-y-1">
+                        {draftChecklist.map((item, idx) => (
+                          <div key={idx} className="flex items-start gap-2 group">
+                            <button
+                              onClick={() => setDraftChecklist(prev => prev.map((it, i) => i === idx ? { ...it, checked: !it.checked } : it))}
+                              className={`mt-0.5 flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-colors ${item.checked ? 'bg-green-600 border-green-500' : 'border-[#30363d] hover:border-purple-500'}`}
+                            >
+                              {item.checked && <CheckCircle size={10} className="text-white" />}
+                            </button>
+                            <input
+                              value={item.text}
+                              onChange={e => setDraftChecklist(prev => prev.map((it, i) => i === idx ? { ...it, text: e.target.value } : it))}
+                              placeholder="Enter checklist item..."
+                              className={`flex-1 bg-transparent border-none text-xs focus:outline-none transition-colors ${item.checked ? 'text-gray-500 line-through' : 'text-gray-300'}`}
+                            />
+                            {item.source && (
+                              <span className="text-[9px] text-purple-400/60 flex-shrink-0 mt-0.5">auto</span>
+                            )}
+                            <button
+                              onClick={() => setDraftChecklist(prev => prev.filter((_, i) => i !== idx))}
+                              className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-400 transition-all flex-shrink-0 mt-0.5"
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      {draftChecklist.length > 0 && (
+                        <p className="text-[10px] text-gray-600">
+                          {draftChecklist.filter(i => i.checked).length}/{draftChecklist.length} complete
+                        </p>
+                      )}
+                    </div>
+                  )}
                   {aiDraft && (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">

@@ -75,6 +75,7 @@ Deno.serve(async (req: Request) => {
       section,
       include_research = false,
       reference_doc_ids = [],
+      word_limit = 500,
     } = await req.json();
 
     // ── Gather context (all queries in parallel) ──────────────────────────
@@ -190,6 +191,9 @@ Focus your research context on:
 Use realistic, plausible data points based on your training knowledge. When citing, use the format: (Author/Org, "Title," Year) for inline citations.
 ` : 'Include inline citations [Source: entry_title] when referencing the knowledge base materials.'}
 
+WORD LIMIT:
+The proposal MUST be approximately ${word_limit} words. Be concise and impactful. Every sentence should earn its place. Do not pad with filler.
+
 PROPOSAL STRUCTURE:
 Generate a complete, well-structured grant proposal with these sections:
 1. Executive Summary / Introduction
@@ -200,7 +204,9 @@ Generate a complete, well-structured grant proposal with these sections:
 6. Organizational Capacity
 7. Budget Justification (brief overview)
 8. Timeline
-${include_research ? '9. Works Cited (MLA format)' : ''}`;
+${include_research ? '9. Works Cited (MLA format)' : ''}
+
+IMPORTANT: Do NOT include any checklist, compliance checklist, or submission checklist in the proposal text. The checklist is handled separately.`;
 
     const userPrompt = `ORGANIZATION CONTEXT:
 Organization: ${orgName}
@@ -225,7 +231,10 @@ ${referenceDocContent}` : ''}
 ${kbContext ? `PAST APPLICATION MATERIALS:
 ${kbContext}` : ''}
 
-Please generate a complete, professional grant proposal. ${include_research ? 'Include recent data with MLA citations and a Works Cited section.' : ''}`;
+Please generate a complete, professional grant proposal in approximately ${word_limit} words. ${include_research ? 'Include recent data with MLA citations and a Works Cited section.' : ''}
+
+After the proposal, on a new line, output a JSON block wrapped in <checklist> tags containing an array of submission checklist items relevant to this grant. Each item should have "text" (the checklist item) and "source" (where the requirement comes from, e.g. "funder guidelines", "reference doc", "standard practice"). Example:
+<checklist>[{"text":"Letter of determination (501c3 status)","source":"standard practice"},{"text":"Board of directors list","source":"funder guidelines"}]</checklist>`;
 
     // ── Generate with AI (multi-model fallback chain) ──────────────────────
 
@@ -371,6 +380,26 @@ Please generate a complete, professional grant proposal. ${include_research ? 'I
       modelUsed = 'template';
     }
 
+    // Extract checklist from AI response (returned inside <checklist> tags)
+    let checklist: Array<{ text: string; checked: boolean; source?: string }> = [];
+    if (modelUsed !== 'template') {
+      const checklistMatch = draft.match(/<checklist>([\s\S]*?)<\/checklist>/i);
+      if (checklistMatch) {
+        try {
+          const items = JSON.parse(checklistMatch[1]);
+          if (Array.isArray(items)) {
+            checklist = items.map((item: any) => ({
+              text: typeof item === 'string' ? item : (item.text || ''),
+              checked: false,
+              source: item.source || undefined,
+            }));
+          }
+        } catch { /* ignore parse errors */ }
+        // Remove the checklist block from the draft
+        draft = draft.replace(/<checklist>[\s\S]*?<\/checklist>/i, '').trimEnd();
+      }
+    }
+
     // Extract cited sources from AI-generated drafts
     if (modelUsed !== 'template') {
       const sourcePattern = /\[Source:\s*([^\]]+)\]/g;
@@ -398,10 +427,12 @@ Please generate a complete, professional grant proposal. ${include_research ? 'I
 
     return json({
       draft,
+      checklist,
       sources: allSources,
       citedSources,
       referenceDocsUsed: reference_doc_ids.length,
       researchIncluded: include_research,
+      wordLimit: word_limit,
       modelUsed,
     });
   } catch (err: any) {
