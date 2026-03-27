@@ -131,8 +131,8 @@ function App() {
       <AuthProvider>
         <AnimatedRoutes />
         <BugReportButton />
-        <FeatureTooltips />
         <ThemeToggle />
+        <FeatureTooltips />
       </AuthProvider>
     </BrowserRouter>
   );

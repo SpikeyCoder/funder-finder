@@ -90,11 +90,8 @@ export default function NewProjectPage() {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!loading && !user) {
-      navigate('/');
-    }
-  }, [user, loading, navigate]);
+  // AuthGuard already handles unauthenticated users — no need for a redundant check here.
+  // (Previously this navigated to '/' which incorrectly sent users to the landing page.)
 
   const handleLocationToggle = (state: string) => {
     setForm(prev => ({
@@ -185,7 +182,7 @@ export default function NewProjectPage() {
       const activeUser = sessionData.session?.user;
       if (!activeUser) {
         setError('Your session has expired. Please sign in again.');
-        navigate('/');
+        navigate('/login');
         return;
       }
 
