@@ -376,16 +376,28 @@ export default function ProjectWorkspace() {
       const keywords = p.keywords || [];
       const fieldsOfWork = p.fields_of_work || [];
 
-      const res = await fetch(MATCH_FUNDERS_URL, {
+      const body = JSON.stringify({
+        mission: p.description || p.name,
+        locationServed: states.join(', ') || undefined,
+        keywords: keywords.length > 0 ? keywords : fieldsOfWork.length > 0 ? fieldsOfWork : undefined,
+        budgetBand: p.budget_min ? `${p.budget_min}-${p.budget_max || ''}` : undefined,
+      });
+
+      let res = await fetch(MATCH_FUNDERS_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...headers },
-        body: JSON.stringify({
-          mission: p.description || p.name,
-          locationServed: states.join(', ') || undefined,
-          keywords: keywords.length > 0 ? keywords : fieldsOfWork.length > 0 ? fieldsOfWork : undefined,
-          budgetBand: p.budget_min ? `${p.budget_min}-${p.budget_max || ''}` : undefined,
-        }),
+        body,
       });
+
+      // If 401, the session token was stale — retry with the anon key
+      if (res.status === 401) {
+        const anonHeaders = await getEdgeFunctionHeaders('application/json', { useAnonOnly: true });
+        res = await fetch(MATCH_FUNDERS_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...anonHeaders },
+          body,
+        });
+      }
 
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
