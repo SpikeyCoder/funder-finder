@@ -318,9 +318,10 @@ export default function NewProjectPage() {
             {step === 1 && (
               <div className="space-y-6">
                 <div>
-                  <label className="block text-sm font-medium text-white mb-2">
+                  <label className="block text-sm font-medium text-white mb-1">
                     Project Name *
                   </label>
+                  <p className="text-sm text-gray-400 mb-2">The project or program you're seeking funding for</p>
                   <input
                     type="text"
                     value={form.name}
@@ -331,13 +332,14 @@ export default function NewProjectPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-white mb-2">
-                    Mission / Description *
+                  <label className="block text-sm font-medium text-white mb-1">
+                    Description *
                   </label>
+                  <p className="text-sm text-gray-400 mb-2">What the funding will be used for (200 words or less)</p>
                   <textarea
                     value={form.description}
                     onChange={(e) => setForm({ ...form, description: e.target.value })}
-                    placeholder="Describe your project mission and goals - this is used to find matching funders..."
+                    placeholder="Describe your project goals, target population, and intended impact..."
                     rows={4}
                     className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
                   />
@@ -501,7 +503,7 @@ export default function NewProjectPage() {
                     <p className="text-white mt-1">{form.name || '(Not provided)'}</p>
                   </div>
                   <div>
-                    <h3 className="text-sm font-medium text-gray-400">Mission / Description</h3>
+                    <h3 className="text-sm font-medium text-gray-400">Description</h3>
                     <p className="text-white mt-1">{form.description || '(Not provided)'}</p>
                   </div>
                 </div>
