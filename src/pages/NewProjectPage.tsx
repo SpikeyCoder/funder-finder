@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, ChevronLeft, X } from 'lucide-react';
+import { ChevronRight, ChevronLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
@@ -86,7 +86,6 @@ export default function NewProjectPage() {
       keywords: []
     }
   });
-  const [currentKeyword, setCurrentKeyword] = useState('');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -129,28 +128,6 @@ export default function NewProjectPage() {
     }));
   };
 
-  const handleAddKeyword = (keyword: string) => {
-    if (keyword.trim() && !form.search_criteria.keywords.includes(keyword.trim())) {
-      setForm(prev => ({
-        ...prev,
-        search_criteria: {
-          ...prev.search_criteria,
-          keywords: [...prev.search_criteria.keywords, keyword.trim()]
-        }
-      }));
-      setCurrentKeyword('');
-    }
-  };
-
-  const handleRemoveKeyword = (keyword: string) => {
-    setForm(prev => ({
-      ...prev,
-      search_criteria: {
-        ...prev.search_criteria,
-        keywords: prev.search_criteria.keywords.filter(k => k !== keyword)
-      }
-    }));
-  };
 
   const handleGrantSizePreset = (min: number, max: number | null) => {
     setForm(prev => ({
@@ -425,48 +402,6 @@ export default function NewProjectPage() {
                   </div>
                 </div>
 
-                {/* Keywords */}
-                <div>
-                  <label className="block text-sm font-medium text-white mb-4">
-                    Keywords
-                  </label>
-                  <div className="space-y-3">
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={currentKeyword}
-                        onChange={(e) => setCurrentKeyword(e.target.value)}
-                        onKeyPress={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            handleAddKeyword(currentKeyword);
-                          }
-                        }}
-                        placeholder="Enter a keyword and press Enter"
-                        className="flex-1 bg-[#0d1117] border border-[#30363d] rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
-                      />
-                    </div>
-                    {form.search_criteria.keywords.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {form.search_criteria.keywords.map(keyword => (
-                          <div
-                            key={keyword}
-                            className="flex items-center gap-2 bg-blue-600 text-white px-3 py-1 rounded-full text-sm"
-                          >
-                            <span>{keyword}</span>
-                            <button
-                              onClick={() => handleRemoveKeyword(keyword)}
-                              className="hover:opacity-80"
-                            >
-                              <X size={14} />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
                 {/* Grant Size Range */}
                 <div>
                   <label className="block text-sm font-medium text-white mb-4">
@@ -543,22 +478,6 @@ export default function NewProjectPage() {
                           )
                           .join(', ')}
                       </p>
-                    </div>
-                  )}
-
-                  {form.search_criteria.keywords.length > 0 && (
-                    <div>
-                      <p className="text-xs text-gray-400 uppercase">Keywords</p>
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {form.search_criteria.keywords.map(keyword => (
-                          <span
-                            key={keyword}
-                            className="bg-blue-600/20 text-blue-300 px-2 py-1 rounded text-sm"
-                          >
-                            {keyword}
-                          </span>
-                        ))}
-                      </div>
                     </div>
                   )}
 
