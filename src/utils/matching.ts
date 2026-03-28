@@ -10,16 +10,49 @@ const RECIPIENT_PROFILE_URL = `${SUPABASE_URL}/functions/v1/get-recipient-profil
 const COMPUTE_PEERS_URL = `${SUPABASE_URL}/functions/v1/compute-peers`;
 
 /**
- * Fetch a single funder row from the `funders` table by its EIN (primary key).
- * Uses the Supabase REST API (PostgREST) directly — no edge function needed.
+ * Fetch a single funder by its EIN.
+ * Tries the `funders` table first (richer data), then falls back to
+ * `mv_funder_search_index` (materialized view built from 990 filings)
+ * which contains many funders not yet in the main table.
  */
 export async function fetchFunderByEin(ein: string): Promise<Funder | null> {
   const headers = await getEdgeFunctionHeaders('application/json', { useAnonOnly: true });
+
+  // 1. Try the main funders table
   const url = `${SUPABASE_URL}/rest/v1/funders?id=eq.${encodeURIComponent(ein)}&limit=1`;
   const res = await fetch(url, { headers });
-  if (!res.ok) return null;
-  const rows: Funder[] = await res.json();
-  return rows.length > 0 ? rows[0] : null;
+  if (res.ok) {
+    const rows: Funder[] = await res.json();
+    if (rows.length > 0) return rows[0];
+  }
+
+  // 2. Fall back to the materialized view (covers Browse Grants funders)
+  const mvUrl = `${SUPABASE_URL}/rest/v1/mv_funder_search_index?ein=eq.${encodeURIComponent(ein)}&limit=1`;
+  const mvRes = await fetch(mvUrl, { headers });
+  if (!mvRes.ok) return null;
+  const mvRows = await mvRes.json();
+  if (mvRows.length === 0) return null;
+
+  const mv = mvRows[0];
+  return {
+    id: mv.ein || mv.funder_id,
+    name: mv.name || 'Unknown Funder',
+    type: mv.entity_type || 'foundation',
+    description: null,
+    focus_areas: mv.focus_areas || [],
+    ntee_code: mv.ntee_code || null,
+    city: null,
+    state: mv.state || null,
+    website: mv.website || null,
+    total_giving: mv.total_awarded ?? mv.total_giving ?? null,
+    asset_amount: mv.asset_amount ?? null,
+    grant_range_min: mv.grant_range_min ?? null,
+    grant_range_max: mv.grant_range_max ?? null,
+    contact_name: null,
+    contact_title: null,
+    contact_email: null,
+    next_step: null,
+  } as Funder;
 }
 
 export interface MatchResponse {
