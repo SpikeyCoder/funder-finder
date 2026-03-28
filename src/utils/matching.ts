@@ -9,6 +9,13 @@ const SEARCH_ORGS_URL = `${SUPABASE_URL}/functions/v1/search-organizations`;
 const RECIPIENT_PROFILE_URL = `${SUPABASE_URL}/functions/v1/get-recipient-profile`;
 const COMPUTE_PEERS_URL = `${SUPABASE_URL}/functions/v1/compute-peers`;
 
+/** Truncate text to at most `max` words so large descriptions don't cause timeouts. */
+function truncateWords(text: string, max = 200): string {
+  const words = text.split(/\s+/);
+  if (words.length <= max) return text;
+  return words.slice(0, max).join(' ');
+}
+
 /**
  * Fetch a single funder by its EIN.
  * Tries the `funders` table first (richer data), then falls back to
@@ -74,7 +81,7 @@ export async function findMatches(
   const res = await fetch(EDGE_FUNCTION_URL, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ mission, locationServed, keywords, budgetBand, forceRefresh, peerNonprofits }),
+    body: JSON.stringify({ mission: truncateWords(mission), locationServed, keywords, budgetBand, forceRefresh, peerNonprofits }),
   });
 
   if (!res.ok) {

@@ -408,8 +408,14 @@ export default function ProjectWorkspace() {
       const keywords = p.keywords || [];
       const fieldsOfWork = p.fields_of_work || [];
 
+      // Auto-truncate long descriptions to 200 words to avoid timeouts
+      const rawMission = p.description || p.name;
+      const mission = rawMission.split(/\s+/).length > 200
+        ? rawMission.split(/\s+/).slice(0, 200).join(' ')
+        : rawMission;
+
       const body = JSON.stringify({
-        mission: p.description || p.name,
+        mission,
         locationServed: states.join(', ') || undefined,
         keywords: keywords.length > 0 ? keywords : fieldsOfWork.length > 0 ? fieldsOfWork : undefined,
         budgetBand: p.budget_min ? `${p.budget_min}-${p.budget_max || ''}` : undefined,
