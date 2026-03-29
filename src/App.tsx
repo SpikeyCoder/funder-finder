@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useRef } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import AnalyticsTracker from './components/AnalyticsTracker';
@@ -91,6 +91,7 @@ function AnimatedRoutes() {
         <Route path="/browse" element={<BrowsePage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
+        <Route path="/find" element={<Navigate to="/mission" replace />} />
 
         {/* Auth-gated routes */}
         <Route path="/dashboard" element={<AuthGuard><DashboardPage /></AuthGuard>} />

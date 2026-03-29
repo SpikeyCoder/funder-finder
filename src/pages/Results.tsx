@@ -686,6 +686,7 @@ export default function Results() {
               <button
                 key={key}
                 onClick={() => { setGrantSizeFilter(key); setCurrentPage(1); }}
+                aria-pressed={grantSizeFilter === key}
                 className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
                   grantSizeFilter === key
                     ? 'bg-blue-600 border-blue-500 text-white font-semibold'
@@ -698,6 +699,7 @@ export default function Results() {
             <span className="text-[#30363d] mx-1">|</span>
             <button
               onClick={() => { setHideDAFs(!hideDAFs); setCurrentPage(1); }}
+              aria-pressed={hideDAFs}
               className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
                 hideDAFs
                   ? 'bg-blue-600 border-blue-500 text-white font-semibold'
@@ -708,6 +710,7 @@ export default function Results() {
             </button>
             <button
               onClick={() => { setHideUniversities(!hideUniversities); setCurrentPage(1); }}
+              aria-pressed={hideUniversities}
               className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
                 hideUniversities
                   ? 'bg-blue-600 border-blue-500 text-white font-semibold'

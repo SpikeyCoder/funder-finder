@@ -297,12 +297,14 @@ export default function SignupPage() {
           </div>
 
           {/* Error Message */}
-          {error && (
-            <div className="mb-6 p-4 bg-red-900/20 border border-red-700 rounded-lg flex gap-3">
-              <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-              <p className="text-red-400 text-sm">{error}</p>
-            </div>
-          )}
+          <div aria-live="polite" aria-atomic="true">
+            {error && (
+              <div className="mb-6 p-4 bg-red-900/20 border border-red-700 rounded-lg flex gap-3" id="signup-error" role="alert">
+                <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                <p className="text-red-400 text-sm">{error}</p>
+              </div>
+            )}
+          </div>
 
           {/* Step 1: Account Creation */}
           {currentStep === 'account' && (
@@ -319,6 +321,8 @@ export default function SignupPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@example.com"
+                    aria-required="true"
+                    aria-describedby={error ? 'signup-error' : undefined}
                     className="w-full pl-10 pr-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
@@ -336,10 +340,12 @@ export default function SignupPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
+                    aria-required="true"
+                    aria-describedby={`password-hint${error ? ' signup-error' : ''}`}
                     className="w-full pl-10 pr-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
-                <p className="text-xs text-gray-500 mt-1">At least 8 characters</p>
+                <p id="password-hint" className="text-xs text-gray-500 mt-1">At least 8 characters</p>
               </div>
 
               <div>
@@ -354,6 +360,8 @@ export default function SignupPage() {
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="••••••••"
+                    aria-required="true"
+                    aria-describedby={error ? 'signup-error' : undefined}
                     className="w-full pl-10 pr-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                   />
                 </div>

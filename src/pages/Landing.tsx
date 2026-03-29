@@ -38,7 +38,7 @@ export default function Landing() {
 
       {/* Demo Video */}
       <div className="max-w-5xl mx-auto">
-        <p className="text-center text-sm text-gray-500 uppercase tracking-widest mb-4">See It in Action</p>
+        <p className="text-center text-sm text-gray-300 uppercase tracking-widest mb-4">See It in Action</p>
         <DemoVideo />
       </div>
 
@@ -117,7 +117,7 @@ export default function Landing() {
       </div>
 
       {/* Footer */}
-      <footer role="contentinfo" className="border-t border-[#21262d] py-8 text-center text-sm text-gray-500">
+      <footer role="contentinfo" className="border-t border-[#21262d] py-8 text-center text-sm text-gray-400">
         © {new Date().getFullYear()} FunderMatch &middot; Built for nonprofits
       </footer>
     </div>
