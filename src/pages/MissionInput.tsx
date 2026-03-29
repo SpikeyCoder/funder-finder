@@ -129,21 +129,26 @@ export default function MissionInput() {
 
         {/* Mission Statement */}
         <div>
-          <label className="block text-base font-semibold mb-1">
+          <label htmlFor="mission-statement" className="block text-base font-semibold mb-1">
             Your Mission Statement <span className="text-red-400">*</span>
           </label>
-          <p className="text-sm text-gray-400 mb-3">Describe what your nonprofit does and who you serve</p>
+          <p id="mission-desc" className="text-sm text-gray-400 mb-3">Describe what your nonprofit does and who you serve</p>
           <textarea
+            id="mission-statement"
             value={mission}
             onChange={e => { setMission(e.target.value); setErrors(prev => ({ ...prev, mission: undefined })); }}
             placeholder="Example: We empower underserved youth through accessible education programs and mentorship opportunities that build skills for future success."
             rows={4}
+            required
+            aria-required="true"
+            aria-describedby="mission-desc"
+            aria-invalid={!!errors.mission}
             className={`w-full bg-[#0d1117] border rounded-xl px-4 py-3 text-white placeholder-gray-600 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.mission ? 'border-red-500' : 'border-[#30363d]'}`}
           />
           <div className="flex items-center justify-between mt-2">
             <span className="text-xs text-gray-300">{mission.length} characters</span>
           </div>
-          {errors.mission && <p className="text-red-400 text-sm mt-1">{errors.mission}</p>}
+          {errors.mission && <p className="text-red-400 text-sm mt-1" role="alert">{errors.mission}</p>}
 
           <button
             onClick={() => setShowExamples(!showExamples)}
@@ -170,30 +175,33 @@ export default function MissionInput() {
 
         {/* Location Served */}
         <div>
-          <label className="block text-base font-semibold mb-1">
+          <label htmlFor="location-served" className="block text-base font-semibold mb-1">
             <span className="flex items-center gap-2">
               <MapPin size={16} className="text-blue-400" />
               Location Served <span className="text-red-400">*</span>
             </span>
           </label>
-          <p className="text-sm text-gray-400 mb-3">
+          <p id="location-desc" className="text-sm text-gray-400 mb-3">
             Where does your nonprofit primarily operate or serve communities?
             Funders with geographic alignment will be ranked higher.
           </p>
           <LocationAutocomplete
+            id="location-served"
             value={locationServed}
             onChange={(val) => {
               setLocationServed(val);
               setErrors(prev => ({ ...prev, location: undefined }));
             }}
             hasError={!!errors.location}
+            aria-describedby="location-desc"
+            aria-required="true"
           />
-          {errors.location && <p className="text-red-400 text-sm mt-1">{errors.location}</p>}
+          {errors.location && <p className="text-red-400 text-sm mt-1" role="alert">{errors.location}</p>}
         </div>
 
         {/* Budget band */}
-        <div>
-          <label className="block text-base font-semibold mb-1">Annual Operating Budget <span className="text-gray-400 font-normal">(Optional)</span></label>
+        <fieldset>
+          <legend className="block text-base font-semibold mb-1">Annual Operating Budget <span className="text-gray-400 font-normal">(Optional)</span></legend>
           <p className="text-sm text-gray-400 mb-3">
             We use this to prioritize funders that have supported nonprofits of similar size.
           </p>
@@ -217,7 +225,7 @@ export default function MissionInput() {
               );
             })}
           </div>
-        </div>
+        </fieldset>
       </div>
 
       <button

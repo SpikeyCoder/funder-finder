@@ -65,7 +65,7 @@ export default function FunderDetail() {
   const [peers, setPeers] = useState<PeerEntry[]>([]);
   const [peersLoading, setPeersLoading] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
-    trends: true, grantees: false, geo: false, recipients: false, purposes: false, peers: false,
+    trends: true, grantees: true, geo: true, recipients: true, purposes: false, peers: false,
   });
 
   const [showAllRecipients, setShowAllRecipients] = useState(false);
@@ -686,9 +686,9 @@ export default function FunderDetail() {
                 </div>
               )}
 
-              <div className="flex items-center gap-3">
-                <Globe size={18} className="text-gray-400" />
-                {funder.website ? (
+              {funder.website && (
+                <div className="flex items-center gap-3">
+                  <Globe size={18} className="text-gray-400" />
                   <a
                     href={funder.website.startsWith('http') ? funder.website : `https://${funder.website}`}
                     target="_blank"
@@ -697,16 +697,19 @@ export default function FunderDetail() {
                   >
                     {funder.website} ↗
                   </a>
-                ) : (
-                  <a
-                    href={`https://projects.propublica.org/nonprofits/organizations/${(funder.id || '').replace(/-/g, '')}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-400 hover:underline break-all"
-                  >
-                    View on ProPublica Nonprofit Explorer ↗
-                  </a>
-                )}
+                </div>
+              )}
+
+              <div className="flex items-center gap-3">
+                <FileText size={18} className="text-gray-400" />
+                <a
+                  href={`https://projects.propublica.org/nonprofits/organizations/${(funder.id || funder.foundation_ein || '').replace(/-/g, '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-400 hover:underline break-all"
+                >
+                  View 990 Filing on ProPublica ↗
+                </a>
               </div>
             </div>
           </div>

@@ -1,6 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Bookmark, BookmarkCheck, ChevronRight, Copy, Download, RefreshCw, Loader2 } from 'lucide-react';
+import { ArrowLeft, Bookmark, BookmarkCheck, ChevronRight, Copy, Download, RefreshCw, Loader2, ArrowUpDown } from 'lucide-react';
 import NavBar from '../components/NavBar';
 
 import { findMatches, formatGrantRange, formatTotalGiving } from '../utils/matching';
@@ -105,6 +105,7 @@ export default function Results() {
   const [suggestedPeers, setSuggestedPeers] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const RESULTS_PER_PAGE = 20;
+  const [sortBy, setSortBy] = useState<'fit_score' | 'avg_grant_size' | 'total_giving' | 'grant_count'>('fit_score');
   const autoPeerSearchDoneRef = useRef(false);
   const usedCacheOnMountRef = useRef(!!cachedResultsOnMount);
   const searchTelemetryRef = useRef<SearchTelemetryContext | null>(null);
@@ -114,6 +115,9 @@ export default function Results() {
   const [loginModalFunder, setLoginModalFunder] = useState<Funder | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [showPeerEditor, setShowPeerEditor] = useState(false);
+  const [showGuidanceBanner, setShowGuidanceBanner] = useState(() => {
+    return !sessionStorage.getItem('ff_guidance_dismissed');
+  });
   const keywordKey = keywords.join('|');
   const peerKey = activePeerNonprofits.join('|');
   const isPeerSearchMode = activePeerNonprofits.length > 0;
@@ -488,9 +492,34 @@ export default function Results() {
       return grantInRange(effectiveMax);
     });
 
+  // Sort
+  const sortedMatches = [...filteredMatches].sort((a, b) => {
+    if (sortBy === 'fit_score') {
+      return ((b.fit_score ?? b.score ?? 0) - (a.fit_score ?? a.score ?? 0));
+    }
+    if (sortBy === 'total_giving') {
+      return ((b.total_giving ?? 0) - (a.total_giving ?? 0));
+    }
+    if (sortBy === 'avg_grant_size') {
+      const avgA = a.grant_range_max != null && a.grant_range_min != null
+        ? (a.grant_range_max + a.grant_range_min) / 2
+        : (a.grant_range_max ?? a.grant_range_min ?? 0);
+      const avgB = b.grant_range_max != null && b.grant_range_min != null
+        ? (b.grant_range_max + b.grant_range_min) / 2
+        : (b.grant_range_max ?? b.grant_range_min ?? 0);
+      return avgB - avgA;
+    }
+    if (sortBy === 'grant_count') {
+      const countA = a.similar_past_grantees?.length ?? 0;
+      const countB = b.similar_past_grantees?.length ?? 0;
+      return countB - countA;
+    }
+    return 0;
+  });
+
   // Pagination
-  const totalPages = Math.max(1, Math.ceil(filteredMatches.length / RESULTS_PER_PAGE));
-  const paginatedMatches = filteredMatches.slice(
+  const totalPages = Math.max(1, Math.ceil(sortedMatches.length / RESULTS_PER_PAGE));
+  const paginatedMatches = sortedMatches.slice(
     (currentPage - 1) * RESULTS_PER_PAGE,
     currentPage * RESULTS_PER_PAGE,
   );
@@ -517,8 +546,8 @@ export default function Results() {
               <>
                 <p className="text-gray-400 mt-1">
                   {isPeerSearchMode
-                    ? `Found ${filteredMatches.length} foundations with recent grants to your peer nonprofits`
-                    : `Found ${filteredMatches.length} funders aligned with your mission`}
+                    ? `Found ${sortedMatches.length} foundations with recent grants to your peer nonprofits`
+                    : `Found ${sortedMatches.length} funders aligned with your mission`}
                   {!isPeerSearchMode && cached && <span className="ml-2 text-xs text-gray-300">(cached)</span>}
                 </p>
                 {!isPeerSearchMode && (
@@ -553,6 +582,26 @@ export default function Results() {
             <ArrowLeft size={16} />
             Update Search
           </button>
+        )}
+
+        {/* First-time guidance banner */}
+        {showGuidanceBanner && !loading && filteredMatches.length > 0 && (
+          <div className="mt-4 mb-4 bg-[#0f1d2e] border border-[#1f3a5f] rounded-2xl p-4 relative">
+            <button
+              onClick={() => { setShowGuidanceBanner(false); sessionStorage.setItem('ff_guidance_dismissed', '1'); }}
+              className="absolute top-3 right-3 text-gray-400 hover:text-white text-sm"
+              aria-label="Dismiss guidance"
+            >
+              &times;
+            </button>
+            <p className="text-sm font-semibold text-blue-300 mb-1">How to read your results</p>
+            <p className="text-xs text-gray-400 leading-relaxed pr-6">
+              Each funder card shows a <strong className="text-blue-200">fit score</strong> (0-100%) indicating
+              how well their giving history aligns with your mission, geography, and budget.
+              Higher scores mean stronger alignment. Use the sort and filter options above to narrow your list,
+              then click any funder to see detailed 990 data, past grantees, and contact info.
+            </p>
+          </div>
         )}
 
         {/* Auto-identified peer nonprofits (shown when peers were auto-detected) */}
@@ -667,10 +716,28 @@ export default function Results() {
             >
               Hide Universities
             </button>
+
+            <span className="text-[#30363d] mx-1">|</span>
+            <div className="flex items-center gap-1.5">
+              <ArrowUpDown size={13} className="text-gray-400" />
+              <label htmlFor="sort-results" className="sr-only">Sort results by</label>
+              <select
+                id="sort-results"
+                value={sortBy}
+                onChange={(e) => { setSortBy(e.target.value as typeof sortBy); setCurrentPage(1); }}
+                className="text-xs bg-[#0d1117] border border-[#30363d] text-gray-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="fit_score">Fit Score</option>
+                <option value="avg_grant_size">Avg Grant Size</option>
+                <option value="total_giving">Total Giving</option>
+                <option value="grant_count">Number of Grants</option>
+              </select>
+            </div>
           </div>
         )}
 
         {/* Loading state */}
+        <div aria-live="polite" aria-atomic="true">
         {loading && (
           <div className="flex flex-col items-center justify-center py-24 text-gray-400">
             <Loader2 size={40} className="animate-spin mb-4 text-blue-400" />
@@ -683,9 +750,11 @@ export default function Results() {
           </div>
         )}
 
+        </div>
+
         {/* Error state */}
         {!loading && error && (
-          <div className="bg-red-900/20 border border-red-800 rounded-2xl p-8 text-center">
+          <div className="bg-red-900/20 border border-red-800 rounded-2xl p-8 text-center" role="alert">
             <p className="text-red-400 font-semibold mb-2">Something went wrong</p>
             <p className="text-gray-400 text-sm mb-4">{error}</p>
             <button

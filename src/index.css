@@ -146,3 +146,50 @@ html.light-mode ::-webkit-scrollbar-thumb { background: #c1c8d0 !important; }
 
 /* ── Theme toggle button itself — keep visible in light mode ──────── */
 html.light-mode .bg-\[\#21262d\] { background-color: #e8eaed !important; }
+
+/* ── Responsive: Browse Grants table as card layout on mobile ────── */
+@media (max-width: 768px) {
+  .browse-table thead {
+    display: none;
+  }
+  .browse-table,
+  .browse-table tbody,
+  .browse-table tr,
+  .browse-table td {
+    display: block;
+    width: 100%;
+  }
+  .browse-table tr {
+    margin-bottom: 1rem;
+    border: 1px solid #30363d;
+    border-radius: 0.75rem;
+    padding: 0.75rem;
+    background: #161b22;
+  }
+  .browse-table td {
+    padding: 0.25rem 0;
+    border: none;
+    text-align: left;
+  }
+  .browse-table td::before {
+    content: attr(data-label);
+    display: inline-block;
+    font-weight: 600;
+    color: #8b949e;
+    font-size: 0.75rem;
+    min-width: 100px;
+    margin-right: 0.5rem;
+  }
+  .browse-table td.browse-cell-hidden {
+    display: block !important;
+  }
+}
+
+/* ── Responsive: prevent horizontal scroll at 375px ─────────────── */
+@media (max-width: 480px) {
+  .max-w-2xl, .max-w-3xl, .max-w-5xl, .max-w-6xl {
+    max-width: 100% !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+}

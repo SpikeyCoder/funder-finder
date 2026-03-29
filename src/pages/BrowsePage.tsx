@@ -234,7 +234,7 @@ const BrowsePage: React.FC = () => {
           {/* Results Table */}
           <div className="flex-1 overflow-auto">
             {results.length > 0 ? (
-              <table className="w-full text-sm">
+              <table className="w-full text-sm browse-table">
                 <caption className="sr-only">Funder search results table</caption>
                 <thead className="sticky top-0 bg-[#161b22] border-b border-[#30363d]">
                   <tr>
@@ -265,7 +265,7 @@ const BrowsePage: React.FC = () => {
                       key={`${funder.ein}-${idx}`}
                       className="border-b border-[#30363d] hover:bg-[#161b22] transition-colors"
                     >
-                      <td className="px-4 py-3 text-white">
+                      <td data-label="Funder" className="px-4 py-3 text-white">
                         <a
                           href={`/funder/${funder.ein}`}
                           className="text-[#58a6ff] hover:underline flex items-center gap-2"
@@ -274,22 +274,22 @@ const BrowsePage: React.FC = () => {
                           <ExternalLink size={14} className="opacity-50" />
                         </a>
                       </td>
-                      <td className="px-4 py-3 text-gray-300">{funder.state || '-'}</td>
-                      <td className="px-4 py-3 text-gray-300">{funder.entity_type || '-'}</td>
-                      <td className="px-4 py-3 text-gray-300">
+                      <td data-label="State" className="px-4 py-3 text-gray-300">{funder.state || '-'}</td>
+                      <td data-label="Type" className="px-4 py-3 text-gray-300">{funder.entity_type || '-'}</td>
+                      <td data-label="Avg Grant" className="px-4 py-3 text-gray-300">
                         {funder.avg_grant_size
                           ? `$${(funder.avg_grant_size / 1000).toFixed(0)}K`
                           : '-'}
                       </td>
-                      <td className="px-4 py-3 text-gray-300 hidden md:table-cell">
+                      <td data-label="Total Giving" className="px-4 py-3 text-gray-300 hidden md:table-cell browse-cell-hidden">
                         {funder.total_giving
                           ? `$${(funder.total_giving / 1000000).toFixed(1)}M`
                           : '-'}
                       </td>
-                      <td className="px-4 py-3 text-gray-300 hidden md:table-cell">
+                      <td data-label="Grants" className="px-4 py-3 text-gray-300 hidden md:table-cell browse-cell-hidden">
                         {funder.grant_count || '-'}
                       </td>
-                      <td className="px-4 py-3 text-center">
+                      <td data-label="" className="px-4 py-3 text-center">
                         <SaveToProjectButton
                           funderEin={funder.ein}
                           funderName={funder.name}

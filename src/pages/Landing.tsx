@@ -117,7 +117,7 @@ export default function Landing() {
       </div>
 
       {/* Footer */}
-      <footer className="border-t border-[#21262d] py-8 text-center text-sm text-gray-500">
+      <footer role="contentinfo" className="border-t border-[#21262d] py-8 text-center text-sm text-gray-500">
         © {new Date().getFullYear()} FunderMatch &middot; Built for nonprofits
       </footer>
     </div>
