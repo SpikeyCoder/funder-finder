@@ -728,6 +728,7 @@ export default function Results() {
                 id="sort-results"
                 value={sortBy}
                 onChange={(e) => { setSortBy(e.target.value as typeof sortBy); setCurrentPage(1); }}
+                aria-label="Sort results by"
                 className="text-xs bg-[#0d1117] border border-[#30363d] text-gray-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="fit_score">Fit Score</option>

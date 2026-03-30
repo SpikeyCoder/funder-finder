@@ -125,7 +125,7 @@ export default function MissionInput() {
       <h1 className="text-4xl font-bold mb-3 text-center">Tell Us About Your Mission</h1>
       <p className="text-gray-400 mb-10 text-center">We'll match you with funders who share your vision</p>
 
-      <div className="w-full max-w-2xl bg-[#161b22] border border-[#30363d] rounded-2xl p-8 space-y-8">
+      <div className="w-full max-w-2xl bg-[#161b22] border border-[#30363d] rounded-2xl p-8 space-y-8" aria-live="polite">
 
         {/* Mission Statement */}
         <div>
@@ -213,6 +213,7 @@ export default function MissionInput() {
                   key={band.key}
                   type="button"
                   onClick={() => setBudgetBand(band.key)}
+                  aria-pressed={selected}
                   className={`text-left border rounded-xl px-4 py-3 transition-colors ${
                     selected
                       ? 'border-blue-500 bg-blue-900/30'

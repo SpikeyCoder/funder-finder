@@ -17,7 +17,7 @@ export default function Landing() {
 
       {/* Hero */}
       <div className="flex flex-col items-center justify-center text-center px-6 pt-24 pb-12">
-        <h1 className="text-5xl md:text-7xl font-bold leading-tight tracking-tight max-w-4xl">
+        <h1 className="text-3xl sm:text-5xl md:text-7xl font-bold leading-tight tracking-tight max-w-4xl">
           Find Funders Aligned to Your Mission
         </h1>
         <p className="mt-6 text-lg md:text-xl text-gray-400 max-w-2xl">
@@ -26,7 +26,7 @@ export default function Landing() {
         </p>
         <button
           onClick={() => navigate('/mission')}
-          className="mt-8 inline-flex items-center gap-3 bg-white text-gray-900 rounded-2xl px-10 py-4 text-lg font-semibold hover:bg-gray-100 transition shadow-lg"
+          className="mt-8 inline-flex items-center gap-3 bg-white text-gray-900 rounded-2xl px-6 sm:px-10 py-4 text-base sm:text-lg font-semibold hover:bg-gray-100 transition shadow-lg"
         >
           <Search size={22} />
           Get Started
@@ -45,7 +45,7 @@ export default function Landing() {
       {/* How It Works */}
       <div className="px-6 pb-20 max-w-5xl mx-auto">
         <h2 className="text-3xl font-bold text-center mb-12">How It Works</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {[
               {
                 icon: <Target size={32} className="text-blue-400" />,
@@ -81,7 +81,7 @@ export default function Landing() {
 
       {/* What's Included */}
       <div className="px-6 pb-24 max-w-5xl mx-auto">
-        <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-12">
+        <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-6 md:p-12">
           <h2 className="text-3xl font-bold text-center mb-10">What's Included</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-y-6 gap-x-12">
             {[

@@ -208,12 +208,12 @@ const BrowsePage: React.FC = () => {
     <div className="min-h-screen bg-[#0d1117]">
       <NavBar />
 
-      <div className="flex h-[calc(100vh-64px)]">
+      <div className="flex flex-col md:flex-row h-auto md:h-[calc(100vh-64px)]">
         {/* Filter Panel - Desktop Sidebar */}
         <FilterPanel filters={filters} onChange={handleFilterChange} showPeerToggle={!!user} />
 
         {/* Main Content Area */}
-        <main id="main-content" className="flex-1 flex flex-col overflow-hidden">
+        <main id="main-content" className="flex-1 flex flex-col overflow-hidden min-w-0">
           {/* Results Header */}
           <div className="border-b border-[#30363d] p-4 bg-[#161b22]">
             {totalCount > 0 ? (
@@ -234,7 +234,8 @@ const BrowsePage: React.FC = () => {
           {/* Results Table */}
           <div className="flex-1 overflow-auto">
             {results.length > 0 ? (
-              <table className="w-full text-sm browse-table">
+              <>
+              <table className="w-full text-sm browse-table hidden md:table">
                 <caption className="sr-only">Funder search results table</caption>
                 <thead className="sticky top-0 bg-[#161b22] border-b border-[#30363d]">
                   <tr>
@@ -299,6 +300,50 @@ const BrowsePage: React.FC = () => {
                   ))}
                 </tbody>
               </table>
+
+              {/* Mobile card layout */}
+              <div className="md:hidden space-y-3 p-4">
+                {results.map((funder, idx) => (
+                  <div
+                    key={`mobile-${funder.ein}-${idx}`}
+                    className="bg-[#161b22] border border-[#30363d] rounded-xl p-4 space-y-2"
+                  >
+                    <a
+                      href={`/funder/${funder.ein}`}
+                      className="text-[#58a6ff] hover:underline font-medium flex items-center gap-2"
+                    >
+                      {funder.name}
+                      <ExternalLink size={14} className="opacity-50" />
+                    </a>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <span className="text-gray-500">State:</span>{' '}
+                        <span className="text-gray-300">{funder.state || '-'}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Type:</span>{' '}
+                        <span className="text-gray-300">{funder.entity_type || '-'}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Avg Grant:</span>{' '}
+                        <span className="text-gray-300">
+                          {funder.avg_grant_size ? `$${(funder.avg_grant_size / 1000).toFixed(0)}K` : '-'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Total Giving:</span>{' '}
+                        <span className="text-gray-300">
+                          {funder.total_giving ? `$${(funder.total_giving / 1000000).toFixed(1)}M` : '-'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="pt-2">
+                      <SaveToProjectButton funderEin={funder.ein} funderName={funder.name} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              </>
             ) : (
               <div className="flex items-center justify-center h-full text-gray-400">
                 {loading ? (
