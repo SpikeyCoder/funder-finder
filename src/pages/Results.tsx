@@ -951,7 +951,7 @@ export default function Results() {
                   <div className="bg-[#0d1117] border border-[#30363d] rounded-xl px-4 py-3 mb-4 text-sm">
                     <span className="text-gray-400">Best next step: </span>
                     <a
-                      href={`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(funder.name)}&network=%5B%22F%22%2C%22S%22%5D`}
+                      href={`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(funder.name)}&currentCompany=${encodeURIComponent(funder.name)}&network=%5B%22F%22%2C%22S%22%5D`}
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={() => logResultSignal('result_outbound_click', funder, { url: 'linkedin_search' })}
