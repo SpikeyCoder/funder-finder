@@ -13,7 +13,7 @@
     "eval:export-signals": "node scripts/export-search-signal-labels.js"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.99.2",
+    "@supabase/supabase-js": "^2.101.0",
     "@types/file-saver": "^2.0.7",
     "file-saver": "^2.0.5",
     "html-docx-js-typescript": "^0.1.5",
