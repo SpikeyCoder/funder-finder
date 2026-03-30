@@ -313,6 +313,7 @@ export default function Results() {
           await saveFunderToDB(funder);
           setSavedIds(prev => [...prev, funder.id]);
           logResultSignal('result_saved', funder);
+          setToastMsg('Funder saved!');
         } catch (e) {
           console.error('Failed to save to DB:', e);
         }
@@ -533,6 +534,7 @@ export default function Results() {
 
   const emptyFunder = {} as Funder;
   const handleToastLogin = () => { setToastMsg(null); setLoginModalFunder(emptyFunder); };
+  const handleToastViewSaved = () => { setToastMsg(null); navigate('/saved'); };
 
   return (
     <div className="min-h-screen bg-[#0d1117] text-white">
@@ -1043,11 +1045,14 @@ export default function Results() {
         <LoginModal pendingFunder={loginModalFunder} onClose={() => setLoginModalFunder(null)} />
       )}
 
-      {/* Toast — non-blocking hint to log in for cloud sync */}
+      {/* Toast — confirmation with contextual action */}
       {toastMsg && (
         <Toast
           message={toastMsg}
-          action={{ label: 'Log in', onClick: handleToastLogin }}
+          action={user
+            ? { label: 'View saved', onClick: handleToastViewSaved }
+            : { label: 'Log in', onClick: handleToastLogin }
+          }
           onClose={() => setToastMsg(null)}
         />
       )}

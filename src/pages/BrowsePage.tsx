@@ -5,7 +5,9 @@ import NavBar from '../components/NavBar';
 import { useAuth } from '../contexts/AuthContext';
 import FilterPanel, { FilterState, EMPTY_FILTERS } from '../components/FilterPanel';
 import SaveToProjectButton from '../components/SaveToProjectButton';
+import QuickSaveButton from '../components/QuickSaveButton';
 import { getEdgeFunctionHeaders } from '../lib/supabase';
+import { Funder } from '../types';
 
 const EDGE_FUNCTION_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co/functions/v1/filter-funders';
 
@@ -30,6 +32,30 @@ interface FilterResponse {
 
 type SortField = 'name' | 'state' | 'entity_type' | 'avg_grant_size' | 'total_giving' | 'grant_count';
 type SortOrder = 'asc' | 'desc';
+
+/** Convert a Browse FunderResult to a minimal Funder so QuickSaveButton can persist it. */
+function toFunder(r: FunderResult): Funder {
+  return {
+    id: r.funder_id || r.ein,
+    name: r.name,
+    type: r.entity_type || '',
+    foundation_ein: r.ein,
+    description: null,
+    focus_areas: [],
+    ntee_code: r.ntee_code || null,
+    city: null,
+    state: r.state || null,
+    website: null,
+    total_giving: r.total_giving ?? null,
+    asset_amount: null,
+    grant_range_min: null,
+    grant_range_max: null,
+    contact_name: null,
+    contact_title: null,
+    contact_email: null,
+    next_step: null,
+  };
+}
 
 const BrowsePage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -291,10 +317,15 @@ const BrowsePage: React.FC = () => {
                         {funder.grant_count || '-'}
                       </td>
                       <td data-label="" className="px-4 py-3 text-center">
-                        <SaveToProjectButton
-                          funderEin={funder.ein}
-                          funderName={funder.name}
-                        />
+                        <div className="flex items-center gap-2 justify-center">
+                          <QuickSaveButton funder={toFunder(funder)} compact />
+                          {user && (
+                            <SaveToProjectButton
+                              funderEin={funder.ein}
+                              funderName={funder.name}
+                            />
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -337,8 +368,11 @@ const BrowsePage: React.FC = () => {
                         </span>
                       </div>
                     </div>
-                    <div className="pt-2">
-                      <SaveToProjectButton funderEin={funder.ein} funderName={funder.name} />
+                    <div className="pt-2 flex items-center gap-2">
+                      <QuickSaveButton funder={toFunder(funder)} compact />
+                      {user && (
+                        <SaveToProjectButton funderEin={funder.ein} funderName={funder.name} />
+                      )}
                     </div>
                   </div>
                 ))}
