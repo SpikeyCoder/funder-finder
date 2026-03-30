@@ -1,5 +1,4 @@
 import { YearTrend, GeoEntry } from '../types';
-export { GeoHeatMap } from './GeoHeatMap';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

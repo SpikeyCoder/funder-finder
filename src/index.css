@@ -193,3 +193,18 @@ html.light-mode .bg-\[\#21262d\] { background-color: #e8eaed !important; }
     padding-right: 1rem !important;
   }
 }
+
+/* ── Global mobile text overflow prevention ─────────────────────── */
+* {
+  min-width: 0;
+}
+
+h1, h2, h3, h4, h5, h6, p, span, a, td, th, li, label, button {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+table {
+  table-layout: fixed;
+  word-break: break-word;
+}

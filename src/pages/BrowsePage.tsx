@@ -266,13 +266,13 @@ const BrowsePage: React.FC = () => {
                       key={`${funder.ein}-${idx}`}
                       className="border-b border-[#30363d] hover:bg-[#161b22] transition-colors"
                     >
-                      <td data-label="Funder" className="px-4 py-3 text-white">
+                      <td data-label="Funder" className="px-4 py-3 text-white max-w-[250px]">
                         <a
                           href={`/funder/${funder.ein}`}
-                          className="text-[#58a6ff] hover:underline flex items-center gap-2"
+                          className="text-[#58a6ff] hover:underline flex items-center gap-2 min-w-0"
                         >
-                          {funder.name}
-                          <ExternalLink size={14} className="opacity-50" />
+                          <span className="truncate">{funder.name}</span>
+                          <ExternalLink size={14} className="opacity-50 flex-shrink-0" />
                         </a>
                       </td>
                       <td data-label="State" className="px-4 py-3 text-gray-300">{funder.state || '-'}</td>
@@ -310,27 +310,27 @@ const BrowsePage: React.FC = () => {
                   >
                     <a
                       href={`/funder/${funder.ein}`}
-                      className="text-[#58a6ff] hover:underline font-medium flex items-center gap-2"
+                      className="text-[#58a6ff] hover:underline font-medium flex items-center gap-2 min-w-0"
                     >
-                      {funder.name}
-                      <ExternalLink size={14} className="opacity-50" />
+                      <span className="break-words min-w-0">{funder.name}</span>
+                      <ExternalLink size={14} className="opacity-50 flex-shrink-0" />
                     </a>
                     <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div>
+                      <div className="min-w-0">
                         <span className="text-gray-500">State:</span>{' '}
-                        <span className="text-gray-300">{funder.state || '-'}</span>
+                        <span className="text-gray-300 truncate">{funder.state || '-'}</span>
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <span className="text-gray-500">Type:</span>{' '}
-                        <span className="text-gray-300">{funder.entity_type || '-'}</span>
+                        <span className="text-gray-300 truncate">{funder.entity_type || '-'}</span>
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <span className="text-gray-500">Avg Grant:</span>{' '}
                         <span className="text-gray-300">
                           {funder.avg_grant_size ? `$${(funder.avg_grant_size / 1000).toFixed(0)}K` : '-'}
                         </span>
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <span className="text-gray-500">Total Giving:</span>{' '}
                         <span className="text-gray-300">
                           {funder.total_giving ? `$${(funder.total_giving / 1000000).toFixed(1)}M` : '-'}

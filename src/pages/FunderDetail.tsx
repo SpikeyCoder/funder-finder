@@ -7,7 +7,7 @@ import { formatGrantRange, formatTotalGiving, fetchFunderInsights, fetchPeers, f
 import { useAuth } from '../contexts/AuthContext';
 import LoginModal from '../components/LoginModal';
 import Toast from '../components/Toast';
-import { GivingTrendsChart, GeoBarChart, GeoHeatMap, StatCard, InsightsSkeleton, fmtDollar } from '../components/InsightCharts';
+import { GivingTrendsChart, GeoBarChart, StatCard, InsightsSkeleton, fmtDollar } from '../components/InsightCharts';
 import NavBar from '../components/NavBar';
 
 /** Classify giving trend as increasing / stable / decreasing (FEAT-006) */
@@ -203,10 +203,10 @@ export default function FunderDetail() {
           Back
         </button>
 
-        <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-8">
+        <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-4 sm:p-8 overflow-hidden">
           {/* Header */}
-          <div className="flex items-start justify-between mb-2">
-            <h1 className="text-3xl font-bold">{funder.name}</h1>
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <h1 className="text-2xl sm:text-3xl font-bold break-words min-w-0">{funder.name}</h1>
             <button
               onClick={toggleSave}
               className={`flex items-center gap-2 border rounded-xl px-4 py-2 text-sm transition-colors ${saved ? 'border-blue-600 text-blue-400 bg-blue-900/20' : 'border-[#30363d] hover:bg-[#21262d]'}`}
@@ -331,7 +331,7 @@ export default function FunderDetail() {
             <>
               <div id="giving" className="mb-6">
                 <h2 className="text-lg font-semibold mb-3">Giving Overview</h2>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {funder.total_giving && (
                     <div className="bg-[#0d1117] border border-[#30363d] rounded-xl p-4">
                       <div className="flex items-center gap-2 mb-1">
@@ -384,7 +384,7 @@ export default function FunderDetail() {
                 </button>
                 {expandedSections.trends && (
                   <div className="space-y-4">
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
                       <StatCard label="Total Grants" value={insights.grantHistory.totalGrants.toLocaleString()} />
                       <StatCard label="Total Given" value={fmtDollar(insights.grantHistory.totalAmount)} color="text-blue-400" />
                       <StatCard
@@ -420,7 +420,7 @@ export default function FunderDetail() {
                   {expandedSections.grantees ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
                 </button>
                 {expandedSections.grantees && (
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
                     <StatCard label="Total Grantees (5yr)" value={insights.granteeAnalysis.totalGrantees5y.toLocaleString()} />
                     <StatCard label="New Grantees" value={insights.granteeAnalysis.newGrantees.toLocaleString()} color="text-green-400" />
                     <StatCard label="Repeat Grantees" value={insights.granteeAnalysis.repeatGrantees.toLocaleString()} color="text-blue-400" />
@@ -449,14 +449,9 @@ export default function FunderDetail() {
                       {expandedSections.geo ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
                     </button>
                     {expandedSections.geo && (
-                      <div className="space-y-4">
-                        <div className="bg-[#0d1117] border border-[#30363d] rounded-xl p-4">
-                          <GeoHeatMap data={insights.geographicFootprint} />
-                        </div>
-                        <div className="bg-[#0d1117] border border-[#30363d] rounded-xl p-4">
-                          <p className="text-xs text-gray-500 mb-2">Top states by grant count</p>
-                          <GeoBarChart data={insights.geographicFootprint} />
-                        </div>
+                      <div className="bg-[#0d1117] border border-[#30363d] rounded-xl p-4">
+                        <p className="text-xs text-gray-500 mb-2">Top states by grant count</p>
+                        <GeoBarChart data={insights.geographicFootprint} />
                       </div>
                     )}
                   </div>
@@ -481,13 +476,13 @@ export default function FunderDetail() {
                     </button>
                     {expandedSections.recipients && (
                       <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
+                        <table className="w-full text-xs sm:text-sm">
                           <thead>
                             <tr className="text-gray-400 text-xs border-b border-[#30363d]">
-                              <th className="text-left py-2 pr-3">Recipient</th>
-                              <th className="text-right py-2 px-2">Total</th>
-                              <th className="text-right py-2 px-2">Grants</th>
-                              <th className="text-right py-2 pl-2">Last</th>
+                              <th className="text-left py-2 pr-2">Recipient</th>
+                              <th className="text-right py-2 px-1 sm:px-2">Total</th>
+                              <th className="text-right py-2 px-1 sm:px-2">Grants</th>
+                              <th className="text-right py-2 pl-1 sm:pl-2">Last</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -497,12 +492,12 @@ export default function FunderDetail() {
                                 className="border-b border-[#30363d]/50 hover:bg-[#21262d]/30 cursor-pointer"
                                 onClick={() => r.granteeEin && navigate(`/recipient/${r.granteeEin}`)}
                               >
-                                <td className="py-2 pr-3 max-w-[200px] truncate">
+                                <td className="py-2 pr-2 max-w-[120px] sm:max-w-[200px] truncate">
                                   <span className={r.granteeEin ? 'text-blue-400 hover:underline' : 'text-gray-200'}>{r.granteeName}</span>
                                 </td>
-                                <td className="py-2 px-2 text-right text-gray-300 whitespace-nowrap">{fmtDollar(r.totalAmount)}</td>
-                                <td className="py-2 px-2 text-right text-gray-400">{r.grantCount}</td>
-                                <td className="py-2 pl-2 text-right text-gray-400">{r.lastYear}</td>
+                                <td className="py-2 px-1 sm:px-2 text-right text-gray-300 whitespace-nowrap">{fmtDollar(r.totalAmount)}</td>
+                                <td className="py-2 px-1 sm:px-2 text-right text-gray-400">{r.grantCount}</td>
+                                <td className="py-2 pl-1 sm:pl-2 text-right text-gray-400">{r.lastYear}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -584,13 +579,13 @@ export default function FunderDetail() {
                     </div>
                   ) : (
                     <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
+                      <table className="w-full text-xs sm:text-sm">
                         <thead>
                           <tr className="text-gray-400 text-xs border-b border-[#30363d]">
-                            <th className="text-left py-2 pr-3">Funder</th>
-                            <th className="text-right py-2 px-2">Shared Recipients</th>
-                            <th className="text-right py-2 px-2">State</th>
-                            <th className="text-right py-2 pl-2">Similarity</th>
+                            <th className="text-left py-2 pr-2">Funder</th>
+                            <th className="text-right py-2 px-1 sm:px-2 whitespace-nowrap">Shared</th>
+                            <th className="text-right py-2 px-1 sm:px-2">State</th>
+                            <th className="text-right py-2 pl-1 sm:pl-2">Sim.</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -600,10 +595,10 @@ export default function FunderDetail() {
                               className="border-b border-[#30363d]/50 hover:bg-[#21262d]/30 cursor-pointer"
                               onClick={() => navigate(`/funder/${p.id}`, { state: { funder: { id: p.id, name: p.name, state: p.state } as Funder } })}
                             >
-                              <td className="py-2 pr-3 text-gray-200 max-w-[200px] truncate">{p.name}</td>
-                              <td className="py-2 px-2 text-right text-gray-400">{p.sharedCount}</td>
-                              <td className="py-2 px-2 text-right text-gray-400">{p.state || '-'}</td>
-                              <td className="py-2 pl-2 text-right">
+                              <td className="py-2 pr-2 text-gray-200 max-w-[100px] sm:max-w-[200px] truncate">{p.name}</td>
+                              <td className="py-2 px-1 sm:px-2 text-right text-gray-400">{p.sharedCount}</td>
+                              <td className="py-2 px-1 sm:px-2 text-right text-gray-400">{p.state || '-'}</td>
+                              <td className="py-2 pl-1 sm:pl-2 text-right">
                                 <span className={`text-xs font-medium ${p.score >= 0.3 ? 'text-green-400' : p.score >= 0.15 ? 'text-yellow-400' : 'text-gray-400'}`}>
                                   {Math.round(p.score * 100)}%
                                 </span>
@@ -693,7 +688,7 @@ export default function FunderDetail() {
                     href={funder.website.startsWith('http') ? funder.website : `https://${funder.website}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-blue-400 hover:underline break-all"
+                    className="text-blue-400 hover:underline break-all text-sm"
                   >
                     {funder.website} ↗
                   </a>

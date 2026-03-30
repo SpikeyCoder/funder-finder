@@ -68,12 +68,12 @@ export default function Landing() {
               desc: 'Generate a personalized grant application draft with a funder-fit score and compliance checklist.',
             },
           ].map(({ icon, step, desc }) => (
-            <div key={step} className="bg-[#161b22] border border-[#30363d] rounded-2xl p-8 text-center">
+            <div key={step} className="bg-[#161b22] border border-[#30363d] rounded-2xl p-5 sm:p-8 text-center">
               <div className="flex justify-center mb-4">
                 <div className="bg-[#21262d] rounded-full p-4">{icon}</div>
               </div>
-              <h3 className="text-xl font-semibold mb-3">{step}</h3>
-              <p className="text-gray-400">{desc}</p>
+              <h3 className="text-lg sm:text-xl font-semibold mb-3">{step}</h3>
+              <p className="text-gray-400 text-sm sm:text-base">{desc}</p>
             </div>
           ))}
         </div>
