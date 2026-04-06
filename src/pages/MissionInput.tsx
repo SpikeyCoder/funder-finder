@@ -187,7 +187,6 @@ export default function MissionInput() {
             Funders with geographic alignment will be ranked higher.
           </p>
           <LocationAutocomplete
-            id="location-served"
             value={locationServed}
             onChange={(val) => {
               setLocationServed(val);

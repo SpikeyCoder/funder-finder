@@ -8,7 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 import LoginModal from '../components/LoginModal';
 import Toast from '../components/Toast';
 import Breadcrumb from '../components/Breadcrumb';
-import { GivingTrendsChart, GeoBarChart, GeoHeatMap, StatCard, InsightsSkeleton, fmtDollar } from '../components/InsightCharts';
+import { GivingTrendsChart, GeoBarChart, StatCard, InsightsSkeleton, fmtDollar } from '../components/InsightCharts';
 import NavBar from '../components/NavBar';
 
 /** Classify giving trend as increasing / stable / decreasing (FEAT-006) */

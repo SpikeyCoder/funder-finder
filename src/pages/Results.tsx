@@ -707,7 +707,6 @@ export default function Results() {
                     ? 'bg-blue-600 border-blue-500 text-white font-semibold'
                     : 'border-[#30363d] text-gray-400 hover:border-gray-500 hover:text-gray-200'
                 }`}
-                aria-pressed={grantSizeFilter === key}
                 aria-label={`Filter by grant size: ${label}`}
               >
                 {label}
@@ -722,7 +721,6 @@ export default function Results() {
                   ? 'bg-blue-600 border-blue-500 text-white font-semibold'
                   : 'border-[#30363d] text-gray-400 hover:border-gray-500 hover:text-gray-200'
               }`}
-              aria-pressed={hideDAFs}
               aria-label={hideDAFs ? 'Show Donor Advised Funds' : 'Hide Donor Advised Funds'}
             >
               Hide DAFs
@@ -735,7 +733,6 @@ export default function Results() {
                   ? 'bg-blue-600 border-blue-500 text-white font-semibold'
                   : 'border-[#30363d] text-gray-400 hover:border-gray-500 hover:text-gray-200'
               }`}
-              aria-pressed={hideUniversities}
               aria-label={hideUniversities ? 'Show universities' : 'Hide universities'}
             >
               Hide Universities
