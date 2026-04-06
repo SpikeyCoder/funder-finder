@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -66,6 +66,18 @@ export default function LoginModal({ pendingFunder, onClose }: LoginModalProps) 
   const { signInWithGoogle, signInWithLinkedIn, signInWithMicrosoft } = useAuth();
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const triggerRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    // Save the element that had focus before modal opened
+    triggerRef.current = document.activeElement as HTMLElement;
+    return () => {
+      // Restore focus when modal closes
+      if (triggerRef.current && triggerRef.current.focus) {
+        triggerRef.current.focus();
+      }
+    };
+  }, []);
 
   const handleProvider = async (key: 'google' | 'linkedin' | 'microsoft') => {
     setError(null);

@@ -50,9 +50,9 @@ html.light-mode body {
 html.light-mode .text-white          { color: #1a1a2e !important; }
 html.light-mode .text-gray-100       { color: #222 !important; }
 html.light-mode .text-gray-200       { color: #333 !important; }
-html.light-mode .text-gray-300       { color: #444 !important; }
-html.light-mode .text-gray-400       { color: #555 !important; }
-html.light-mode .text-gray-500       { color: #666 !important; }
+html.light-mode .text-gray-300       { color: #333 !important; }
+html.light-mode .text-gray-400       { color: #333 !important; }
+html.light-mode .text-gray-500       { color: #444 !important; }
 html.light-mode .text-blue-300       { color: #1d4ed8 !important; }
 html.light-mode .text-blue-400       { color: #2563eb !important; }
 html.light-mode .text-green-400      { color: #16a34a !important; }
@@ -109,8 +109,8 @@ html.light-mode .hover\:text-white:hover       { color: #1a1a2e !important; }
 html.light-mode .hover\:text-gray-200:hover    { color: #333 !important; }
 
 /* ── Placeholder colours ──────────────────────────────────────────── */
-html.light-mode .placeholder-gray-500::placeholder { color: #888 !important; }
-html.light-mode .placeholder-gray-400::placeholder { color: #777 !important; }
+html.light-mode .placeholder-gray-500::placeholder { color: #777 !important; }
+html.light-mode .placeholder-gray-400::placeholder { color: #666 !important; }
 
 /* ── Input / textarea backgrounds ─────────────────────────────────── */
 html.light-mode input,

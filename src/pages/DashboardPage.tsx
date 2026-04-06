@@ -22,6 +22,12 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    document.title = 'Dashboard | FunderMatch';
+    const desc = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    if (desc) desc.content = 'Manage your funding projects, track matches, and monitor grant opportunities.';
+  }, []);
+
+  useEffect(() => {
     if (!loading && user) {
       loadProjects();
     }

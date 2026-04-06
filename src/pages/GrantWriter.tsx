@@ -856,9 +856,9 @@ export default function GrantWriter() {
         {/* ── Progress indicator ── */}
         {isProcessing && !output && (
           <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-6 space-y-4">
-            <h3 className="text-sm font-medium text-gray-300 mb-4">
+            <h2 className="text-sm font-medium text-gray-300 mb-4">
               Preparing your grant draft...
-            </h3>
+            </h2>
 
             {/* Phase: Analyzing past grants */}
             {uploadedFiles.length > 0 && (

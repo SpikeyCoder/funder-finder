@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import AnalyticsTracker from './components/AnalyticsTracker';
 import AuthGuard from './components/AuthGuard';
+import ErrorBoundary from './components/ErrorBoundary';
 import FeatureTooltips from './components/FeatureTooltip';
 import Landing from './pages/Landing';
 import MissionInput from './pages/MissionInput';
@@ -130,10 +131,12 @@ function App() {
     <BrowserRouter>
       <AnalyticsTracker />
       <AuthProvider>
-        <AnimatedRoutes />
-        <BugReportButton />
-        <ThemeToggle />
-        <FeatureTooltips />
+        <ErrorBoundary>
+          <AnimatedRoutes />
+          <BugReportButton />
+          <ThemeToggle />
+          <FeatureTooltips />
+        </ErrorBoundary>
       </AuthProvider>
     </BrowserRouter>
   );

@@ -251,6 +251,15 @@ export default function ProjectWorkspace() {
     if (!loading && user && id) loadProjectData();
   }, [id, user, loading]);
 
+  // Set document title when project loads
+  useEffect(() => {
+    if (project) {
+      document.title = `${project.name} | FunderMatch`;
+      const desc = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+      if (desc) desc.content = `Manage funder matches, track grants, and monitor progress for ${project.name}.`;
+    }
+  }, [project]);
+
   const populateEditFields = (p: Project) => {
     setEditName(p.name);
     setEditDesc(p.description || '');

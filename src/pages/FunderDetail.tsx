@@ -7,6 +7,7 @@ import { formatGrantRange, formatTotalGiving, fetchFunderInsights, fetchPeers, f
 import { useAuth } from '../contexts/AuthContext';
 import LoginModal from '../components/LoginModal';
 import Toast from '../components/Toast';
+import Breadcrumb from '../components/Breadcrumb';
 import { GivingTrendsChart, GeoBarChart, GeoHeatMap, StatCard, InsightsSkeleton, fmtDollar } from '../components/InsightCharts';
 import NavBar from '../components/NavBar';
 
@@ -188,6 +189,12 @@ export default function FunderDetail() {
       <NavBar />
       <div className="py-12 px-6">
       <div className="max-w-2xl mx-auto">
+        <Breadcrumb
+          items={[
+            { label: 'Search', href: '/search' },
+            { label: funder?.name || 'Funder' },
+          ]}
+        />
         <button
           onClick={() => {
             // If there's real navigation history, go back; otherwise fall back to /search

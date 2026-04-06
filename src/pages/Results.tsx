@@ -299,23 +299,33 @@ export default function Results() {
     const alreadySaved = savedIds.includes(funder.id);
 
     if (user) {
-      // Authenticated path — use DB
+      // Authenticated path — use DB with optimistic update and rollback on failure
       if (alreadySaved) {
+        // Optimistic remove
+        const previousIds = savedIds;
+        setSavedIds(prev => prev.filter(i => i !== funder.id));
         try {
           await unsaveFunderFromDB(funder.id);
-          setSavedIds(prev => prev.filter(i => i !== funder.id));
           logResultSignal('result_unsaved', funder);
         } catch (e) {
           console.error('Failed to unsave from DB:', e);
+          // Rollback on error
+          setSavedIds(previousIds);
+          setToastMsg('Failed to unsave funder. Please try again.');
         }
       } else {
+        // Optimistic add
+        const previousIds = savedIds;
+        setSavedIds(prev => [...prev, funder.id]);
         try {
           await saveFunderToDB(funder);
-          setSavedIds(prev => [...prev, funder.id]);
           logResultSignal('result_saved', funder);
           setToastMsg('Funder saved!');
         } catch (e) {
           console.error('Failed to save to DB:', e);
+          // Rollback on error
+          setSavedIds(previousIds);
+          setToastMsg('Failed to save funder. Please try again.');
         }
       }
     } else {

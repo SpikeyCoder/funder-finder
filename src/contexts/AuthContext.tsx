@@ -128,12 +128,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const saveFunderToDB = useCallback(async (funder: Funder) => {
     const userId = (await supabase.auth.getUser()).data.user?.id;
-    if (!userId) throw new Error('Not authenticated');
+    if (!userId) throw new Error('Authentication required to save funders');
     const { error } = await supabase.from('saved_funders').upsert(
       { user_id: userId, funder_id: funder.id, funder_data: funder },
       { onConflict: 'user_id,funder_id' }
     );
-    if (error) throw error;
+    if (error) {
+      if (error.message.includes('network')) {
+        throw new Error('Network connection error. Please check your internet and try again.');
+      }
+      if (error.message.includes('timeout')) {
+        throw new Error('Request timeout. Please try again.');
+      }
+      if (error.message.includes('permission') || error.message.includes('unauthorized')) {
+        throw new Error('You do not have permission to save funders.');
+      }
+      throw new Error('Failed to save funder. Please try again.');
+    }
   }, []);
 
   const saveFunderToDBWithUser = useCallback(async (funder: Funder, userId: string) => {
@@ -152,7 +163,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .delete()
       .eq('user_id', userId)
       .eq('funder_id', funderId);
-    if (error) throw error;
+    if (error) {
+      if (error.message.includes('network')) {
+        throw new Error('Network connection error. Please check your internet and try again.');
+      }
+      if (error.message.includes('timeout')) {
+        throw new Error('Request timeout. Please try again.');
+      }
+      throw new Error('Failed to remove funder. Please try again.');
+    }
   }, []);
 
   const fetchSavedFunders = useCallback(async (): Promise<Funder[]> => {
@@ -160,7 +179,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .from('saved_funders')
       .select('funder_data, saved_at')
       .order('saved_at', { ascending: false });
-    if (error) throw error;
+    if (error) {
+      if (error.message.includes('network')) {
+        throw new Error('Network connection error. Cannot load saved funders.');
+      }
+      if (error.message.includes('timeout')) {
+        throw new Error('Request timeout while loading saved funders.');
+      }
+      throw new Error('Failed to load saved funders. Please try again.');
+    }
     return (data ?? []).map((row: any) => row.funder_data as Funder);
   }, []);
 
