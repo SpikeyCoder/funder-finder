@@ -76,8 +76,7 @@ function AnimatedRoutes() {
   }, [user, navigate, location.pathname]);
 
   return (
-    <div key={location.pathname} className="page-fade-in">
-      <main id="main-content">
+    <main key={location.pathname} id="main-content" className="page-fade-in">
       <Routes location={location}>
         {/* Public routes */}
         <Route path="/" element={<Landing />} />
@@ -120,8 +119,7 @@ function AnimatedRoutes() {
 
         <Route path="*" element={<NotFound />} />
       </Routes>
-      </main>
-    </div>
+    </main>
   );
 }
 

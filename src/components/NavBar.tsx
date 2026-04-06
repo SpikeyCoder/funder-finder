@@ -35,43 +35,44 @@ export default function NavBar() {
       <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-blue-600 focus:text-white focus:px-4 focus:py-2 focus:rounded">
         Skip to main content
       </a>
-      <nav className="w-full bg-[#0d1117] border-b border-[#1b2130]">
+      <nav className="w-full bg-[#0d1117] border-b border-[#1b2130]" aria-label="Main navigation">
         <div className="max-w-6xl mx-auto flex items-center justify-between h-16 px-6">
           {/* Logo — left */}
           <button
             onClick={() => navigate('/')}
             className="text-white font-bold text-lg tracking-tight shrink-0 hover:opacity-80 transition-opacity"
+            aria-label="FunderMatch home"
           >
             FunderMatch
           </button>
 
           {/* Nav items — right aligned, desktop */}
           <div className="hidden md:flex items-center gap-1">
-            <button onClick={() => navigate('/mission')} className={linkClass('/mission')}>
+            <button onClick={() => navigate('/mission')} className={linkClass('/mission')} aria-label="Find Funders">
               Find Funders
             </button>
             {!loading && user && (
-              <button onClick={() => navigate('/saved')} className={linkClass('/saved')}>
+              <button onClick={() => navigate('/saved')} className={linkClass('/saved')} aria-label="View saved funders">
                 Saved Funders
               </button>
             )}
-            <button onClick={() => navigate('/browse')} className={linkClass('/browse')}>
+            <button onClick={() => navigate('/browse')} className={linkClass('/browse')} aria-label="Browse grants">
               Browse Grants
             </button>
-            <button onClick={() => navigate('/search')} className={linkClass('/search')}>
+            <button onClick={() => navigate('/search')} className={linkClass('/search')} aria-label="Search organizations">
               Search
             </button>
 
             {!loading && (
               user ? (
                 <>
-                  <button onClick={() => navigate('/portfolio')} className={linkClass('/portfolio')}>
+                  <button onClick={() => navigate('/portfolio')} className={linkClass('/portfolio')} aria-label="View your portfolio dashboard">
                     Dashboard
                   </button>
-                  <button onClick={() => navigate('/dashboard')} className={linkClass('/dashboard')}>
+                  <button onClick={() => navigate('/dashboard')} className={linkClass('/dashboard')} aria-label="View your portfolio">
                     Portfolio
                   </button>
-                  <button onClick={() => navigate('/tasks')} className={linkClass('/tasks')}>
+                  <button onClick={() => navigate('/tasks')} className={linkClass('/tasks')} aria-label="View your tasks">
                     Tasks
                   </button>
 
@@ -80,6 +81,9 @@ export default function NavBar() {
                     <button
                       onClick={() => setAccountOpen(!accountOpen)}
                       className="flex items-center gap-1.5 px-4 py-2 min-h-[44px] text-sm font-medium text-gray-400 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors"
+                      aria-label={`Account menu for ${user.email?.split('@')[0] || 'account'}`}
+                      aria-expanded={accountOpen}
+                      aria-haspopup="true"
                     >
                       <span className="max-w-[140px] truncate">
                         {user.email?.split('@')[0]}
@@ -88,25 +92,31 @@ export default function NavBar() {
                     </button>
 
                     {accountOpen && (
-                      <div className="absolute right-0 top-full mt-1 w-56 bg-[#161b22] border border-[#30363d] rounded-lg shadow-xl py-1 z-50">
+                      <div className="absolute right-0 top-full mt-1 w-56 bg-[#161b22] border border-[#30363d] rounded-lg shadow-xl py-1 z-50" role="menu">
                         <div className="px-4 py-2.5 border-b border-[#30363d]">
                           <p className="text-xs text-gray-500 truncate">{user.email}</p>
                         </div>
                         <button
                           onClick={() => { navigate('/settings/team'); setAccountOpen(false); }}
                           className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/[0.06] transition-colors"
+                          role="menuitem"
+                          aria-label="Go to team settings"
                         >
                           Team
                         </button>
                         <button
                           onClick={() => { navigate('/settings'); setAccountOpen(false); }}
                           className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/[0.06] transition-colors"
+                          role="menuitem"
+                          aria-label="Go to account settings"
                         >
                           Settings
                         </button>
                         <button
                           onClick={() => { signOut(); setAccountOpen(false); }}
                           className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/[0.06] transition-colors"
+                          role="menuitem"
+                          aria-label="Sign out of your account"
                         >
                           Sign Out
                         </button>
@@ -118,6 +128,7 @@ export default function NavBar() {
                 <button
                   onClick={() => navigate('/login')}
                   className="px-4 py-2 min-h-[44px] flex items-center text-sm font-medium text-gray-400 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors"
+                  aria-label="Sign in to your account"
                 >
                   Sign In
                 </button>
@@ -143,6 +154,7 @@ export default function NavBar() {
               className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
                 isActive('/mission') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
               }`}
+              aria-label="Find Funders"
             >
               Find Funders
             </button>
@@ -152,6 +164,7 @@ export default function NavBar() {
                 className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
                   isActive('/saved') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
                 }`}
+                aria-label="View saved funders"
               >
                 Saved Funders
               </button>
@@ -161,6 +174,7 @@ export default function NavBar() {
               className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
                 isActive('/browse') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
               }`}
+              aria-label="Browse grants"
             >
               Browse Grants
             </button>
@@ -169,6 +183,7 @@ export default function NavBar() {
               className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
                 isActive('/search') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
               }`}
+              aria-label="Search organizations"
             >
               Search
             </button>
@@ -177,10 +192,11 @@ export default function NavBar() {
               user ? (
                 <>
                   <button
-                    onClick={() => { navigate('/portfolio'); setMobileOpen(false); }}
+                    onClick={() => { navigate('/dashboard'); setMobileOpen(false); }}
                     className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
-                      isActive('/portfolio') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
+                      isActive('/dashboard') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
                     }`}
+                    aria-label="View your portfolio dashboard"
                   >
                     Dashboard
                   </button>
@@ -189,6 +205,7 @@ export default function NavBar() {
                     className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
                       isActive('/dashboard') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
                     }`}
+                    aria-label="View your portfolio"
                   >
                     Portfolio
                   </button>
@@ -197,6 +214,7 @@ export default function NavBar() {
                     className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
                       isActive('/tasks') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
                     }`}
+                    aria-label="View your tasks"
                   >
                     Tasks
                   </button>
@@ -206,6 +224,7 @@ export default function NavBar() {
                       className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
                         isActive('/settings/team') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
                       }`}
+                      aria-label="Go to team settings"
                     >
                       Team
                     </button>
@@ -214,6 +233,7 @@ export default function NavBar() {
                       className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
                         isActive('/settings') && !isActive('/settings/team') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
                       }`}
+                      aria-label="Go to account settings"
                     >
                       Settings
                     </button>
@@ -222,6 +242,7 @@ export default function NavBar() {
                       <button
                         onClick={() => { signOut(); setMobileOpen(false); }}
                         className="text-sm font-medium text-gray-300 hover:text-white transition-colors"
+                        aria-label="Sign out of your account"
                       >
                         Sign Out
                       </button>
@@ -232,6 +253,7 @@ export default function NavBar() {
                 <button
                   onClick={() => { navigate('/login'); setMobileOpen(false); }}
                   className="block w-full text-left px-3 py-2.5 text-sm font-medium text-gray-400 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors"
+                  aria-label="Sign in to your account"
                 >
                   Sign In
                 </button>

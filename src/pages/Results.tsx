@@ -659,12 +659,14 @@ export default function Results() {
               <button
                 onClick={() => { runPeerSearch(); setShowPeerEditor(false); }}
                 className="bg-blue-600 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-blue-500 transition-colors"
+                aria-label="Update search results with peer nonprofit list"
               >
                 Update results
               </button>
               <button
                 onClick={() => setShowPeerEditor(false)}
                 className="border border-[#30363d] text-gray-300 text-sm px-4 py-2 rounded-xl hover:bg-[#21262d] transition-colors"
+                aria-label="Cancel peer search edit"
               >
                 Cancel
               </button>
@@ -672,6 +674,7 @@ export default function Results() {
                 <button
                   onClick={() => { clearPeerSearch(); setShowPeerEditor(false); }}
                   className="border border-[#30363d] text-gray-300 text-sm px-4 py-2 rounded-xl hover:bg-[#21262d] transition-colors"
+                  aria-label="Clear peer search and return to mission-based matching"
                 >
                   Back to mission matching
                 </button>
@@ -694,6 +697,8 @@ export default function Results() {
                     ? 'bg-blue-600 border-blue-500 text-white font-semibold'
                     : 'border-[#30363d] text-gray-400 hover:border-gray-500 hover:text-gray-200'
                 }`}
+                aria-pressed={grantSizeFilter === key}
+                aria-label={`Filter by grant size: ${label}`}
               >
                 {label}
               </button>
@@ -707,6 +712,8 @@ export default function Results() {
                   ? 'bg-blue-600 border-blue-500 text-white font-semibold'
                   : 'border-[#30363d] text-gray-400 hover:border-gray-500 hover:text-gray-200'
               }`}
+              aria-pressed={hideDAFs}
+              aria-label={hideDAFs ? 'Show Donor Advised Funds' : 'Hide Donor Advised Funds'}
             >
               Hide DAFs
             </button>
@@ -718,6 +725,8 @@ export default function Results() {
                   ? 'bg-blue-600 border-blue-500 text-white font-semibold'
                   : 'border-[#30363d] text-gray-400 hover:border-gray-500 hover:text-gray-200'
               }`}
+              aria-pressed={hideUniversities}
+              aria-label={hideUniversities ? 'Show universities' : 'Hide universities'}
             >
               Hide Universities
             </button>
@@ -766,6 +775,7 @@ export default function Results() {
             <button
               onClick={() => loadMatches(true)}
               className="flex items-center gap-2 mx-auto border border-red-800 text-red-400 rounded-xl px-4 py-2 text-sm hover:bg-red-900/30 transition-colors"
+              aria-label="Retry loading results"
             >
               <RefreshCw size={14} />
               Try Again
@@ -796,13 +806,14 @@ export default function Results() {
                   </>
                 ) : (
                   <>
-                    <p className="text-2xl mb-3">No funders found</p>
-                    <p className="mb-4 text-sm">The database may be empty. Run the ingestion script first.</p>
+                    <p className="text-2xl mb-3">No matches found yet</p>
+                    <p className="mb-4 text-sm">Try broadening your mission description or adjusting filters to find more matching funders.</p>
                     <button
                       onClick={() => navigate('/mission', { state: { mission, locationServed, keywords, budgetBand } })}
                       className="bg-white text-gray-900 font-semibold px-6 py-3 rounded-xl hover:bg-gray-100 transition-colors"
+                      aria-label="Edit and retry your mission and location"
                     >
-                      Update Mission
+                      Edit Mission & Location
                     </button>
                   </>
                 )}
@@ -969,6 +980,7 @@ export default function Results() {
                       <button
                         onClick={() => copyEmail(funder.contact_email!, funder.id)}
                         className="flex items-center gap-2 border border-[#30363d] rounded-xl px-4 py-2 text-sm hover:bg-[#21262d] transition-colors"
+                        aria-label={`Copy email for ${funder.name}`}
                       >
                         <Copy size={14} />
                         {copied === funder.id ? 'Copied!' : 'Copy Email'}
@@ -977,6 +989,8 @@ export default function Results() {
                     <button
                       onClick={() => toggleSave(funder)}
                       className={`flex items-center gap-2 border rounded-xl px-4 py-2 text-sm transition-colors ${isSaved ? 'border-blue-600 text-blue-400 bg-blue-900/20' : 'border-[#30363d] hover:bg-[#21262d]'}`}
+                      aria-label={isSaved ? `Remove ${funder.name} from saved` : `Save ${funder.name}`}
+                      aria-pressed={isSaved}
                     >
                       {isSaved ? <BookmarkCheck size={14} /> : <Bookmark size={14} />}
                       {isSaved ? 'Saved' : 'Save'}
@@ -987,6 +1001,7 @@ export default function Results() {
                         navigate(`/funder/${funder.id}`, { state: { funder, mission, keywords, budgetBand } });
                       }}
                       className="flex items-center gap-2 bg-white text-gray-900 font-semibold rounded-xl px-4 py-2 text-sm hover:bg-gray-100 transition-colors ml-auto"
+                      aria-label={`View details for ${funder.name}`}
                     >
                       View Details
                       <ChevronRight size={14} />
@@ -1006,10 +1021,11 @@ export default function Results() {
                   }}
                   disabled={currentPage <= 1}
                   className="px-4 py-2 rounded-lg bg-[#21262d] text-gray-300 text-sm font-medium hover:bg-[#30363d] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  aria-label="Go to previous page"
                 >
                   &lt; Previous
                 </button>
-                <span className="text-gray-400 text-sm">
+                <span className="text-gray-400 text-sm" aria-live="polite">
                   Page {currentPage} of {totalPages}
                   {' '}({(currentPage - 1) * RESULTS_PER_PAGE + 1}-{Math.min(currentPage * RESULTS_PER_PAGE, filteredMatches.length)} of {filteredMatches.length})
                 </span>
@@ -1020,6 +1036,7 @@ export default function Results() {
                   }}
                   disabled={currentPage >= totalPages}
                   className="px-4 py-2 rounded-lg bg-[#21262d] text-gray-300 text-sm font-medium hover:bg-[#30363d] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  aria-label="Go to next page"
                 >
                   Next &gt;
                 </button>
@@ -1031,6 +1048,7 @@ export default function Results() {
               <button
                 onClick={() => loadMatches(true)}
                 className="flex items-center gap-2 text-gray-300 hover:text-white text-sm transition-colors"
+                aria-label={isPeerSearchMode ? 'Refresh results and re-run peer lookup' : 'Refresh results and re-run AI matching'}
               >
                 <RefreshCw size={14} />
                 {isPeerSearchMode ? 'Refresh results (re-run peer lookup)' : 'Refresh results (re-run AI matching)'}

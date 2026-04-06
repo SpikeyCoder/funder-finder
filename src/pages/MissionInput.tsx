@@ -129,33 +129,34 @@ export default function MissionInput() {
 
         {/* Mission Statement */}
         <div>
-          <label htmlFor="mission-statement" className="block text-base font-semibold mb-1">
+          <label htmlFor="mission-input" className="block text-base font-semibold mb-1">
             Your Mission Statement <span className="text-red-400">*</span>
           </label>
           <p id="mission-desc" className="text-sm text-gray-400 mb-3">Describe what your nonprofit does and who you serve</p>
           <textarea
-            id="mission-statement"
+            id="mission-input"
             value={mission}
             onChange={e => { setMission(e.target.value); setErrors(prev => ({ ...prev, mission: undefined })); }}
             placeholder="Example: We empower underserved youth through accessible education programs and mentorship opportunities that build skills for future success."
             rows={4}
-            required
-            aria-required="true"
-            aria-describedby="mission-desc"
+            className={`w-full bg-[#0d1117] border rounded-xl px-4 py-3 text-white placeholder-gray-600 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.mission ? 'border-red-500 focus:ring-red-500' : 'border-[#30363d]'}`}
+            aria-label="Your nonprofit's mission statement"
             aria-invalid={!!errors.mission}
-            className={`w-full bg-[#0d1117] border rounded-xl px-4 py-3 text-white placeholder-gray-600 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.mission ? 'border-red-500' : 'border-[#30363d]'}`}
+            aria-describedby={errors.mission ? 'mission-error' : undefined}
           />
           <div className="flex items-center justify-between mt-2">
             <span className="text-xs text-gray-300">{mission.length} characters</span>
           </div>
-          {errors.mission && <p className="text-red-400 text-sm mt-1" role="alert">{errors.mission}</p>}
+          {errors.mission && <p id="mission-error" className="text-red-400 text-sm mt-1">{errors.mission}</p>}
 
           <button
             onClick={() => setShowExamples(!showExamples)}
             className="flex items-center gap-2 text-gray-400 text-sm mt-3 hover:text-white transition-colors"
+            aria-label={showExamples ? 'Hide examples' : 'Show examples'}
+            aria-expanded={showExamples}
           >
             <Sparkles size={16} />
-            Show Examples
+            {showExamples ? 'Hide Examples' : 'Show Examples'}
           </button>
 
           {showExamples && (
@@ -175,7 +176,7 @@ export default function MissionInput() {
 
         {/* Location Served */}
         <div>
-          <label htmlFor="location-served" className="block text-base font-semibold mb-1">
+          <label htmlFor="location-input" className="block text-base font-semibold mb-1">
             <span className="flex items-center gap-2">
               <MapPin size={16} className="text-blue-400" />
               Location Served <span className="text-red-400">*</span>
@@ -193,10 +194,10 @@ export default function MissionInput() {
               setErrors(prev => ({ ...prev, location: undefined }));
             }}
             hasError={!!errors.location}
-            aria-describedby="location-desc"
-            aria-required="true"
+            aria-invalid={!!errors.location}
+            aria-describedby={errors.location ? 'location-error' : undefined}
           />
-          {errors.location && <p className="text-red-400 text-sm mt-1" role="alert">{errors.location}</p>}
+          {errors.location && <p id="location-error" className="text-red-400 text-sm mt-1">{errors.location}</p>}
         </div>
 
         {/* Budget band */}
@@ -205,7 +206,7 @@ export default function MissionInput() {
           <p className="text-sm text-gray-400 mb-3">
             We use this to prioritize funders that have supported nonprofits of similar size.
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" role="radiogroup" aria-label="Select your annual operating budget range">
             {BUDGET_BANDS.map((band) => {
               const selected = budgetBand === band.key;
               return (
@@ -213,7 +214,9 @@ export default function MissionInput() {
                   key={band.key}
                   type="button"
                   onClick={() => setBudgetBand(band.key)}
-                  aria-pressed={selected}
+                  role="radio"
+                  aria-checked={selected}
+                  aria-label={`${band.label} - ${band.hint}`}
                   className={`text-left border rounded-xl px-4 py-3 transition-colors ${
                     selected
                       ? 'border-blue-500 bg-blue-900/30'
@@ -232,6 +235,7 @@ export default function MissionInput() {
       <button
         onClick={handleSubmit}
         className="mt-8 flex items-center gap-3 bg-white text-gray-900 font-semibold px-10 py-4 rounded-xl text-lg hover:bg-gray-100 transition-colors"
+        aria-label="Find matching funders for your nonprofit"
       >
         Find Matching Funders
         <ArrowRight size={20} />

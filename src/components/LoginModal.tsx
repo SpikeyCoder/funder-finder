@@ -124,6 +124,7 @@ export default function LoginModal({ pendingFunder, onClose }: LoginModalProps) 
               onClick={() => handleProvider(key)}
               disabled={loadingProvider !== null}
               className="w-full flex items-center justify-center gap-3 bg-white text-gray-900 font-medium rounded-xl px-4 py-3 text-sm hover:bg-gray-100 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              aria-label={`Sign in with ${label}`}
             >
               {loadingProvider === key ? (
                 <Loader2 size={18} className="animate-spin text-gray-600" />

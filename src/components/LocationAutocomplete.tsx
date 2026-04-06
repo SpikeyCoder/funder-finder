@@ -130,9 +130,8 @@ interface Props {
   onChange: (value: string) => void;
   hasError?: boolean;
   placeholder?: string;
-  id?: string;
+  'aria-invalid'?: boolean;
   'aria-describedby'?: string;
-  'aria-required'?: string;
 }
 
 // Track Google Maps script loading state globally
@@ -168,7 +167,7 @@ function loadGoogleMaps(): Promise<void> {
   });
 }
 
-export default function LocationAutocomplete({ value, onChange, hasError, placeholder, id, 'aria-describedby': ariaDescribedby, 'aria-required': ariaRequired }: Props) {
+export default function LocationAutocomplete({ value, onChange, hasError, placeholder, 'aria-invalid': ariaInvalid, 'aria-describedby': ariaDescribedBy }: Props) {
   const [suggestions, setSuggestions] = useState<{ label: string; placeId?: string; type: string }[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -266,7 +265,7 @@ export default function LocationAutocomplete({ value, onChange, hasError, placeh
       <div className="relative">
         <input
           ref={inputRef}
-          id={id}
+          id="location-input"
           value={value}
           onChange={e => {
             onChange(e.target.value);
@@ -275,11 +274,10 @@ export default function LocationAutocomplete({ value, onChange, hasError, placeh
           onFocus={handleFocus}
           onBlur={() => setTimeout(() => setOpen(false), 200)}
           placeholder={placeholder || 'e.g. King County, WA | Chicago, IL | National'}
-          required={ariaRequired === 'true'}
-          aria-required={ariaRequired === 'true' ? 'true' : undefined}
-          aria-describedby={ariaDescribedby}
-          aria-invalid={hasError}
-          className={`w-full bg-[#0d1117] border rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 ${hasError ? 'border-red-500' : 'border-[#30363d]'}`}
+          className={`w-full bg-[#0d1117] border rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 ${hasError ? 'border-red-500 focus:ring-red-500' : 'border-[#30363d]'}`}
+          aria-label="Location your nonprofit serves"
+          aria-invalid={ariaInvalid}
+          aria-describedby={ariaDescribedBy}
         />
         {loading && (
           <div className="absolute right-3 top-1/2 -translate-y-1/2">
