@@ -21,6 +21,7 @@ interface FunderResult {
   avg_grant_size: number | null;
   total_giving: number | null;
   grant_count: number | null;
+  website: string | null;
 }
 
 interface FilterResponse {
@@ -67,6 +68,7 @@ const BrowsePage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
+  const [onlyWithWebsite, setOnlyWithWebsite] = useState(false);
 
   const { user } = useAuth();
   const RESULTS_PER_PAGE = 25;
@@ -215,6 +217,9 @@ const BrowsePage: React.FC = () => {
   const startIndex = (currentPage - 1) * RESULTS_PER_PAGE + 1;
   const endIndex = Math.min(currentPage * RESULTS_PER_PAGE, totalCount);
 
+  const hasWebsite = (f: FunderResult) => f.website != null && f.website.trim() !== '';
+  const displayedResults = onlyWithWebsite ? results.filter(hasWebsite) : results;
+
   const SortHeader: React.FC<{ field: SortField; label: string }> = ({ field, label }) => (
     <button
       onClick={() => handleSort(field)}
@@ -242,24 +247,38 @@ const BrowsePage: React.FC = () => {
         <main id="main-content" className="flex-1 flex flex-col overflow-hidden min-w-0">
           {/* Results Header */}
           <div className="border-b border-[#30363d] p-4 bg-[#161b22]">
-            {totalCount > 0 ? (
-              <div className="text-sm text-gray-400">
-                Showing <span className="text-white font-medium">{startIndex}</span> to{' '}
-                <span className="text-white font-medium">{endIndex}</span> of{' '}
-                <span className="text-white font-medium">{totalCount}</span> funders
-              </div>
-            ) : loading ? (
-              <div className="text-sm text-gray-400">Loading...</div>
-            ) : error ? (
-              <div className="text-sm text-red-400">{error}</div>
-            ) : (
-              <div className="text-sm text-gray-400">No funders found. Try adjusting your filters.</div>
-            )}
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              {totalCount > 0 ? (
+                <div className="text-sm text-gray-400">
+                  Showing <span className="text-white font-medium">{startIndex}</span> to{' '}
+                  <span className="text-white font-medium">{endIndex}</span> of{' '}
+                  <span className="text-white font-medium">{totalCount}</span> funders
+                </div>
+              ) : loading ? (
+                <div className="text-sm text-gray-400">Loading...</div>
+              ) : error ? (
+                <div className="text-sm text-red-400">{error}</div>
+              ) : (
+                <div className="text-sm text-gray-400">No funders found. Try adjusting your filters.</div>
+              )}
+              <button
+                onClick={() => { setOnlyWithWebsite(!onlyWithWebsite); setCurrentPage(1); }}
+                aria-pressed={onlyWithWebsite}
+                className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                  onlyWithWebsite
+                    ? 'bg-blue-600 border-blue-500 text-white font-semibold'
+                    : 'border-[#30363d] text-gray-400 hover:border-gray-500 hover:text-gray-200'
+                }`}
+                aria-label={onlyWithWebsite ? 'Show all funders' : 'Only show funders with website'}
+              >
+                Only Funders with Website
+              </button>
+            </div>
           </div>
 
           {/* Results Table */}
           <div className="flex-1 overflow-auto">
-            {results.length > 0 ? (
+            {displayedResults.length > 0 ? (
               <>
               <table className="w-full text-sm browse-table hidden md:table">
                 <caption className="sr-only">Funder search results table</caption>
@@ -287,7 +306,7 @@ const BrowsePage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {results.map((funder, idx) => (
+                  {displayedResults.map((funder, idx) => (
                     <tr
                       key={`${funder.ein}-${idx}`}
                       className="border-b border-[#30363d] hover:bg-[#161b22] transition-colors"
@@ -300,6 +319,9 @@ const BrowsePage: React.FC = () => {
                           <span className="truncate">{funder.name}</span>
                           <ExternalLink size={14} className="opacity-50 flex-shrink-0" />
                         </a>
+                        {!hasWebsite(funder) && (
+                          <span className="inline-block mt-1 text-gray-500 text-xs">No website listed</span>
+                        )}
                       </td>
                       <td data-label="State" className="px-4 py-3 text-gray-300">{funder.state || '-'}</td>
                       <td data-label="Type" className="px-4 py-3 text-gray-300">{funder.entity_type || '-'}</td>
@@ -334,7 +356,7 @@ const BrowsePage: React.FC = () => {
 
               {/* Mobile card layout */}
               <div className="md:hidden space-y-3 p-4">
-                {results.map((funder, idx) => (
+                {displayedResults.map((funder, idx) => (
                   <div
                     key={`mobile-${funder.ein}-${idx}`}
                     className="bg-[#161b22] border border-[#30363d] rounded-xl p-4 space-y-2"
@@ -346,6 +368,9 @@ const BrowsePage: React.FC = () => {
                       <span className="break-words min-w-0">{funder.name}</span>
                       <ExternalLink size={14} className="opacity-50 flex-shrink-0" />
                     </a>
+                    {!hasWebsite(funder) && (
+                      <span className="inline-block text-gray-500 text-xs">No website listed</span>
+                    )}
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       <div className="min-w-0">
                         <span className="text-gray-500">State:</span>{' '}

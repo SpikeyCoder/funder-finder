@@ -100,6 +100,7 @@ export default function Results() {
   const [grantSizeFilter, setGrantSizeFilter] = useState<'any' | 'small' | 'medium' | 'large'>('any');
   const [hideDAFs, setHideDAFs] = useState(true);
   const [hideUniversities, setHideUniversities] = useState(false);
+  const [onlyWithWebsite, setOnlyWithWebsite] = useState(false);
   const [peerSearchInput, setPeerSearchInput] = useState<string>(peerNonprofitsFromState.join('\n'));
   const [activePeerNonprofits, setActivePeerNonprofits] = useState<string[]>(peerNonprofitsFromState);
   const [suggestedPeers, setSuggestedPeers] = useState<string[]>([]);
@@ -488,6 +489,7 @@ export default function Results() {
   const filteredMatches = deduplicatedMatches
     .filter(f => !hideDAFs || (f.type !== 'daf' && !isDAF(f.name)))
     .filter(f => !hideUniversities || !isUniversity(f))
+    .filter(f => !onlyWithWebsite || (f.website != null && f.website.trim() !== ''))
     .filter(f => {
       if (grantSizeFilter === 'any') return true;
 
@@ -737,6 +739,18 @@ export default function Results() {
             >
               Hide Universities
             </button>
+            <button
+              onClick={() => { setOnlyWithWebsite(!onlyWithWebsite); setCurrentPage(1); }}
+              aria-pressed={onlyWithWebsite}
+              className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                onlyWithWebsite
+                  ? 'bg-blue-600 border-blue-500 text-white font-semibold'
+                  : 'border-[#30363d] text-gray-400 hover:border-gray-500 hover:text-gray-200'
+              }`}
+              aria-label={onlyWithWebsite ? 'Show all funders' : 'Only show funders with website'}
+            >
+              Only Funders with Website
+            </button>
 
             <span className="text-[#30363d] mx-1">|</span>
             <div className="flex items-center gap-1.5">
@@ -863,6 +877,12 @@ export default function Results() {
                         {funder.total_giving && (
                           <span className="inline-block bg-[#21262d] border border-[#30363d] text-gray-300 text-xs px-3 py-1 rounded-full">
                             {formatTotalGiving(funder.total_giving)} in grants
+                          </span>
+                        )}
+                        {/* No website indicator */}
+                        {(!funder.website || funder.website.trim() === '') && (
+                          <span className="inline-block bg-[#21262d] border border-[#30363d] text-gray-500 text-xs px-3 py-1 rounded-full">
+                            No website listed
                           </span>
                         )}
                         {/* Data freshness indicator */}
