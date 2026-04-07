@@ -414,8 +414,6 @@ export default function ProjectWorkspace() {
       setComputing(true); setMatchesLoading(true); setError(null);
       const headers = await getEdgeFunctionHeaders();
       const states = p.location_scope?.map(l => l.state) || [];
-      const keywords = p.keywords || [];
-      const fieldsOfWork = p.fields_of_work || [];
 
       // Auto-truncate long descriptions to 200 words to avoid timeouts
       const rawMission = p.description || p.name;
@@ -423,10 +421,12 @@ export default function ProjectWorkspace() {
         ? rawMission.split(/\s+/).slice(0, 200).join(' ')
         : rawMission;
 
+      // Note: the edge function's `keywords` param is for EXCLUSION filtering,
+      // so do not send the project's descriptive keywords/fields_of_work here.
+      // The mission text already carries the semantic signal for matching.
       const body = JSON.stringify({
         mission,
         locationServed: states.join(', ') || undefined,
-        keywords: keywords.length > 0 ? keywords : fieldsOfWork.length > 0 ? fieldsOfWork : undefined,
         budgetBand: p.budget_min ? `${p.budget_min}-${p.budget_max || ''}` : undefined,
       });
 
