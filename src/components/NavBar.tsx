@@ -192,9 +192,9 @@ export default function NavBar() {
               user ? (
                 <>
                   <button
-                    onClick={() => { navigate('/dashboard'); setMobileOpen(false); }}
+                    onClick={() => { navigate('/portfolio'); setMobileOpen(false); }}
                     className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
-                      isActive('/dashboard') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
+                      isActive('/portfolio') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
                     }`}
                     aria-label="View your portfolio dashboard"
                   >
