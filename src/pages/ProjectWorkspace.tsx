@@ -1872,7 +1872,16 @@ export default function ProjectWorkspace() {
             <div className="flex-shrink-0 px-5 py-4 border-b border-[#30363d] bg-[#161b22]">
               <div className="flex items-start justify-between">
                 <div className="min-w-0 flex-1 mr-3">
-                  <h3 className="text-lg font-semibold text-white truncate">{selectedGrant.funder_name}</h3>
+                  {selectedGrant.funder_ein ? (
+                    <h3 className="text-lg font-semibold truncate">
+                      <button onClick={() => navigate(`/funder/${selectedGrant.funder_ein}`)} className="text-blue-400 hover:text-blue-300 transition-colors text-left flex items-center gap-1.5">
+                        {selectedGrant.funder_name}
+                        <ExternalLink size={14} className="flex-shrink-0 opacity-60" />
+                      </button>
+                    </h3>
+                  ) : (
+                    <h3 className="text-lg font-semibold text-white truncate">{selectedGrant.funder_name}</h3>
+                  )}
                   {selectedGrant.grant_title && <p className="text-sm text-gray-400 mt-0.5 truncate">{selectedGrant.grant_title}</p>}
                 </div>
                 <button onClick={() => closeDrawer()} className="text-gray-400 hover:text-white flex-shrink-0 p-1"><X size={18} /></button>
@@ -1885,12 +1894,10 @@ export default function ProjectWorkspace() {
                   {pipelineStatuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
                 <span className="text-sm text-white font-medium">{fmtCurrency(selectedGrant.amount)}</span>
-                {selectedGrant.deadline && (
-                  <span className="text-xs text-gray-400 flex items-center gap-1">
-                    <Calendar size={11} />
-                    {new Date(selectedGrant.deadline).toLocaleDateString()}
-                  </span>
-                )}
+                <span className="text-xs text-gray-400 flex items-center gap-1">
+                  <Calendar size={11} />
+                  {selectedGrant.deadline ? new Date(selectedGrant.deadline).toLocaleDateString() : 'No deadline'}
+                </span>
               </div>
             </div>
 
@@ -1913,7 +1920,13 @@ export default function ProjectWorkspace() {
                     </div>
                     <div>
                       <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Deadline</p>
-                      <p className="text-sm text-white">{selectedGrant.deadline ? new Date(selectedGrant.deadline).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '-'}</p>
+                      <input
+                        type="date"
+                        value={selectedGrant.deadline ? selectedGrant.deadline.slice(0, 10) : ''}
+                        onChange={e => setSelectedGrant(prev => prev ? { ...prev, deadline: e.target.value || null } : prev)}
+                        onBlur={() => selectedGrant && handleUpdateGrant(selectedGrant.id, { deadline: selectedGrant.deadline } as any)}
+                        className="w-full bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-blue-500"
+                      />
                     </div>
                     <div>
                       <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Project</p>
