@@ -100,6 +100,8 @@ Deno.serve(async (req: Request) => {
       grant_count: 'grant_count',
       avg_grant_size: 'avg_grant_size',
       name: 'name',
+      state: 'state',
+      entity_type: 'entity_type',
       match_score: 'total_giving', // fallback
     };
     const sortCol = validSortCols[sort_by] || 'total_giving';

@@ -60,18 +60,9 @@ const NTEE_CATEGORIES = [
   { code: 'Z', label: 'Unknown' },
 ];
 
-const FUNDING_TYPES = [
-  { id: 'general_operating', label: 'General Operating' },
-  { id: 'project_program', label: 'Project/Program' },
-  { id: 'capital', label: 'Capital' },
-  { id: 'capacity_building', label: 'Capacity Building' },
-];
-
 const FUNDER_TYPES = [
-  { id: 'private_foundation', label: 'Private Foundation' },
-  { id: 'community_foundation', label: 'Community Foundation' },
+  { id: 'foundation', label: 'Foundation' },
   { id: 'corporate', label: 'Corporate' },
-  { id: 'government', label: 'Government' },
   { id: 'daf', label: 'Donor Advised Fund' },
 ];
 
@@ -153,15 +144,6 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
     });
   };
 
-  const handleFundingTypeChange = (type: string, checked: boolean) => {
-    onChange({
-      ...filters,
-      funding_types: checked
-        ? [...filters.funding_types, type]
-        : filters.funding_types.filter((t) => t !== type),
-    });
-  };
-
   const handleFunderTypeChange = (type: string, checked: boolean) => {
     onChange({
       ...filters,
@@ -187,7 +169,6 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
   const activeFilterCount = [
     ...filters.states,
     ...filters.ntee_codes,
-    ...filters.funding_types,
     ...filters.funder_types,
   ].length + (filters.grant_size_min !== null || filters.grant_size_max !== null ? 1 : 0) + (filters.keyword ? 1 : 0);
 
@@ -215,21 +196,6 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
           {label}
           <button
             onClick={() => handleNTEEChange(code, false)}
-            className="hover:text-white"
-          >
-            <X size={14} />
-          </button>
-        </div>
-      );
-    });
-
-    filters.funding_types.forEach((type) => {
-      const label = FUNDING_TYPES.find((t) => t.id === type)?.label || type;
-      chips.push(
-        <div key={`funding-${type}`} className="inline-flex items-center gap-2 bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-sm text-gray-300">
-          {label}
-          <button
-            onClick={() => handleFundingTypeChange(type, false)}
             className="hover:text-white"
           >
             <X size={14} />
@@ -368,27 +334,6 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
                   className="rounded border-[#30363d] accent-[#58a6ff] mt-0.5"
                 />
                 <span className="text-sm text-gray-300">{category.label}</span>
-              </label>
-            ))}
-          </div>
-        </Accordion>
-
-        {/* Funding Type */}
-        <Accordion
-          title={`Funding Type ${filters.funding_types.length > 0 ? `(${filters.funding_types.length})` : ''}`}
-          isOpen={expandedSections.fundingType}
-          onToggle={() => toggleSection('fundingType')}
-        >
-          <div className="space-y-2">
-            {FUNDING_TYPES.map((type) => (
-              <label key={type.id} className="flex items-center gap-2 cursor-pointer hover:text-gray-200">
-                <input
-                  type="checkbox"
-                  checked={filters.funding_types.includes(type.id)}
-                  onChange={(e) => handleFundingTypeChange(type.id, e.target.checked)}
-                  className="rounded border-[#30363d] accent-[#58a6ff]"
-                />
-                <span className="text-sm text-gray-300">{type.label}</span>
               </label>
             ))}
           </div>

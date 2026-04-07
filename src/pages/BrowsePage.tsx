@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { ExternalLink, ArrowUpDown } from 'lucide-react';
 import NavBar from '../components/NavBar';
 import { useAuth } from '../contexts/AuthContext';
@@ -59,6 +59,7 @@ function toFunder(r: FunderResult): Funder {
 }
 
 const BrowsePage: React.FC = () => {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [results, setResults] = useState<FunderResult[]>([]);
@@ -312,13 +313,13 @@ const BrowsePage: React.FC = () => {
                       className="border-b border-[#30363d] hover:bg-[#161b22] transition-colors"
                     >
                       <td data-label="Funder" className="px-4 py-3 text-white max-w-[250px]">
-                        <a
-                          href={`/funder/${funder.ein}`}
-                          className="text-[#58a6ff] hover:underline flex items-center gap-2 min-w-0"
+                        <button
+                          onClick={() => navigate(`/funder/${funder.ein}`)}
+                          className="text-[#58a6ff] hover:underline flex items-center gap-2 min-w-0 text-left"
                         >
                           <span className="truncate">{funder.name}</span>
                           <ExternalLink size={14} className="opacity-50 flex-shrink-0" />
-                        </a>
+                        </button>
                         {!hasWebsite(funder) && (
                           <span className="inline-block mt-1 text-gray-500 text-xs">No website listed</span>
                         )}
@@ -361,13 +362,13 @@ const BrowsePage: React.FC = () => {
                     key={`mobile-${funder.ein}-${idx}`}
                     className="bg-[#161b22] border border-[#30363d] rounded-xl p-4 space-y-2"
                   >
-                    <a
-                      href={`/funder/${funder.ein}`}
-                      className="text-[#58a6ff] hover:underline font-medium flex items-center gap-2 min-w-0"
+                    <button
+                      onClick={() => navigate(`/funder/${funder.ein}`)}
+                      className="text-[#58a6ff] hover:underline font-medium flex items-center gap-2 min-w-0 text-left"
                     >
                       <span className="break-words min-w-0">{funder.name}</span>
                       <ExternalLink size={14} className="opacity-50 flex-shrink-0" />
-                    </a>
+                    </button>
                     {!hasWebsite(funder) && (
                       <span className="inline-block text-gray-500 text-xs">No website listed</span>
                     )}
