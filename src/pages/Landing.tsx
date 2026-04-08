@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search, Target, Zap, Bookmark, PenLine } from 'lucide-react';
 import DemoVideo from '../components/DemoVideo';
 import NavBar from '../components/NavBar';
+import Footer from '../components/Footer';
 
 export default function Landing() {
   const navigate = useNavigate();
@@ -117,9 +118,7 @@ export default function Landing() {
       </div>
 
       {/* Footer */}
-      <footer role="contentinfo" className="border-t border-[#21262d] py-8 text-center text-sm text-gray-400">
-        © {new Date().getFullYear()} FunderMatch &middot; Built for nonprofits
-      </footer>
+      <Footer />
     </div>
   );
 }
