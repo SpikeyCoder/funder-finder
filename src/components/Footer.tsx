@@ -9,7 +9,7 @@ export default function Footer() {
           <Link to="/mission" className="text-xs text-gray-400 hover:text-white transition-colors">About</Link>
           <Link to="/search" className="text-xs text-gray-400 hover:text-white transition-colors">Help</Link>
           <a href="mailto:support@fundermatch.org" className="text-xs text-gray-400 hover:text-white transition-colors">Contact</a>
-          <Link to="/mission" className="text-xs text-gray-400 hover:text-white transition-colors">Privacy Policy</Link>
+          <Link to="/privacy-policy" className="text-xs text-gray-400 hover:text-white transition-colors">Privacy Policy</Link>
         </nav>
       </div>
     </footer>

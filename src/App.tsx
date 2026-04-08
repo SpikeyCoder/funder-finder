@@ -27,6 +27,7 @@ import SharedViewPage from './pages/SharedViewPage';
 import ReportsPage from './pages/ReportsPage';
 import ApplicationsPage from './pages/ApplicationsPage';
 import OnboardingPage from './pages/OnboardingPage';
+import PrivacyPolicy from './pages/PrivacyPolicy';
 import NotFound from './pages/NotFound';
 import BugReportButton from './components/BugReportButton';
 import ThemeToggle from './components/ThemeToggle';
@@ -91,6 +92,7 @@ function AnimatedRoutes() {
         <Route path="/browse" element={<BrowsePage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
+        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
         <Route path="/find" element={<Navigate to="/mission" replace />} />
 
         {/* Auth-gated routes */}
