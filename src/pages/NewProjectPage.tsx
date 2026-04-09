@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, ChevronLeft } from 'lucide-react';
+import { ChevronRight, ChevronLeft, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
@@ -74,7 +74,7 @@ const GRANT_SIZE_PRESETS = [
 
 export default function NewProjectPage() {
   const navigate = useNavigate();
-  const { loading } = useAuth();
+  const { user, loading } = useAuth();
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<FormState>({
     name: '',
@@ -86,11 +86,15 @@ export default function NewProjectPage() {
       keywords: []
     }
   });
+  const [currentKeyword, setCurrentKeyword] = useState('');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // AuthGuard already handles unauthenticated users — no need for a redundant check here.
-  // (Previously this navigated to '/' which incorrectly sent users to the landing page.)
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate('/');
+    }
+  }, [user, loading, navigate]);
 
   const handleLocationToggle = (state: string) => {
     setForm(prev => ({
@@ -128,6 +132,28 @@ export default function NewProjectPage() {
     }));
   };
 
+  const handleAddKeyword = (keyword: string) => {
+    if (keyword.trim() && !form.search_criteria.keywords.includes(keyword.trim())) {
+      setForm(prev => ({
+        ...prev,
+        search_criteria: {
+          ...prev.search_criteria,
+          keywords: [...prev.search_criteria.keywords, keyword.trim()]
+        }
+      }));
+      setCurrentKeyword('');
+    }
+  };
+
+  const handleRemoveKeyword = (keyword: string) => {
+    setForm(prev => ({
+      ...prev,
+      search_criteria: {
+        ...prev.search_criteria,
+        keywords: prev.search_criteria.keywords.filter(k => k !== keyword)
+      }
+    }));
+  };
 
   const handleGrantSizePreset = (min: number, max: number | null) => {
     setForm(prev => ({
@@ -159,7 +185,7 @@ export default function NewProjectPage() {
       const activeUser = sessionData.session?.user;
       if (!activeUser) {
         setError('Your session has expired. Please sign in again.');
-        navigate('/login');
+        navigate('/');
         return;
       }
 
@@ -295,10 +321,9 @@ export default function NewProjectPage() {
             {step === 1 && (
               <div className="space-y-6">
                 <div>
-                  <label className="block text-sm font-medium text-white mb-1">
+                  <label className="block text-sm font-medium text-white mb-2">
                     Project Name *
                   </label>
-                  <p className="text-sm text-gray-400 mb-2">The project or program you're seeking funding for</p>
                   <input
                     type="text"
                     value={form.name}
@@ -309,14 +334,13 @@ export default function NewProjectPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-white mb-1">
-                    Description *
+                  <label className="block text-sm font-medium text-white mb-2">
+                    Mission / Description *
                   </label>
-                  <p className="text-sm text-gray-400 mb-2">What the funding will be used for (200 words or less)</p>
                   <textarea
                     value={form.description}
                     onChange={(e) => setForm({ ...form, description: e.target.value })}
-                    placeholder="Describe your project goals, target population, and intended impact..."
+                    placeholder="Describe your project mission and goals — this is used to find matching funders..."
                     rows={4}
                     className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
                   />
@@ -402,6 +426,48 @@ export default function NewProjectPage() {
                   </div>
                 </div>
 
+                {/* Keywords */}
+                <div>
+                  <label className="block text-sm font-medium text-white mb-4">
+                    Keywords
+                  </label>
+                  <div className="space-y-3">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={currentKeyword}
+                        onChange={(e) => setCurrentKeyword(e.target.value)}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleAddKeyword(currentKeyword);
+                          }
+                        }}
+                        placeholder="Enter a keyword and press Enter"
+                        className="flex-1 bg-[#0d1117] border border-[#30363d] rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
+                      />
+                    </div>
+                    {form.search_criteria.keywords.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {form.search_criteria.keywords.map(keyword => (
+                          <div
+                            key={keyword}
+                            className="flex items-center gap-2 bg-blue-600 text-white px-3 py-1 rounded-full text-sm"
+                          >
+                            <span>{keyword}</span>
+                            <button
+                              onClick={() => handleRemoveKeyword(keyword)}
+                              className="hover:opacity-80"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 {/* Grant Size Range */}
                 <div>
                   <label className="block text-sm font-medium text-white mb-4">
@@ -438,7 +504,7 @@ export default function NewProjectPage() {
                     <p className="text-white mt-1">{form.name || '(Not provided)'}</p>
                   </div>
                   <div>
-                    <h3 className="text-sm font-medium text-gray-400">Description</h3>
+                    <h3 className="text-sm font-medium text-gray-400">Mission / Description</h3>
                     <p className="text-white mt-1">{form.description || '(Not provided)'}</p>
                   </div>
                 </div>
@@ -481,6 +547,22 @@ export default function NewProjectPage() {
                     </div>
                   )}
 
+                  {form.search_criteria.keywords.length > 0 && (
+                    <div>
+                      <p className="text-xs text-gray-400 uppercase">Keywords</p>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {form.search_criteria.keywords.map(keyword => (
+                          <span
+                            key={keyword}
+                            className="bg-blue-600/20 text-blue-300 px-2 py-1 rounded text-sm"
+                          >
+                            {keyword}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {(form.search_criteria.min_grant_size != null || form.search_criteria.max_grant_size != null) && (
                     <div>
                       <p className="text-xs text-gray-400 uppercase">Grant Size Range</p>
@@ -520,7 +602,7 @@ export default function NewProjectPage() {
                       return;
                     }
                     if (!form.description.trim()) {
-                      setError('Mission description is required - it\'s used to find matching funders');
+                      setError('Mission description is required — it\'s used to find matching funders');
                       return;
                     }
                   }
