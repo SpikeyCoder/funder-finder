@@ -128,7 +128,7 @@ export function GeoHeatMap({ data }: GeoHeatMapProps) {
           style={{ left: Math.min(tooltip.x + 10, W - 140), top: tooltip.y - 50 }}
         >
           <p className="font-semibold text-white">{tooltip.state}</p>
-          <p className="text-gray-400">{tooltip.info.grantCount} grants | {tooltip.info.pctOfGrants}%</p>
+          <p className="text-gray-400">{tooltip.info.grantCount} grants · {tooltip.info.pctOfGrants}%</p>
           <p className="text-gray-500">${(tooltip.info.totalAmount / 1e6).toFixed(1)}M total</p>
         </div>
       )}
