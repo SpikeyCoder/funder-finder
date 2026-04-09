@@ -11,7 +11,6 @@ import { formatTotalGiving, fetchPeers } from '../utils/matching';
 import { fmtDollar } from '../components/InsightCharts';
 import { useAuth } from '../contexts/AuthContext';
 import LoginModal from '../components/LoginModal';
-import NavBar from '../components/NavBar';
 
 // ── Status config ──────────────────────────────────────────────────────────────
 
@@ -214,9 +213,7 @@ export default function SavedFunders() {
   // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-[#0d1117] text-white">
-      <NavBar />
-      <div className="py-12 px-6">
+    <div className="min-h-screen bg-[#0d1117] text-white py-12 px-6">
       <div className="max-w-3xl mx-auto">
 
         {/* Header */}
@@ -420,7 +417,7 @@ export default function SavedFunders() {
                         <textarea
                           className="mt-2 w-full bg-[#0d1117] border border-[#30363d] rounded-xl px-4 py-3 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-600 resize-none"
                           rows={3}
-                          placeholder="Add notes about this funder, next steps, contacts, deadlines..."
+                          placeholder="Add notes about this funder, next steps, contacts, deadlines…"
                           value={notesDraft[f.id] ?? notes}
                           onChange={e => handleNotesChange(f.id, e.target.value)}
                         />
@@ -505,7 +502,7 @@ export default function SavedFunders() {
                           </div>
                         </td>
                         <td className="py-3 px-2 text-right text-gray-300 whitespace-nowrap">
-                          {p.totalFunding ? fmtDollar(p.totalFunding) : '-'}
+                          {p.totalFunding ? fmtDollar(p.totalFunding) : '—'}
                         </td>
                         <td className="py-3 px-2 text-right">
                           <span className={`text-xs font-medium ${p.score >= 0.3 ? 'text-green-400' : p.score >= 0.15 ? 'text-yellow-400' : 'text-gray-400'}`}>
@@ -523,7 +520,6 @@ export default function SavedFunders() {
             )}
           </div>
         )}
-      </div>
       </div>
 
       {showLoginModal && (
