@@ -97,6 +97,14 @@ export default function NavBar() {
                           <p className="text-xs text-gray-500 truncate">{user.email}</p>
                         </div>
                         <button
+                          onClick={() => { navigate('/import'); setAccountOpen(false); }}
+                          className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/[0.06] transition-colors"
+                          role="menuitem"
+                          aria-label="Import data from other platforms"
+                        >
+                          Import Data
+                        </button>
+                        <button
                           onClick={() => { navigate('/settings/team'); setAccountOpen(false); }}
                           className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/[0.06] transition-colors"
                           role="menuitem"
@@ -219,6 +227,15 @@ export default function NavBar() {
                     Tasks
                   </button>
                   <div className="pt-2 border-t border-[#1b2130] mt-2 space-y-1">
+                    <button
+                      onClick={() => { navigate('/import'); setMobileOpen(false); }}
+                      className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
+                        isActive('/import') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
+                      }`}
+                      aria-label="Import data from other platforms"
+                    >
+                      Import Data
+                    </button>
                     <button
                       onClick={() => { navigate('/settings/team'); setMobileOpen(false); }}
                       className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
