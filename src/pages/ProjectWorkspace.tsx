@@ -1,8 +1,6 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Save, Loader, Users, RefreshCw, Plus, Download, Upload, X, CheckCircle, Clock, AlertTriangle, ExternalLink, Trash2, ClipboardList, Calendar, Paperclip, Sparkles, ChevronDown, FileText } from 'lucide-react';
-import { asBlob } from 'html-docx-js-typescript';
-import { saveAs } from 'file-saver';
+import { ArrowLeft, Save, Loader, Users, RefreshCw, Plus, Download, Upload, X, CheckCircle, Clock, AlertTriangle, ExternalLink, Trash2, ClipboardList, Calendar, Paperclip, Sparkles, ChevronDown } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
@@ -100,36 +98,8 @@ type TabType = 'matches' | 'tracker' | 'calendar' | 'peers' | 'settings';
 
 // Format currency amounts
 function fmtCurrency(amount: number | null | undefined): string {
-  if (!amount) return '-';
+  if (!amount) return '—';
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(amount);
-}
-
-// Simple markdown-to-HTML for Word export
-function markdownToHtml(text: string): string {
-  const lines = text.split('\n');
-  const parts: string[] = [];
-  for (const raw of lines) {
-    const esc = raw.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const inl = esc.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    if (raw.startsWith('### ')) parts.push(`<h3>${inl.slice(4)}</h3>`);
-    else if (raw.startsWith('## ')) parts.push(`<h2>${inl.slice(3)}</h2>`);
-    else if (raw.startsWith('# ')) parts.push(`<h1>${inl.slice(2)}</h1>`);
-    else if (raw === '---') parts.push('<hr>');
-    else if (raw.startsWith('- ')) parts.push(`<li>${inl.slice(2)}</li>`);
-    else if (raw.startsWith('| ')) {
-      // Table rows — pass through as-is for simple rendering
-      const cells = raw.split('|').filter(c => c.trim()).map(c => `<td style="border:1px solid #ccc;padding:4pt 8pt">${c.trim()}</td>`);
-      parts.push(`<tr>${cells.join('')}</tr>`);
-    } else if (raw === '') parts.push('<br>');
-    else parts.push(`<p>${inl}</p>`);
-  }
-  // Wrap consecutive <li> in <ul>, <tr> in <table>
-  let html = parts.join('\n');
-  html = html.replace(/(<li>[\s\S]*?<\/li>\n?)+/g, (m) => `<ul>${m}</ul>`);
-  html = html.replace(/(<tr>[\s\S]*?<\/tr>\n?)+/g, (m) => `<table style="border-collapse:collapse;width:100%">${m}</table>`);
-  // Remove separator rows (|---|---|)
-  html = html.replace(/<tr>(<td[^>]*>-+<\/td>)+<\/tr>/g, '');
-  return html;
 }
 
 export default function ProjectWorkspace() {
@@ -190,8 +160,6 @@ export default function ProjectWorkspace() {
   const [aiDraft, setAiDraft] = useState<string | null>(null);
   const [aiDraftLoading, setAiDraftLoading] = useState(false);
   const [aiDraftEditable, setAiDraftEditable] = useState(false);
-  const [draftWordLimit, setDraftWordLimit] = useState(500);
-  const [draftChecklist, setDraftChecklist] = useState<{ text: string; checked: boolean; source?: string }[]>([]);
 
   // Reference documents for AI draft
   const [refDocs, setRefDocs] = useState<{ id: string; title: string; file_name: string | null; source_type: string; created_at: string; storage_path: string | null }[]>([]);
@@ -250,15 +218,6 @@ export default function ProjectWorkspace() {
   useEffect(() => {
     if (!loading && user && id) loadProjectData();
   }, [id, user, loading]);
-
-  // Set document title when project loads
-  useEffect(() => {
-    if (project) {
-      document.title = `${project.name} | FunderMatch`;
-      const desc = document.querySelector<HTMLMetaElement>('meta[name="description"]');
-      if (desc) desc.content = `Manage funder matches, track grants, and monitor progress for ${project.name}.`;
-    }
-  }, [project]);
 
   const populateEditFields = (p: Project) => {
     setEditName(p.name);
@@ -414,37 +373,19 @@ export default function ProjectWorkspace() {
       setComputing(true); setMatchesLoading(true); setError(null);
       const headers = await getEdgeFunctionHeaders();
       const states = p.location_scope?.map(l => l.state) || [];
+      const keywords = p.keywords || [];
+      const fieldsOfWork = p.fields_of_work || [];
 
-      // Auto-truncate long descriptions to 200 words to avoid timeouts
-      const rawMission = p.description || p.name;
-      const mission = rawMission.split(/\s+/).length > 200
-        ? rawMission.split(/\s+/).slice(0, 200).join(' ')
-        : rawMission;
-
-      // Note: the edge function's `keywords` param is for EXCLUSION filtering,
-      // so do not send the project's descriptive keywords/fields_of_work here.
-      // The mission text already carries the semantic signal for matching.
-      const body = JSON.stringify({
-        mission,
-        locationServed: states.join(', ') || undefined,
-        budgetBand: p.budget_min ? `${p.budget_min}-${p.budget_max || ''}` : undefined,
-      });
-
-      let res = await fetch(MATCH_FUNDERS_URL, {
+      const res = await fetch(MATCH_FUNDERS_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...headers },
-        body,
+        body: JSON.stringify({
+          mission: p.description || p.name,
+          locationServed: states.join(', ') || undefined,
+          keywords: keywords.length > 0 ? keywords : fieldsOfWork.length > 0 ? fieldsOfWork : undefined,
+          budgetBand: p.budget_min ? `${p.budget_min}-${p.budget_max || ''}` : undefined,
+        }),
       });
-
-      // If 401, the session token was stale — retry with the anon key
-      if (res.status === 401) {
-        const anonHeaders = await getEdgeFunctionHeaders('application/json', { useAnonOnly: true });
-        res = await fetch(MATCH_FUNDERS_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...anonHeaders },
-          body,
-        });
-      }
 
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
@@ -486,33 +427,9 @@ export default function ProjectWorkspace() {
     }
   };
 
-  // Save a funder to the tracker (tracked_grants) — optimistic UI
+  // Save a funder to the tracker (tracked_grants)
   const handleSaveFunder = async (funderEin: string, funderName: string) => {
     if (trackedGrants.some(tg => tg.funder_ein === funderEin)) return;
-
-    // Optimistic: mark as tracked immediately so the button updates instantly
-    const optimistic: TrackedGrant = {
-      id: `temp-${funderEin}`,
-      project_id: id!,
-      user_id: '',
-      funder_ein: funderEin,
-      funder_name: funderName,
-      grant_title: null,
-      status_id: '',
-      amount: null,
-      deadline: null,
-      grant_url: null,
-      notes: null,
-      source: 'ai_match',
-      is_external: false,
-      awarded_amount: null,
-      awarded_date: null,
-      added_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      pipeline_statuses: { name: 'Researching', slug: 'researching', color: '#6b7280', is_terminal: false },
-    } as TrackedGrant;
-    setTrackedGrants(prev => [...prev, optimistic]);
-
     try {
       const headers = await getEdgeFunctionHeaders();
       const res = await fetch(TRACKED_GRANTS_URL, {
@@ -527,16 +444,10 @@ export default function ProjectWorkspace() {
         }),
       });
       if (res.ok) {
-        const real = await res.json();
-        // Replace optimistic entry with the real server data
-        setTrackedGrants(prev => prev.map(tg => tg.id === optimistic.id ? real : tg));
-      } else {
-        // Rollback on failure
-        setTrackedGrants(prev => prev.filter(tg => tg.id !== optimistic.id));
+        await loadTrackerData();
       }
     } catch (err) {
       console.error('Error saving funder:', err);
-      setTrackedGrants(prev => prev.filter(tg => tg.id !== optimistic.id));
     }
   };
 
@@ -777,36 +688,11 @@ export default function ProjectWorkspace() {
           project_id: id,
           include_research: true,
           reference_doc_ids: refDocs.map(d => d.id),
-          word_limit: draftWordLimit,
         }),
       });
       if (res.ok) {
         const data = await res.json();
-        // Separate checklist from proposal body
-        let proposalBody = data.draft || '';
-        const checklistItems: { text: string; checked: boolean; source?: string }[] = [];
-
-        // Parse checklist from response (returned as separate field or embedded)
-        if (data.checklist && Array.isArray(data.checklist)) {
-          data.checklist.forEach((item: any) => {
-            checklistItems.push({ text: item.text || item, checked: !!item.checked, source: item.source });
-          });
-        }
-
-        // Also extract any checklist-like lines from the draft itself (- [ ] or - [x] patterns)
-        const checklistRegex = /^[-*]\s*\[([ xX])\]\s*(.+)$/gm;
-        let match;
-        const checklistSection = proposalBody.match(/##?\s*(?:Checklist|Compliance|Requirements|Pre-?Submission)[\s\S]*$/i);
-        if (checklistSection) {
-          while ((match = checklistRegex.exec(checklistSection[0])) !== null) {
-            checklistItems.push({ text: match[2].trim(), checked: match[1] !== ' ' });
-          }
-          // Remove the checklist section from the proposal body
-          proposalBody = proposalBody.replace(/\n*##?\s*(?:Checklist|Compliance|Requirements|Pre-?Submission)[\s\S]*$/i, '').trimEnd();
-        }
-
-        setAiDraft(proposalBody);
-        if (checklistItems.length > 0) setDraftChecklist(checklistItems);
+        setAiDraft(data.draft);
         setDrawerSection('draft');
       } else {
         const err = await res.json().catch(() => null);
@@ -1176,7 +1062,7 @@ export default function ProjectWorkspace() {
                                 {Math.round(Number(m.match_score))}%
                               </span>
                             </td>
-                            <td className="px-6 py-4 text-gray-400">{m.gives_to_peers ? 'Yes' : '-'}</td>
+                            <td className="px-6 py-4 text-gray-400">{m.gives_to_peers ? 'Yes' : '—'}</td>
                             <td className="px-6 py-4 text-right">
                               <button onClick={(e) => { e.stopPropagation(); handleSaveFunder(m.funder_ein, m.funder_name || m.funder_ein); }}
                                 disabled={trackedGrants.some(tg => tg.funder_ein === m.funder_ein)}
@@ -1288,7 +1174,7 @@ export default function ProjectWorkspace() {
                                     {isOverdue && <AlertTriangle size={12} className="inline mr-1" />}
                                     {new Date(grant.deadline).toLocaleDateString()}
                                   </span>
-                                ) : <span className="text-gray-600 text-sm">-</span>}
+                                ) : <span className="text-gray-600 text-sm">—</span>}
                               </td>
                               <td className="px-4 py-3 text-gray-500 text-xs uppercase">{grant.source}</td>
                               <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
@@ -1361,11 +1247,11 @@ export default function ProjectWorkspace() {
                         {peers.map((peer, idx) => (
                           <tr key={peer.ein || `peer-${idx}`} className="hover:bg-[#0d1117] transition-colors cursor-pointer" onClick={() => peer.ein && navigate(`/recipient/${peer.ein}`)}>
                             <td className="px-6 py-4 text-blue-400 hover:text-blue-300 font-medium text-sm">{peer.name}</td>
-                            <td className="px-6 py-4 text-gray-400 text-sm">{peer.state || '-'}</td>
+                            <td className="px-6 py-4 text-gray-400 text-sm">{peer.state || '—'}</td>
                             <td className="px-6 py-4 text-gray-400 text-sm">
-                              {NTEE_CATEGORIES.find(c => peer.ntee_code?.startsWith(c.code))?.label || peer.ntee_code || '-'}
+                              {NTEE_CATEGORIES.find(c => peer.ntee_code?.startsWith(c.code))?.label || peer.ntee_code || '—'}
                             </td>
-                            <td className="px-6 py-4 text-right text-gray-300 text-sm">{peer.shared_funders ?? '-'}</td>
+                            <td className="px-6 py-4 text-right text-gray-300 text-sm">{peer.shared_funders ?? '—'}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -1608,7 +1494,7 @@ export default function ProjectWorkspace() {
                           <div className="flex flex-col">
                             <span className="text-sm font-medium text-white">{status.name}</span>
                             <span className="text-xs text-gray-500">
-                              {status.is_default ? 'Default' : 'Custom'}{status.is_terminal ? ' - Terminal' : ''}
+                              {status.is_default ? 'Default' : 'Custom'}{status.is_terminal ? ' • Terminal' : ''}
                             </span>
                           </div>
                         </div>
@@ -1813,7 +1699,7 @@ export default function ProjectWorkspace() {
                       <label className="block text-xs text-gray-500 mb-1 capitalize">{field.replace('_', ' ')}</label>
                       <select value={csvMapping[field] || ''} onChange={e => setCsvMapping(p => ({ ...p, [field]: e.target.value }))}
                         className="w-full bg-[#0d1117] border border-[#30363d] rounded px-2 py-1.5 text-white text-sm">
-                        <option value="">- Skip -</option>
+                        <option value="">— Skip —</option>
                         {csvData.length > 0 && Object.keys(csvData[0]).map(col => (
                           <option key={col} value={col}>{col}</option>
                         ))}
@@ -1872,16 +1758,7 @@ export default function ProjectWorkspace() {
             <div className="flex-shrink-0 px-5 py-4 border-b border-[#30363d] bg-[#161b22]">
               <div className="flex items-start justify-between">
                 <div className="min-w-0 flex-1 mr-3">
-                  {selectedGrant.funder_ein ? (
-                    <h3 className="text-lg font-semibold truncate">
-                      <button onClick={() => navigate(`/funder/${selectedGrant.funder_ein}`)} className="text-blue-400 hover:text-blue-300 transition-colors text-left flex items-center gap-1.5">
-                        {selectedGrant.funder_name}
-                        <ExternalLink size={14} className="flex-shrink-0 opacity-60" />
-                      </button>
-                    </h3>
-                  ) : (
-                    <h3 className="text-lg font-semibold text-white truncate">{selectedGrant.funder_name}</h3>
-                  )}
+                  <h3 className="text-lg font-semibold text-white truncate">{selectedGrant.funder_name}</h3>
                   {selectedGrant.grant_title && <p className="text-sm text-gray-400 mt-0.5 truncate">{selectedGrant.grant_title}</p>}
                 </div>
                 <button onClick={() => closeDrawer()} className="text-gray-400 hover:text-white flex-shrink-0 p-1"><X size={18} /></button>
@@ -1894,10 +1771,12 @@ export default function ProjectWorkspace() {
                   {pipelineStatuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
                 <span className="text-sm text-white font-medium">{fmtCurrency(selectedGrant.amount)}</span>
-                <span className="text-xs text-gray-400 flex items-center gap-1">
-                  <Calendar size={11} />
-                  {selectedGrant.deadline ? new Date(selectedGrant.deadline).toLocaleDateString() : 'No deadline'}
-                </span>
+                {selectedGrant.deadline && (
+                  <span className="text-xs text-gray-400 flex items-center gap-1">
+                    <Calendar size={11} />
+                    {new Date(selectedGrant.deadline).toLocaleDateString()}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -1920,17 +1799,11 @@ export default function ProjectWorkspace() {
                     </div>
                     <div>
                       <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Deadline</p>
-                      <input
-                        type="date"
-                        value={selectedGrant.deadline ? selectedGrant.deadline.slice(0, 10) : ''}
-                        onChange={e => setSelectedGrant(prev => prev ? { ...prev, deadline: e.target.value || null } : prev)}
-                        onBlur={() => selectedGrant && handleUpdateGrant(selectedGrant.id, { deadline: selectedGrant.deadline } as any)}
-                        className="w-full bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-blue-500"
-                      />
+                      <p className="text-sm text-white">{selectedGrant.deadline ? new Date(selectedGrant.deadline).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—'}</p>
                     </div>
                     <div>
                       <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Project</p>
-                      <p className="text-sm text-white truncate">{project?.name || '-'}</p>
+                      <p className="text-sm text-white truncate">{project?.name || '—'}</p>
                     </div>
                     <div>
                       <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Source</p>
@@ -2050,7 +1923,7 @@ export default function ProjectWorkspace() {
                         </p>
                         <p className="text-xs text-gray-500">
                           {item.type.replace(/_/g, ' ')}
-                          {item.due_date && ` | Due ${new Date(item.due_date).toLocaleDateString()}`}
+                          {item.due_date && ` · Due ${new Date(item.due_date).toLocaleDateString()}`}
                         </p>
                       </div>
                       <select value={item.status} onChange={e => handleUpdateComplianceStatus(item.id, e.target.value)}
@@ -2142,7 +2015,7 @@ export default function ProjectWorkspace() {
                         <p className="text-sm text-white truncate">{doc.title}</p>
                         <p className="text-xs text-gray-500">
                           {doc.file_name || 'text entry'}
-                          <span className="mx-1">|</span>
+                          <span className="mx-1">·</span>
                           {new Date(doc.created_at).toLocaleDateString()}
                         </p>
                       </div>
@@ -2195,78 +2068,11 @@ export default function ProjectWorkspace() {
                       <p className="text-xs text-purple-300">{refDocs.length} reference document{refDocs.length !== 1 ? 's' : ''} will guide the AI's writing style</p>
                     </div>
                   )}
-                  {/* Word limit control */}
-                  <div className="flex items-center gap-2">
-                    <label className="text-sm text-gray-200 whitespace-nowrap font-medium">Word limit:</label>
-                    <input
-                      type="number"
-                      min={100}
-                      max={5000}
-                      step={100}
-                      value={draftWordLimit}
-                      onChange={e => setDraftWordLimit(Math.max(100, Math.min(5000, parseInt(e.target.value) || 500)))}
-                      className="w-24 bg-[#0d1117] border border-[#30363d] rounded px-2 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-purple-500"
-                    />
-                    <span className="text-sm text-gray-400">words (100–5000)</span>
-                  </div>
                   <button onClick={() => handleGenerateDraft()} disabled={aiDraftLoading}
                     className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60">
                     {aiDraftLoading ? <Loader size={14} className="animate-spin" /> : <Sparkles size={14} />}
                     {aiDraftLoading ? 'Researching & generating...' : aiDraft ? 'Regenerate Draft' : 'Generate AI Draft Proposal'}
                   </button>
-
-                  {/* Dynamic Checklist */}
-                  {(draftChecklist.length > 0 || aiDraft) && (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs font-semibold text-yellow-300/80 uppercase tracking-wider flex items-center gap-1.5">
-                          <ClipboardList size={12} />
-                          Submission Checklist
-                        </p>
-                        <button
-                          onClick={() => setDraftChecklist(prev => [...prev, { text: '', checked: false }])}
-                          className="text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-1"
-                        >
-                          <Plus size={10} /> Add item
-                        </button>
-                      </div>
-                      {draftChecklist.length === 0 && (
-                        <p className="text-[10px] text-gray-600 italic">Generate a draft to auto-populate, or add items manually.</p>
-                      )}
-                      <div className="space-y-1">
-                        {draftChecklist.map((item, idx) => (
-                          <div key={idx} className="flex items-start gap-2 group">
-                            <button
-                              onClick={() => setDraftChecklist(prev => prev.map((it, i) => i === idx ? { ...it, checked: !it.checked } : it))}
-                              className={`mt-0.5 flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-colors ${item.checked ? 'bg-green-600 border-green-500' : 'border-[#30363d] hover:border-purple-500'}`}
-                            >
-                              {item.checked && <CheckCircle size={10} className="text-white" />}
-                            </button>
-                            <input
-                              value={item.text}
-                              onChange={e => setDraftChecklist(prev => prev.map((it, i) => i === idx ? { ...it, text: e.target.value } : it))}
-                              placeholder="Enter checklist item..."
-                              className={`flex-1 bg-transparent border-none text-xs focus:outline-none transition-colors ${item.checked ? 'text-gray-500 line-through' : 'text-gray-300'}`}
-                            />
-                            {item.source && (
-                              <span className="text-[9px] text-purple-400/60 flex-shrink-0 mt-0.5">auto</span>
-                            )}
-                            <button
-                              onClick={() => setDraftChecklist(prev => prev.filter((_, i) => i !== idx))}
-                              className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-400 transition-all flex-shrink-0 mt-0.5"
-                            >
-                              <X size={12} />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                      {draftChecklist.length > 0 && (
-                        <p className="text-[10px] text-gray-600">
-                          {draftChecklist.filter(i => i.checked).length}/{draftChecklist.length} complete
-                        </p>
-                      )}
-                    </div>
-                  )}
                   {aiDraft && (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
@@ -2279,36 +2085,6 @@ export default function ProjectWorkspace() {
                           <button onClick={() => { navigator.clipboard.writeText(aiDraft); }}
                             className="text-xs text-gray-400 hover:text-white">
                             Copy
-                          </button>
-                          <button onClick={async () => {
-                            try {
-                              const cleanedHtml = markdownToHtml(aiDraft);
-                              const fullHtml = `<!DOCTYPE html><html><head><meta charset="utf-8">
-<style>
-  body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; line-height: 1.5; color: #000; }
-  h1 { font-size: 18pt; font-weight: bold; color: #1a3a5c; margin: 20pt 0 8pt 0; }
-  h2 { font-size: 15pt; font-weight: bold; color: #1a3a5c; margin: 18pt 0 6pt 0; }
-  h3 { font-size: 12pt; font-weight: bold; color: #000; margin: 14pt 0 4pt 0; }
-  p { font-size: 11pt; margin: 4pt 0; }
-  li { font-size: 11pt; margin: 2pt 0; }
-  strong { font-weight: bold; }
-  hr { border: none; border-top: 1px solid #999; margin: 12pt 0; }
-  table { border-collapse: collapse; width: 100%; margin: 8pt 0; }
-  td { border: 1px solid #ccc; padding: 4pt 8pt; font-size: 10pt; }
-</style></head><body>${cleanedHtml}</body></html>`;
-                              const blob = await asBlob(fullHtml, {
-                                orientation: 'portrait' as const,
-                                margins: { top: 1440, right: 1440, bottom: 1440, left: 1440 },
-                              }) as Blob;
-                              const safeName = project?.name
-                                ? `Proposal_${project.name.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, '_')}.docx`
-                                : 'Grant_Proposal.docx';
-                              saveAs(blob, safeName);
-                            } catch (err) { console.error('Export to Word failed:', err); }
-                          }}
-                            className="text-xs text-green-400 hover:text-green-300 flex items-center gap-1">
-                            <FileText size={12} />
-                            Export .docx
                           </button>
                         </div>
                       </div>
