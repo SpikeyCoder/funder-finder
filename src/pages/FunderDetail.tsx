@@ -1,15 +1,14 @@
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Bookmark, BookmarkCheck, Copy, Globe, MapPin, User, Mail, TrendingUp, ChevronDown, ChevronUp, BarChart3, Users, Map, Loader2, FileText, Info } from 'lucide-react';
+import GlossaryTooltip from '../components/GlossaryTooltip';
 import { Funder, FunderInsights, PeerEntry } from '../types';
 import { isSaved, saveFunder, unsaveFunder } from '../utils/storage';
 import { formatGrantRange, formatTotalGiving, fetchFunderInsights, fetchPeers, fetchFunderByEin } from '../utils/matching';
 import { useAuth } from '../contexts/AuthContext';
 import LoginModal from '../components/LoginModal';
 import Toast from '../components/Toast';
-import Breadcrumb from '../components/Breadcrumb';
-import { GivingTrendsChart, GeoBarChart, StatCard, InsightsSkeleton, fmtDollar } from '../components/InsightCharts';
-import NavBar from '../components/NavBar';
+import { GivingTrendsChart, GeoBarChart, GeoHeatMap, StatCard, InsightsSkeleton, fmtDollar } from '../components/InsightCharts';
 
 /** Classify giving trend as increasing / stable / decreasing (FEAT-006) */
 function classifyTrend(yearTrend: { year: number; totalAmount: number }[]): { label: string; color: string } | null {
@@ -66,7 +65,7 @@ export default function FunderDetail() {
   const [peers, setPeers] = useState<PeerEntry[]>([]);
   const [peersLoading, setPeersLoading] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
-    trends: true, grantees: true, geo: true, recipients: true, purposes: false, peers: false,
+    trends: true, grantees: true, geo: false, recipients: false, purposes: false, peers: false,
   });
 
   const [showAllRecipients, setShowAllRecipients] = useState(false);
@@ -123,23 +122,17 @@ export default function FunderDetail() {
   }, [funder?.id]);
 
   if (funderLoading) return (
-    <div className="min-h-screen bg-[#0d1117] text-white">
-      <NavBar />
-      <div className="flex items-center justify-center" style={{ minHeight: 'calc(100vh - 64px)' }}>
-        <Loader2 size={28} className="animate-spin text-gray-400" />
-      </div>
+    <div className="min-h-screen bg-[#0d1117] text-white flex items-center justify-center">
+      <Loader2 size={28} className="animate-spin text-gray-400" />
     </div>
   );
 
   if (!funder) return (
-    <div className="min-h-screen bg-[#0d1117] text-white">
-      <NavBar />
-      <div className="flex items-center justify-center" style={{ minHeight: 'calc(100vh - 64px)' }}>
+    <div className="min-h-screen bg-[#0d1117] text-white flex items-center justify-center">
       <div className="text-center">
         <p className="text-2xl font-bold mb-4">Funder not found</p>
         <p className="text-gray-400 text-sm mb-6">This funder may not be in our database yet.</p>
         <button onClick={() => navigate('/search')} className="text-blue-400 hover:underline">Search organizations</button>
-      </div>
       </div>
     </div>
   );
@@ -185,16 +178,8 @@ export default function FunderDetail() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0d1117] text-white">
-      <NavBar />
-      <div className="py-12 px-6">
+    <div className="min-h-screen bg-[#0d1117] text-white py-12 px-6">
       <div className="max-w-2xl mx-auto">
-        <Breadcrumb
-          items={[
-            { label: 'Search', href: '/search' },
-            { label: funder?.name || 'Funder' },
-          ]}
-        />
         <button
           onClick={() => {
             // If there's real navigation history, go back; otherwise fall back to /search
@@ -210,10 +195,10 @@ export default function FunderDetail() {
           Back
         </button>
 
-        <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-4 sm:p-8 overflow-hidden">
+        <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-8">
           {/* Header */}
-          <div className="flex items-start justify-between gap-3 mb-2">
-            <h1 className="text-2xl sm:text-3xl font-bold break-words min-w-0">{funder.name}</h1>
+          <div className="flex items-start justify-between mb-2">
+            <h1 className="text-3xl font-bold">{funder.name}</h1>
             <button
               onClick={toggleSave}
               className={`flex items-center gap-2 border rounded-xl px-4 py-2 text-sm transition-colors ${saved ? 'border-blue-600 text-blue-400 bg-blue-900/20' : 'border-[#30363d] hover:bg-[#21262d]'}`}
@@ -228,8 +213,8 @@ export default function FunderDetail() {
               {funder.type}
             </span>
             {funder.ntee_code && (
-              <span className="inline-block bg-[#21262d] border border-[#30363d] text-gray-400 text-sm px-3 py-1 rounded-full">
-                NTEE {funder.ntee_code}
+              <span className="inline-flex items-center gap-1 bg-[#21262d] border border-[#30363d] text-gray-400 text-sm px-3 py-1 rounded-full">
+                NTEE {funder.ntee_code} <GlossaryTooltip term="NTEE" />
               </span>
             )}
             {/* Data freshness indicator */}
@@ -258,7 +243,9 @@ export default function FunderDetail() {
               <p className="text-xs text-blue-400 font-semibold mb-1">Why this funder matches your mission</p>
               <p className="text-gray-300 text-sm">{funder.fit_explanation || funder.reason}</p>
               {funder.score && (
-                <p className="text-xs text-gray-300 mt-2">Match score: {Math.round(funder.score * 100)}%</p>
+                <p className="text-xs text-gray-300 mt-2 inline-flex items-center gap-1">
+                  Match score: {Math.round(funder.score * 100)}% <GlossaryTooltip term="fit score" />
+                </p>
               )}
             </div>
           )}
@@ -292,13 +279,13 @@ export default function FunderDetail() {
                             className="text-sm font-semibold text-blue-400 hover:text-blue-300 hover:underline text-left transition-colors"
                             title="View this organization's profile"
                           >
-                            {grantee.name}
+                            {grantee.name} →
                           </button>
                         ) : (
                           <p className="text-sm font-semibold text-white">{grantee.name}</p>
                         )}
                         <p className="text-xs text-gray-300">
-                          {(grantee.year ? String(grantee.year) : 'Year n/a')} | {formatGrantAmount(grantee.amount)}
+                          {(grantee.year ? String(grantee.year) : 'Year n/a')} · {formatGrantAmount(grantee.amount)}
                         </p>
                       </div>
                       {grantee.match_reasons.length > 0 && (
@@ -338,7 +325,7 @@ export default function FunderDetail() {
             <>
               <div id="giving" className="mb-6">
                 <h2 className="text-lg font-semibold mb-3">Giving Overview</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-4">
                   {funder.total_giving && (
                     <div className="bg-[#0d1117] border border-[#30363d] rounded-xl p-4">
                       <div className="flex items-center gap-2 mb-1">
@@ -371,9 +358,11 @@ export default function FunderDetail() {
             <>
               {/* Section 1: Giving Trends */}
               <div className="mb-6">
+                <div className="flex items-center justify-between w-full mb-3">
                 <button
                   onClick={() => toggleSection('trends')}
-                  className="flex items-center justify-between w-full mb-3 group"
+                  aria-expanded={expandedSections.trends}
+                  className="flex items-center gap-2 group flex-1 text-left"
                 >
                   <div className="flex items-center gap-2">
                     <BarChart3 size={16} className="text-blue-400" />
@@ -389,9 +378,17 @@ export default function FunderDetail() {
                   </div>
                   {expandedSections.trends ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
                 </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); }}
+                  className="ml-2 shrink-0"
+                  aria-label="What is a 990?"
+                >
+                  <GlossaryTooltip term="990" />
+                </button>
+                </div>
                 {expandedSections.trends && (
                   <div className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+                    <div className="grid grid-cols-3 gap-3">
                       <StatCard label="Total Grants" value={insights.grantHistory.totalGrants.toLocaleString()} />
                       <StatCard label="Total Given" value={fmtDollar(insights.grantHistory.totalAmount)} color="text-blue-400" />
                       <StatCard
@@ -407,7 +404,7 @@ export default function FunderDetail() {
                       <GivingTrendsChart data={insights.grantHistory.yearTrend} />
                     </div>
                     <p className="text-xs text-gray-500">
-                      Data through {insights.dataAsOf || 'IRS 990-PF filings, 2015-present'}
+                      Data through {insights.dataAsOf || 'IRS 990-PF filings, 2015–present'}
                     </p>
                   </div>
                 )}
@@ -418,6 +415,7 @@ export default function FunderDetail() {
               <div className="mb-6">
                 <button
                   onClick={() => toggleSection('grantees')}
+                  aria-expanded={expandedSections.grantees}
                   className="flex items-center justify-between w-full mb-3 group"
                 >
                   <div className="flex items-center gap-2">
@@ -427,7 +425,7 @@ export default function FunderDetail() {
                   {expandedSections.grantees ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
                 </button>
                 {expandedSections.grantees && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                  <div className="grid grid-cols-2 gap-3">
                     <StatCard label="Total Grantees (5yr)" value={insights.granteeAnalysis.totalGrantees5y.toLocaleString()} />
                     <StatCard label="New Grantees" value={insights.granteeAnalysis.newGrantees.toLocaleString()} color="text-green-400" />
                     <StatCard label="Repeat Grantees" value={insights.granteeAnalysis.repeatGrantees.toLocaleString()} color="text-blue-400" />
@@ -447,6 +445,7 @@ export default function FunderDetail() {
                   <div className="mb-6">
                     <button
                       onClick={() => toggleSection('geo')}
+                      aria-expanded={expandedSections.geo}
                       className="flex items-center justify-between w-full mb-3 group"
                     >
                       <div className="flex items-center gap-2">
@@ -456,9 +455,14 @@ export default function FunderDetail() {
                       {expandedSections.geo ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
                     </button>
                     {expandedSections.geo && (
-                      <div className="bg-[#0d1117] border border-[#30363d] rounded-xl p-4">
-                        <p className="text-xs text-gray-500 mb-2">Top states by grant count</p>
-                        <GeoBarChart data={insights.geographicFootprint} />
+                      <div className="space-y-4">
+                        <div className="bg-[#0d1117] border border-[#30363d] rounded-xl p-4">
+                          <GeoHeatMap data={insights.geographicFootprint} />
+                        </div>
+                        <div className="bg-[#0d1117] border border-[#30363d] rounded-xl p-4">
+                          <p className="text-xs text-gray-500 mb-2">Top states by grant count</p>
+                          <GeoBarChart data={insights.geographicFootprint} />
+                        </div>
                       </div>
                     )}
                   </div>
@@ -472,6 +476,7 @@ export default function FunderDetail() {
                   <div className="mb-6">
                     <button
                       onClick={() => toggleSection('recipients')}
+                      aria-expanded={expandedSections.recipients}
                       className="flex items-center justify-between w-full mb-3 group"
                     >
                       <div className="flex items-center gap-2">
@@ -483,13 +488,13 @@ export default function FunderDetail() {
                     </button>
                     {expandedSections.recipients && (
                       <div className="overflow-x-auto">
-                        <table className="w-full text-xs sm:text-sm">
+                        <table className="w-full text-sm">
                           <thead>
                             <tr className="text-gray-400 text-xs border-b border-[#30363d]">
-                              <th className="text-left py-2 pr-2">Recipient</th>
-                              <th className="text-right py-2 px-1 sm:px-2">Total</th>
-                              <th className="text-right py-2 px-1 sm:px-2">Grants</th>
-                              <th className="text-right py-2 pl-1 sm:pl-2">Last</th>
+                              <th className="text-left py-2 pr-3">Recipient</th>
+                              <th className="text-right py-2 px-2">Total</th>
+                              <th className="text-right py-2 px-2">Grants</th>
+                              <th className="text-right py-2 pl-2">Last</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -499,12 +504,12 @@ export default function FunderDetail() {
                                 className="border-b border-[#30363d]/50 hover:bg-[#21262d]/30 cursor-pointer"
                                 onClick={() => r.granteeEin && navigate(`/recipient/${r.granteeEin}`)}
                               >
-                                <td className="py-2 pr-2 max-w-[120px] sm:max-w-[200px] truncate">
+                                <td className="py-2 pr-3 max-w-[200px] truncate">
                                   <span className={r.granteeEin ? 'text-blue-400 hover:underline' : 'text-gray-200'}>{r.granteeName}</span>
                                 </td>
-                                <td className="py-2 px-1 sm:px-2 text-right text-gray-300 whitespace-nowrap">{fmtDollar(r.totalAmount)}</td>
-                                <td className="py-2 px-1 sm:px-2 text-right text-gray-400">{r.grantCount}</td>
-                                <td className="py-2 pl-1 sm:pl-2 text-right text-gray-400">{r.lastYear}</td>
+                                <td className="py-2 px-2 text-right text-gray-300 whitespace-nowrap">{fmtDollar(r.totalAmount)}</td>
+                                <td className="py-2 px-2 text-right text-gray-400">{r.grantCount}</td>
+                                <td className="py-2 pl-2 text-right text-gray-400">{r.lastYear}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -530,6 +535,7 @@ export default function FunderDetail() {
                   <div className="mb-6">
                     <button
                       onClick={() => toggleSection('purposes')}
+                      aria-expanded={expandedSections.purposes}
                       className="flex items-center justify-between w-full mb-3 group"
                     >
                       <div className="flex items-center gap-2">
@@ -571,6 +577,7 @@ export default function FunderDetail() {
               <div className="mb-6">
                 <button
                   onClick={() => toggleSection('peers')}
+                  aria-expanded={expandedSections.peers}
                   className="flex items-center justify-between w-full mb-3 group"
                 >
                   <div className="flex items-center gap-2">
@@ -586,13 +593,13 @@ export default function FunderDetail() {
                     </div>
                   ) : (
                     <div className="overflow-x-auto">
-                      <table className="w-full text-xs sm:text-sm">
+                      <table className="w-full text-sm">
                         <thead>
                           <tr className="text-gray-400 text-xs border-b border-[#30363d]">
-                            <th className="text-left py-2 pr-2">Funder</th>
-                            <th className="text-right py-2 px-1 sm:px-2 whitespace-nowrap">Shared</th>
-                            <th className="text-right py-2 px-1 sm:px-2">State</th>
-                            <th className="text-right py-2 pl-1 sm:pl-2">Sim.</th>
+                            <th className="text-left py-2 pr-3">Funder</th>
+                            <th className="text-right py-2 px-2">Shared Recipients</th>
+                            <th className="text-right py-2 px-2">State</th>
+                            <th className="text-right py-2 pl-2">Similarity</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -602,10 +609,10 @@ export default function FunderDetail() {
                               className="border-b border-[#30363d]/50 hover:bg-[#21262d]/30 cursor-pointer"
                               onClick={() => navigate(`/funder/${p.id}`, { state: { funder: { id: p.id, name: p.name, state: p.state } as Funder } })}
                             >
-                              <td className="py-2 pr-2 text-gray-200 max-w-[100px] sm:max-w-[200px] truncate">{p.name}</td>
-                              <td className="py-2 px-1 sm:px-2 text-right text-gray-400">{p.sharedCount}</td>
-                              <td className="py-2 px-1 sm:px-2 text-right text-gray-400">{p.state || '-'}</td>
-                              <td className="py-2 pl-1 sm:pl-2 text-right">
+                              <td className="py-2 pr-3 text-gray-200 max-w-[200px] truncate">{p.name}</td>
+                              <td className="py-2 px-2 text-right text-gray-400">{p.sharedCount}</td>
+                              <td className="py-2 px-2 text-right text-gray-400">{p.state || '—'}</td>
+                              <td className="py-2 pl-2 text-right">
                                 <span className={`text-xs font-medium ${p.score >= 0.3 ? 'text-green-400' : p.score >= 0.15 ? 'text-yellow-400' : 'text-gray-400'}`}>
                                   {Math.round(p.score * 100)}%
                                 </span>
@@ -623,26 +630,54 @@ export default function FunderDetail() {
             </>
           )}
 
-          {/* Recommended Next Step — LinkedIn warm intro */}
-          <>
-            <div className="mb-6">
-              <h2 className="text-lg font-semibold mb-3">Recommended Next Step</h2>
-              <div className="bg-[#0d1117] border border-blue-800 rounded-xl px-5 py-4">
-                <p className="text-sm text-gray-400 mb-3">Find a warm introduction through your professional network</p>
-                <a
-                  href={`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(funder.name)}&currentCompany=${encodeURIComponent(funder.name)}&network=%5B%22F%22%2C%22S%22%5D`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 bg-[#0a66c2] hover:bg-[#004182] text-white font-medium rounded-lg px-4 py-2.5 text-sm transition-colors"
-                >
-                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
-                  Find your connections at {funder.name}
-                </a>
-                <p className="text-xs text-gray-500 mt-2">Opens LinkedIn filtered to current employees who are your 1st or 2nd degree connections</p>
+          {/* Recommended Next Step */}
+          {funder.next_step && (
+            <>
+              <div className="mb-6">
+                <h2 className="text-lg font-semibold mb-3">Recommended Next Step</h2>
+                <div className="bg-[#0d1117] border border-blue-800 rounded-xl px-5 py-4 text-blue-300">
+                  {(() => {
+                    // Normalise to a fully-qualified external URL:
+                    //  - Strip stale cached GitHub Pages funder paths (e.g. https://...github.io/.../funder/cct.org)
+                    //  - Reject internal routes starting with '/'
+                    //  - Prepend https:// for bare domains (e.g. cct.org)
+                    const STALE_RE = /^https?:\/\/[^\/]*\.github\.io\/[^\/]+\/funder\//;
+                    const toExtUrl = (u: string | null | undefined) => {
+                      let s = u?.trim();
+                      if (!s) return null;
+                      s = s.replace(STALE_RE, '');
+                      if (!s || s.startsWith('/')) return null;
+                      return s.startsWith('http') ? s : `https://${s}`;
+                    };
+
+                    // Check for URLs embedded in the next_step text itself
+                    // e.g. "Review current filing history in IRS EO Search: https://apps.irs.gov/app/eos/?ein=611934172"
+                    const urlMatch = funder.next_step?.match(/(https?:\/\/[^\s]+)/);
+                    const embeddedUrl = urlMatch ? urlMatch[1] : null;
+                    // Clean text: remove the raw URL and any trailing colon/space before it
+                    const cleanedText = embeddedUrl
+                      ? funder.next_step.replace(/:\s*https?:\/\/[^\s]+/, '').replace(/\s+$/, '')
+                      : funder.next_step;
+
+                    const linkUrl = toExtUrl(funder.next_step_url) ?? (embeddedUrl ? toExtUrl(embeddedUrl) : null) ?? toExtUrl(funder.website);
+                    return linkUrl ? (
+                      <a
+                        href={linkUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hover:text-blue-200 underline underline-offset-2 transition-colors"
+                      >
+                        {cleanedText}
+                      </a>
+                    ) : (
+                      funder.next_step
+                    );
+                  })()}
+                </div>
               </div>
-            </div>
-            <hr className="border-[#30363d] mb-6" />
-          </>
+              <hr className="border-[#30363d] mb-6" />
+            </>
+          )}
 
           {/* Contact Information */}
           <div id="contact" className="mb-2">
@@ -688,31 +723,24 @@ export default function FunderDetail() {
                 </div>
               )}
 
-              {funder.website && (
+              {funder.website ? (
                 <div className="flex items-center gap-3">
                   <Globe size={18} className="text-gray-400" />
                   <a
                     href={funder.website.startsWith('http') ? funder.website : `https://${funder.website}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-blue-400 hover:underline break-all text-sm"
+                    className="text-blue-400 hover:underline break-all"
                   >
                     {funder.website} ↗
                   </a>
                 </div>
+              ) : (
+                <div className="flex items-center gap-3 text-gray-400">
+                  <Globe size={18} />
+                  <p className="text-sm">No website available</p>
+                </div>
               )}
-
-              <div className="flex items-center gap-3">
-                <FileText size={18} className="text-gray-400" />
-                <a
-                  href={`https://projects.propublica.org/nonprofits/organizations/${(funder.id || funder.foundation_ein || '').replace(/-/g, '')}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-400 hover:underline break-all"
-                >
-                  View 990 Filing on ProPublica ↗
-                </a>
-              </div>
             </div>
           </div>
         </div>
@@ -733,7 +761,7 @@ export default function FunderDetail() {
             }}
             className="flex-1 border border-[#30363d] rounded-xl py-3 text-sm hover:bg-[#161b22] transition-colors"
           >
-            {mission ? '< Back to Results' : '< Back to Search'}
+            {mission ? '← Back to Results' : '← Back to Search'}
           </button>
           <button
             onClick={() => navigate('/saved')}
@@ -760,7 +788,6 @@ export default function FunderDetail() {
           onClose={() => setToastMsg(null)}
         />
       )}
-      </div>
     </div>
   );
 }
