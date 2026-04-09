@@ -1,9 +1,8 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useRef } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import AnalyticsTracker from './components/AnalyticsTracker';
 import AuthGuard from './components/AuthGuard';
-import ErrorBoundary from './components/ErrorBoundary';
 import FeatureTooltips from './components/FeatureTooltip';
 import Landing from './pages/Landing';
 import MissionInput from './pages/MissionInput';
@@ -27,7 +26,6 @@ import SharedViewPage from './pages/SharedViewPage';
 import ReportsPage from './pages/ReportsPage';
 import ApplicationsPage from './pages/ApplicationsPage';
 import OnboardingPage from './pages/OnboardingPage';
-import PrivacyPolicy from './pages/PrivacyPolicy';
 import NotFound from './pages/NotFound';
 import BugReportButton from './components/BugReportButton';
 import ThemeToggle from './components/ThemeToggle';
@@ -78,7 +76,7 @@ function AnimatedRoutes() {
   }, [user, navigate, location.pathname]);
 
   return (
-    <main key={location.pathname} id="main-content" className="page-fade-in">
+    <div key={location.pathname} className="page-fade-in">
       <Routes location={location}>
         {/* Public routes */}
         <Route path="/" element={<Landing />} />
@@ -92,8 +90,6 @@ function AnimatedRoutes() {
         <Route path="/browse" element={<BrowsePage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
-        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-        <Route path="/find" element={<Navigate to="/mission" replace />} />
 
         {/* Auth-gated routes */}
         <Route path="/dashboard" element={<AuthGuard><DashboardPage /></AuthGuard>} />
@@ -122,7 +118,7 @@ function AnimatedRoutes() {
 
         <Route path="*" element={<NotFound />} />
       </Routes>
-    </main>
+    </div>
   );
 }
 
@@ -133,12 +129,10 @@ function App() {
     <BrowserRouter>
       <AnalyticsTracker />
       <AuthProvider>
-        <ErrorBoundary>
-          <AnimatedRoutes />
-          <BugReportButton />
-          <ThemeToggle />
-          <FeatureTooltips />
-        </ErrorBoundary>
+        <AnimatedRoutes />
+        <BugReportButton />
+        <FeatureTooltips />
+        <ThemeToggle />
       </AuthProvider>
     </BrowserRouter>
   );
