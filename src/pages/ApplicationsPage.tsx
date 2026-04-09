@@ -179,7 +179,7 @@ export default function ApplicationsPage() {
 
         {showForm && (
           <div className="mb-6 p-4 bg-[#161b22] border border-[#30363d] rounded-lg">
-            <h2 className="text-sm font-semibold mb-3">Add Application Content</h2>
+            <h3 className="text-sm font-semibold mb-3">Add Application Content</h3>
             <input type="text" value={newTitle} onChange={e => setNewTitle(e.target.value)}
               placeholder="Title (e.g., 'Ford Foundation 2025 LOI')"
               className="w-full mb-3 bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
@@ -217,7 +217,7 @@ export default function ApplicationsPage() {
                       <div>
                         <p className="text-sm font-medium text-white">{entry.title}</p>
                         <p className="text-xs text-gray-500 mt-0.5">
-                          {entry.source_type} | {new Date(entry.created_at).toLocaleDateString()}
+                          {entry.source_type} · {new Date(entry.created_at).toLocaleDateString()}
                         </p>
                       </div>
                     </div>
@@ -237,7 +237,7 @@ export default function ApplicationsPage() {
                   <div className="flex items-start justify-between mb-4">
                     <div>
                       <h3 className="text-lg font-semibold mb-1">{selectedEntry.title}</h3>
-                      <p className="text-xs text-gray-500">{selectedEntry.source_type} | Added {new Date(selectedEntry.created_at).toLocaleDateString()}</p>
+                      <p className="text-xs text-gray-500">{selectedEntry.source_type} · Added {new Date(selectedEntry.created_at).toLocaleDateString()}</p>
                     </div>
                     <button
                       onClick={() => setShowBookmarkForm(!showBookmarkForm)}
