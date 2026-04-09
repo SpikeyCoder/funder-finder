@@ -100,10 +100,10 @@ export default function SharedViewPage() {
                     </span>
                   </td>
                   <td className="p-3 text-right text-white">
-                    {grant.awarded_amount ? `$${grant.awarded_amount.toLocaleString()}` : '-'}
+                    {grant.awarded_amount ? `$${grant.awarded_amount.toLocaleString()}` : '—'}
                   </td>
                   <td className="p-3 text-gray-400">
-                    {grant.deadline ? new Date(grant.deadline).toLocaleDateString() : '-'}
+                    {grant.deadline ? new Date(grant.deadline).toLocaleDateString() : '—'}
                   </td>
                 </tr>
               ))}
