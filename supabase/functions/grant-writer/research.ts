@@ -17,7 +17,6 @@ export interface ResearchData {
   statistics: string[];
   localContext: string;
   recentTrends: string[];
-  mlaSources: string[];
   fallbackUsed: boolean;
 }
 
@@ -36,7 +35,7 @@ async function tavilySearch(
         query,
         search_depth: 'advanced',
         include_answer: false,
-        max_results: 5,
+        max_results: 4,
       }),
     });
     if (!res.ok) return [];
@@ -58,13 +57,14 @@ function buildSearchQueries(
   geoFocus: string,
   targetPop: string,
 ): string[] {
+  // Extract key phrases (simple keyword extraction)
   const missionLower = mission.toLowerCase();
   const geo = geoFocus || '';
   const pop = targetPop || '';
 
   const queries: string[] = [];
 
-  // Issue-area statistics with current data
+  // Issue-area statistics
   queries.push(`${mission.slice(0, 100)} statistics data 2024 2025`);
 
   // Local/regional need
@@ -78,20 +78,9 @@ function buildSearchQueries(
   }
 
   // Funding trends
-  const sector = missionLower.includes('education') ? 'education'
-    : missionLower.includes('health') ? 'health'
-    : missionLower.includes('environment') ? 'environment'
-    : missionLower.includes('arts') ? 'arts culture'
-    : 'social services';
-  queries.push(`nonprofit funding trends ${sector} 2024 2025`);
+  queries.push(`nonprofit funding trends ${missionLower.includes('education') ? 'education' : missionLower.includes('health') ? 'health' : 'social services'} 2024 2025`);
 
-  // Prevalence/scope data for the issue area (helps fill bracket placeholders)
-  queries.push(`${mission.slice(0, 80)} prevalence scope "according to" report 2024`);
-
-  // Program model evidence / best practices
-  queries.push(`${mission.slice(0, 80)} evidence-based program outcomes effectiveness research`);
-
-  return queries.slice(0, 6);
+  return queries.slice(0, 4);
 }
 
 // ── Compile results into structured research data ───────────────────────────
@@ -137,27 +126,11 @@ function compileResearch(
     }
   }
 
-  // Build MLA-style source list for citations
-  const mlaSources: string[] = [];
-  const seenUrls = new Set<string>();
-  for (const { results } of allResults) {
-    for (const r of results) {
-      if (r.url && !seenUrls.has(r.url)) {
-        seenUrls.add(r.url);
-        // Extract domain as publisher fallback
-        let publisher = '';
-        try { publisher = new URL(r.url).hostname.replace('www.', ''); } catch {}
-        mlaSources.push(`"${r.title}." ${publisher}, ${new Date().getFullYear()}. ${r.url}`);
-      }
-    }
-  }
-
   return {
     findings: findings.slice(0, 12),
-    statistics: [...new Set(statistics)].slice(0, 15),
+    statistics: [...new Set(statistics)].slice(0, 10),
     localContext: localContext.trim().slice(0, 500) || 'No location-specific data found.',
     recentTrends: [...new Set(trends)].slice(0, 6),
-    mlaSources: mlaSources.slice(0, 12),
     fallbackUsed: false,
   };
 }
@@ -213,7 +186,6 @@ Return JSON:
       statistics: parsed.statistics || [],
       localContext: parsed.localContext || '',
       recentTrends: parsed.recentTrends || [],
-      mlaSources: [],
       fallbackUsed: true,
     };
   } catch (err) {
@@ -223,7 +195,6 @@ Return JSON:
       statistics: [],
       localContext: '',
       recentTrends: [],
-      mlaSources: [],
       fallbackUsed: true,
     };
   }
