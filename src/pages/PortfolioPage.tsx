@@ -79,7 +79,7 @@ export default function PortfolioPage() {
       <main className="min-h-screen bg-[#0d1117] pt-20 px-4 sm:px-6 lg:px-8 pb-12">
         <div className="max-w-6xl mx-auto">
           <div className="flex items-center justify-between mb-8">
-            <h1 className="text-3xl font-bold text-white">Tracked Grants Status</h1>
+            <h1 className="text-3xl font-bold text-white">Portfolio</h1>
             <button onClick={handleExport} disabled={grants.length === 0}
               className="flex items-center gap-2 px-4 py-2 bg-[#161b22] border border-[#30363d] text-gray-300 rounded-lg text-sm hover:border-[#484f58] transition-colors disabled:opacity-50">
               <Download size={16} /> Export CSV
@@ -112,7 +112,7 @@ export default function PortfolioPage() {
                   <Award size={14} /> <span className="text-xs">Win Rate</span>
                 </div>
                 <p className={`text-2xl font-bold ${metrics.win_rate !== null ? (metrics.win_rate >= 50 ? 'text-green-400' : metrics.win_rate >= 25 ? 'text-yellow-400' : 'text-red-400') : 'text-gray-500'}`}>
-                  {metrics.win_rate !== null ? `${metrics.win_rate}%` : '-'}
+                  {metrics.win_rate !== null ? `${metrics.win_rate}%` : '—'}
                 </p>
               </div>
               <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-4">
@@ -195,14 +195,14 @@ export default function PortfolioPage() {
                               {g.status_name}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-gray-300 text-sm">{g.amount ? fmtCurrency(g.amount) : '-'}</td>
+                          <td className="px-4 py-3 text-gray-300 text-sm">{g.amount ? fmtCurrency(g.amount) : '—'}</td>
                           <td className="px-4 py-3">
                             {g.deadline ? (
                               <span className={`text-sm ${isOverdue ? 'text-red-400 font-medium' : 'text-gray-300'}`}>
                                 {isOverdue && <AlertTriangle size={12} className="inline mr-1" />}
                                 {new Date(g.deadline).toLocaleDateString()}
                               </span>
-                            ) : <span className="text-gray-600 text-sm">-</span>}
+                            ) : <span className="text-gray-600 text-sm">—</span>}
                           </td>
                         </tr>
                       );
