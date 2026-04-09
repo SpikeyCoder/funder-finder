@@ -605,14 +605,13 @@ Deno.serve(async (req) => {
 
     const funderLookup = new Map(funderRows.map((f) => [f.id, f]));
 
-    const WEIGHT_SHARED = 0.30;
-    const WEIGHT_NTEE   = 0.15;
-    const WEIGHT_BUDGET = 0.15;
-    const WEIGHT_GEO    = 0.40;
+    const WEIGHT_SHARED = 0.40;
+    const WEIGHT_NTEE   = 0.20;
+    const WEIGHT_BUDGET = 0.20;
+    const WEIGHT_GEO    = 0.20;
 
     const sourceNteeChar = sourceFunder?.ntee_code?.charAt(0)?.toUpperCase() || null;
     const funderSourceState = sourceFunder?.state?.toUpperCase() || null;
-    const funderSourceRegion = funderSourceState ? STATE_REGION[funderSourceState] || null : null;
     const sourceGiving = sourceFunder?.total_giving ?? null;
 
     const funderScored = funderEnrichPool
@@ -661,28 +660,12 @@ Deno.serve(async (req) => {
           sharedCount: c.sharedSet.size,
           state: f.state,
           totalFunding: f.total_giving,
-          geoScore,
         };
       })
       .filter(Boolean);
 
     funderScored.sort((a, b) => (b?.score ?? 0) - (a?.score ?? 0));
-
-    // Prefer peers from the same state or Census region.
-    // Fall back to all scored peers only if too few regional matches exist.
-    const regionalPeers = funderScored.filter((p) => {
-      if (!p) return false;
-      const ps = p.state?.toUpperCase() || null;
-      if (!funderSourceState || !ps) return false;
-      if (funderSourceState === ps) return true;
-      const peerRegion = STATE_REGION[ps] || null;
-      return funderSourceRegion && peerRegion && funderSourceRegion === peerRegion;
-    });
-
-    const MIN_REGIONAL = 3;
-    const peers = regionalPeers.length >= MIN_REGIONAL
-      ? regionalPeers.slice(0, MAX_PEERS)
-      : funderScored.slice(0, MAX_PEERS);
+    const peers = funderScored.slice(0, MAX_PEERS);
 
     return new Response(JSON.stringify({ peers }), {
       headers: { ...headers, 'Content-Type': 'application/json' },
