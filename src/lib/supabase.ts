@@ -38,24 +38,8 @@ export async function getEdgeFunctionHeaders(
   let accessToken = SUPABASE_ANON_KEY;
 
   if (!useAnonOnly) {
-    // getSession() returns the cached session which may have an expired access_token.
-    // Check the expiry and refresh proactively so edge functions don't get a 401.
     const { data } = await supabase.auth.getSession();
-    const session = data.session;
-
-    if (session) {
-      const expiresAt = session.expires_at ?? 0; // epoch seconds
-      const nowSecs = Math.floor(Date.now() / 1000);
-      const bufferSecs = 60; // refresh if <60 s left
-
-      if (expiresAt - nowSecs < bufferSecs) {
-        // Token expired or about to — force a refresh
-        const { data: refreshed } = await supabase.auth.refreshSession();
-        accessToken = refreshed.session?.access_token || SUPABASE_ANON_KEY;
-      } else {
-        accessToken = session.access_token;
-      }
-    }
+    accessToken = data.session?.access_token || SUPABASE_ANON_KEY;
   }
 
   return {
