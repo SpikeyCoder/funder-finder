@@ -313,9 +313,9 @@ export default function TeamSettingsPage() {
                   onChange={e => setInviteRole(e.target.value)}
                   className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-4 py-2.5 text-white text-sm"
                 >
-                  <option value="admin">Admin - full access</option>
-                  <option value="editor">Editor - can modify</option>
-                  <option value="viewer">Viewer - read only</option>
+                  <option value="admin">Admin — full access</option>
+                  <option value="editor">Editor — can modify</option>
+                  <option value="viewer">Viewer — read only</option>
                 </select>
               </div>
               <div className="sm:self-end">
@@ -596,7 +596,7 @@ export default function TeamSettingsPage() {
                                         </p>
                                         <p className="text-xs text-gray-500 mt-0.5">
                                           {project.grant_count} grant{project.grant_count !== 1 ? 's' : ''} tracked
-                                          <span className="mx-1.5">|</span>
+                                          <span className="mx-1.5">·</span>
                                           Updated {timeAgo(project.updated_at)}
                                         </p>
                                       </div>
@@ -654,7 +654,7 @@ export default function TeamSettingsPage() {
                           <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
                             <Icon size={10} className={rc.color} />
                             <span>{rc.label}</span>
-                            <span className="mx-0.5">|</span>
+                            <span className="mx-0.5">·</span>
                             {isExpired ? (
                               <span className="text-red-400">Expired</span>
                             ) : (
