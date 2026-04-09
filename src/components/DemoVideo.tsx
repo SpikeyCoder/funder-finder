@@ -30,15 +30,15 @@ const LOCATION_CHAR_MS = 80;  // 11 chars × 80 ms = 880 ms
 const STREAMING_LINES = [
   '## 📊 Funder-Fit Summary',
   'Strong alignment with youth education focus areas...',
-  '## + Compliance Checklist',
-  '+ 501(c)(3) status required',
-  '+ Geographic match: Chicago, IL',
+  '## ✅ Compliance Checklist',
+  '✓ 501(c)(3) status required',
+  '✓ Geographic match: Chicago, IL',
   '## 📝 Grant Application Draft',
   '### 1. Executive Summary',
   'The Community Youth Alliance requests $50,000...',
 ];
 
-const STEP_LABELS = ['Start', 'Mission', 'Search', 'Save', 'Pipeline', 'Write Grant', 'Generating', 'Done +'];
+const STEP_LABELS = ['Start', 'Mission', 'Search', 'Save', 'Pipeline', 'Write Grant', 'Generating', 'Done ✓'];
 
 export default function DemoVideo() {
   const [step, setStep] = useState(0);
@@ -230,7 +230,7 @@ export default function DemoVideo() {
                   }`}>
                     {locationChars > 0
                       ? LOCATION_TEXT.slice(0, locationChars)
-                      : <span className="text-gray-600">e.g. King County, WA | Chicago, IL | National</span>
+                      : <span className="text-gray-600">e.g. King County, WA · Chicago, IL · National</span>
                     }
                     {missionDone && locationChars < LOCATION_TEXT.length && (
                       <span className="inline-block w-0.5 h-3.5 bg-blue-400 animate-pulse ml-px align-middle" />
@@ -288,13 +288,13 @@ export default function DemoVideo() {
                 <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">Funder Matches</p>
                 <FunderCard
                   name="Gates Foundation"
-                  type="foundation | National"
+                  type="foundation · National"
                   score={92}
                   saved={saved}
                   onSave={() => setSaved(true)}
                   highlight={!saved}
                 />
-                <FunderCard name="Knight Foundation" type="foundation | Miami, FL" score={78} saved={false} />
+                <FunderCard name="Knight Foundation" type="foundation · Miami, FL" score={78} saved={false} />
               </div>
             </ScreenSlide>
 
@@ -324,7 +324,7 @@ export default function DemoVideo() {
                   <p className="text-sm font-semibold">AI Grant Writer</p>
                   <span className="ml-auto flex gap-1 items-center text-xs text-blue-400">
                     <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-                    Generating...
+                    Generating…
                   </span>
                 </div>
                 <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-3 space-y-1 text-xs font-mono">
@@ -334,7 +334,7 @@ export default function DemoVideo() {
                       className={
                         line.startsWith('##')
                           ? 'text-blue-400 font-bold'
-                          : line.startsWith('+')
+                          : line.startsWith('✓')
                           ? 'text-green-400'
                           : line.startsWith('###')
                           ? 'text-white font-semibold'
@@ -370,7 +370,7 @@ export default function DemoVideo() {
                   <p className="text-xs text-gray-400 mt-1">/ 100</p>
                 </div>
                 <p className="text-xs text-gray-400 text-center max-w-xs">
-                  Complete 8-section narrative | Compliance checklist | Personalized to Gates Foundation
+                  Complete 8-section narrative · Compliance checklist · Personalized to Gates Foundation
                 </p>
               </div>
             </ScreenSlide>
