@@ -3050,20 +3050,15 @@ Deno.serve(async (req) => {
       // Enrich grantee EINs from recipient_organizations where missing
       await enrichGranteeEins(results);
 
-      // If peer-based matching found results, return them.
-      // Otherwise, fall through to baseline mission matching below.
-      if (results.length > 0) {
-        return new Response(JSON.stringify({
-          results,
-          cached: false,
-          query_check_run: queryCheckRan,
-          ...(suggestedPeers.length ? { peers: suggestedPeers } : {}),
-          ...(debugMode ? { debug: peerDebug } : {}),
-        }), {
-          headers: { ...headers, 'Content-Type': 'application/json' },
-        });
-      }
-      // Peer search returned 0 results -- fall through to baseline matching
+      return new Response(JSON.stringify({
+        results,
+        cached: false,
+        query_check_run: queryCheckRan,
+        ...(suggestedPeers.length ? { peers: suggestedPeers } : {}),
+        ...(debugMode ? { debug: peerDebug } : {}),
+      }), {
+        headers: { ...headers, 'Content-Type': 'application/json' },
+      });
     }
 
     const cacheKey = hashKey(mission, locationServed, keywords, budgetBand);
