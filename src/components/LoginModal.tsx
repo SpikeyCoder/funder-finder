@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -66,18 +66,6 @@ export default function LoginModal({ pendingFunder, onClose }: LoginModalProps) 
   const { signInWithGoogle, signInWithLinkedIn, signInWithMicrosoft } = useAuth();
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const triggerRef = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    // Save the element that had focus before modal opened
-    triggerRef.current = document.activeElement as HTMLElement;
-    return () => {
-      // Restore focus when modal closes
-      if (triggerRef.current && triggerRef.current.focus) {
-        triggerRef.current.focus();
-      }
-    };
-  }, []);
 
   const handleProvider = async (key: 'google' | 'linkedin' | 'microsoft') => {
     setError(null);
@@ -136,7 +124,6 @@ export default function LoginModal({ pendingFunder, onClose }: LoginModalProps) 
               onClick={() => handleProvider(key)}
               disabled={loadingProvider !== null}
               className="w-full flex items-center justify-center gap-3 bg-white text-gray-900 font-medium rounded-xl px-4 py-3 text-sm hover:bg-gray-100 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-              aria-label={`Sign in with ${label}`}
             >
               {loadingProvider === key ? (
                 <Loader2 size={18} className="animate-spin text-gray-600" />
