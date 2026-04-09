@@ -130,8 +130,9 @@ interface Props {
   onChange: (value: string) => void;
   hasError?: boolean;
   placeholder?: string;
-  'aria-invalid'?: boolean;
-  'aria-describedby'?: string;
+  id?: string;
+  required?: boolean;
+  ariaDescribedBy?: string;
 }
 
 // Track Google Maps script loading state globally
@@ -167,16 +168,14 @@ function loadGoogleMaps(): Promise<void> {
   });
 }
 
-export default function LocationAutocomplete({ value, onChange, hasError, placeholder, 'aria-invalid': ariaInvalid, 'aria-describedby': ariaDescribedBy }: Props) {
+export default function LocationAutocomplete({ value, onChange, hasError, placeholder, id, required, ariaDescribedBy }: Props) {
   const [suggestions, setSuggestions] = useState<{ label: string; placeId?: string; type: string }[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [useGoogle, setUseGoogle] = useState(false);
-  const [selectedIndex, setSelectedIndex] = useState(-1);
   const autocompleteService = useRef<google.maps.places.AutocompleteService | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const inputRef = useRef<HTMLInputElement>(null);
-  const listboxRef = useRef<HTMLDivElement>(null);
 
   // Try to load Google Maps on first focus
   const handleFocus = useCallback(() => {
@@ -256,46 +255,10 @@ export default function LocationAutocomplete({ value, onChange, hasError, placeh
     };
   }, [value, open, useGoogle, fetchGoogleSuggestions, fetchLocalSuggestions]);
 
-  // Reset selectedIndex when suggestions change
-  useEffect(() => {
-    setSelectedIndex(-1);
-  }, [suggestions]);
-
   const selectSuggestion = (label: string) => {
     onChange(label);
     setOpen(false);
     setSuggestions([]);
-    setSelectedIndex(-1);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (!open) return;
-
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        setSelectedIndex(prev =>
-          prev < suggestions.length - 1 ? prev + 1 : prev
-        );
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        setSelectedIndex(prev => (prev > 0 ? prev - 1 : -1));
-        break;
-      case 'Enter':
-        e.preventDefault();
-        if (selectedIndex >= 0 && suggestions[selectedIndex]) {
-          selectSuggestion(suggestions[selectedIndex].label);
-        }
-        break;
-      case 'Escape':
-        e.preventDefault();
-        setOpen(false);
-        setSelectedIndex(-1);
-        break;
-      default:
-        break;
-    }
   };
 
   return (
@@ -303,7 +266,7 @@ export default function LocationAutocomplete({ value, onChange, hasError, placeh
       <div className="relative">
         <input
           ref={inputRef}
-          id="location-input"
+          id={id}
           value={value}
           onChange={e => {
             onChange(e.target.value);
@@ -311,15 +274,11 @@ export default function LocationAutocomplete({ value, onChange, hasError, placeh
           }}
           onFocus={handleFocus}
           onBlur={() => setTimeout(() => setOpen(false), 200)}
-          onKeyDown={handleKeyDown}
-          placeholder={placeholder || 'e.g. King County, WA | Chicago, IL | National'}
-          className={`w-full bg-[#0d1117] border rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 ${hasError ? 'border-red-500 focus:ring-red-500' : 'border-[#30363d]'}`}
-          aria-label="Location your nonprofit serves"
-          aria-invalid={ariaInvalid}
+          placeholder={placeholder || 'e.g. King County, WA · Chicago, IL · National'}
+          required={required}
+          aria-required={required ? 'true' : undefined}
           aria-describedby={ariaDescribedBy}
-          aria-autocomplete="list"
-          aria-controls="location-listbox"
-          aria-expanded={open}
+          className={`w-full bg-[#0d1117] border rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 ${hasError ? 'border-red-500' : 'border-[#30363d]'}`}
         />
         {loading && (
           <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -329,27 +288,15 @@ export default function LocationAutocomplete({ value, onChange, hasError, placeh
       </div>
 
       {open && suggestions.length > 0 && (
-        <div
-          ref={listboxRef}
-          id="location-listbox"
-          role="listbox"
-          className="absolute z-20 w-full mt-1 bg-[#21262d] border border-[#30363d] rounded-xl overflow-hidden shadow-xl max-h-64 overflow-y-auto"
-        >
+        <div className="absolute z-20 w-full mt-1 bg-[#21262d] border border-[#30363d] rounded-xl overflow-hidden shadow-xl max-h-64 overflow-y-auto">
           {suggestions.map((suggestion, i) => (
             <button
               key={`${suggestion.label}-${i}`}
-              role="option"
-              aria-selected={selectedIndex === i}
               onMouseDown={(e) => {
                 e.preventDefault();
                 selectSuggestion(suggestion.label);
               }}
-              onMouseEnter={() => setSelectedIndex(i)}
-              className={`flex items-center gap-2.5 w-full text-left px-4 py-2.5 text-sm transition-colors ${
-                selectedIndex === i
-                  ? 'bg-[#30363d] text-white'
-                  : 'text-gray-300 hover:bg-[#30363d]'
-              }`}
+              className="flex items-center gap-2.5 w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-[#30363d] transition-colors"
             >
               <MapPin size={13} className="text-blue-400 shrink-0" />
               <span>{suggestion.label}</span>
