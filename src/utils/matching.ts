@@ -9,57 +9,17 @@ const SEARCH_ORGS_URL = `${SUPABASE_URL}/functions/v1/search-organizations`;
 const RECIPIENT_PROFILE_URL = `${SUPABASE_URL}/functions/v1/get-recipient-profile`;
 const COMPUTE_PEERS_URL = `${SUPABASE_URL}/functions/v1/compute-peers`;
 
-/** Truncate text to at most `max` words so large descriptions don't cause timeouts. */
-function truncateWords(text: string, max = 200): string {
-  const words = text.split(/\s+/);
-  if (words.length <= max) return text;
-  return words.slice(0, max).join(' ');
-}
-
 /**
- * Fetch a single funder by its EIN.
- * Tries the `funders` table first (richer data), then falls back to
- * `mv_funder_search_index` (materialized view built from 990 filings)
- * which contains many funders not yet in the main table.
+ * Fetch a single funder row from the `funders` table by its EIN (primary key).
+ * Uses the Supabase REST API (PostgREST) directly — no edge function needed.
  */
 export async function fetchFunderByEin(ein: string): Promise<Funder | null> {
   const headers = await getEdgeFunctionHeaders('application/json', { useAnonOnly: true });
-
-  // 1. Try the main funders table
   const url = `${SUPABASE_URL}/rest/v1/funders?id=eq.${encodeURIComponent(ein)}&limit=1`;
   const res = await fetch(url, { headers });
-  if (res.ok) {
-    const rows: Funder[] = await res.json();
-    if (rows.length > 0) return rows[0];
-  }
-
-  // 2. Fall back to the materialized view (covers Browse Grants funders)
-  const mvUrl = `${SUPABASE_URL}/rest/v1/mv_funder_search_index?ein=eq.${encodeURIComponent(ein)}&limit=1`;
-  const mvRes = await fetch(mvUrl, { headers });
-  if (!mvRes.ok) return null;
-  const mvRows = await mvRes.json();
-  if (mvRows.length === 0) return null;
-
-  const mv = mvRows[0];
-  return {
-    id: mv.ein || mv.funder_id,
-    name: mv.name || 'Unknown Funder',
-    type: mv.entity_type || 'foundation',
-    description: null,
-    focus_areas: mv.focus_areas || [],
-    ntee_code: mv.ntee_code || null,
-    city: null,
-    state: mv.state || null,
-    website: mv.website || null,
-    total_giving: mv.total_awarded ?? mv.total_giving ?? null,
-    asset_amount: mv.asset_amount ?? null,
-    grant_range_min: mv.grant_range_min ?? null,
-    grant_range_max: mv.grant_range_max ?? null,
-    contact_name: null,
-    contact_title: null,
-    contact_email: null,
-    next_step: null,
-  } as Funder;
+  if (!res.ok) return null;
+  const rows: Funder[] = await res.json();
+  return rows.length > 0 ? rows[0] : null;
 }
 
 export interface MatchResponse {
@@ -78,31 +38,18 @@ export async function findMatches(
   peerNonprofits: string[] = []
 ): Promise<MatchResponse> {
   const headers = await getEdgeFunctionHeaders('application/json', { useAnonOnly: true });
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+  const res = await fetch(EDGE_FUNCTION_URL, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ mission, locationServed, keywords, budgetBand, forceRefresh, peerNonprofits }),
+  });
 
-  try {
-    const res = await fetch(EDGE_FUNCTION_URL, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ mission: truncateWords(mission), locationServed, keywords, budgetBand, forceRefresh, peerNonprofits }),
-      signal: controller.signal,
-    });
-
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.error || `Server error (${res.status})`);
-    }
-
-    return res.json();
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('Request took too long. Please try again.');
-    }
-    throw error;
-  } finally {
-    clearTimeout(timeoutId);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Server error (${res.status})`);
   }
+
+  return res.json();
 }
 
 export interface SuggestPeersResponse {
@@ -116,91 +63,52 @@ export async function suggestPeers(
   budgetBand: BudgetBand = 'prefer_not_to_say',
 ): Promise<SuggestPeersResponse> {
   const headers = await getEdgeFunctionHeaders('application/json', { useAnonOnly: true });
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+  const res = await fetch(SUGGEST_PEERS_URL, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ mission, locationServed, budgetBand }),
+  });
 
-  try {
-    const res = await fetch(SUGGEST_PEERS_URL, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ mission, locationServed, budgetBand }),
-      signal: controller.signal,
-    });
-
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      return { peers: [], error: body.error || `Server error (${res.status})` };
-    }
-
-    const data = await res.json();
-    return { peers: Array.isArray(data.peers) ? data.peers : [] };
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      return { peers: [], error: 'Request took too long. Please try again.' };
-    }
-    return { peers: [], error: error instanceof Error ? error.message : 'Unknown error' };
-  } finally {
-    clearTimeout(timeoutId);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    return { peers: [], error: body.error || `Server error (${res.status})` };
   }
+
+  const data = await res.json();
+  return { peers: Array.isArray(data.peers) ? data.peers : [] };
 }
 
 export async function fetchFunderInsights(funderId: string): Promise<FunderInsights> {
   const headers = await getEdgeFunctionHeaders('application/json', { useAnonOnly: true });
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+  const res = await fetch(FUNDER_INSIGHTS_URL, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ funderId }),
+  });
 
-  try {
-    const res = await fetch(FUNDER_INSIGHTS_URL, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ funderId }),
-      signal: controller.signal,
-    });
-
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.error || `Server error (${res.status})`);
-    }
-
-    return res.json();
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('Request took too long. Please try again.');
-    }
-    throw error;
-  } finally {
-    clearTimeout(timeoutId);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Server error (${res.status})`);
   }
+
+  return res.json();
 }
 
 export async function searchOrganizations(query: string, limit = 15): Promise<OrgSearchResult[]> {
   const headers = await getEdgeFunctionHeaders('application/json', { useAnonOnly: true });
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+  const res = await fetch(SEARCH_ORGS_URL, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ query, limit }),
+  });
 
-  try {
-    const res = await fetch(SEARCH_ORGS_URL, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ query, limit }),
-      signal: controller.signal,
-    });
-
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.error || `Server error (${res.status})`);
-    }
-
-    const data = await res.json();
-    return Array.isArray(data.results) ? data.results : [];
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('Request took too long. Please try again.');
-    }
-    throw error;
-  } finally {
-    clearTimeout(timeoutId);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Server error (${res.status})`);
   }
+
+  const data = await res.json();
+  return Array.isArray(data.results) ? data.results : [];
 }
 
 export async function fetchRecipientProfile(
@@ -208,31 +116,18 @@ export async function fetchRecipientProfile(
   ein?: string,
 ): Promise<RecipientProfile> {
   const headers = await getEdgeFunctionHeaders('application/json', { useAnonOnly: true });
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+  const res = await fetch(RECIPIENT_PROFILE_URL, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ recipientId, ein }),
+  });
 
-  try {
-    const res = await fetch(RECIPIENT_PROFILE_URL, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ recipientId, ein }),
-      signal: controller.signal,
-    });
-
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.error || `Server error (${res.status})`);
-    }
-
-    return res.json();
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('Request took too long. Please try again.');
-    }
-    throw error;
-  } finally {
-    clearTimeout(timeoutId);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Server error (${res.status})`);
   }
+
+  return res.json();
 }
 
 export async function fetchPeers(
@@ -240,32 +135,19 @@ export async function fetchPeers(
   entityId: string,
 ): Promise<PeerEntry[]> {
   const headers = await getEdgeFunctionHeaders('application/json', { useAnonOnly: true });
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+  const res = await fetch(COMPUTE_PEERS_URL, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ entityType, entityId }),
+  });
 
-  try {
-    const res = await fetch(COMPUTE_PEERS_URL, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ entityType, entityId }),
-      signal: controller.signal,
-    });
-
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.error || `Server error (${res.status})`);
-    }
-
-    const data = await res.json();
-    return Array.isArray(data.peers) ? data.peers : [];
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('Request took too long. Please try again.');
-    }
-    throw error;
-  } finally {
-    clearTimeout(timeoutId);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Server error (${res.status})`);
   }
+
+  const data = await res.json();
+  return Array.isArray(data.peers) ? data.peers : [];
 }
 
 export function formatGrantRange(funder: Funder): string {
@@ -273,7 +155,7 @@ export function formatGrantRange(funder: Funder): string {
   const fmt = (n: number) =>
     n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(1)}M` : `$${(n / 1000).toFixed(0)}K`;
   if (funder.grant_range_min && funder.grant_range_max) {
-    return `${fmt(funder.grant_range_min)} - ${fmt(funder.grant_range_max)}`;
+    return `${fmt(funder.grant_range_min)} – ${fmt(funder.grant_range_max)}`;
   }
   return funder.grant_range_max ? `Up to ${fmt(funder.grant_range_max)}` : '';
 }

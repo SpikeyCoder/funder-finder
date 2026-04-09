@@ -240,24 +240,23 @@ async function main() {
     const orgs = await fetchAllForQuery(query, debug && query === SEARCH_QUERIES[0]);
     if (orgs.length === 0) { console.log('  No results.'); continue; }
 
-    // Keep only legitimate grantmaking orgs, deduplicated.
-    //
-    // FIX (2026-03-26): The previous filter was too loose — it accepted any org
-    // whose name contained generic terms like "fund", "trust", "foundation", etc.
-    // This caused ~426K non-grantmaking orgs (e.g. "Surge for Water Inc") to be
-    // classified as funders. Now we REQUIRE an NTEE T-code (Philanthropy/Grantmaking).
-    //
-    // Orgs without NTEE codes are skipped here; they can be added later via
-    // sync-grant-history.js if they file 990-PF forms (proving they're foundations).
+    // Keep grantmaking orgs, deduplicated.
+    // NOTE: ProPublica search results often omit ntee_code, so we accept orgs that
+    // either (a) have a T-coded NTEE, OR (b) have a foundation/grantmaking name.
+    const FOUNDATION_TERMS = ['foundation', 'fund', 'trust', 'endowment', 'grant', 'philanthropi', 'charitable', 'giving'];
     let added = 0;
     for (const org of orgs) {
       const ntee    = (org.ntee_code || '').toUpperCase();
+      const nameLow = (org.name || '').toLowerCase();
       const ein     = String(org.ein || org.id || '');
 
-      // Only accept organizations with NTEE T-code (Philanthropy, Voluntarism & Grantmaking)
-      if (!ntee.startsWith('T')) continue;
+      const looksLikeFoundation = ntee.startsWith('T') ||
+        FOUNDATION_TERMS.some(t => nameLow.includes(t));
+      if (!looksLikeFoundation) continue;         // skip non-grantmaking orgs
 
       if (seen.has(ein)) continue;                // deduplicate
+      // Note: ProPublica search results don't include financial figures —
+      // those only appear in individual org lookups. Skip money filter here.
       seen.add(ein);
       allSignificant.push(org);
       added++;

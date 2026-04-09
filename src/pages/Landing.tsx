@@ -3,13 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { Search, Target, Zap, Bookmark, PenLine } from 'lucide-react';
 import DemoVideo from '../components/DemoVideo';
 import NavBar from '../components/NavBar';
-import Footer from '../components/Footer';
 
 export default function Landing() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    document.title = 'Non-Profit Funder Finder - Free AI Funder Matching for 501(c)(3)s';
+    document.title = 'Non-Profit Funder Finder — Free AI Funder Matching for 501(c)(3)s';
   }, []);
 
   return (
@@ -17,8 +16,8 @@ export default function Landing() {
       <NavBar />
 
       {/* Hero */}
-      <div className="flex flex-col items-center justify-center text-center px-6 pt-24 pb-12">
-        <h1 className="text-3xl sm:text-5xl md:text-7xl font-bold leading-tight tracking-tight max-w-4xl">
+      <div id="main-content" className="flex flex-col items-center justify-center text-center px-6 pt-24 pb-12">
+        <h1 className="text-5xl md:text-7xl font-bold leading-tight tracking-tight max-w-4xl">
           Find Funders Aligned to Your Mission
         </h1>
         <p className="mt-6 text-lg md:text-xl text-gray-400 max-w-2xl">
@@ -27,7 +26,7 @@ export default function Landing() {
         </p>
         <button
           onClick={() => navigate('/mission')}
-          className="mt-8 inline-flex items-center gap-3 bg-white text-gray-900 rounded-2xl px-6 sm:px-10 py-4 text-base sm:text-lg font-semibold hover:bg-gray-100 transition shadow-lg"
+          className="mt-8 inline-flex items-center gap-3 bg-white text-gray-900 rounded-2xl px-10 py-4 text-lg font-semibold hover:bg-gray-100 transition shadow-lg"
         >
           <Search size={22} />
           Get Started
@@ -39,14 +38,14 @@ export default function Landing() {
 
       {/* Demo Video */}
       <div className="max-w-5xl mx-auto">
-        <p className="text-center text-sm text-gray-300 uppercase tracking-widest mb-4">See It in Action</p>
+        <p className="text-center text-sm text-gray-500 uppercase tracking-widest mb-4">See It in Action</p>
         <DemoVideo />
       </div>
 
       {/* How It Works */}
       <div className="px-6 pb-20 max-w-5xl mx-auto">
         <h2 className="text-3xl font-bold text-center mb-12">How It Works</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {[
               {
                 icon: <Target size={32} className="text-blue-400" />,
@@ -69,12 +68,12 @@ export default function Landing() {
               desc: 'Generate a personalized grant application draft with a funder-fit score and compliance checklist.',
             },
           ].map(({ icon, step, desc }) => (
-            <div key={step} className="bg-[#161b22] border border-[#30363d] rounded-2xl p-5 sm:p-8 text-center">
+            <div key={step} className="bg-[#161b22] border border-[#30363d] rounded-2xl p-8 text-center">
               <div className="flex justify-center mb-4">
                 <div className="bg-[#21262d] rounded-full p-4">{icon}</div>
               </div>
-              <h3 className="text-lg sm:text-xl font-semibold mb-3">{step}</h3>
-              <p className="text-gray-400 text-sm sm:text-base">{desc}</p>
+              <h3 className="text-xl font-semibold mb-3">{step}</h3>
+              <p className="text-gray-400">{desc}</p>
             </div>
           ))}
         </div>
@@ -82,7 +81,7 @@ export default function Landing() {
 
       {/* What's Included */}
       <div className="px-6 pb-24 max-w-5xl mx-auto">
-        <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-6 md:p-12">
+        <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-12">
           <h2 className="text-3xl font-bold text-center mb-10">What's Included</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-y-6 gap-x-12">
             {[
@@ -94,7 +93,7 @@ export default function Landing() {
               'No account required to start searching',
             ].map(item => (
               <div key={item} className="flex items-start gap-3">
-                <span className="text-green-400 mt-0.5 font-bold text-lg">+</span>
+                <span className="text-green-400 mt-0.5 font-bold text-lg">✓</span>
                 <span className="text-gray-200">{item}</span>
               </div>
             ))}
@@ -118,7 +117,9 @@ export default function Landing() {
       </div>
 
       {/* Footer */}
-      <Footer />
+      <footer className="border-t border-[#21262d] py-8 text-center text-sm text-gray-500">
+        © {new Date().getFullYear()} FunderMatch &middot; Built for nonprofits
+      </footer>
     </div>
   );
 }

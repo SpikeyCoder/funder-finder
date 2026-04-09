@@ -12,7 +12,7 @@ interface TooltipConfig {
 const TOOLTIPS: TooltipConfig[] = [
   { id: 'tracker', target: '[data-tooltip="tracker"]', title: 'Grant Tracker', description: 'Track your grant applications through every pipeline stage. Click any grant to see details and manage tasks.', position: 'bottom' },
   { id: 'calendar', target: '[data-tooltip="calendar"]', title: 'Deadline Calendar', description: 'View all grant deadlines in a monthly calendar. Never miss an important date.', position: 'bottom' },
-  { id: 'reports', target: '[data-tooltip="reports"]', title: 'Portfolio Reports', description: 'See your grant performance at a glance - win rates, pipeline status, and funding trends.', position: 'bottom' },
+  { id: 'reports', target: '[data-tooltip="reports"]', title: 'Portfolio Reports', description: 'See your grant performance at a glance — win rates, pipeline status, and funding trends.', position: 'bottom' },
   { id: 'ai-draft', target: '[data-tooltip="ai-draft"]', title: 'AI Draft Assistant', description: 'Generate grant proposal drafts powered by AI. Build your knowledge base for better results.', position: 'bottom' },
 ];
 
@@ -72,7 +72,7 @@ export default function FeatureTooltips() {
   if (!tooltip) return null;
 
   return (
-    <div className="fixed bottom-6 left-6 z-50 max-w-xs bg-blue-600 text-white rounded-lg shadow-2xl p-4 animate-fade-in">
+    <div className="fixed bottom-6 right-6 z-50 max-w-xs bg-blue-600 text-white rounded-lg shadow-2xl p-4 animate-fade-in">
       <button onClick={() => dismiss(tooltip.id)} className="absolute top-2 right-2 text-white/70 hover:text-white">
         <X size={14} />
       </button>

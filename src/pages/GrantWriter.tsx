@@ -1,16 +1,12 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ArrowLeft, Check, CheckCircle2, ChevronDown, ChevronUp, Copy, Download,
+  ArrowLeft, Check, CheckCircle2, ChevronDown, ChevronUp, Copy,
   FileText, Loader2, RefreshCw, Trash2, Upload, Wand2, X,
 } from 'lucide-react';
-import { asBlob } from 'html-docx-js-typescript';
-import { saveAs } from 'file-saver';
 import { Funder, GenerationPhase, OrgDetails, UploadedGrantFile } from '../types';
 import { getEdgeFunctionHeaders, supabase } from '../lib/supabase';
 import { formatGrantRange, formatTotalGiving } from '../utils/matching';
-import NavBar from '../components/NavBar';
-import { useAuth } from '../contexts/AuthContext';
 
 const GRANT_WRITER_URL =
   'https://tgtotjvdubhjxzybmdex.supabase.co/functions/v1/grant-writer';
@@ -57,19 +53,19 @@ function renderMarkdown(text: string): string {
       parts.push('<hr class="border-[#30363d] my-6">');
     } else if (rawLine.startsWith('- [x] ')) {
       parts.push(
-        `<div class="flex items-start gap-2 my-1.5 text-sm"><span class="text-green-400 font-bold shrink-0 mt-0.5" style="font-family:sans-serif">+</span><span class="text-gray-300">${inl.slice(6)}</span></div>`,
+        `<div class="flex items-start gap-2 my-1.5 text-sm"><span class="text-green-400 font-bold shrink-0 mt-0.5">✓</span><span class="text-gray-300">${inl.slice(6)}</span></div>`,
       );
     } else if (rawLine.startsWith('- [ ] ')) {
       parts.push(
-        `<div class="flex items-start gap-2 my-1.5 text-sm"><span class="w-3 h-3 shrink-0 mt-1 rounded-full border border-gray-500"></span><span class="text-gray-300">${inl.slice(6)}</span></div>`,
+        `<div class="flex items-start gap-2 my-1.5 text-sm"><span class="text-gray-400 shrink-0 mt-0.5">○</span><span class="text-gray-300">${inl.slice(6)}</span></div>`,
       );
     } else if (rawLine.startsWith('  - ')) {
       parts.push(
-        `<div class="flex items-start gap-2 ml-5 my-1 text-sm"><span class="text-gray-400 shrink-0 mt-0.5" style="font-family:sans-serif">-</span><span class="text-gray-400">${inl.slice(4)}</span></div>`,
+        `<div class="flex items-start gap-2 ml-5 my-1 text-sm"><span class="text-gray-400 shrink-0 mt-0.5">–</span><span class="text-gray-400">${inl.slice(4)}</span></div>`,
       );
     } else if (rawLine.startsWith('- ')) {
       parts.push(
-        `<div class="flex items-start gap-2 my-1.5 text-sm"><span class="w-1.5 h-1.5 shrink-0 mt-1.5 rounded-full bg-gray-400"></span><span class="text-gray-300">${inl.slice(2)}</span></div>`,
+        `<div class="flex items-start gap-2 my-1.5 text-sm"><span class="text-gray-400 shrink-0 mt-0.5">•</span><span class="text-gray-300">${inl.slice(2)}</span></div>`,
       );
     } else if (rawLine === '') {
       parts.push('<div class="h-1.5"></div>');
@@ -86,14 +82,13 @@ function renderMarkdown(text: string): string {
 export default function GrantWriter() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, userProfile, profileLoaded, saveUserProfile } = useAuth();
 
   const funder: Funder | null = (location.state as any)?.funder ?? null;
 
   // Page title
   useEffect(() => {
     const name = funder?.name
-      ? `AI Grant Writer  - ${funder.name} | FunderMatch`
+      ? `AI Grant Writer — ${funder.name} | FunderMatch`
       : 'AI Grant Writer | FunderMatch';
     document.title = name;
     const desc = document.querySelector<HTMLMetaElement>(
@@ -130,17 +125,6 @@ export default function GrantWriter() {
   const [showOrg, setShowOrg] = useState(false);
   const [showProgram, setShowProgram] = useState(false);
   const [showPastGrants, setShowPastGrants] = useState(true);
-  const profileAppliedRef = useRef(false);
-
-  // Pre-populate mission & location from user profile if not already set via sessionStorage
-  useEffect(() => {
-    if (profileAppliedRef.current || !profileLoaded || !userProfile) return;
-    profileAppliedRef.current = true;
-    if (!mission && userProfile.mission_statement) setMission(userProfile.mission_statement);
-    if (!orgDetails.geoFocus && userProfile.location_served) {
-      setOrgDetails(prev => ({ ...prev, geoFocus: userProfile.location_served! }));
-    }
-  }, [profileLoaded, userProfile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Upload state ────────────────────────────────────────────────────────
 
@@ -161,7 +145,6 @@ export default function GrantWriter() {
   // ── Generation state ────────────────────────────────────────────────────
 
   const [output, setOutput] = useState('');
-  const [wordLimit, setWordLimit] = useState(500);
   const [phase, setPhase] = useState<GenerationPhase>('idle');
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -274,11 +257,6 @@ export default function GrantWriter() {
   const generate = async () => {
     if (!funder || !mission.trim() || phase === 'generating' || phase === 'analyzing' || phase === 'researching') return;
 
-    // Save mission to profile for logged-in users (fire-and-forget)
-    if (user && mission.trim()) {
-      saveUserProfile({ mission_statement: mission.trim() }).catch(e => console.warn('Profile save:', e));
-    }
-
     setOutput('');
     setPhase('analyzing');
     setError(null);
@@ -295,7 +273,6 @@ export default function GrantWriter() {
           orgDetails,
           uploadedFilePaths: uploadedFiles.map((f) => f.path),
           sessionId: sessionId.current,
-          word_limit: wordLimit,
         }),
       });
 
@@ -384,43 +361,6 @@ export default function GrantWriter() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const exportToWord = async () => {
-    // Build a clean HTML document from the markdown output
-    // Strip Tailwind classes from the rendered HTML since Word won't understand them
-    const rawHtml = renderMarkdown(output);
-    const cleanedHtml = rawHtml
-      .replace(/ class="[^"]*"/g, '')
-      .replace(/<div><\/div>/g, '<br>');
-    const fullHtml = `<!DOCTYPE html>
-<html><head><meta charset="utf-8">
-<style>
-  body { font-family: 'Calibri', 'Arial', sans-serif; font-size: 11pt; line-height: 1.6; color: #1a1a1a; margin: 1in; }
-  h2 { font-size: 16pt; font-weight: bold; color: #1a3a5c; margin-top: 24pt; margin-bottom: 8pt; border-bottom: 1pt solid #ccc; padding-bottom: 4pt; }
-  h3 { font-size: 13pt; font-weight: bold; color: #2a2a2a; margin-top: 18pt; margin-bottom: 6pt; }
-  p { font-size: 11pt; margin: 6pt 0; padding: 0; }
-  strong { font-weight: bold; }
-  hr { border: none; border-top: 1pt solid #ccc; margin: 18pt 0; }
-  span { font-size: 11pt; }
-  div { font-size: 11pt; margin: 2pt 0; padding: 0; }
-</style>
-</head><body>${cleanedHtml}</body></html>`;
-
-    try {
-      const blob = await asBlob(fullHtml, {
-        orientation: 'portrait' as const,
-        margins: { top: 1440, right: 1440, bottom: 1440, left: 1440 },
-      }) as Blob;
-
-      const safeFileName = funder?.name
-        ? `Grant_Draft_${funder.name.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, '_')}.docx`
-        : 'Grant_Draft.docx';
-
-      saveAs(blob, safeFileName);
-    } catch (err) {
-      console.error('Export to Word failed:', err);
-    }
-  };
-
   const reset = () => {
     setOutput('');
     setPhase('idle');
@@ -449,9 +389,7 @@ export default function GrantWriter() {
   // ── Render ──────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-[#0d1117] text-white">
-      <NavBar />
-      <div className="py-12 px-6">
+    <div className="min-h-screen bg-[#0d1117] text-white py-12 px-6">
       <div className="max-w-3xl mx-auto">
         {/* Back */}
         <button
@@ -517,7 +455,7 @@ export default function GrantWriter() {
               <textarea
                 className="w-full bg-[#161b22] border border-[#30363d] rounded-xl px-4 py-3 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-600 resize-none"
                 rows={4}
-                placeholder="Describe your nonprofit's mission and the communities you serve..."
+                placeholder="Describe your nonprofit's mission and the communities you serve…"
                 value={mission}
                 onChange={(e) => setMission(e.target.value)}
               />
@@ -532,7 +470,7 @@ export default function GrantWriter() {
                 <span className="text-gray-300">
                   Past Successful Grants{' '}
                   <span className="text-gray-400 font-normal">
-                    (optional  - matches your writing style)
+                    (optional — matches your writing style)
                   </span>
                   {uploadedFiles.length > 0 && (
                     <span className="ml-2 text-xs bg-blue-600/20 text-blue-400 px-2 py-0.5 rounded-full">
@@ -550,7 +488,7 @@ export default function GrantWriter() {
               {showPastGrants && (
                 <div className="px-5 pb-5 bg-[#0d1117]">
                   <p className="text-xs text-gray-400 mb-3">
-                    Upload 1-3 past successful grant proposals. The AI will
+                    Upload 1–3 past successful grant proposals. The AI will
                     analyze your writing style, tone, and structure to match it
                     in the new draft. Files are used for this session only and
                     automatically deleted.
@@ -579,7 +517,7 @@ export default function GrantWriter() {
                       {uploading ? (
                         <span className="flex items-center justify-center gap-2">
                           <Loader2 size={14} className="animate-spin" />
-                          Uploading...
+                          Uploading…
                         </span>
                       ) : (
                         <>
@@ -591,7 +529,7 @@ export default function GrantWriter() {
                       )}
                     </p>
                     <p className="text-xs text-gray-500 mt-1">
-                      PDF, DOCX, or TXT  - max 10 MB each
+                      PDF, DOCX, or TXT — max 10 MB each
                     </p>
                   </div>
                   <input
@@ -629,7 +567,7 @@ export default function GrantWriter() {
                                 {f.name}
                               </p>
                               <p className="text-xs text-gray-500">
-                                {FILE_TYPE_LABELS[f.type] || 'File'} |{' '}
+                                {FILE_TYPE_LABELS[f.type] || 'File'} ·{' '}
                                 {formatSize(f.size)}
                               </p>
                             </div>
@@ -660,7 +598,7 @@ export default function GrantWriter() {
                 <span className="text-gray-300">
                   Organization Details{' '}
                   <span className="text-gray-400 font-normal">
-                    (optional  - improves quality)
+                    (optional — improves quality)
                   </span>
                 </span>
                 {showOrg ? (
@@ -699,7 +637,7 @@ export default function GrantWriter() {
                     <input
                       type="text"
                       className={inputClass}
-                      placeholder="e.g. Youth ages 12-18 in low-income communities"
+                      placeholder="e.g. Youth ages 12–18 in low-income communities"
                       value={orgDetails.targetPop}
                       onChange={(e) => updateOrg('targetPop', e.target.value)}
                     />
@@ -721,7 +659,7 @@ export default function GrantWriter() {
                     <textarea
                       className={`${inputClass} resize-none`}
                       rows={2}
-                      placeholder="Brief description of your organization's history, programs, and impact..."
+                      placeholder="Brief description of your organization's history, programs, and impact…"
                       value={orgDetails.orgDesc}
                       onChange={(e) => updateOrg('orgDesc', e.target.value)}
                     />
@@ -739,7 +677,7 @@ export default function GrantWriter() {
                 <span className="text-gray-300">
                   Program / Project Details{' '}
                   <span className="text-gray-400 font-normal">
-                    (optional  - improves specificity)
+                    (optional — improves specificity)
                   </span>
                 </span>
                 {showProgram ? (
@@ -782,7 +720,7 @@ export default function GrantWriter() {
                     <input
                       type="text"
                       className={inputClass}
-                      placeholder="e.g. 12-month program, July 2025 - June 2026"
+                      placeholder="e.g. 12-month program, July 2025 – June 2026"
                       value={orgDetails.timeline}
                       onChange={(e) => updateOrg('timeline', e.target.value)}
                     />
@@ -802,7 +740,7 @@ export default function GrantWriter() {
                     <textarea
                       className={`${inputClass} resize-none`}
                       rows={3}
-                      placeholder="Describe the specific program or project you're seeking funding for..."
+                      placeholder="Describe the specific program or project you're seeking funding for…"
                       value={orgDetails.programDesc}
                       onChange={(e) =>
                         updateOrg('programDesc', e.target.value)
@@ -819,21 +757,6 @@ export default function GrantWriter() {
                 {error}
               </div>
             )}
-
-            {/* Word limit control */}
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-gray-200 whitespace-nowrap font-medium">Word limit:</label>
-              <input
-                type="number"
-                min={100}
-                max={5000}
-                step={100}
-                value={wordLimit}
-                onChange={e => setWordLimit(Math.max(100, Math.min(5000, parseInt(e.target.value) || 500)))}
-                className="w-24 bg-[#0d1117] border border-[#30363d] rounded px-2 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-blue-500"
-              />
-              <span className="text-sm text-gray-400">words (100–5000)</span>
-            </div>
 
             {/* Generate button */}
             <button
@@ -856,9 +779,9 @@ export default function GrantWriter() {
         {/* ── Progress indicator ── */}
         {isProcessing && !output && (
           <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-6 space-y-4">
-            <h2 className="text-sm font-medium text-gray-300 mb-4">
-              Preparing your grant draft...
-            </h2>
+            <h3 className="text-sm font-medium text-gray-300 mb-4">
+              Preparing your grant draft…
+            </h3>
 
             {/* Phase: Analyzing past grants */}
             {uploadedFiles.length > 0 && (
@@ -876,7 +799,7 @@ export default function GrantWriter() {
                   }`}
                 >
                   Analyzing {uploadedFiles.length} past grant
-                  {uploadedFiles.length !== 1 ? 's' : ''} for writing style...
+                  {uploadedFiles.length !== 1 ? 's' : ''} for writing style…
                 </span>
               </div>
             )}
@@ -901,7 +824,7 @@ export default function GrantWriter() {
               >
                 {researchStats
                   ? `Found ${researchStats.statsFound} statistics and ${researchStats.sourcesFound} sources${researchStats.fallback ? ' (using AI knowledge)' : ''}`
-                  : 'Researching context, statistics, and trends...'}
+                  : 'Researching context, statistics, and trends…'}
               </span>
             </div>
 
@@ -919,7 +842,7 @@ export default function GrantWriter() {
                     : 'text-gray-600'
                 }`}
               >
-                Writing your grant draft for {funder.name}...
+                Writing your grant draft for {funder.name}…
               </span>
             </div>
           </div>
@@ -929,7 +852,7 @@ export default function GrantWriter() {
         {phase === 'generating' && output && (
           <div className="flex items-center gap-3 py-2 text-blue-400 text-sm">
             <Loader2 size={16} className="animate-spin" />
-            Writing your grant application for {funder.name}...
+            Writing your grant application for {funder.name}…
           </div>
         )}
 
@@ -940,13 +863,6 @@ export default function GrantWriter() {
               <h2 className="text-lg font-semibold">Your Grant Draft</h2>
               {phase === 'done' && (
                 <div className="flex gap-2">
-                  <button
-                    onClick={exportToWord}
-                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-4 py-2 text-sm font-medium transition-colors"
-                  >
-                    <Download size={14} />
-                    Export to Word
-                  </button>
                   <button
                     onClick={copyOutput}
                     className="flex items-center gap-2 border border-[#30363d] rounded-xl px-4 py-2 text-sm hover:bg-[#161b22] transition-colors"
@@ -988,7 +904,7 @@ export default function GrantWriter() {
             {phase === 'generating' && (
               <div className="flex items-center gap-2 mt-3 text-sm text-blue-400">
                 <Loader2 size={14} className="animate-spin" />
-                Generating...
+                Generating…
               </div>
             )}
             <div ref={outputEndRef} />
@@ -1003,7 +919,6 @@ export default function GrantWriter() {
             )}
           </div>
         )}
-      </div>
       </div>
     </div>
   );

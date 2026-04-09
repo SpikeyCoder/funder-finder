@@ -724,7 +724,7 @@ function UserSettingsContent() {
                     <h3 className="text-md font-semibold text-white mb-4">Create new feed</h3>
                     <div className="space-y-4">
                       <div>
-                        <label className="text-sm text-gray-400 mb-2 block">Project (optional - leave blank for all projects)</label>
+                        <label className="text-sm text-gray-400 mb-2 block">Project (optional — leave blank for all projects)</label>
                         <select value={newFeedProjectId} onChange={(e) => setNewFeedProjectId(e.target.value)} className={inputClass}>
                           <option value="">All projects</option>
                           {projects.map(p => (

@@ -231,7 +231,7 @@ export default function ReportsPage() {
                   <div key={item.type}>
                     <div className="flex justify-between text-xs mb-1">
                       <span className="text-gray-300">{item.type}</span>
-                      <span className="text-gray-400">{item.count} grant{item.count !== 1 ? 's' : ''} | {fmt(item.amount)}</span>
+                      <span className="text-gray-400">{item.count} grant{item.count !== 1 ? 's' : ''} · {fmt(item.amount)}</span>
                     </div>
                     <div className="h-2 bg-[#0d1117] rounded-full overflow-hidden">
                       <div className="h-full rounded-full bg-indigo-500 transition-all" style={{
