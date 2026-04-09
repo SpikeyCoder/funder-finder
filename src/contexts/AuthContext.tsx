@@ -1,20 +1,11 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase, SUPABASE_CUSTOM_DOMAIN } from '../lib/supabase';
-import { BudgetBand, Funder, FunderStatus, SavedFunderEntry } from '../types';
+import { Funder, FunderStatus, SavedFunderEntry } from '../types';
 
 // The OAuth redirect URL must match what is registered in Supabase dashboard
 // and in each OAuth provider's allowed redirect URIs.
 const REDIRECT_URL = 'https://fundermatch.org/';
-
-// ── Profile type ─────────────────────────────────────────────────────────────
-
-export interface UserProfile {
-  mission_statement: string | null;
-  location_served: string | null;
-  budget_range: BudgetBand | null;
-  organization_name: string | null;
-}
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -52,15 +43,6 @@ interface AuthContextValue {
   fetchSavedEntries: () => Promise<SavedFunderEntry[]>;
   /** Update status and/or notes for a saved funder. */
   updateSavedFunder: (funderId: string, updates: { status?: FunderStatus; notes?: string }) => Promise<void>;
-
-  /** User profile (mission, location, budget) — loaded on auth. */
-  userProfile: UserProfile | null;
-  /** Whether the profile has been loaded from DB (false during initial fetch). */
-  profileLoaded: boolean;
-  /** Save/update profile fields to the DB and update local state. */
-  saveUserProfile: (fields: Partial<UserProfile>) => Promise<void>;
-  /** Reload profile from DB. */
-  refreshUserProfile: () => Promise<void>;
 }
 
 // ── Context ───────────────────────────────────────────────────────────────────
@@ -86,8 +68,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [pendingFunder, setPendingFunder] = useState<Funder | null>(null);
   const [postLoginRedirect, setPostLoginRedirect] = useState<string | null>(null);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [profileLoaded, setProfileLoaded] = useState(false);
 
   // Ref so callbacks inside onAuthStateChange can read latest values
   const pendingFunderRef = useRef<Funder | null>(null);
@@ -128,23 +108,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const saveFunderToDB = useCallback(async (funder: Funder) => {
     const userId = (await supabase.auth.getUser()).data.user?.id;
-    if (!userId) throw new Error('Authentication required to save funders');
+    if (!userId) throw new Error('Not authenticated');
     const { error } = await supabase.from('saved_funders').upsert(
       { user_id: userId, funder_id: funder.id, funder_data: funder },
       { onConflict: 'user_id,funder_id' }
     );
-    if (error) {
-      if (error.message.includes('network')) {
-        throw new Error('Network connection error. Please check your internet and try again.');
-      }
-      if (error.message.includes('timeout')) {
-        throw new Error('Request timeout. Please try again.');
-      }
-      if (error.message.includes('permission') || error.message.includes('unauthorized')) {
-        throw new Error('You do not have permission to save funders.');
-      }
-      throw new Error('Failed to save funder. Please try again.');
-    }
+    if (error) throw error;
   }, []);
 
   const saveFunderToDBWithUser = useCallback(async (funder: Funder, userId: string) => {
@@ -163,15 +132,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .delete()
       .eq('user_id', userId)
       .eq('funder_id', funderId);
-    if (error) {
-      if (error.message.includes('network')) {
-        throw new Error('Network connection error. Please check your internet and try again.');
-      }
-      if (error.message.includes('timeout')) {
-        throw new Error('Request timeout. Please try again.');
-      }
-      throw new Error('Failed to remove funder. Please try again.');
-    }
+    if (error) throw error;
   }, []);
 
   const fetchSavedFunders = useCallback(async (): Promise<Funder[]> => {
@@ -179,15 +140,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .from('saved_funders')
       .select('funder_data, saved_at')
       .order('saved_at', { ascending: false });
-    if (error) {
-      if (error.message.includes('network')) {
-        throw new Error('Network connection error. Cannot load saved funders.');
-      }
-      if (error.message.includes('timeout')) {
-        throw new Error('Request timeout while loading saved funders.');
-      }
-      throw new Error('Failed to load saved funders. Please try again.');
-    }
+    if (error) throw error;
     return (data ?? []).map((row: any) => row.funder_data as Funder);
   }, []);
 
@@ -226,49 +179,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .eq('funder_id', funderId);
     if (error) throw error;
   }, []);
-
-  // ── User profile ─────────────────────────────────────────────────────────────
-
-  const loadUserProfile = useCallback(async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .select('mission_statement, location_served, budget_range, organization_name')
-        .eq('id', userId)
-        .maybeSingle();
-      if (error) { console.warn('Failed to load profile:', error); return; }
-      if (data) {
-        setUserProfile({
-          mission_statement: data.mission_statement ?? null,
-          location_served: data.location_served ?? null,
-          budget_range: data.budget_range ?? null,
-          organization_name: data.organization_name ?? null,
-        });
-      }
-    } finally {
-      setProfileLoaded(true);
-    }
-  }, []);
-
-  const saveUserProfile = useCallback(async (fields: Partial<UserProfile>) => {
-    const userId = (await supabase.auth.getUser()).data.user?.id;
-    if (!userId) throw new Error('Not authenticated');
-    const { error } = await supabase
-      .from('user_profiles')
-      .upsert({ id: userId, ...fields, updated_at: new Date().toISOString() }, { onConflict: 'id' });
-    if (error) throw error;
-    // Update local state optimistically
-    setUserProfile(prev => prev ? { ...prev, ...fields } : {
-      mission_statement: null, location_served: null, budget_range: null, organization_name: null,
-      ...fields,
-    });
-  }, []);
-
-  const refreshUserProfile = useCallback(async () => {
-    const userId = (await supabase.auth.getUser()).data.user?.id;
-    if (!userId) return;
-    await loadUserProfile(userId);
-  }, [loadUserProfile]);
 
   // ── OAuth sign-in ────────────────────────────────────────────────────────────
 
@@ -332,9 +242,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
-      // Load profile for authenticated user
-      if (session?.user) loadUserProfile(session.user.id);
-      else setProfileLoaded(true);
     });
 
     // Listen for future auth changes
@@ -342,12 +249,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       async (event, newSession) => {
         setSession(newSession);
         setUser(newSession?.user ?? null);
-
-        // Clear profile on sign-out
-        if (!newSession?.user) {
-          setUserProfile(null);
-          setProfileLoaded(true);
-        }
 
         // After a successful sign-in, auto-save any pending funder.
         //
@@ -374,14 +275,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               setPostLoginRedirect('/saved');
             }
           }
-          // Load user profile on sign-in
-          loadUserProfile(newSession.user.id);
         }
       }
     );
 
     return () => subscription.unsubscribe();
-  }, [clearPendingFunder, saveFunderToDBWithUser, loadUserProfile]);
+  }, [clearPendingFunder, saveFunderToDBWithUser]);
 
   // ── Value ─────────────────────────────────────────────────────────────────────
 
@@ -405,10 +304,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         fetchSavedIds,
         fetchSavedEntries,
         updateSavedFunder,
-        userProfile,
-        profileLoaded,
-        saveUserProfile,
-        refreshUserProfile,
       }}
     >
       {children}
