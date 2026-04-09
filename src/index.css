@@ -4,8 +4,15 @@
 @tailwind utilities;
 
 @layer base {
-  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible, [role="button"]:focus-visible, [tabindex]:focus-visible {
-    outline: 2px solid #38bdf8;
+  /* Visible focus rings on all interactive elements (WCAG 2.4.7) */
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  [role="radio"]:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 2px solid #3b82f6;
     outline-offset: 2px;
   }
 }
@@ -21,6 +28,68 @@ body {
   margin: 0;
 }
 
+/* Improved contrast for placeholder text (WCAG 1.4.3) */
+::placeholder {
+  color: #8b949e;
+  opacity: 1;
+}
+
+/* Light mode theme overrides */
+html.light-mode body {
+  background-color: #ffffff;
+  color: #1f2328;
+}
+
+html.light-mode nav,
+html.light-mode footer {
+  background-color: #f6f8fa !important;
+  border-color: #d1d9e0 !important;
+}
+
+html.light-mode .bg-\[\#0d1117\] {
+  background-color: #ffffff;
+}
+
+html.light-mode .bg-\[\#161b22\] {
+  background-color: #f6f8fa;
+}
+
+html.light-mode .bg-\[\#21262d\] {
+  background-color: #eaeef2;
+}
+
+html.light-mode .border-\[\#30363d\] {
+  border-color: #d1d9e0;
+}
+
+html.light-mode .border-\[\#1b2130\] {
+  border-color: #d1d9e0;
+}
+
+html.light-mode .text-white {
+  color: #1f2328;
+}
+
+html.light-mode .text-gray-400 {
+  color: #656d76;
+}
+
+html.light-mode .text-gray-300 {
+  color: #424a53;
+}
+
+html.light-mode .text-gray-500 {
+  color: #6e7681;
+}
+
+html.light-mode .text-gray-600 {
+  color: #57606a;
+}
+
+html.light-mode .placeholder-gray-600::placeholder {
+  color: #6e7681;
+}
+
 @keyframes pageFadeIn {
   from {
     opacity: 0;
@@ -34,177 +103,4 @@ body {
 
 .page-fade-in {
   animation: pageFadeIn 0.25s ease-out forwards;
-}
-
-/* ── Light-mode overrides ──────────────────────────────────────────────
-   The ThemeToggle component adds .light-mode to <html> when the user
-   clicks the sun/moon button. These rules flip every dark-first colour
-   so text, backgrounds, and borders stay readable on a light canvas.
-   ──────────────────────────────────────────────────────────────────── */
-html.light-mode body {
-  background-color: #ffffff !important;
-  color: #1a1a2e !important;
-}
-
-/* ── Text colours ─────────────────────────────────────────────────── */
-html.light-mode .text-white          { color: #1a1a2e !important; }
-html.light-mode .text-gray-100       { color: #222 !important; }
-html.light-mode .text-gray-200       { color: #333 !important; }
-html.light-mode .text-gray-300       { color: #333 !important; }
-html.light-mode .text-gray-400       { color: #333 !important; }
-html.light-mode .text-gray-500       { color: #444 !important; }
-html.light-mode .text-blue-300       { color: #1d4ed8 !important; }
-html.light-mode .text-blue-400       { color: #2563eb !important; }
-html.light-mode .text-green-400      { color: #16a34a !important; }
-html.light-mode .text-green-300      { color: #15803d !important; }
-html.light-mode .text-yellow-400     { color: #ca8a04 !important; }
-html.light-mode .text-yellow-300     { color: #a16207 !important; }
-html.light-mode .text-red-400        { color: #dc2626 !important; }
-html.light-mode .text-red-300        { color: #b91c1c !important; }
-html.light-mode .text-blue-100       { color: #1e40af !important; }
-html.light-mode .text-blue-200       { color: #1e3a8a !important; }
-html.light-mode .text-gray-600       { color: #444 !important; }
-html.light-mode .text-gray-900       { color: #111 !important; }
-html.light-mode .text-orange-400     { color: #c2410c !important; }
-html.light-mode .text-purple-400     { color: #7c3aed !important; }
-html.light-mode .text-purple-300     { color: #6d28d9 !important; }
-html.light-mode .text-amber-300      { color: #b45309 !important; }
-html.light-mode .text-amber-400      { color: #92400e !important; }
-html.light-mode .text-red-200        { color: #991b1b !important; }
-html.light-mode .text-blue-500       { color: #1d4ed8 !important; }
-html.light-mode .text-blue-600       { color: #1e40af !important; }
-
-/* ── Background colours ───────────────────────────────────────────── */
-html.light-mode .bg-\[\#0d1117\]     { background-color: #ffffff !important; }
-html.light-mode .bg-\[\#161b22\]     { background-color: #f6f8fa !important; }
-html.light-mode .bg-\[\#1c2128\]     { background-color: #f0f2f5 !important; }
-html.light-mode .bg-\[\#21262d\]     { background-color: #e8eaed !important; }
-html.light-mode .bg-\[\#111723\]     { background-color: #f0f2f5 !important; }
-html.light-mode .bg-\[\#0f1d2e\]     { background-color: #e8f0fe !important; }
-html.light-mode .bg-\[\#1a1f2e\]     { background-color: #f0f2f5 !important; }
-html.light-mode .bg-gray-900         { background-color: #f6f8fa !important; }
-html.light-mode .bg-gray-800         { background-color: #f0f2f5 !important; }
-html.light-mode .bg-black            { background-color: #f6f8fa !important; }
-html.light-mode .bg-blue-900\/30     { background-color: #dbeafe !important; }
-html.light-mode .bg-red-900\/20      { background-color: #fee2e2 !important; }
-html.light-mode .bg-green-900\/20    { background-color: #dcfce7 !important; }
-html.light-mode .bg-yellow-900\/20   { background-color: #fef9c3 !important; }
-html.light-mode .bg-\[\#30363d\]     { background-color: #d8dce0 !important; }
-html.light-mode .bg-\[\#3d444d\]     { background-color: #ccd1d6 !important; }
-html.light-mode .bg-\[\#1a202e\]     { background-color: #f0f2f5 !important; }
-html.light-mode .bg-\[\#1f2937\]     { background-color: #f0f2f5 !important; }
-
-/* ── Border colours ───────────────────────────────────────────────── */
-html.light-mode .border-\[\#30363d\] { border-color: #d0d7de !important; }
-html.light-mode .border-\[\#1f3a5f\] { border-color: #a8c8f0 !important; }
-html.light-mode .border-gray-700     { border-color: #d0d7de !important; }
-html.light-mode .border-gray-600     { border-color: #d0d7de !important; }
-html.light-mode .border-blue-800\/50 { border-color: #93c5fd !important; }
-
-/* ── Hover states ─────────────────────────────────────────────────── */
-html.light-mode .hover\:bg-\[\#21262d\]:hover  { background-color: #e0e3e6 !important; }
-html.light-mode .hover\:bg-\[\#161b22\]:hover  { background-color: #eaecef !important; }
-html.light-mode .hover\:bg-\[\#30363d\]:hover  { background-color: #d8dce0 !important; }
-html.light-mode .hover\:text-white:hover       { color: #1a1a2e !important; }
-html.light-mode .hover\:text-gray-200:hover    { color: #333 !important; }
-
-/* ── Placeholder colours ──────────────────────────────────────────── */
-html.light-mode .placeholder-gray-500::placeholder { color: #777 !important; }
-html.light-mode .placeholder-gray-400::placeholder { color: #666 !important; }
-
-/* ── Input / textarea backgrounds ─────────────────────────────────── */
-html.light-mode input,
-html.light-mode textarea,
-html.light-mode select {
-  background-color: #ffffff !important;
-  color: #1a1a2e !important;
-  border-color: #d0d7de !important;
-}
-
-/* ── Cards, panels, modals ────────────────────────────────────────── */
-html.light-mode .shadow-lg  { box-shadow: 0 4px 12px rgba(0,0,0,0.08) !important; }
-html.light-mode .shadow-2xl { box-shadow: 0 8px 24px rgba(0,0,0,0.12) !important; }
-
-/* ── NavBar ───────────────────────────────────────────────────────── */
-html.light-mode nav,
-html.light-mode header {
-  background-color: #ffffff !important;
-  border-bottom-color: #d0d7de !important;
-}
-
-/* ── Blue accent buttons (keep legible) ───────────────────────────── */
-html.light-mode .bg-blue-600 { background-color: #2563eb !important; }
-html.light-mode .bg-\[\#1f6feb\] { background-color: #2563eb !important; }
-
-/* ── Divider / ring colours ───────────────────────────────────────── */
-html.light-mode .ring-blue-400    { --tw-ring-color: #2563eb !important; }
-html.light-mode .divide-gray-700 > :not([hidden]) ~ :not([hidden]) { border-color: #d0d7de !important; }
-
-/* ── Scrollbar (Webkit) ───────────────────────────────────────────── */
-html.light-mode ::-webkit-scrollbar-track { background: #f6f8fa !important; }
-html.light-mode ::-webkit-scrollbar-thumb { background: #c1c8d0 !important; }
-
-/* ── Theme toggle button itself — keep visible in light mode ──────── */
-html.light-mode .bg-\[\#21262d\] { background-color: #e8eaed !important; }
-
-/* ── Responsive: Browse Grants table as card layout on mobile ────── */
-@media (max-width: 768px) {
-  .browse-table thead {
-    display: none;
-  }
-  .browse-table,
-  .browse-table tbody,
-  .browse-table tr,
-  .browse-table td {
-    display: block;
-    width: 100%;
-  }
-  .browse-table tr {
-    margin-bottom: 1rem;
-    border: 1px solid #30363d;
-    border-radius: 0.75rem;
-    padding: 0.75rem;
-    background: #161b22;
-  }
-  .browse-table td {
-    padding: 0.25rem 0;
-    border: none;
-    text-align: left;
-  }
-  .browse-table td::before {
-    content: attr(data-label);
-    display: inline-block;
-    font-weight: 600;
-    color: #8b949e;
-    font-size: 0.75rem;
-    min-width: 100px;
-    margin-right: 0.5rem;
-  }
-  .browse-table td.browse-cell-hidden {
-    display: block !important;
-  }
-}
-
-/* ── Responsive: prevent horizontal scroll at 375px ─────────────── */
-@media (max-width: 480px) {
-  .max-w-2xl, .max-w-3xl, .max-w-5xl, .max-w-6xl {
-    max-width: 100% !important;
-    padding-left: 1rem !important;
-    padding-right: 1rem !important;
-  }
-}
-
-/* ── Global mobile text overflow prevention ─────────────────────── */
-* {
-  min-width: 0;
-}
-
-h1, h2, h3, h4, h5, h6, p, span, a, td, th, li, label, button {
-  overflow-wrap: break-word;
-  word-break: break-word;
-}
-
-table {
-  table-layout: fixed;
-  word-break: break-word;
 }
