@@ -15,6 +15,7 @@ const GRANT_TASKS_URL = `${SUPABASE_URL}/functions/v1/grant-tasks`;
 const COMPLIANCE_URL = `${SUPABASE_URL}/functions/v1/compliance`;
 const SHARE_LINK_URL = `${SUPABASE_URL}/functions/v1/share-link`;
 const AI_DRAFT_URL = `${SUPABASE_URL}/functions/v1/ai-draft`;
+const FETCH_DEADLINE_URL = `${SUPABASE_URL}/functions/v1/fetch-grant-deadline`;
 
 interface PeerOrg {
   name: string;
@@ -126,6 +127,10 @@ export default function ProjectWorkspace() {
   const [grantTasks, setGrantTasks] = useState<GrantTask[]>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerVisible, setDrawerVisible] = useState(false); // for slide animation
+
+  // Deadline auto-fill
+  const [fetchingDeadline, setFetchingDeadline] = useState(false);
+  const [deadlineFetchNote, setDeadlineFetchNote] = useState<string | null>(null);
 
   // External grant modal
   const [addGrantOpen, setAddGrantOpen] = useState(false);
@@ -482,6 +487,32 @@ export default function ProjectWorkspace() {
     }
   };
 
+  // Auto-fill deadline from funder website
+  const autoFillDeadline = async () => {
+    if (!selectedGrant?.grant_url || fetchingDeadline) return;
+    setFetchingDeadline(true);
+    setDeadlineFetchNote(null);
+    try {
+      const headers = await getEdgeFunctionHeaders();
+      const resp = await fetch(FETCH_DEADLINE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ url: selectedGrant.grant_url, funder_name: selectedGrant.funder_name }),
+      });
+      const data = await resp.json();
+      if (data.deadline) {
+        await handleUpdateGrant(selectedGrant.id, { deadline: data.deadline } as any);
+        setDeadlineFetchNote(`Set to ${new Date(data.deadline).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} (${data.confidence} confidence)`);
+      } else {
+        setDeadlineFetchNote(data.notes || 'No deadline found on that page');
+      }
+    } catch {
+      setDeadlineFetchNote('Could not fetch deadline — check the URL');
+    } finally {
+      setFetchingDeadline(false);
+    }
+  };
+
   // Delete grant
   const handleDeleteGrant = async (grantId: string) => {
     try {
@@ -532,6 +563,7 @@ export default function ProjectWorkspace() {
     setDrawerSection('overview');
     setAiDraft(null);
     setAiDraftEditable(false);
+    setDeadlineFetchNote(null);
     // Load tasks
     try {
       const headers = await getEdgeFunctionHeaders();
@@ -1799,7 +1831,29 @@ export default function ProjectWorkspace() {
                     </div>
                     <div>
                       <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Deadline</p>
-                      <p className="text-sm text-white">{selectedGrant.deadline ? new Date(selectedGrant.deadline).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—'}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm text-white">
+                          {selectedGrant.deadline ? new Date(selectedGrant.deadline).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—'}
+                        </p>
+                        {selectedGrant.grant_url && (
+                          <button
+                            onClick={() => { setDeadlineFetchNote(null); autoFillDeadline(); }}
+                            disabled={fetchingDeadline}
+                            title="Auto-fill deadline from grant website"
+                            className="flex items-center gap-1 text-[10px] text-blue-400 hover:text-blue-300 disabled:opacity-50 transition-colors"
+                          >
+                            {fetchingDeadline ? (
+                              <Loader size={10} className="animate-spin" />
+                            ) : (
+                              <Sparkles size={10} />
+                            )}
+                            {fetchingDeadline ? 'Fetching…' : 'Auto-fill'}
+                          </button>
+                        )}
+                      </div>
+                      {deadlineFetchNote && (
+                        <p className="text-[10px] text-gray-400 mt-0.5">{deadlineFetchNote}</p>
+                      )}
                     </div>
                     <div>
                       <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Project</p>
