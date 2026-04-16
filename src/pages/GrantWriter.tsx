@@ -2,10 +2,11 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft, Check, CheckCircle2, ChevronDown, ChevronUp, Copy,
-  FileText, Loader2, RefreshCw, Trash2, Upload, Wand2, X,
+  FileText, Loader2, RefreshCw, Save, Trash2, Upload, Wand2, X,
 } from 'lucide-react';
 import { Funder, GenerationPhase, OrgDetails, UploadedGrantFile } from '../types';
 import { getEdgeFunctionHeaders, supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 import { formatGrantRange, formatTotalGiving } from '../utils/matching';
 
 const GRANT_WRITER_URL =
@@ -83,6 +84,7 @@ export default function GrantWriter() {
   const location = useLocation();
   const navigate = useNavigate();
 
+  const { user } = useAuth();
   const funder: Funder | null = (location.state as any)?.funder ?? null;
 
   // Page title
@@ -148,6 +150,9 @@ export default function GrantWriter() {
   const [phase, setPhase] = useState<GenerationPhase>('idle');
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [savedDraftId, setSavedDraftId] = useState<string | null>(null);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [researchStats, setResearchStats] = useState<{
     statsFound: number;
     sourcesFound: number;
@@ -361,11 +366,52 @@ export default function GrantWriter() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const saveDraft = async () => {
+    if (!funder || !output || !user) return;
+    setSavingDraft(true);
+    setSaveError(null);
+    try {
+      const title = `${funder.name} — ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+      if (savedDraftId) {
+        // Update existing draft
+        const { error } = await supabase
+          .from('grant_drafts')
+          .update({ content: output, title, mission })
+          .eq('id', savedDraftId)
+          .eq('user_id', user.id);
+        if (error) throw error;
+      } else {
+        // Insert new draft
+        const { data, error } = await supabase
+          .from('grant_drafts')
+          .insert({
+            user_id: user.id,
+            funder_id: funder.id,
+            funder_name: funder.name,
+            funder_ein: funder.foundation_ein ?? null,
+            title,
+            content: output,
+            mission,
+          })
+          .select('id')
+          .single();
+        if (error) throw error;
+        setSavedDraftId(data.id);
+      }
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : 'Failed to save draft');
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
   const reset = () => {
     setOutput('');
     setPhase('idle');
     setError(null);
     setResearchStats(null);
+    setSavedDraftId(null);
+    setSaveError(null);
   };
 
   // ── Helpers ─────────────────────────────────────────────────────────────
@@ -862,7 +908,7 @@ export default function GrantWriter() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">Your Grant Draft</h2>
               {phase === 'done' && (
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <button
                     onClick={copyOutput}
                     className="flex items-center gap-2 border border-[#30363d] rounded-xl px-4 py-2 text-sm hover:bg-[#161b22] transition-colors"
@@ -874,6 +920,22 @@ export default function GrantWriter() {
                     )}
                     {copied ? 'Copied!' : 'Copy All'}
                   </button>
+                  {user && (
+                    <button
+                      onClick={saveDraft}
+                      disabled={savingDraft}
+                      className="flex items-center gap-2 border border-[#30363d] rounded-xl px-4 py-2 text-sm hover:bg-[#161b22] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {savingDraft ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : savedDraftId ? (
+                        <Check size={14} className="text-green-400" />
+                      ) : (
+                        <Save size={14} />
+                      )}
+                      {savingDraft ? 'Saving…' : savedDraftId ? 'Saved' : 'Save Draft'}
+                    </button>
+                  )}
                   <button
                     onClick={reset}
                     className="flex items-center gap-2 border border-[#30363d] rounded-xl px-4 py-2 text-sm hover:bg-[#161b22] transition-colors"
@@ -884,6 +946,21 @@ export default function GrantWriter() {
                 </div>
               )}
             </div>
+
+            {/* Save error */}
+            {saveError && (
+              <div className="flex items-center gap-2 mb-3 text-xs text-red-400">
+                <X size={12} />
+                {saveError}
+              </div>
+            )}
+
+            {/* Login prompt for saving */}
+            {!user && phase === 'done' && (
+              <p className="mb-3 text-xs text-gray-500">
+                Sign in to save this draft for future retrieval.
+              </p>
+            )}
 
             {/* Research summary badge */}
             {researchStats && (

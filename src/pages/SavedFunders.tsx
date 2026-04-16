@@ -3,13 +3,14 @@ import { useEffect, useState, useRef } from 'react';
 import {
   ArrowLeft, BookmarkX, Download, ChevronRight, Loader2,
   LogOut, PenLine, User as UserIcon, StickyNote, ChevronDown, ChevronUp,
-  Users, Building2,
+  Users, Building2, FileText, X,
 } from 'lucide-react';
-import { SavedFunderEntry, FunderStatus, PeerEntry } from '../types';
+import { SavedFunderEntry, FunderStatus, PeerEntry, GrantDraft } from '../types';
 import { getSavedEntries, unsaveFunder, setFunderMeta } from '../utils/storage';
 import { formatTotalGiving, fetchPeers } from '../utils/matching';
 import { fmtDollar } from '../components/InsightCharts';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 import LoginModal from '../components/LoginModal';
 
 // ── Status config ──────────────────────────────────────────────────────────────
@@ -42,6 +43,10 @@ export default function SavedFunders() {
   const [notesDraft, setNotesDraft] = useState<Record<string, string>>({});
   const [showLoginModal, setShowLoginModal] = useState(false);
 
+  // Grant drafts: keyed by funder_id, array of drafts per funder
+  const [draftsByFunder, setDraftsByFunder] = useState<Record<string, GrantDraft[]>>({});
+  const [viewingDraft, setViewingDraft] = useState<GrantDraft | null>(null);
+
   // FEAT-008: Peer recommendations aggregated from saved funders
   const [peerRecs, setPeerRecs] = useState<(PeerEntry & { recommendedBy: string })[]>([]);
   const [peersLoading, setPeersLoading] = useState(false);
@@ -59,6 +64,25 @@ export default function SavedFunders() {
   }, []);
 
   useEffect(() => { loadEntries(); }, [user]);
+
+  // Load grant drafts for logged-in users
+  useEffect(() => {
+    if (!user) { setDraftsByFunder({}); return; }
+    supabase
+      .from('grant_drafts')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        if (!data) return;
+        const byFunder: Record<string, GrantDraft[]> = {};
+        for (const d of data as GrantDraft[]) {
+          if (!byFunder[d.funder_id]) byFunder[d.funder_id] = [];
+          byFunder[d.funder_id].push(d);
+        }
+        setDraftsByFunder(byFunder);
+      });
+  }, [user]);
 
   const loadEntries = async () => {
     setLoading(true);
@@ -446,6 +470,15 @@ export default function SavedFunders() {
                             Write Grant
                           </button>
                         )}
+                        {user && draftsByFunder[f.id]?.length > 0 && (
+                          <button
+                            onClick={() => setViewingDraft(draftsByFunder[f.id][0])}
+                            className="flex items-center gap-2 border border-[#30363d] text-gray-300 rounded-xl px-4 py-2 text-sm hover:bg-[#21262d] transition-colors"
+                          >
+                            <FileText size={14} />
+                            Drafts ({draftsByFunder[f.id].length})
+                          </button>
+                        )}
                         <button
                           onClick={() => navigate(`/funder/${f.id}`, { state: { funder: f } })}
                           className="flex items-center gap-2 border border-[#30363d] rounded-xl px-4 py-2 text-sm hover:bg-[#21262d] transition-colors ml-auto"
@@ -521,6 +554,63 @@ export default function SavedFunders() {
           </div>
         )}
       </div>
+
+      {/* Grant draft viewer modal */}
+      {viewingDraft && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
+          <div className="bg-[#161b22] border border-[#30363d] rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#30363d]">
+              <div className="min-w-0">
+                <h3 className="font-semibold text-white truncate">{viewingDraft.title}</h3>
+                <p className="text-xs text-gray-400 mt-0.5">{viewingDraft.funder_name}</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0 ml-4">
+                {draftsByFunder[viewingDraft.funder_id]?.length > 1 && (
+                  <div className="flex gap-1">
+                    {draftsByFunder[viewingDraft.funder_id].map((d, i) => (
+                      <button
+                        key={d.id}
+                        onClick={() => setViewingDraft(d)}
+                        className={`text-xs px-2 py-1 rounded-lg border transition-colors ${
+                          d.id === viewingDraft.id
+                            ? 'bg-blue-600/20 border-blue-600 text-blue-400'
+                            : 'border-[#30363d] text-gray-400 hover:border-gray-500'
+                        }`}
+                      >
+                        {i + 1}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <button
+                  onClick={() => setViewingDraft(null)}
+                  className="text-gray-400 hover:text-white transition-colors p-1"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+            <div className="overflow-y-auto px-6 py-5 flex-1">
+              <pre className="whitespace-pre-wrap text-sm text-gray-300 font-sans leading-relaxed">
+                {viewingDraft.content}
+              </pre>
+            </div>
+            <div className="px-6 py-3 border-t border-[#30363d] flex items-center justify-between">
+              <p className="text-xs text-gray-500">
+                Saved {new Date(viewingDraft.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              </p>
+              <button
+                onClick={async () => {
+                  await navigator.clipboard.writeText(viewingDraft.content);
+                }}
+                className="text-xs text-gray-400 hover:text-white transition-colors"
+              >
+                Copy text
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showLoginModal && (
         <LoginModal onClose={() => setShowLoginModal(false)} />
