@@ -2272,6 +2272,130 @@ function baselineMissionScore(userTokens: Set<string>, funderTokens: Set<string>
   return 0.22;
 }
 
+// === Direct purpose-text search (past grant matching without peer intermediary) ===
+
+/**
+ * Search foundation_grants.purpose_text directly for missions matching the user's
+ * description, then score and return the foundations who made those grants.
+ * This replaces the peer-org intermediary approach: instead of
+ * "find orgs like mine -> find funders of those orgs", we do
+ * "find grants whose purpose text matches my mission -> rank those funders".
+ */
+async function searchByPurposeText(
+  mission: string,
+  locationServed: string,
+  budgetBand: string,
+  filterDafs: boolean,
+): Promise<unknown[]> {
+  const missionTokens = tokenize(mission);
+  const topTerms = [...missionTokens]
+    .filter((t) => t.length > 4)
+    .slice(0, 10);
+
+  if (!topTerms.length) return [];
+
+  const userLocation = parseUserLocation(locationServed);
+  const baseSelect =
+    'id,name,type,foundation_ein,description,focus_areas,ntee_code,city,state,' +
+    'website,contact_url,programs_url,apply_url,discovered_apply_url,news_url,total_giving,asset_amount,' +
+    'grant_range_min,grant_range_max,contact_name,contact_title,contact_email,next_step';
+
+  // Build ILIKE conditions: look for grants whose purpose_text contains any top term
+  const ilikeFilters = topTerms.map((t) => `purpose_text.ilike.*${t}*`).join(',');
+  const minYear = new Date().getUTCFullYear() - 7;
+
+  let grantsUrl =
+    `foundation_grants?select=foundation_id,purpose_text,grant_year,grant_amount,grantee_state` +
+    `&or=(${ilikeFilters})` +
+    `&grant_year=gte.${minYear}` +
+    `&limit=5000`;
+
+  try {
+    const grantsRes = await sbFetch(grantsUrl);
+    const grants = await grantsRes.json() as Array<{
+      foundation_id: string;
+      purpose_text: string | null;
+      grant_year: number | null;
+      grant_amount: number | null;
+      grantee_state: string | null;
+    }>;
+
+    if (!grants.length) return [];
+
+    // Score each foundation by frequency and recency of purpose-matched grants
+    const foundationScores = new Map<string, { count: number; recentCount: number; totalAmount: number }>();
+    const recentCutoff = new Date().getUTCFullYear() - 3;
+
+    for (const g of grants) {
+      if (!g.foundation_id) continue;
+      const entry = foundationScores.get(g.foundation_id) || { count: 0, recentCount: 0, totalAmount: 0 };
+      entry.count++;
+      if ((g.grant_year || 0) >= recentCutoff) entry.recentCount++;
+      entry.totalAmount += g.grant_amount || 0;
+      foundationScores.set(g.foundation_id, entry);
+    }
+
+    const topFoundationIds = [...foundationScores.entries()]
+      .sort((a, b) => (b[1].recentCount * 2 + b[1].count) - (a[1].recentCount * 2 + a[1].count))
+      .slice(0, 60)
+      .map(([id]) => id);
+
+    if (!topFoundationIds.length) return [];
+
+    // Fetch funder details
+    let funderUrl =
+      `funders?select=${baseSelect}&id=in.${buildInFilter(topFoundationIds)}&limit=60`;
+    if (filterDafs) funderUrl += `&type=neq.daf`;
+
+    const funderRes = await sbFetch(funderUrl);
+    const funderRows = await funderRes.json() as FunderRow[];
+
+    const userTokensList = [...missionTokens];
+    const userBudget = toNumericBudgetBand(budgetBand);
+
+    const results = funderRows.map((funder) => {
+      const entry = foundationScores.get(funder.id) || { count: 0, recentCount: 0, totalAmount: 0 };
+      const purposeScore = Math.min(1, (entry.recentCount * 2 + entry.count) / 20);
+      const missionScore = baselineMissionScore(funder, userTokensList);
+      const locationScore = funderLocationBaseline(userLocation, funder.state);
+      const fitScore = purposeScore * 0.5 + missionScore * 0.3 + locationScore * 0.2;
+
+      const factorLines: string[] = [];
+      if (entry.recentCount > 0) {
+        factorLines.push(`Funded ${entry.recentCount} similar program${entry.recentCount > 1 ? 's' : ''} in the past 3 years.`);
+      }
+      if (locationScore >= 0.68) factorLines.push('Geographic alignment with your service area.');
+
+      const next = deriveNextStep(funder);
+      const nextStepUrl = resolveNextStepUrl(next.type, funder);
+
+      return {
+        ...funder,
+        score: Number(fitScore.toFixed(4)),
+        fit_score: Number(fitScore.toFixed(4)),
+        reason: factorLines.join(' ') || 'Past grant history matches your program area.',
+        fit_explanation: factorLines.join(' ') || 'Past grant history matches your program area.',
+        limited_grant_history_data: entry.count < 3,
+        similar_past_grantees: [],
+        next_step: next.text,
+        next_step_type: next.type,
+        next_step_url: nextStepUrl,
+      };
+    })
+    .filter((r) => (r.fit_score || 0) >= MIN_RESULT_FIT_SCORE)
+    .sort((a, b) => {
+      if ((b.fit_score || 0) !== (a.fit_score || 0)) return (b.fit_score || 0) - (a.fit_score || 0);
+      return (b.total_giving || 0) - (a.total_giving || 0);
+    });
+
+    await enrichGranteeEins(results);
+    return results;
+  } catch (err) {
+    console.error('[directPurposeSearch] error:', err);
+    return [];
+  }
+}
+
 // === Inline suggest-peers logic ===
 
 const SUGGEST_PEER_STOP_WORDS = new Set([
@@ -2582,6 +2706,18 @@ Deno.serve(async (req) => {
     const debugMode = !!body?.debug;
     const budgetBand = normalizeBudgetBand(body?.budgetBand);
     const forceRefresh = !!body?.forceRefresh;
+    // When true, exclude Donor Advised Funds (type='daf') from all results
+    const filterDafs = body?.filter_dafs !== false; // default true
+    // When true, search foundation_grants.purpose_text directly instead of using peer org intermediaries
+    const directPurposeSearch = !!body?.direct_purpose_search;
+
+    // Direct purpose search: find funders whose past grants match the mission text directly
+    if (directPurposeSearch && mission) {
+      const purposeResults = await searchByPurposeText(mission, locationServed, budgetBand, filterDafs);
+      return new Response(JSON.stringify({ results: purposeResults, cached: false, mode: 'direct_purpose' }), {
+        headers: { ...headers, 'Content-Type': 'application/json' },
+      });
+    }
 
     // Auto-suggest peers when none provided but mission is given
     let suggestedPeers: string[] = [];
@@ -3085,6 +3221,7 @@ Deno.serve(async (req) => {
           };
         })
         .filter((row) => (row.similar_past_grantees?.length || 0) > 0)
+        .filter((row) => !filterDafs || row.type !== 'daf')
         .sort((a, b) => {
           const scoreDiff = (b.fit_score || 0) - (a.fit_score || 0);
           if (scoreDiff !== 0) return scoreDiff;

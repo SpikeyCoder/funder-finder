@@ -600,7 +600,7 @@ Deno.serve(async (req) => {
     const idFilter = `(${peerIds.map((id) => `"${id}"`).join(',')})`;
     const funderRows = (await restQuery(
       'funders',
-      `id=in.${idFilter}&select=id,name,state,total_giving,ntee_code`,
+      `id=in.${idFilter}&select=id,name,type,state,total_giving,ntee_code&type=neq.daf`,
     )) as FunderRow[];
 
     const funderLookup = new Map(funderRows.map((f) => [f.id, f]));

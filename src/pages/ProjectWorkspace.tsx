@@ -193,6 +193,10 @@ export default function ProjectWorkspace() {
   const [editBudgetMin, setEditBudgetMin] = useState<string>('');
   const [editBudgetMax, setEditBudgetMax] = useState<string>('');
 
+  // Match options
+  const [excludeDafs, setExcludeDafs] = useState(true);
+  const [useDirectPurposeSearch, setUseDirectPurposeSearch] = useState(true);
+
   // Custom pipeline status form
   const [showStatusForm, setShowStatusForm] = useState(false);
   const [newStatusName, setNewStatusName] = useState('');
@@ -384,6 +388,8 @@ export default function ProjectWorkspace() {
           locationServed: states.join(', ') || undefined,
           keywords: keywords.length > 0 ? keywords : fieldsOfWork.length > 0 ? fieldsOfWork : undefined,
           budgetBand: p.budget_min ? `${p.budget_min}-${p.budget_max || ''}` : undefined,
+          filter_dafs: excludeDafs,
+          direct_purpose_search: useDirectPurposeSearch,
         }),
       });
 
@@ -1018,15 +1024,37 @@ export default function ProjectWorkspace() {
           {/* MATCHES TAB */}
           {activeTab === 'matches' && (
             <div>
-              <div className="flex items-center justify-between mb-4">
-                <p className="text-sm text-gray-400">
-                  {matches.length > 0 ? `${matches.length} matched funder${matches.length !== 1 ? 's' : ''}` : ''}
-                </p>
-                <button onClick={() => computeMatches()} disabled={computing}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors">
-                  <RefreshCw size={16} className={computing ? 'animate-spin' : ''} />
-                  {computing ? 'Computing...' : matches.length > 0 ? 'Refresh Matches' : 'Compute Matches'}
-                </button>
+              <div className="flex flex-col gap-3 mb-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-gray-400">
+                    {matches.length > 0 ? `${matches.length} matched funder${matches.length !== 1 ? 's' : ''}` : ''}
+                  </p>
+                  <button onClick={() => computeMatches()} disabled={computing}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors">
+                    <RefreshCw size={16} className={computing ? 'animate-spin' : ''} />
+                    {computing ? 'Computing...' : matches.length > 0 ? 'Refresh Matches' : 'Compute Matches'}
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-4 text-sm">
+                  <label className="flex items-center gap-2 cursor-pointer text-gray-400">
+                    <input
+                      type="checkbox"
+                      checked={useDirectPurposeSearch}
+                      onChange={(e) => setUseDirectPurposeSearch(e.target.checked)}
+                      className="rounded accent-blue-500"
+                    />
+                    Match by past grant purpose (recommended)
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer text-gray-400">
+                    <input
+                      type="checkbox"
+                      checked={excludeDafs}
+                      onChange={(e) => setExcludeDafs(e.target.checked)}
+                      className="rounded accent-blue-500"
+                    />
+                    Exclude Donor Advised Funds (DAFs)
+                  </label>
+                </div>
               </div>
               {matchesLoading && !computing ? (
                 <div className="flex items-center justify-center py-12"><Loader className="animate-spin text-gray-400" size={24} /></div>
