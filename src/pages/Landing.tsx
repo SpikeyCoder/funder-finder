@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search, Target, Zap, Bookmark, PenLine } from 'lucide-react';
 import DemoVideo from '../components/DemoVideo';
 import NavBar from '../components/NavBar';
+import Footer from '../components/Footer';
 
 export default function Landing() {
   const navigate = useNavigate();
@@ -12,7 +13,7 @@ export default function Landing() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#0d1117] text-white">
+    <div className="min-h-screen bg-[#0d1117] text-white flex flex-col">
       <NavBar />
 
       {/* Hero */}
@@ -116,10 +117,7 @@ export default function Landing() {
         </button>
       </div>
 
-      {/* Footer */}
-      <footer className="border-t border-[#21262d] py-8 text-center text-sm text-gray-500">
-        © {new Date().getFullYear()} FunderMatch &middot; Built for nonprofits
-      </footer>
+      <Footer />
     </div>
   );
 }

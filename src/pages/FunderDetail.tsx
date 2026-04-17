@@ -9,6 +9,7 @@ import { useAuth } from '../contexts/AuthContext';
 import LoginModal from '../components/LoginModal';
 import Toast from '../components/Toast';
 import { GivingTrendsChart, GeoBarChart, GeoHeatMap, StatCard, InsightsSkeleton, fmtDollar } from '../components/InsightCharts';
+import Footer from '../components/Footer';
 
 /** Classify giving trend as increasing / stable / decreasing (FEAT-006) */
 function classifyTrend(yearTrend: { year: number; totalAmount: number }[]): { label: string; color: string } | null {
@@ -178,7 +179,7 @@ export default function FunderDetail() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0d1117] text-white py-12 px-6">
+    <div className="min-h-screen bg-[#0d1117] text-white py-12 px-6 flex flex-col">
       <div className="max-w-2xl mx-auto">
         <button
           onClick={() => {
@@ -788,6 +789,7 @@ export default function FunderDetail() {
           onClose={() => setToastMsg(null)}
         />
       )}
+      <Footer />
     </div>
   );
 }

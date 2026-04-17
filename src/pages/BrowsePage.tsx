@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { ExternalLink, ArrowUpDown } from 'lucide-react';
 import NavBar from '../components/NavBar';
+import Footer from '../components/Footer';
 import { useAuth } from '../contexts/AuthContext';
 import FilterPanel, { FilterState, EMPTY_FILTERS } from '../components/FilterPanel';
 import SaveToProjectButton from '../components/SaveToProjectButton';
@@ -237,7 +238,7 @@ const BrowsePage: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen bg-[#0d1117]">
+    <div className="min-h-screen bg-[#0d1117] flex flex-col">
       <NavBar />
 
       <div className="flex flex-col md:flex-row h-auto md:h-[calc(100vh-64px)]">
@@ -478,6 +479,7 @@ const BrowsePage: React.FC = () => {
           )}
         </main>
       </div>
+      <Footer />
     </div>
   );
 };
