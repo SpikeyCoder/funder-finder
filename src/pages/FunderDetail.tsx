@@ -8,6 +8,7 @@ import { formatGrantRange, formatTotalGiving, fetchFunderInsights, fetchPeers, f
 import { useAuth } from '../contexts/AuthContext';
 import LoginModal from '../components/LoginModal';
 import Toast from '../components/Toast';
+import Footer from '../components/Footer';
 import { GivingTrendsChart, GeoBarChart, GeoHeatMap, StatCard, InsightsSkeleton, fmtDollar } from '../components/InsightCharts';
 import Footer from '../components/Footer';
 
@@ -744,6 +745,8 @@ export default function FunderDetail() {
           </button>
         </div>
       </div>
+
+      <Footer />
 
       {/* Login modal — shown when user explicitly clicks login */}
       {showLoginModal && (
