@@ -13,7 +13,7 @@
     "eval:export-signals": "node scripts/export-search-signal-labels.js"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.103.0",
+    "@supabase/supabase-js": "^2.104.0",
     "html2canvas": "^1.4.1",
     "lucide-react": "^0.577.0",
     "papaparse": "^5.5.3",
@@ -23,16 +23,16 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "@axe-core/cli": "^4.11.1",
+    "@axe-core/cli": "^4.11.2",
     "@types/papaparse": "^5.5.2",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.2.1",
-    "autoprefixer": "^10.4.16",
+    "autoprefixer": "^10.5.0",
     "axe-core": "^4.11.1",
     "jsdom": "^29.0.2",
-    "postcss": "^8.5.9",
-    "puppeteer": "^24.40.0",
+    "postcss": "^8.5.10",
+    "puppeteer": "^24.42.0",
     "tailwindcss": "^3.3.6",
     "typescript": "^5.2.2",
     "vite": "^7.3.1"
