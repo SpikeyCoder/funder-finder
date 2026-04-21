@@ -631,54 +631,26 @@ export default function FunderDetail() {
             </>
           )}
 
-          {/* Recommended Next Step */}
-          {funder.next_step && (
-            <>
-              <div className="mb-6">
-                <h2 className="text-lg font-semibold mb-3">Recommended Next Step</h2>
-                <div className="bg-[#0d1117] border border-blue-800 rounded-xl px-5 py-4 text-blue-300">
-                  {(() => {
-                    // Normalise to a fully-qualified external URL:
-                    //  - Strip stale cached GitHub Pages funder paths (e.g. https://...github.io/.../funder/cct.org)
-                    //  - Reject internal routes starting with '/'
-                    //  - Prepend https:// for bare domains (e.g. cct.org)
-                    const STALE_RE = /^https?:\/\/[^\/]*\.github\.io\/[^\/]+\/funder\//;
-                    const toExtUrl = (u: string | null | undefined) => {
-                      let s = u?.trim();
-                      if (!s) return null;
-                      s = s.replace(STALE_RE, '');
-                      if (!s || s.startsWith('/')) return null;
-                      return s.startsWith('http') ? s : `https://${s}`;
-                    };
-
-                    // Check for URLs embedded in the next_step text itself
-                    // e.g. "Review current filing history in IRS EO Search: https://apps.irs.gov/app/eos/?ein=611934172"
-                    const urlMatch = funder.next_step?.match(/(https?:\/\/[^\s]+)/);
-                    const embeddedUrl = urlMatch ? urlMatch[1] : null;
-                    // Clean text: remove the raw URL and any trailing colon/space before it
-                    const cleanedText = embeddedUrl
-                      ? funder.next_step.replace(/:\s*https?:\/\/[^\s]+/, '').replace(/\s+$/, '')
-                      : funder.next_step;
-
-                    const linkUrl = toExtUrl(funder.next_step_url) ?? (embeddedUrl ? toExtUrl(embeddedUrl) : null) ?? toExtUrl(funder.website);
-                    return linkUrl ? (
-                      <a
-                        href={linkUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="hover:text-blue-200 underline underline-offset-2 transition-colors"
-                      >
-                        {cleanedText}
-                      </a>
-                    ) : (
-                      funder.next_step
-                    );
-                  })()}
-                </div>
+          {/* Recommended Next Step — LinkedIn warm intro */}
+          <>
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold mb-3">Recommended Next Step</h2>
+              <div className="bg-[#0d1117] border border-blue-800 rounded-xl px-5 py-4">
+                <p className="text-sm text-gray-400 mb-3">Find a warm introduction through your professional network</p>
+                <a
+                  href={`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(funder.name)}&currentCompany=${encodeURIComponent(funder.name)}&network=%5B%22F%22%2C%22S%22%5D`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 bg-[#0a66c2] hover:bg-[#004182] text-white font-medium rounded-lg px-4 py-2.5 text-sm transition-colors"
+                >
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4" aria-hidden="true"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                  Find your connections at {funder.name}
+                </a>
+                <p className="text-xs text-gray-500 mt-2">Opens LinkedIn filtered to current employees who are your 1st or 2nd degree connections</p>
               </div>
-              <hr className="border-[#30363d] mb-6" />
-            </>
-          )}
+            </div>
+            <hr className="border-[#30363d] mb-6" />
+          </>
 
           {/* Contact Information */}
           <div id="contact" className="mb-2">
