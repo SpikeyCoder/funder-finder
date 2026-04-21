@@ -64,12 +64,18 @@ async function captureScreenshot(): Promise<Blob | null> {
     // Wait one frame so the browser repaints without those elements
     await new Promise((r) => requestAnimationFrame(r));
 
-    const canvas = await html2canvas(document.body, {
-      useCORS: true,
-      scale: 1,
-      logging: false,
-      backgroundColor: '#0d1117',
-    });
+    const TIMEOUT_MS = 10_000;
+    const canvas = await Promise.race([
+      html2canvas(document.body, {
+        useCORS: true,
+        scale: 1,
+        logging: false,
+        backgroundColor: '#0d1117',
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Screenshot timed out')), TIMEOUT_MS)
+      ),
+    ]);
 
     // Restore visibility
     elemsToHide.forEach((el, i) => { el.style.display = savedStyles[i]; });
