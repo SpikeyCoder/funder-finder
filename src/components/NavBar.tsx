@@ -39,6 +39,9 @@ export default function NavBar() {
           <Link to="/" className="text-white font-bold text-lg tracking-tight shrink-0 hover:opacity-80 transition-opacity">FunderMatch</Link>
           <div className="hidden md:flex items-center gap-1">
             <Link to="/mission" className={linkClass('/mission')}>Find Funders</Link>
+            {!loading && user && (
+              <Link to="/saved" className={linkClass('/saved')}>Saved Funders</Link>
+            )}
             <Link to="/browse" className={linkClass('/browse')}>Browse Grants</Link>
             <Link to="/search" className={linkClass('/search')}>Search</Link>
             {!loading && (user ? (
@@ -73,6 +76,9 @@ export default function NavBar() {
         {mobileOpen && (
           <div className="md:hidden border-t border-[#1b2130] bg-[#0d1117] px-6 pb-4 pt-2 space-y-1">
             <Link to="/mission" onClick={() => setMobileOpen(false)} className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${isActive('/mission') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'}`}>Find Funders</Link>
+            {!loading && user && (
+              <Link to="/saved" onClick={() => setMobileOpen(false)} className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${isActive('/saved') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'}`}>Saved Funders</Link>
+            )}
             <Link to="/browse" onClick={() => setMobileOpen(false)} className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${isActive('/browse') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'}`}>Browse Grants</Link>
             <Link to="/search" onClick={() => setMobileOpen(false)} className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${isActive('/search') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'}`}>Search</Link>
             {!loading && (user ? (
