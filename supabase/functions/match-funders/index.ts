@@ -19,6 +19,12 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || '';
 
+// Overall wall-clock budget for a single /match-funders request. Protects
+// against the combined latency of suggestPeers + peer-name ilikes + fallback
+// full-text search exceeding the Supabase edge function limit (~150s) — which
+// the browser reports as an opaque "Failed to fetch".
+const REQUEST_BUDGET_MS = 60_000;
+
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const FOUNDATION_SCAN_LIMIT = 250;
 const CANDIDATE_LIMIT = 120;
@@ -409,23 +415,46 @@ function hashKey(
   return h.toString(36);
 }
 
-async function sbFetch(path: string, options: RequestInit = {}) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    ...options,
-    headers: {
-      apikey: SUPABASE_KEY,
-      Authorization: `Bearer ${SUPABASE_KEY}`,
-      'Content-Type': 'application/json',
-      ...(options.headers || {}),
-    },
-  });
+// Default per-query timeout. PostgREST's own statement_timeout varies by plan
+// (often 30-60s); without a client-side timeout, a single slow query can stall
+// the entire edge function until its ~150s wall clock runs out — which the
+// browser surfaces as "Failed to fetch".
+const SB_FETCH_DEFAULT_TIMEOUT_MS = 12_000;
 
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Supabase error [${res.status}] ${body.slice(0, 500)}`);
+interface SbFetchOptions extends RequestInit {
+  timeoutMs?: number;
+}
+
+async function sbFetch(path: string, options: SbFetchOptions = {}) {
+  const { timeoutMs = SB_FETCH_DEFAULT_TIMEOUT_MS, ...fetchOptions } = options;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+      ...fetchOptions,
+      signal: controller.signal,
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        ...(fetchOptions.headers || {}),
+      },
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`Supabase error [${res.status}] ${body.slice(0, 500)}`);
+    }
+
+    return res;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error(`Supabase client timeout after ${timeoutMs}ms (statement timeout)`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
   }
-
-  return res;
 }
 
 function toExternalUrl(url: string | null | undefined): string | null {
@@ -1284,6 +1313,7 @@ function isSupabaseStatementTimeout(error: unknown): boolean {
 async function fetchPeerGrantsFromDatabase(
   peerProfiles: PeerProfile[],
   userLocation: UserLocation,
+  deadlineAt: number = Number.POSITIVE_INFINITY,
 ): Promise<{ grants: GrantRow[]; stats: Record<string, number> }> {
   const stats = {
     queries_attempted: 0,
@@ -1294,6 +1324,7 @@ async function fetchPeerGrantsFromDatabase(
     timed_out_name_profiles: 0,
     timeout_fallback_candidate_foundations: 0,
     timeout_fallback_rows: 0,
+    fallback_skipped_over_budget: 0,
   };
   const grantsByKey = new Map<string, GrantRow>();
   const selectColumns =
@@ -1391,6 +1422,11 @@ async function fetchPeerGrantsFromDatabase(
   }
 
   if (timedOutNameProfiles.length && grantsByKey.size < PEER_DB_MAX_GRANTS) {
+    if (Date.now() >= deadlineAt) {
+      stats.fallback_skipped_over_budget = 1;
+    }
+  }
+  if (timedOutNameProfiles.length && grantsByKey.size < PEER_DB_MAX_GRANTS && Date.now() < deadlineAt) {
     const locationHints = uniqueStrings(timedOutNameProfiles.flatMap((profile) => {
       const hints: string[] = [];
       if (profile.city && profile.state) {
@@ -1485,15 +1521,9 @@ async function fetchPeerGrantsFromDatabase(
           stats.rows_loaded += rows.length;
           return rows;
         } catch (error) {
-          if (isSupabaseStatementTimeout(error) && ids.length > 20) {
-            stats.queries_timed_out += 1;
-            const mid = Math.ceil(ids.length / 2);
-            const [left, right] = await Promise.all([
-              batchQuery(ids.slice(0, mid)),
-              batchQuery(ids.slice(mid)),
-            ]);
-            return [...left, ...right];
-          }
+          // Do NOT recursively bisect on timeout — a single slow batch would otherwise
+          // spawn log₂(N) more queries and amplify overall latency past the request
+          // deadline. Record and skip.
           if (isSupabaseStatementTimeout(error)) {
             stats.queries_timed_out += 1;
           } else {
@@ -2344,13 +2374,20 @@ const LARGE_NATIONAL_NONPROFIT_PATTERNS = [
   /\bSILICON VALLEY COMMUNITY\b/i, /\bDONOR.?ADVISED\b/i,
 ];
 
+// Cap how aggressively suggestPeersInternal scans foundation_grants.
+// Each keyword runs a double-wildcard ilike on purpose_text — a very expensive
+// query pattern — so scanning every extracted keyword × 500 rows was a major
+// contributor to the overall request timing out.
+const SUGGEST_PEERS_MAX_KEYWORDS = 4;
+const SUGGEST_PEERS_QUERY_LIMIT = 150;
+
 async function suggestPeersInternal(
   mission: string,
   locationServed: string,
   excludedKeywords: string[] = [],
   budgetBand: string = 'prefer_not_to_say',
 ): Promise<string[]> {
-  const keywords = extractMissionKeywords(mission);
+  const keywords = extractMissionKeywords(mission).slice(0, SUGGEST_PEERS_MAX_KEYWORDS);
   if (!keywords.length) return [];
 
   const { city, state } = (() => {
@@ -2394,7 +2431,7 @@ async function suggestPeersInternal(
       `&purpose_text=not.is.null` +
       `&grant_year=gte.2019` +
       stateFilter +
-      `&limit=500`;
+      `&limit=${SUGGEST_PEERS_QUERY_LIMIT}`;
     try {
       const res = await sbFetch(path);
       const rows = await res.json() as Array<{ grantee_name: string; grantee_city: string; purpose_text: string | null; ntee_code: string | null }>;
@@ -2529,6 +2566,12 @@ Deno.serve(async (req) => {
     return new Response('ok', { headers });
   }
 
+  // Wall-clock budget for the whole request. Checked before each expensive
+  // optional stage so we never run past the Supabase edge function limit.
+  const requestStartMs = Date.now();
+  const requestDeadlineAt = requestStartMs + REQUEST_BUDGET_MS;
+  const isOverBudget = () => Date.now() >= requestDeadlineAt;
+
   try {
     const body = await req.json();
 
@@ -2623,6 +2666,7 @@ Deno.serve(async (req) => {
       const { grants: matchedGrantsAll, stats: peerDbStats } = await fetchPeerGrantsFromDatabase(
         peerProfiles,
         userLocation,
+        requestDeadlineAt,
       );
       peerDebug.db_query_stats = peerDbStats;
       peerDebug.total_grants_fetched = matchedGrantsAll.length;
@@ -2707,9 +2751,14 @@ Deno.serve(async (req) => {
         'grant_range_min,grant_range_max,contact_name,contact_title,contact_email,next_step';
       let queryCheckRan = false;
 
-      if (foundationIds.length < PEER_LIVE_QUERY_MIN_RESULTS) {
+      if (foundationIds.length < PEER_LIVE_QUERY_MIN_RESULTS && !isOverBudget()) {
         queryCheckRan = true;
-        const deadlineMs = Date.now() + PEER_LIVE_QUERY_TIMEOUT_MS;
+        // Clamp the full-text-search deadline to whichever is sooner: its own
+        // budget, or whatever we have left in the overall request budget.
+        const deadlineMs = Math.min(
+          Date.now() + PEER_LIVE_QUERY_TIMEOUT_MS,
+          requestDeadlineAt,
+        );
 
         // Early termination: skip full text search if DB already found >= 8 unique foundations
         const skipFullText = foundationIds.length >= 8;
