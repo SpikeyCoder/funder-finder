@@ -42,24 +42,24 @@ export async function getEdgeFunctionHeaders(
     accessToken = data.session?.access_token || SUPABASE_ANON_KEY;
   }
 
-  // NOTE: intentionally do NOT send the `apikey` header for edge-function
-  // requests. Supabase's edge-function gateway preflight (OPTIONS) only
-  // allows `Content-Type, Authorization` in `Access-Control-Allow-Headers`,
-  // so browsers will block any fetch that carries an `apikey` header,
-  // surfacing to the user as the opaque `TypeError: Failed to fetch`.
-  // The anon key (or user JWT) in the `Authorization: Bearer ...` header is
-  // sufficient to authenticate edge-function calls.
-  // For PostgREST (`/rest/v1/...`) calls, use `getRestApiHeaders` below —
-  // PostgREST requires `apikey` and does list it in its CORS allow-headers.
+  // The Supabase API gateway requires the `apikey` header to route requests
+  // to the edge function — without it the gateway rejects the request and
+  // the browser surfaces an opaque `TypeError: Failed to fetch`.
+  // Every edge function in this repo lists `apikey` in
+  // `Access-Control-Allow-Headers`, so the CORS preflight passes.
+  // (The original "Failed to fetch" that prompted dropping this header was
+  // actually a function-side timeout, not a CORS rejection.)
   return {
     'Content-Type': contentType,
+    apikey: SUPABASE_ANON_KEY,
     Authorization: `Bearer ${accessToken}`,
   };
 }
 
 /**
  * Headers for Supabase PostgREST (`/rest/v1/...`) calls.
- * PostgREST REQUIRES the `apikey` header — unlike edge functions.
+ * PostgREST also requires `apikey`; this helper exists so callers don't
+ * have to know which gateway they're hitting.
  */
 export async function getRestApiHeaders(
   contentType = 'application/json',
