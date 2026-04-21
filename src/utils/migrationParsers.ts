@@ -323,7 +323,11 @@ function normalizeGeneric(row: Record<string, string>): ImportedRecord | null {
   const funderName =
     col(row, 'funder name') || col(row, 'funder') || col(row, 'foundation name') ||
     col(row, 'foundation') || col(row, 'organization name') || col(row, 'organization') ||
-    col(row, 'grantor') || col(row, 'name');
+    col(row, 'grantor') || col(row, 'name') || col(row, 'nonprofit name') ||
+    col(row, 'company') || col(row, 'institution') || col(row, 'donor') ||
+    col(row, 'grantmaker') || col(row, 'grant maker') || col(row, 'trust') ||
+    // Last resort: first non-empty string column value in the row
+    Object.values(row).find(v => typeof v === 'string' && v.trim().length > 0)?.trim() || '';
   if (!funderName) return null;
 
   const rawStatus = (col(row, 'status') || '').toLowerCase();

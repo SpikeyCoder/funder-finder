@@ -125,6 +125,13 @@ export default function MigrationImportPage() {
 
       if (result.records.length === 0 && result.errors.length > 0) {
         setParseError(result.errors[0]);
+      } else if (result.records.length === 0) {
+        // No records parsed and no explicit errors — column headers didn't match
+        const expectedCols = 'Funder Name, Foundation Name, Organization Name, or Name';
+        setParseError(
+          `No matching data found. Make sure your spreadsheet has a column named ${expectedCols}. ` +
+          `Detected columns: ${result.headers.slice(0, 8).join(', ')}${result.headers.length > 8 ? '...' : ''}`
+        );
       } else {
         setStep('preview');
       }
