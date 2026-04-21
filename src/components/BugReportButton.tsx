@@ -231,7 +231,7 @@ export default function BugReportButton() {
     <button
       onClick={handleOpen}
       data-bug-report-button
-      className="fixed bottom-6 right-6 z-40 bg-[#1f6feb] hover:bg-[#388bfd] text-white rounded-full p-3 shadow-lg shadow-black/40 transition-all duration-200 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-[#0d1117] group"
+      className="fixed bottom-6 left-6 z-40 bg-[#1f6feb] hover:bg-[#388bfd] text-white rounded-full p-3 shadow-lg shadow-black/40 transition-all duration-200 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-[#0d1117] group"
       aria-label="Report a bug or request a feature"
       title="Report a bug or request a feature"
     >
