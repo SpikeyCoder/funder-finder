@@ -42,6 +42,37 @@ export async function getEdgeFunctionHeaders(
     accessToken = data.session?.access_token || SUPABASE_ANON_KEY;
   }
 
+  // NOTE: intentionally do NOT send the `apikey` header for edge-function
+  // requests. Supabase's edge-function gateway preflight (OPTIONS) only
+  // allows `Content-Type, Authorization` in `Access-Control-Allow-Headers`,
+  // so browsers will block any fetch that carries an `apikey` header,
+  // surfacing to the user as the opaque `TypeError: Failed to fetch`.
+  // The anon key (or user JWT) in the `Authorization: Bearer ...` header is
+  // sufficient to authenticate edge-function calls.
+  // For PostgREST (`/rest/v1/...`) calls, use `getRestApiHeaders` below —
+  // PostgREST requires `apikey` and does list it in its CORS allow-headers.
+  return {
+    'Content-Type': contentType,
+    Authorization: `Bearer ${accessToken}`,
+  };
+}
+
+/**
+ * Headers for Supabase PostgREST (`/rest/v1/...`) calls.
+ * PostgREST REQUIRES the `apikey` header — unlike edge functions.
+ */
+export async function getRestApiHeaders(
+  contentType = 'application/json',
+  options: EdgeFunctionHeaderOptions = {},
+): Promise<Record<string, string>> {
+  const { useAnonOnly = false } = options;
+  let accessToken = SUPABASE_ANON_KEY;
+
+  if (!useAnonOnly) {
+    const { data } = await supabase.auth.getSession();
+    accessToken = data.session?.access_token || SUPABASE_ANON_KEY;
+  }
+
   return {
     'Content-Type': contentType,
     apikey: SUPABASE_ANON_KEY,

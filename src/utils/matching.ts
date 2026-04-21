@@ -1,5 +1,5 @@
 import { BudgetBand, Funder, FunderInsights, OrgSearchResult, PeerEntry, RecipientProfile } from '../types';
-import { getEdgeFunctionHeaders } from '../lib/supabase';
+import { getEdgeFunctionHeaders, getRestApiHeaders } from '../lib/supabase';
 
 const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const EDGE_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/match-funders`;
@@ -14,7 +14,8 @@ const COMPUTE_PEERS_URL = `${SUPABASE_URL}/functions/v1/compute-peers`;
  * Uses the Supabase REST API (PostgREST) directly — no edge function needed.
  */
 export async function fetchFunderByEin(ein: string): Promise<Funder | null> {
-  const headers = await getEdgeFunctionHeaders('application/json', { useAnonOnly: true });
+  // PostgREST requires the `apikey` header (unlike edge functions).
+  const headers = await getRestApiHeaders('application/json', { useAnonOnly: true });
   const url = `${SUPABASE_URL}/rest/v1/funders?id=eq.${encodeURIComponent(ein)}&limit=1`;
   const res = await fetch(url, { headers });
   if (!res.ok) return null;
