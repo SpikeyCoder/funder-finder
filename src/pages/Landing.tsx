@@ -38,7 +38,7 @@ export default function Landing() {
       </div>
 
       {/* Demo Video */}
-      <div className="max-w-[360rem] mx-auto">
+      <div className="w-full max-w-[360rem] mx-auto">
         <p className="text-center text-sm text-gray-500 uppercase tracking-widest mb-4">See It in Action</p>
         <DemoVideo />
       </div>
