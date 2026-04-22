@@ -38,7 +38,7 @@ const STREAMING_LINES = [
   'The Community Youth Alliance requests $50,000...',
 ];
 
-const STEP_LABELS = ['Start', 'Mission', 'Search', 'Save', 'Pipeline', 'Write Grant', 'Generating', 'Done ✓'];
+const STEP_LABELS = ['Start', 'Mission', 'Search', 'Save', 'Pipeline', 'Write', 'Draft', 'Done'];
 
 export default function DemoVideo() {
   const [step, setStep] = useState(0);
@@ -384,11 +384,11 @@ export default function DemoVideo() {
         </div>
 
         {/* Step labels */}
-        <div className="flex justify-between mt-3 px-1">
+        <div className="flex items-center mt-3 px-1 gap-1">
           {STEP_LABELS.map((label, i) => (
             <span
               key={label}
-              className={`text-xs transition-colors duration-300 ${
+              className={`flex-1 text-center text-[11px] sm:text-xs truncate transition-colors duration-300 ${
                 step === i ? 'text-blue-400 font-semibold' : 'text-gray-500'
               }`}
             >
