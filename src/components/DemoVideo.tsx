@@ -160,7 +160,7 @@ export default function DemoVideo() {
   return (
     <div className="w-full flex justify-center px-4 py-8">
       {/* Outer wrapper — max width, aspect ratio preserved */}
-      <div className="w-full max-w-[168rem]">
+      <div className="w-full max-w-[336rem]">
         {/* Browser chrome mock */}
         <div className="rounded-2xl overflow-hidden border border-[#30363d] shadow-2xl shadow-black/50">
           {/* Browser bar */}
