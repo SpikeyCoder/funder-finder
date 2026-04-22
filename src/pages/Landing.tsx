@@ -32,13 +32,10 @@ export default function Landing() {
           <Search size={22} />
           Get Started
         </button>
-        <p className="mt-4 text-base text-gray-400">
-          No account required &middot; No credit card &middot; Results in 30 seconds
-        </p>
       </div>
 
       {/* Demo Video */}
-      <div className="w-full max-w-[360rem] mx-auto">
+      <div className="w-4/5 max-w-[360rem] mx-auto">
         <p className="text-center text-sm text-gray-500 uppercase tracking-widest mb-4">See It in Action</p>
         <DemoVideo />
       </div>
