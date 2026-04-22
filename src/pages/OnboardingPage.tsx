@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getEdgeFunctionHeaders } from '../lib/supabase';
 import { ArrowRight, ArrowLeft, User, FolderPlus, Search, Bookmark, Sparkles } from 'lucide-react';
+import NavBar from '../components/NavBar';
 
 const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const ONBOARDING_URL = `${SUPABASE_URL}/functions/v1/onboarding`;
@@ -96,15 +97,20 @@ export default function OnboardingPage() {
   };
 
   if (loading || isLoading) return (
-    <div className="min-h-screen bg-[#0d1117] text-white flex items-center justify-center">
-      <div className="text-gray-400">Loading...</div>
-    </div>
+    <>
+      <NavBar />
+      <div className="min-h-screen bg-[#0d1117] text-white flex items-center justify-center">
+        <div className="text-gray-400">Loading...</div>
+      </div>
+    </>
   );
 
   const step = STEPS[currentStep - 1];
 
   return (
-    <div className="min-h-screen bg-[#0d1117] text-white flex flex-col">
+    <>
+      <NavBar />
+      <div className="min-h-screen bg-[#0d1117] text-white flex flex-col">
       {/* Progress bar */}
       <div className="border-b border-[#30363d] bg-[#161b22]">
         <div className="max-w-2xl mx-auto px-4 py-4">
@@ -267,5 +273,6 @@ export default function OnboardingPage() {
         </div>
       </div>
     </div>
+    </>
   );
 }

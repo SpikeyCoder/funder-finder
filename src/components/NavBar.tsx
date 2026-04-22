@@ -34,7 +34,7 @@ export default function NavBar() {
       <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-blue-600 focus:text-white focus:px-4 focus:py-2 focus:rounded">
         Skip to main content
       </a>
-      <nav aria-label="Main navigation" className="w-full bg-[#0d1117] border-b border-[#1b2130]">
+      <nav aria-label="Main navigation" className="sticky top-0 z-40 w-full bg-[#0d1117] border-b border-[#1b2130]">
         <div className="max-w-6xl mx-auto flex items-center justify-between h-16 px-6">
           <Link to="/" className="text-white font-bold text-lg tracking-tight shrink-0 hover:opacity-80 transition-opacity">FunderMatch</Link>
           <div className="hidden md:flex items-center gap-1">

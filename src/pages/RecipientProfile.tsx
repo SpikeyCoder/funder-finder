@@ -7,6 +7,7 @@ import { GeoBarChart, StatCard, fmtDollar } from '../components/InsightCharts';
 import { useAuth } from '../contexts/AuthContext';
 import { isSaved, saveFunder, unsaveFunder } from '../utils/storage';
 import LoginModal from '../components/LoginModal';
+import NavBar from '../components/NavBar';
 
 export default function RecipientProfile() {
   const { id } = useParams<{ id: string }>();
@@ -96,28 +97,34 @@ export default function RecipientProfile() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0d1117] text-white flex items-center justify-center">
-        <div className="animate-pulse space-y-4 w-full max-w-2xl px-6">
-          <div className="h-8 bg-[#21262d] rounded w-64" />
-          <div className="h-4 bg-[#21262d] rounded w-40" />
-          <div className="grid grid-cols-2 gap-3 mt-6">
-            {[1, 2, 3, 4].map(i => <div key={i} className="h-20 bg-[#21262d] rounded-xl" />)}
+      <>
+        <NavBar />
+        <div className="min-h-screen bg-[#0d1117] text-white flex items-center justify-center">
+          <div className="animate-pulse space-y-4 w-full max-w-2xl px-6">
+            <div className="h-8 bg-[#21262d] rounded w-64" />
+            <div className="h-4 bg-[#21262d] rounded w-40" />
+            <div className="grid grid-cols-2 gap-3 mt-6">
+              {[1, 2, 3, 4].map(i => <div key={i} className="h-20 bg-[#21262d] rounded-xl" />)}
+            </div>
+            <div className="h-48 bg-[#21262d] rounded-xl mt-4" />
           </div>
-          <div className="h-48 bg-[#21262d] rounded-xl mt-4" />
         </div>
-      </div>
+      </>
     );
   }
 
   if (error || !profile) {
     return (
-      <div className="min-h-screen bg-[#0d1117] text-white flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-2xl font-bold mb-4">Recipient not found</p>
-          <p className="text-gray-400 text-sm mb-6">{error || 'No data available for this organization.'}</p>
-          <button onClick={() => navigate('/search')} className="text-blue-400 hover:underline">Search organizations</button>
+      <>
+        <NavBar />
+        <div className="min-h-screen bg-[#0d1117] text-white flex items-center justify-center">
+          <div className="text-center">
+            <p className="text-2xl font-bold mb-4">Recipient not found</p>
+            <p className="text-gray-400 text-sm mb-6">{error || 'No data available for this organization.'}</p>
+            <button onClick={() => navigate('/search')} className="text-blue-400 hover:underline">Search organizations</button>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
@@ -170,7 +177,9 @@ export default function RecipientProfile() {
   const budgetLabel = profile.budget?.totalExpenses != null ? 'Total Expenses' : 'Total Revenue';
 
   return (
-    <div className="min-h-screen bg-[#0d1117] text-white py-12 px-6">
+    <>
+      <NavBar />
+      <div className="min-h-screen bg-[#0d1117] text-white py-12 px-6">
       <div className="max-w-2xl mx-auto">
         <button
           onClick={() => navigate(-1)}
@@ -440,5 +449,6 @@ export default function RecipientProfile() {
       </div>
       {showLoginModal && <LoginModal onClose={() => setShowLoginModal(false)} />}
     </div>
+    </>
   );
 }

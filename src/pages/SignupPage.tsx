@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, Building2, AlertCircle, ChevronRight, ChevronLeft, Loader, CheckCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import NavBar from '../components/NavBar';
 
 const US_STATES = [
   'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
@@ -200,7 +201,9 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0d1117] flex items-center justify-center px-4 py-12">
+    <>
+      <NavBar />
+      <div className="min-h-screen bg-[#0d1117] flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-2xl">
         <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-8">
           {/* Header */}
@@ -510,5 +513,6 @@ export default function SignupPage() {
         </div>
       </div>
     </div>
+    </>
   );
 }

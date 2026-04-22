@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import NavBar from '../components/NavBar';
 
 const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const SHARE_LINK_URL = `${SUPABASE_URL}/functions/v1/share-link`;
@@ -40,25 +41,33 @@ export default function SharedViewPage() {
   };
 
   if (loading) return (
-    <div className="min-h-screen bg-[#0d1117] text-white flex items-center justify-center">
-      <div className="text-gray-400">Loading shared view...</div>
-    </div>
+    <>
+      <NavBar />
+      <div className="min-h-screen bg-[#0d1117] text-white flex items-center justify-center">
+        <div className="text-gray-400">Loading shared view...</div>
+      </div>
+    </>
   );
 
   if (error) return (
-    <div className="min-h-screen bg-[#0d1117] text-white flex items-center justify-center">
-      <div className="text-center">
-        <h1 className="text-xl font-bold mb-2">Unable to Access</h1>
-        <p className="text-gray-400">{error}</p>
-        <a href="https://fundermatch.org" className="text-blue-400 hover:underline mt-4 inline-block">Go to FunderMatch</a>
+    <>
+      <NavBar />
+      <div className="min-h-screen bg-[#0d1117] text-white flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-xl font-bold mb-2">Unable to Access</h1>
+          <p className="text-gray-400">{error}</p>
+          <a href="https://fundermatch.org" className="text-blue-400 hover:underline mt-4 inline-block">Go to FunderMatch</a>
+        </div>
       </div>
-    </div>
+    </>
   );
 
   const grants: SharedGrant[] = data?.grants || [];
 
   return (
-    <div className="min-h-screen bg-[#0d1117] text-white">
+    <>
+      <NavBar />
+      <div className="min-h-screen bg-[#0d1117] text-white">
       <header className="border-b border-[#30363d] bg-[#161b22]">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div>
@@ -119,5 +128,6 @@ export default function SharedViewPage() {
         </p>
       </main>
     </div>
+    </>
   );
 }

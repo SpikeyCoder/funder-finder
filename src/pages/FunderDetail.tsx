@@ -10,6 +10,7 @@ import LoginModal from '../components/LoginModal';
 import Toast from '../components/Toast';
 import { GivingTrendsChart, GeoBarChart, GeoHeatMap, StatCard, InsightsSkeleton, fmtDollar } from '../components/InsightCharts';
 import Footer from '../components/Footer';
+import NavBar from '../components/NavBar';
 
 /** Classify giving trend as increasing / stable / decreasing (FEAT-006) */
 function classifyTrend(yearTrend: { year: number; totalAmount: number }[]): { label: string; color: string } | null {
@@ -123,19 +124,25 @@ export default function FunderDetail() {
   }, [funder?.id]);
 
   if (funderLoading) return (
-    <div className="min-h-screen bg-[#0d1117] text-white flex items-center justify-center">
-      <Loader2 size={28} className="animate-spin text-gray-400" />
-    </div>
+    <>
+      <NavBar />
+      <div className="min-h-screen bg-[#0d1117] text-white flex items-center justify-center">
+        <Loader2 size={28} className="animate-spin text-gray-400" />
+      </div>
+    </>
   );
 
   if (!funder) return (
-    <div className="min-h-screen bg-[#0d1117] text-white flex items-center justify-center">
-      <div className="text-center">
-        <p className="text-2xl font-bold mb-4">Funder not found</p>
-        <p className="text-gray-400 text-sm mb-6">This funder may not be in our database yet.</p>
-        <button onClick={() => navigate('/search')} className="text-blue-400 hover:underline">Search organizations</button>
+    <>
+      <NavBar />
+      <div className="min-h-screen bg-[#0d1117] text-white flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-2xl font-bold mb-4">Funder not found</p>
+          <p className="text-gray-400 text-sm mb-6">This funder may not be in our database yet.</p>
+          <button onClick={() => navigate('/search')} className="text-blue-400 hover:underline">Search organizations</button>
+        </div>
       </div>
-    </div>
+    </>
   );
 
   const toggleSave = async () => {
@@ -179,7 +186,9 @@ export default function FunderDetail() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0d1117] text-white py-12 px-6 flex flex-col">
+    <>
+      <NavBar />
+      <div className="min-h-screen bg-[#0d1117] text-white py-12 px-6 flex flex-col">
       <div className="max-w-2xl mx-auto">
         <button
           onClick={() => {
@@ -763,5 +772,6 @@ export default function FunderDetail() {
       )}
       <Footer />
     </div>
+    </>
   );
 }
