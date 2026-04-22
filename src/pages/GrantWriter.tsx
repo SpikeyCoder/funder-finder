@@ -8,6 +8,7 @@ import { Funder, GenerationPhase, OrgDetails, UploadedGrantFile } from '../types
 import { getEdgeFunctionHeaders, supabase } from '../lib/supabase';
 import { formatGrantRange, formatTotalGiving } from '../utils/matching';
 import NavBar from '../components/NavBar';
+import { useAuth } from '../contexts/AuthContext';
 
 const GRANT_WRITER_URL =
   'https://tgtotjvdubhjxzybmdex.supabase.co/functions/v1/grant-writer';
@@ -83,6 +84,7 @@ function renderMarkdown(text: string): string {
 export default function GrantWriter() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, userProfile, profileLoaded, saveUserProfile } = useAuth();
 
   const funder: Funder | null = (location.state as any)?.funder ?? null;
 
@@ -126,6 +128,17 @@ export default function GrantWriter() {
   const [showOrg, setShowOrg] = useState(false);
   const [showProgram, setShowProgram] = useState(false);
   const [showPastGrants, setShowPastGrants] = useState(true);
+  const profileAppliedRef = useRef(false);
+
+  // Pre-populate mission & location from user profile if not already set via sessionStorage
+  useEffect(() => {
+    if (profileAppliedRef.current || !profileLoaded || !userProfile) return;
+    profileAppliedRef.current = true;
+    if (!mission && userProfile.mission_statement) setMission(userProfile.mission_statement);
+    if (!orgDetails.geoFocus && userProfile.location_served) {
+      setOrgDetails(prev => ({ ...prev, geoFocus: userProfile.location_served! }));
+    }
+  }, [profileLoaded, userProfile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Upload state ────────────────────────────────────────────────────────
 
@@ -257,6 +270,11 @@ export default function GrantWriter() {
 
   const generate = async () => {
     if (!funder || !mission.trim() || phase === 'generating' || phase === 'analyzing' || phase === 'researching') return;
+
+    // Save mission to profile for logged-in users (fire-and-forget)
+    if (user && mission.trim()) {
+      saveUserProfile({ mission_statement: mission.trim() }).catch(e => console.warn('Profile save:', e));
+    }
 
     setOutput('');
     setPhase('analyzing');

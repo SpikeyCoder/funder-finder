@@ -768,7 +768,7 @@ export default function Results() {
                     <p className="text-2xl mb-3">No funders found</p>
                     <p className="mb-4 text-sm">The database may be empty. Run the ingestion script first.</p>
                     <button
-                      onClick={() => navigate('/mission')}
+                      onClick={() => navigate('/mission', { state: { mission, locationServed, keywords, budgetBand } })}
                       className="bg-white text-gray-900 font-semibold px-6 py-3 rounded-xl hover:bg-gray-100 transition-colors"
                     >
                       Update Mission

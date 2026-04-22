@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowRight, Sparkles, MapPin } from 'lucide-react';
 import { BudgetBand } from '../types';
 import LocationAutocomplete from '../components/LocationAutocomplete';
 import NavBar from '../components/NavBar';
 import Footer from '../components/Footer';
+import { useAuth } from '../contexts/AuthContext';
 
 const EXAMPLES = [
   'We empower underserved youth through accessible education programs and mentorship opportunities that build skills for future success.',
@@ -23,7 +24,9 @@ const BUDGET_BANDS: { key: BudgetBand; label: string; hint: string }[] = [
 export default function MissionInput() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, userProfile, profileLoaded, saveUserProfile } = useAuth();
   const returnState = location.state as { mission?: string; locationServed?: string; budgetBand?: BudgetBand; keywords?: string[]; prefillMission?: string; prefillLocation?: string } | null;
+  const profileAppliedRef = useRef(false);
 
   // If the user navigated here directly (not via "Update Search"), clear stale session data
   // so the form starts fresh. Only preserve pre-fill when returnState is present.
@@ -54,6 +57,44 @@ export default function MissionInput() {
   const [errors, setErrors] = useState<{ mission?: string; location?: string }>({});
   const [showExamples, setShowExamples] = useState(false);
 
+  // Smart redirect: if logged-in user has a saved profile and arrives fresh
+  // (not via "Update Search" returnState), skip straight to /results.
+  // Otherwise, pre-populate the form from the profile.
+  useEffect(() => {
+    if (profileAppliedRef.current || !profileLoaded || !userProfile || returnState) return;
+    profileAppliedRef.current = true;
+
+    // If the user has a complete profile (mission + location), auto-redirect to results
+    if (user && userProfile.mission_statement && userProfile.location_served) {
+      const savedBudget: BudgetBand = (userProfile.budget_range && BUDGET_BANDS.some(b => b.key === userProfile.budget_range))
+        ? userProfile.budget_range as BudgetBand
+        : 'prefer_not_to_say';
+      // Also populate sessionStorage so /results can survive reloads
+      sessionStorage.setItem('ff_mission', userProfile.mission_statement);
+      sessionStorage.setItem('ff_location', userProfile.location_served);
+      sessionStorage.setItem('ff_budget_band', savedBudget);
+      sessionStorage.setItem('ff_keywords', JSON.stringify([]));
+      navigate('/results', {
+        state: {
+          mission: userProfile.mission_statement,
+          locationServed: userProfile.location_served,
+          budgetBand: savedBudget,
+          keywords: [],
+        },
+        replace: true,
+      });
+      return;
+    }
+
+    // Otherwise just pre-fill the form
+    if (!mission && userProfile.mission_statement) setMission(userProfile.mission_statement);
+    if (!locationServed && userProfile.location_served) setLocationServed(userProfile.location_served);
+    if (budgetBand === 'prefer_not_to_say' && userProfile.budget_range) {
+      const valid = BUDGET_BANDS.some(b => b.key === userProfile.budget_range);
+      if (valid) setBudgetBand(userProfile.budget_range as BudgetBand);
+    }
+  }, [profileLoaded, userProfile]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleSubmit = () => {
     const newErrors: { mission?: string; location?: string } = {};
     if (!mission.trim()) newErrors.mission = 'Please enter your mission statement to continue.';
@@ -65,6 +106,16 @@ export default function MissionInput() {
     sessionStorage.setItem('ff_location', locationServed.trim());
     sessionStorage.setItem('ff_budget_band', budgetBand);
     sessionStorage.setItem('ff_keywords', JSON.stringify(keywords));
+
+    // Save to user profile for logged-in users (fire-and-forget)
+    if (user) {
+      saveUserProfile({
+        mission_statement: mission.trim(),
+        location_served: locationServed.trim(),
+        budget_range: budgetBand,
+      }).catch(e => console.warn('Failed to save profile:', e));
+    }
+
     navigate('/results', { state: { mission, locationServed, keywords, budgetBand } });
   };
 
