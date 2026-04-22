@@ -160,7 +160,7 @@ export default function DemoVideo() {
   return (
     <div className="w-full flex justify-center px-4 py-8">
       {/* Outer wrapper — max width, aspect ratio preserved */}
-      <div className="w-full max-w-2xl">
+      <div className="w-full max-w-[84rem]">
         {/* Browser chrome mock */}
         <div className="rounded-2xl overflow-hidden border border-[#30363d] shadow-2xl shadow-black/50">
           {/* Browser bar */}
@@ -176,7 +176,7 @@ export default function DemoVideo() {
           </div>
 
           {/* Screen content */}
-          <div className="bg-[#0d1117] h-72 sm:h-80 relative overflow-hidden">
+          <div className="bg-[#0d1117] h-[36rem] sm:h-[40rem] relative overflow-hidden">
 
             {/* ── Step 0: Landing page with Get Started ── */}
             <ScreenSlide visible={step === 0}>
