@@ -3,18 +3,12 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  /* Visible focus rings on all interactive elements (WCAG 2.4.7) */
-  button:focus-visible,
-  a:focus-visible,
-  input:focus-visible,
-  select:focus-visible,
-  textarea:focus-visible,
-  [role="radio"]:focus-visible,
-  [tabindex]:focus-visible {
-    outline: 2px solid #3b82f6;
-    outline-offset: 2px;
-  }
+
+/* Visible focus indicators for keyboard users (WCAG 2.4.7).
+   Unlayered so it beats Tailwind utility classes like focus:outline-none. */
+*:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
 }
 
 * {

@@ -6,10 +6,9 @@ export default function Footer() {
       <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
         <p className="text-xs text-gray-500">&copy; {new Date().getFullYear()} FunderMatch. All rights reserved.</p>
         <nav aria-label="Footer navigation" className="flex flex-wrap items-center gap-4">
-          <Link to="/mission" className="text-xs text-gray-400 hover:text-white transition-colors">About</Link>
-          <Link to="/search" className="text-xs text-gray-400 hover:text-white transition-colors">Help</Link>
-          <a href="mailto:support@fundermatch.org" className="text-xs text-gray-400 hover:text-white transition-colors">Contact</a>
-          <Link to="/mission" className="text-xs text-gray-400 hover:text-white transition-colors">Privacy Policy</Link>
+          <Link to="/" className="text-xs text-gray-400 hover:text-white transition-colors">About</Link>
+          <a href="mailto:kevinmarmstrong1990@gmail.com" className="text-xs text-gray-400 hover:text-white transition-colors">Contact</a>
+          <Link to="/privacy" className="text-xs text-gray-400 hover:text-white transition-colors">Privacy Policy</Link>
         </nav>
       </div>
     </footer>

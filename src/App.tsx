@@ -28,6 +28,7 @@ import ApplicationsPage from './pages/ApplicationsPage';
 import MigrationImportPage from './pages/MigrationImportPage';
 import OnboardingPage from './pages/OnboardingPage';
 import NotFound from './pages/NotFound';
+import PrivacyPolicy from './pages/PrivacyPolicy';
 import BugReportButton from './components/BugReportButton';
 import ThemeToggle from './components/ThemeToggle';
 
@@ -91,6 +92,7 @@ function AnimatedRoutes() {
         <Route path="/browse" element={<BrowsePage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
 
         {/* Auth-gated routes */}
         <Route path="/dashboard" element={<AuthGuard><DashboardPage /></AuthGuard>} />
