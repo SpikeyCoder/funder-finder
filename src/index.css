@@ -3,18 +3,12 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  /* Visible focus rings on all interactive elements (WCAG 2.4.7) */
-  button:focus-visible,
-  a:focus-visible,
-  input:focus-visible,
-  select:focus-visible,
-  textarea:focus-visible,
-  [role="radio"]:focus-visible,
-  [tabindex]:focus-visible {
-    outline: 2px solid #3b82f6;
-    outline-offset: 2px;
-  }
+
+/* Non-layered rules win over all @layer (including Tailwind utilities).
+   This ensures focus:outline-none in components cannot suppress keyboard indicators. */
+*:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
 }
 
 * {
@@ -32,6 +26,13 @@ body {
 ::placeholder {
   color: #8b949e;
   opacity: 1;
+}
+
+/* gray-500 (#6b7280) on #0d1117 only reaches 3.9:1 — below WCAG AA.
+   Remap to gray-400 (#9ca3af, 7.8:1) on dark backgrounds.
+   html.light-mode .text-gray-500 below has higher specificity and overrides this in light mode. */
+.text-gray-500 {
+  color: #9ca3af;
 }
 
 /* Light mode theme overrides */

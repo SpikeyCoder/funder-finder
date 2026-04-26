@@ -126,7 +126,13 @@ export default function MissionInput() {
       <h1 className="text-4xl font-bold mb-3 text-center">Tell Us About Your Mission</h1>
       <p className="text-gray-400 mb-10 text-center">We'll match you with funders who share your vision</p>
 
-      <div className="w-full max-w-2xl bg-[#161b22] border border-[#30363d] rounded-2xl p-8 space-y-8">
+      <form
+        noValidate
+        onSubmit={e => { e.preventDefault(); handleSubmit(); }}
+        className="w-full max-w-2xl"
+        aria-label="Funder search form"
+      >
+      <div className="w-full bg-[#161b22] border border-[#30363d] rounded-2xl p-8 space-y-8">
 
         {/* Mission Statement */}
         <div>
@@ -152,6 +158,7 @@ export default function MissionInput() {
           {errors.mission && <p className="text-red-400 text-sm mt-1" aria-live="polite" role="alert">{errors.mission}</p>}
 
           <button
+            type="button"
             onClick={() => setShowExamples(!showExamples)}
             className="flex items-center gap-2 text-gray-400 text-sm mt-3 hover:text-white transition-colors"
           >
@@ -163,6 +170,7 @@ export default function MissionInput() {
             <div className="mt-3 space-y-2">
               {EXAMPLES.map(ex => (
                 <button
+                  type="button"
                   key={ex}
                   onClick={() => { setMission(ex); setShowExamples(false); setErrors(prev => ({ ...prev, mission: undefined })); }}
                   className="block w-full text-left text-sm text-gray-300 bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] rounded-lg p-3 transition-colors"
@@ -233,12 +241,13 @@ export default function MissionInput() {
       </div>
 
       <button
-        onClick={handleSubmit}
+        type="submit"
         className="mt-8 flex items-center gap-3 bg-white text-gray-900 font-semibold px-10 py-4 rounded-xl text-lg hover:bg-gray-100 transition-colors"
       >
         Find Matching Funders
         <ArrowRight size={20} />
       </button>
+      </form>
       </main>
       <Footer />
     </div>

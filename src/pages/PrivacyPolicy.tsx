@@ -79,8 +79,8 @@ export default function PrivacyPolicy() {
             </ul>
             <p className="mt-3">
               To exercise any of these rights, contact us at{' '}
-              <a href="mailto:support@fundermatch.org" className="text-blue-400 hover:text-blue-300 underline">
-                support@fundermatch.org
+              <a href="mailto:kevinmarmstrong1990@gmail.com" className="text-blue-400 hover:text-blue-300 underline">
+                kevinmarmstrong1990@gmail.com
               </a>.
             </p>
           </section>
@@ -123,8 +123,8 @@ export default function PrivacyPolicy() {
             <p>
               If you have questions about this privacy policy or how we handle your data,
               please reach out at{' '}
-              <a href="mailto:support@fundermatch.org" className="text-blue-400 hover:text-blue-300 underline">
-                support@fundermatch.org
+              <a href="mailto:kevinmarmstrong1990@gmail.com" className="text-blue-400 hover:text-blue-300 underline">
+                kevinmarmstrong1990@gmail.com
               </a>.
             </p>
           </section>
