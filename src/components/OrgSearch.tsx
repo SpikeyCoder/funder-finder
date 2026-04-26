@@ -98,6 +98,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
           onKeyDown={handleKeyDown}
           autoFocus={autoFocus}
           placeholder={placeholder}
+          aria-label="Search by organization name or EIN"
           className="w-full bg-[#0d1117] border border-[#30363d] rounded-xl pl-11 pr-10 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-blue-600 transition-colors"
         />
         {loading && (
