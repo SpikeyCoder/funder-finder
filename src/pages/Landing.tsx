@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Target, Zap, Bookmark, PenLine } from 'lucide-react';
+import { Search, Target, Zap, Bookmark, PenLine, Shield, CheckCircle } from 'lucide-react';
 import DemoVideo from '../components/DemoVideo';
 import NavBar from '../components/NavBar';
 import Footer from '../components/Footer';
@@ -34,10 +34,43 @@ export default function Landing() {
         </button>
       </div>
 
+      {/* Trust Signals */}
+      <div className="flex flex-wrap items-center justify-center gap-6 px-6 pb-8 text-xs text-gray-500">
+        <span className="flex items-center gap-1.5">
+          <Shield size={13} />
+          Powered by IRS 990 public filings
+        </span>
+        <span className="flex items-center gap-1.5">
+          <CheckCircle size={13} />
+          Free to use — no credit card required
+        </span>
+        <span className="flex items-center gap-1.5">
+          <CheckCircle size={13} />
+          Your data is never shared or sold
+        </span>
+      </div>
+
       {/* Demo Video */}
       <div className="w-[64%] max-w-[360rem] mx-auto">
         <p className="text-center text-sm text-gray-500 uppercase tracking-widest mb-4">See It in Action</p>
         <DemoVideo />
+      </div>
+
+      {/* Stats */}
+      <div className="px-6 py-12 max-w-5xl mx-auto w-full">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+          {[
+            { value: '460K+', label: 'Funders indexed', color: 'text-blue-400' },
+            { value: '449K+', label: 'Grant recipients', color: 'text-green-400' },
+            { value: '7.5M+', label: 'Individual grants', color: 'text-purple-400' },
+            { value: '1.1M+', label: '990 filings', color: 'text-yellow-400' },
+          ].map(({ value, label, color }) => (
+            <div key={label} className="bg-[#161b22] border border-[#30363d] rounded-xl p-5 text-center">
+              <div className={`text-2xl font-bold ${color}`}>{value}</div>
+              <div className="text-xs text-gray-400 mt-1">{label}</div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* How It Works */}
