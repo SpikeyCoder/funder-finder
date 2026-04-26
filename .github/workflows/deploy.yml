@@ -31,7 +31,7 @@ jobs:
       # SPA routing fix: serve the full app for any 404 so React Router
       # handles client-side routes (replaces the redirect-hack 404.html).
       - run: cp dist/index.html dist/404.html
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: dist
 
