@@ -29,6 +29,8 @@ import MigrationImportPage from './pages/MigrationImportPage';
 import OnboardingPage from './pages/OnboardingPage';
 import NotFound from './pages/NotFound';
 import PrivacyPolicy from './pages/PrivacyPolicy';
+import ContactPage from './pages/ContactPage';
+import TermsOfService from './pages/TermsOfService';
 import BugReportButton from './components/BugReportButton';
 import ThemeToggle from './components/ThemeToggle';
 
@@ -119,6 +121,8 @@ function AnimatedRoutes() {
         {/* Public shared view (no auth required) */}
         <Route path="/shared/:token" element={<SharedViewPage />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/contact" element={<ContactPage />} />
+        <Route path="/terms" element={<TermsOfService />} />
 
         <Route path="*" element={<NotFound />} />
       </Routes>
