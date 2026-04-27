@@ -107,6 +107,7 @@ const BrowsePage: React.FC = () => {
     const maxGrant = params.get('max_grant') ? parseInt(params.get('max_grant')!) : null;
     const keyword = params.get('keyword') || '';
     const givesToPeers = params.get('gives_to_peers') === 'true';
+    const locationsServed = params.get('locations_served')?.split(',').filter(Boolean) || [];
 
     return {
       states,
@@ -117,6 +118,7 @@ const BrowsePage: React.FC = () => {
       grant_size_max: maxGrant,
       keyword,
       gives_to_peers: givesToPeers,
+      locations_served: locationsServed,
     };
   };
 
@@ -147,6 +149,9 @@ const BrowsePage: React.FC = () => {
     if (newFilters.gives_to_peers) {
       params.set('gives_to_peers', 'true');
     }
+    if ((newFilters.locations_served || []).length > 0) {
+      params.set('locations_served', newFilters.locations_served.join(','));
+    }
 
     setSearchParams(params, { replace: true });
   };
@@ -166,6 +171,7 @@ const BrowsePage: React.FC = () => {
           grant_size_min: newFilters.grant_size_min,
           grant_size_max: newFilters.grant_size_max,
           gives_to_peers: newFilters.gives_to_peers,
+          locations_served: newFilters.locations_served || [],
         },
         sort_by: sortField,
         sort_order: sortOrder,

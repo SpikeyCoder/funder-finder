@@ -35,6 +35,7 @@ Deno.serve(async (req: Request) => {
       grant_size_min,
       grant_size_max,
       gives_to_peers = false,
+      locations_served = [],
     } = filters;
 
     // Build the SQL query against the materialized view
@@ -157,6 +158,15 @@ Deno.serve(async (req: Request) => {
 
     // Only show funders with grants
     query_builder = query_builder.gt('grant_count', 0);
+
+    // International location filter: search focus_areas array or use keyword text search
+    // When locations_served contains continents/countries, we combine them with websearch
+    // on the search_vector so funders whose descriptions/focus areas mention those regions appear.
+    if (locations_served.length > 0) {
+      // Build a websearch query from the location terms (OR logic via pipe in websearch mode)
+      const locationQuery = locations_served.join(' | ');
+      query_builder = query_builder.textSearch('search_vector', locationQuery, { type: 'websearch' });
+    }
 
     // Sort
     query_builder = query_builder.order(sortCol, { ascending: sort_order === 'asc', nullsFirst: false });

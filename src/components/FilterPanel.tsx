@@ -10,6 +10,7 @@ export interface FilterState {
   grant_size_max: number | null;
   keyword: string;
   gives_to_peers: boolean;
+  locations_served: string[]; // continents, countries, or "Global"
 }
 
 export const EMPTY_FILTERS: FilterState = {
@@ -21,6 +22,7 @@ export const EMPTY_FILTERS: FilterState = {
   grant_size_max: null,
   keyword: '',
   gives_to_peers: false,
+  locations_served: [],
 };
 
 const US_STATES = [
@@ -58,6 +60,37 @@ const NTEE_CATEGORIES = [
   { code: 'X', label: 'Religion Related' },
   { code: 'Y', label: 'Mutual Benefit' },
   { code: 'Z', label: 'Unknown' },
+];
+
+// Continents and commonly-funded countries/regions for international filtering.
+// These map to terms that appear in funder descriptions or focus areas.
+export const INTERNATIONAL_LOCATIONS: { group: string; items: string[] }[] = [
+  {
+    group: 'Global',
+    items: ['Global', 'Worldwide', 'International'],
+  },
+  {
+    group: 'Continents',
+    items: [
+      'Africa',
+      'Asia',
+      'Europe',
+      'Latin America',
+      'Middle East',
+      'North America',
+      'Oceania',
+      'Caribbean',
+    ],
+  },
+  {
+    group: 'Countries',
+    items: [
+      'Brazil', 'Canada', 'China', 'Colombia', 'Ethiopia', 'Ghana',
+      'India', 'Indonesia', 'Kenya', 'Mexico', 'Nigeria', 'Pakistan',
+      'Philippines', 'Rwanda', 'South Africa', 'Tanzania', 'Uganda',
+      'United Kingdom', 'Vietnam', 'Zimbabwe',
+    ],
+  },
 ];
 
 const FUNDING_TYPES = [
@@ -114,6 +147,7 @@ const Accordion: React.FC<{
 const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerToggle = false }) => {
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     location: true,
+    internationalLocation: false,
     fieldOfWork: true,
     fundingType: true,
     funderType: true,
@@ -121,6 +155,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
   });
 
   const [stateSearchTerm, setStateSearchTerm] = useState('');
+  const [intlSearchTerm, setIntlSearchTerm] = useState('');
 
   const toggleSection = (section: string) => {
     setExpandedSections((prev) => ({
@@ -179,9 +214,28 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
     });
   };
 
+  const handleLocationServedChange = (location: string, checked: boolean) => {
+    onChange({
+      ...filters,
+      locations_served: checked
+        ? [...filters.locations_served, location]
+        : filters.locations_served.filter((l) => l !== location),
+    });
+  };
+
+  const filteredIntlItems = useMemo(() => {
+    if (!intlSearchTerm) return INTERNATIONAL_LOCATIONS;
+    const term = intlSearchTerm.toLowerCase();
+    return INTERNATIONAL_LOCATIONS.map((g) => ({
+      ...g,
+      items: g.items.filter((item) => item.toLowerCase().includes(term)),
+    })).filter((g) => g.items.length > 0);
+  }, [intlSearchTerm]);
+
   const handleClearAll = () => {
     onChange(EMPTY_FILTERS);
     setStateSearchTerm('');
+    setIntlSearchTerm('');
   };
 
   const activeFilterCount = [
@@ -189,6 +243,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
     ...filters.ntee_codes,
     ...filters.funding_types,
     ...filters.funder_types,
+    ...(filters.locations_served || []),
   ].length + (filters.grant_size_min !== null || filters.grant_size_max !== null ? 1 : 0) + (filters.keyword ? 1 : 0);
 
   const renderFilterChips = () => {
@@ -245,6 +300,20 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
           {label}
           <button
             onClick={() => handleFunderTypeChange(type, false)}
+            className="hover:text-white"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      );
+    });
+
+    (filters.locations_served || []).forEach((loc) => {
+      chips.push(
+        <div key={`loc-${loc}`} className="inline-flex items-center gap-2 bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-sm text-gray-300">
+          {loc}
+          <button
+            onClick={() => handleLocationServedChange(loc, false)}
             className="hover:text-white"
           >
             <X size={14} />
@@ -348,6 +417,45 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
                 />
                 <span className="text-sm text-gray-300">{state}</span>
               </label>
+            ))}
+          </div>
+        </Accordion>
+
+        {/* International / Multi-Location */}
+        <Accordion
+          title={`International Locations ${(filters.locations_served || []).length > 0 ? `(${filters.locations_served.length})` : ''}`}
+          isOpen={expandedSections.internationalLocation}
+          onToggle={() => toggleSection('internationalLocation')}
+        >
+          <p className="text-xs text-gray-500 mb-2">Filter funders by the countries or regions they serve.</p>
+          <div className="mb-3">
+            <input
+              type="text"
+              placeholder="Search locations..."
+              aria-label="Search international locations"
+              value={intlSearchTerm}
+              onChange={(e) => setIntlSearchTerm(e.target.value)}
+              className="w-full px-3 py-2 bg-[#0d1117] border border-[#30363d] rounded text-white placeholder-gray-500 focus:outline-none focus:border-[#58a6ff] text-sm"
+            />
+          </div>
+          <div className="space-y-3 max-h-56 overflow-y-auto">
+            {filteredIntlItems.map((group) => (
+              <div key={group.group}>
+                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">{group.group}</p>
+                <div className="space-y-1.5">
+                  {group.items.map((item) => (
+                    <label key={item} className="flex items-center gap-2 cursor-pointer hover:text-gray-200">
+                      <input
+                        type="checkbox"
+                        checked={(filters.locations_served || []).includes(item)}
+                        onChange={(e) => handleLocationServedChange(item, e.target.checked)}
+                        className="rounded border-[#30363d] accent-[#58a6ff]"
+                      />
+                      <span className="text-sm text-gray-300">{item}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         </Accordion>
