@@ -372,14 +372,8 @@ export default function RecipientProfile() {
                     }));
 
                     if (!user) {
-                      // Anonymous: save to localStorage so they aren't lost, then prompt
-                      // for login so they can sync to their account.
-                      minimalFunders.forEach(saveFunder);
-                      setSavedIds(prev => {
-                        const next = new Set(prev);
-                        minimalFunders.forEach(f => next.add(f.id));
-                        return next;
-                      });
+                      // Require auth — stash funders for post-login auto-save to
+                      // Supabase, then prompt sign-in. Nothing is persisted locally.
                       setPendingBulkFunders(minimalFunders);
                       setShowLoginModal(true);
                       return;
