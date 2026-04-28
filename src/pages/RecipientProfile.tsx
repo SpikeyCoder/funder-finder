@@ -5,7 +5,7 @@ import { RecipientProfile as RecipientProfileType, PeerEntry, Funder, GeoEntry }
 import { fetchRecipientProfile, fetchPeers } from '../utils/matching';
 import { GeoBarChart, StatCard, fmtDollar } from '../components/InsightCharts';
 import { useAuth } from '../contexts/AuthContext';
-import { isSaved, saveFunder, unsaveFunder } from '../utils/storage';
+// localStorage storage utils removed — all save/unsave goes through Supabase with auth
 import LoginModal from '../components/LoginModal';
 import NavBar from '../components/NavBar';
 import Toast from '../components/Toast';
@@ -13,7 +13,7 @@ import Toast from '../components/Toast';
 export default function RecipientProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user, saveFunderToDB, fetchSavedIds } = useAuth();
+  const { user, saveFunderToDB, unsaveFunderFromDB, fetchSavedIds } = useAuth();
 
   const [profile, setProfile] = useState<RecipientProfileType | null>(null);
   const [loading, setLoading] = useState(true);
@@ -28,7 +28,8 @@ export default function RecipientProfile() {
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
 
-  // Sync saved funder IDs — from DB for authenticated users, localStorage otherwise
+  // Sync saved funder IDs — from DB for authenticated users only.
+  // Anonymous users see no saved state — saving requires sign-in.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -36,24 +37,21 @@ export default function RecipientProfile() {
         try {
           const ids = await fetchSavedIds();
           if (!cancelled) setSavedIds(new Set(ids));
-          return;
         } catch {
-          // fall through to localStorage on error
+          if (!cancelled) setSavedIds(new Set());
         }
+      } else {
+        if (!cancelled) setSavedIds(new Set());
       }
-      const ids = new Set((JSON.parse(localStorage.getItem('savedFunders_v2') || '[]') as Funder[]).map(f => f.id));
-      if (!cancelled) setSavedIds(ids);
     })();
     return () => { cancelled = true; };
   }, [user, fetchSavedIds]);
 
-  const toggleSave = (e: React.MouseEvent, funderId: string, funderName: string) => {
+  const toggleSave = async (e: React.MouseEvent, funderId: string, funderName: string) => {
     e.stopPropagation(); // prevent row click navigation
-    if (isSaved(funderId)) {
-      unsaveFunder(funderId);
-      setSavedIds(prev => { const next = new Set(prev); next.delete(funderId); return next; });
-    } else {
-      // Build a minimal Funder object from the available data
+
+    // Require auth for all save/unsave actions
+    if (!user) {
       const entry = profile?.topFunders.find(f => f.funderId === funderId);
       const minimalFunder: Funder = {
         id: funderId,
@@ -74,8 +72,45 @@ export default function RecipientProfile() {
         contact_email: null,
         next_step: null,
       };
-      saveFunder(minimalFunder);
-      setSavedIds(prev => new Set(prev).add(funderId));
+      setPendingBulkFunders([minimalFunder]);
+      setShowLoginModal(true);
+      return;
+    }
+
+    if (savedIds.has(funderId)) {
+      try {
+        await unsaveFunderFromDB(funderId);
+        setSavedIds(prev => { const next = new Set(prev); next.delete(funderId); return next; });
+      } catch (err) {
+        console.error('Failed to unsave funder', funderId, err);
+      }
+    } else {
+      const entry = profile?.topFunders.find(f => f.funderId === funderId);
+      const minimalFunder: Funder = {
+        id: funderId,
+        name: funderName,
+        type: 'foundation',
+        description: null,
+        focus_areas: [],
+        ntee_code: null,
+        city: null,
+        state: null,
+        website: null,
+        total_giving: entry?.totalAmount ?? null,
+        asset_amount: null,
+        grant_range_min: null,
+        grant_range_max: null,
+        contact_name: null,
+        contact_title: null,
+        contact_email: null,
+        next_step: null,
+      };
+      try {
+        await saveFunderToDB(minimalFunder);
+        setSavedIds(prev => new Set(prev).add(funderId));
+      } catch (err) {
+        console.error('Failed to save funder', funderId, err);
+      }
     }
   };
 
