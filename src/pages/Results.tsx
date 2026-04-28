@@ -6,9 +6,7 @@ import Footer from '../components/Footer';
 import GlossaryTooltip from '../components/GlossaryTooltip';
 import { findMatches, formatGrantRange, formatTotalGiving } from '../utils/matching';
 import { BudgetBand, Funder } from '../types';
-import { getSavedIds, saveFunder, unsaveFunder } from '../utils/storage';
 
-import Toast from '../components/Toast';
 import { useAuth } from '../contexts/AuthContext';
 import LoginModal from '../components/LoginModal';
 import {
@@ -114,9 +112,8 @@ export default function Results() {
   const searchTelemetryRef = useRef<SearchTelemetryContext | null>(null);
   const searchSessionIdRef = useRef<string>(getOrCreateSearchSessionId());
 
-  // Login modal + toast state
+  // Login modal state
   const [loginModalFunder, setLoginModalFunder] = useState<Funder | null>(null);
-  const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [showPeerEditor, setShowPeerEditor] = useState(false);
   const keywordKey = keywords.join('|');
   const peerKey = activePeerNonprofits.join('|');
@@ -259,7 +256,8 @@ export default function Results() {
     setPeerSearchInput('');
   };
 
-  // Load saved IDs — from DB if logged in, from localStorage if not
+  // Load saved IDs — only authenticated users have a saved list. Anonymous
+  // users see no saved state until they sign in (no localStorage fallback).
   const loadSavedIds = async () => {
     if (user) {
       try {
@@ -267,10 +265,11 @@ export default function Results() {
         setSavedIds(ids);
         return;
       } catch {
-        // fall through to localStorage
+        setSavedIds([]);
+        return;
       }
     }
-    setSavedIds(getSavedIds());
+    setSavedIds([]);
   };
 
   // Single-call flow: match-funders now handles peer suggestion internally.
@@ -296,38 +295,29 @@ export default function Results() {
   }, [mission, locationServed, budgetBand, keywordKey, peerKey, user]);
 
   const toggleSave = async (funder: Funder) => {
-    const alreadySaved = savedIds.includes(funder.id);
+    // Auth gate — anonymous users must sign in to save. The funder is stashed
+    // in the LoginModal flow so it is auto-saved to Supabase after login.
+    if (!user) {
+      setLoginModalFunder(funder);
+      return;
+    }
 
-    if (user) {
-      // Authenticated path — use DB
-      if (alreadySaved) {
-        try {
-          await unsaveFunderFromDB(funder.id);
-          setSavedIds(prev => prev.filter(i => i !== funder.id));
-          logResultSignal('result_unsaved', funder);
-        } catch (e) {
-          console.error('Failed to unsave from DB:', e);
-        }
-      } else {
-        try {
-          await saveFunderToDB(funder);
-          setSavedIds(prev => [...prev, funder.id]);
-          logResultSignal('result_saved', funder);
-        } catch (e) {
-          console.error('Failed to save to DB:', e);
-        }
+    const alreadySaved = savedIds.includes(funder.id);
+    if (alreadySaved) {
+      try {
+        await unsaveFunderFromDB(funder.id);
+        setSavedIds(prev => prev.filter(i => i !== funder.id));
+        logResultSignal('result_unsaved', funder);
+      } catch (e) {
+        console.error('Failed to unsave from DB:', e);
       }
     } else {
-      // Anonymous path — save to localStorage immediately, suggest login for sync
-      if (alreadySaved) {
-        unsaveFunder(funder.id);
-        setSavedIds(prev => prev.filter(i => i !== funder.id));
-        logResultSignal('result_unsaved', funder, { anonymous: true });
-      } else {
-        saveFunder(funder);
+      try {
+        await saveFunderToDB(funder);
         setSavedIds(prev => [...prev, funder.id]);
-        logResultSignal('result_saved', funder, { anonymous: true });
-        setToastMsg('Funder saved! Log in to sync across devices.');
+        logResultSignal('result_saved', funder);
+      } catch (e) {
+        console.error('Failed to save to DB:', e);
       }
     }
   };
@@ -509,9 +499,6 @@ export default function Results() {
     { key: 'medium', label: '$25K – $250K' },
     { key: 'large',  label: '$250K+' },
   ];
-
-  const emptyFunder = {} as Funder;
-  const handleToastLogin = () => { setToastMsg(null); setLoginModalFunder(emptyFunder); };
 
   return (
     <div className="min-h-screen bg-[#0d1117] text-white">
@@ -1005,18 +992,10 @@ export default function Results() {
         )}
       </div>
 
-      {/* Login modal — shown when user explicitly clicks login */}
+      {/* Login modal — shown when an anonymous user tries to save. The
+          pending funder is auto-saved to Supabase after sign-in. */}
       {loginModalFunder && (
         <LoginModal pendingFunder={loginModalFunder} onClose={() => setLoginModalFunder(null)} />
-      )}
-
-      {/* Toast — non-blocking hint to log in for cloud sync */}
-      {toastMsg && (
-        <Toast
-          message={toastMsg}
-          action={{ label: 'Log in', onClick: handleToastLogin }}
-          onClose={() => setToastMsg(null)}
-        />
       )}
 
       <Footer />

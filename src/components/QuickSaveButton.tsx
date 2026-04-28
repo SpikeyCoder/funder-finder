@@ -1,14 +1,9 @@
 /**
  * QuickSaveButton
  *
- * A simple save/unsave toggle that works for both authenticated and anonymous
- * users.  Authenticated users persist to Supabase `saved_funders`; anonymous
- * users persist to localStorage.  After a successful save the component shows
- * a non-blocking toast with a link to /saved.
- *
- * Used on the Browse page (and anywhere a lightweight save is needed without
- * requiring a project).  The Results page has its own inline toggleSave, but
- * this component could replace it in the future for consistency.
+ * Save/unsave toggle that requires authentication. Anonymous users see a
+ * LoginModal; the funder is auto-saved post-login. Authenticated users persist
+ * to Supabase via AuthContext. No localStorage fallback.
  */
 
 import React, { useState, useCallback, useEffect } from 'react';
@@ -16,7 +11,6 @@ import { useNavigate } from 'react-router-dom';
 import { Bookmark, BookmarkCheck } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { Funder } from '../types';
-import { saveFunder, unsaveFunder, getSavedIds } from '../utils/storage';
 import Toast from './Toast';
 import LoginModal from './LoginModal';
 
@@ -38,7 +32,8 @@ const QuickSaveButton: React.FC<QuickSaveButtonProps> = ({ funder, className = '
   const [showLogin, setShowLogin] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  // Check initial saved state
+  // Initial saved state — from Supabase for authenticated users; never from
+  // localStorage. Anonymous users see the unsaved state until they log in.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -47,10 +42,10 @@ const QuickSaveButton: React.FC<QuickSaveButtonProps> = ({ funder, className = '
           const ids = await fetchSavedIds();
           if (!cancelled) setSaved(ids.includes(funder.id));
         } catch {
-          if (!cancelled) setSaved(getSavedIds().includes(funder.id));
+          if (!cancelled) setSaved(false);
         }
       } else {
-        setSaved(getSavedIds().includes(funder.id));
+        setSaved(false);
       }
     })();
     return () => { cancelled = true; };
@@ -58,27 +53,23 @@ const QuickSaveButton: React.FC<QuickSaveButtonProps> = ({ funder, className = '
 
   const toggle = useCallback(async () => {
     if (busy) return;
-    setBusy(true);
 
+    // Auth gate — anonymous users must sign in to save. The funder is stashed
+    // in the LoginModal flow so it is auto-saved to Supabase after login.
+    if (!user) {
+      setShowLogin(true);
+      return;
+    }
+
+    setBusy(true);
     try {
-      if (user) {
-        if (saved) {
-          await unsaveFunderFromDB(funder.id);
-          setSaved(false);
-        } else {
-          await saveFunderToDB(funder);
-          setSaved(true);
-          setToastMsg('Funder saved!');
-        }
+      if (saved) {
+        await unsaveFunderFromDB(funder.id);
+        setSaved(false);
       } else {
-        if (saved) {
-          unsaveFunder(funder.id);
-          setSaved(false);
-        } else {
-          saveFunder(funder);
-          setSaved(true);
-          setToastMsg('Funder saved! Log in to sync across devices.');
-        }
+        await saveFunderToDB(funder);
+        setSaved(true);
+        setToastMsg('Funder saved!');
       }
     } catch (err) {
       console.error('Save toggle failed:', err);
@@ -109,11 +100,7 @@ const QuickSaveButton: React.FC<QuickSaveButtonProps> = ({ funder, className = '
       {toastMsg && (
         <Toast
           message={toastMsg}
-          action={
-            user
-              ? { label: 'View saved', onClick: () => { setToastMsg(null); navigate('/saved'); } }
-              : { label: 'Log in', onClick: () => { setToastMsg(null); setShowLogin(true); } }
-          }
+          action={{ label: 'View saved', onClick: () => { setToastMsg(null); navigate('/saved'); } }}
           onClose={() => setToastMsg(null)}
         />
       )}

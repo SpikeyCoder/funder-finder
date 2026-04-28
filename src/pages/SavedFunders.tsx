@@ -6,7 +6,6 @@ import {
   Users, Building2,
 } from 'lucide-react';
 import { SavedFunderEntry, FunderStatus, PeerEntry } from '../types';
-import { getSavedEntries, unsaveFunder, setFunderMeta } from '../utils/storage';
 import { formatTotalGiving, fetchPeers } from '../utils/matching';
 import { fmtDollar } from '../components/InsightCharts';
 import { useAuth } from '../contexts/AuthContext';
@@ -62,9 +61,16 @@ export default function SavedFunders() {
   useEffect(() => { loadEntries(); }, [user]);
 
   const loadEntries = async () => {
+    // Anonymous users see no entries — saved funders live only in Supabase.
+    if (!user) {
+      setEntries([]);
+      setNotesDraft({});
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
-      const data = user ? await fetchSavedEntries() : getSavedEntries();
+      const data = await fetchSavedEntries();
       setEntries(data);
       // Seed the notes draft from loaded data
       const draft: Record<string, string> = {};
@@ -72,8 +78,7 @@ export default function SavedFunders() {
       setNotesDraft(draft);
     } catch (e) {
       console.error('Failed to load saved funders:', e);
-      const fallback = getSavedEntries();
-      setEntries(fallback);
+      setEntries([]);
     }
     setLoading(false);
   };
@@ -81,16 +86,13 @@ export default function SavedFunders() {
   // ── Status change ─────────────────────────────────────────────────────────────
 
   const handleStatusChange = async (funderId: string, status: FunderStatus) => {
+    if (!user) return;
     // Optimistic update
     setEntries(prev => prev.map(e =>
       e.funder.id === funderId ? { ...e, status } : e
     ));
     try {
-      if (user) {
-        await updateSavedFunder(funderId, { status });
-      } else {
-        setFunderMeta(funderId, { status });
-      }
+      await updateSavedFunder(funderId, { status });
     } catch (e) {
       console.error('Failed to update status:', e);
     }
@@ -106,15 +108,12 @@ export default function SavedFunders() {
   };
 
   const saveNotes = async (funderId: string, notes: string) => {
+    if (!user) return;
     setEntries(prev => prev.map(e =>
       e.funder.id === funderId ? { ...e, notes } : e
     ));
     try {
-      if (user) {
-        await updateSavedFunder(funderId, { notes });
-      } else {
-        setFunderMeta(funderId, { notes });
-      }
+      await updateSavedFunder(funderId, { notes });
     } catch (e) {
       console.error('Failed to save notes:', e);
     }
@@ -131,11 +130,8 @@ export default function SavedFunders() {
   // ── Remove ────────────────────────────────────────────────────────────────────
 
   const remove = async (funderId: string) => {
-    if (user) {
-      try { await unsaveFunderFromDB(funderId); } catch (e) { console.error(e); }
-    } else {
-      unsaveFunder(funderId);
-    }
+    if (!user) return;
+    try { await unsaveFunderFromDB(funderId); } catch (e) { console.error(e); }
     setEntries(prev => prev.filter(e => e.funder.id !== funderId));
   };
 
@@ -272,22 +268,18 @@ export default function SavedFunders() {
           </div>
         </div>
 
-        {/* Anon sync callout */}
-        {!user && entries.length > 0 && (
-          <div className="mb-6 bg-blue-900/10 border border-blue-800/40 rounded-xl px-5 py-4 flex items-center justify-between gap-4">
-            <p className="text-sm text-blue-300">
-              Log in to sync your saved funders and pipeline across all your devices.
-            </p>
+        {!user ? (
+          <div className="text-center py-24">
+            <p className="text-2xl font-bold text-white mb-3">Sign in to see your saved funders</p>
+            <p className="text-gray-400 mb-6">Saved funders are stored to your account so they sync across devices.</p>
             <button
               onClick={() => setShowLoginModal(true)}
-              className="shrink-0 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-xl px-4 py-2 transition-colors"
+              className="bg-blue-600 hover:bg-blue-500 text-white font-semibold px-6 py-3 rounded-xl transition-colors"
             >
-              Log in
+              Sign in
             </button>
           </div>
-        )}
-
-        {loading ? (
+        ) : loading ? (
           <div className="flex justify-center py-24">
             <Loader2 size={32} className="animate-spin text-blue-400" />
           </div>

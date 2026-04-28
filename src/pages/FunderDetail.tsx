@@ -3,11 +3,9 @@ import { useEffect, useState } from 'react';
 import { ArrowLeft, Bookmark, BookmarkCheck, Copy, Globe, MapPin, User, Mail, TrendingUp, ChevronDown, ChevronUp, BarChart3, Users, Map, Loader2, FileText, Info } from 'lucide-react';
 import GlossaryTooltip from '../components/GlossaryTooltip';
 import { Funder, FunderInsights, PeerEntry } from '../types';
-import { isSaved, saveFunder, unsaveFunder } from '../utils/storage';
 import { formatGrantRange, formatTotalGiving, fetchFunderInsights, fetchPeers, fetchFunderByEin } from '../utils/matching';
 import { useAuth } from '../contexts/AuthContext';
 import LoginModal from '../components/LoginModal';
-import Toast from '../components/Toast';
 import { GivingTrendsChart, GeoBarChart, GeoHeatMap, StatCard, InsightsSkeleton, fmtDollar } from '../components/InsightCharts';
 import Footer from '../components/Footer';
 import NavBar from '../components/NavBar';
@@ -38,7 +36,7 @@ export default function FunderDetail() {
   const navigate = useNavigate();
   const location = useLocation();
   const { funder: funderFromState, mission = '', keywords = [] } = location.state || {};
-  const { user, saveFunderToDB, unsaveFunderFromDB } = useAuth();
+  const { user, saveFunderToDB, unsaveFunderFromDB, fetchSavedIds } = useAuth();
 
   // Use funder passed in navigation state; fall back to API fetch by EIN
   const [funder, setFunder] = useState<Funder | null>(funderFromState || null);
@@ -58,7 +56,6 @@ export default function FunderDetail() {
   const [saved, setSaved] = useState(false);
   const [copiedEmail, setCopiedEmail] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   // 990 Intelligence state
   const [insights, setInsights] = useState<FunderInsights | null>(null);
@@ -85,18 +82,25 @@ export default function FunderDetail() {
       : 'View funder contact info, mission alignment scores, and generate a tailored grant application.';
   }, [funder]);
 
+  // Saved state — from Supabase for authenticated users only. Anonymous users
+  // see the unsaved state until they log in.
   useEffect(() => {
-    if (id) {
+    if (!id) return;
+    let cancelled = false;
+    (async () => {
       if (user) {
-        // For logged-in users, we check the DB; but a quick sync from the
-        // Results page has already loaded savedIds. For simplicity here
-        // we fall back to localStorage state which is synced in Results.
-        setSaved(isSaved(id));
+        try {
+          const ids = await fetchSavedIds();
+          if (!cancelled) setSaved(ids.includes(id));
+        } catch {
+          if (!cancelled) setSaved(false);
+        }
       } else {
-        setSaved(isSaved(id));
+        setSaved(false);
       }
-    }
-  }, [id, user]);
+    })();
+    return () => { cancelled = true; };
+  }, [id, user, fetchSavedIds]);
 
   // Fetch 990 insights when funder loads
   useEffect(() => {
@@ -146,34 +150,25 @@ export default function FunderDetail() {
   );
 
   const toggleSave = async () => {
-    if (user) {
-      // Authenticated path — use DB
-      if (saved) {
-        try {
-          await unsaveFunderFromDB(funder.id);
-          unsaveFunder(funder.id); // keep localStorage in sync
-          setSaved(false);
-        } catch (e) {
-          console.error('Failed to unsave from DB:', e);
-        }
-      } else {
-        try {
-          await saveFunderToDB(funder);
-          saveFunder(funder); // keep localStorage in sync
-          setSaved(true);
-        } catch (e) {
-          console.error('Failed to save to DB:', e);
-        }
+    // Auth gate — anonymous users must sign in to save. The funder is stashed
+    // in the LoginModal flow so it is auto-saved to Supabase after login.
+    if (!user) {
+      setShowLoginModal(true);
+      return;
+    }
+    if (saved) {
+      try {
+        await unsaveFunderFromDB(funder.id);
+        setSaved(false);
+      } catch (e) {
+        console.error('Failed to unsave from DB:', e);
       }
     } else {
-      // Anonymous path — save to localStorage immediately, suggest login for sync
-      if (saved) {
-        unsaveFunder(funder.id);
-        setSaved(false);
-      } else {
-        saveFunder(funder);
+      try {
+        await saveFunderToDB(funder);
         setSaved(true);
-        setToastMsg('Funder saved! Log in to sync across devices.');
+      } catch (e) {
+        console.error('Failed to save to DB:', e);
       }
     }
   };
@@ -762,14 +757,6 @@ export default function FunderDetail() {
         />
       )}
 
-      {/* Toast — non-blocking hint to log in for cloud sync */}
-      {toastMsg && (
-        <Toast
-          message={toastMsg}
-          action={{ label: 'Log in', onClick: () => { setToastMsg(null); setShowLoginModal(true); } }}
-          onClose={() => setToastMsg(null)}
-        />
-      )}
       <Footer />
     </div>
     </>
