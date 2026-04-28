@@ -7,6 +7,8 @@ import { Funder } from '../types';
 interface LoginModalProps {
   /** Funder the user tried to save before hitting the modal — will be auto-saved after login. */
   pendingFunder?: Funder;
+  /** Bulk variant: list of funders ("Add All to My Prospects") to auto-save after login. */
+  pendingFunders?: Funder[];
   onClose: () => void;
 }
 
@@ -62,7 +64,7 @@ const PROVIDERS = [
   },
 ] as const;
 
-export default function LoginModal({ pendingFunder, onClose }: LoginModalProps) {
+export default function LoginModal({ pendingFunder, pendingFunders, onClose }: LoginModalProps) {
   const { signInWithGoogle, signInWithLinkedIn, signInWithMicrosoft } = useAuth();
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -71,9 +73,9 @@ export default function LoginModal({ pendingFunder, onClose }: LoginModalProps) 
     setError(null);
     setLoadingProvider(key);
     try {
-      if (key === 'google') await signInWithGoogle(pendingFunder);
-      else if (key === 'linkedin') await signInWithLinkedIn(pendingFunder);
-      else await signInWithMicrosoft(pendingFunder);
+      if (key === 'google') await signInWithGoogle(pendingFunder, pendingFunders);
+      else if (key === 'linkedin') await signInWithLinkedIn(pendingFunder, pendingFunders);
+      else await signInWithMicrosoft(pendingFunder, pendingFunders);
       // OAuth redirect will take over — no need to close the modal
     } catch (e) {
       setError('Something went wrong. Please try again.');
@@ -110,7 +112,9 @@ export default function LoginModal({ pendingFunder, onClose }: LoginModalProps) 
 
         {/* Heading */}
         <h2 className="text-xl font-bold text-white text-center mb-2">
-          Save funders for later
+          {pendingFunders && pendingFunders.length > 1
+            ? `Save ${pendingFunders.length} funders to your prospects`
+            : 'Save funders for later'}
         </h2>
         <p className="text-gray-400 text-sm text-center mb-6">
           Create an account or log in to save funders and access your list anytime, on any device.

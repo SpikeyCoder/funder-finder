@@ -8,11 +8,12 @@ import { useAuth } from '../contexts/AuthContext';
 import { isSaved, saveFunder, unsaveFunder } from '../utils/storage';
 import LoginModal from '../components/LoginModal';
 import NavBar from '../components/NavBar';
+import Toast from '../components/Toast';
 
 export default function RecipientProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  useAuth(); // hook available for future auth-aware save logic
+  const { user, saveFunderToDB, fetchSavedIds } = useAuth();
 
   const [profile, setProfile] = useState<RecipientProfileType | null>(null);
   const [loading, setLoading] = useState(true);
@@ -21,14 +22,30 @@ export default function RecipientProfile() {
   const [peersLoading, setPeersLoading] = useState(false);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [pendingBulkFunders, setPendingBulkFunders] = useState<Funder[]>([]);
   const [filterDafs, setFilterDafs] = useState(false);
   const [filterUniversities, setFilterUniversities] = useState(false);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
-  // Sync saved funder IDs from localStorage
+  // Sync saved funder IDs — from DB for authenticated users, localStorage otherwise
   useEffect(() => {
-    const ids = new Set((JSON.parse(localStorage.getItem('savedFunders_v2') || '[]') as Funder[]).map(f => f.id));
-    setSavedIds(ids);
-  }, []);
+    let cancelled = false;
+    (async () => {
+      if (user) {
+        try {
+          const ids = await fetchSavedIds();
+          if (!cancelled) setSavedIds(new Set(ids));
+          return;
+        } catch {
+          // fall through to localStorage on error
+        }
+      }
+      const ids = new Set((JSON.parse(localStorage.getItem('savedFunders_v2') || '[]') as Funder[]).map(f => f.id));
+      if (!cancelled) setSavedIds(ids);
+    })();
+    return () => { cancelled = true; };
+  }, [user, fetchSavedIds]);
 
   const toggleSave = (e: React.MouseEvent, funderId: string, funderName: string) => {
     e.stopPropagation(); // prevent row click navigation
@@ -338,28 +355,67 @@ export default function RecipientProfile() {
               {/* FEAT-002: Prominent bulk-save CTA */}
               {visibleFunders.filter(f => !savedIds.has(f.funderId)).length > 0 && (
                 <button
-                  onClick={() => {
+                  disabled={bulkBusy}
+                  onClick={async () => {
+                    if (bulkBusy) return;
                     const unsaved = visibleFunders.filter(f => !savedIds.has(f.funderId));
-                    const newIds = new Set(savedIds);
-                    unsaved.forEach(f => {
-                      const minimalFunder: Funder = {
-                        id: f.funderId, name: f.funderName, type: 'foundation',
-                        description: null, focus_areas: [], ntee_code: null,
-                        city: null, state: null, website: null,
-                        total_giving: f.totalAmount ?? null, asset_amount: null,
-                        grant_range_min: null, grant_range_max: null,
-                        contact_name: null, contact_title: null, contact_email: null,
-                        next_step: null,
-                      };
-                      saveFunder(minimalFunder);
-                      newIds.add(f.funderId);
-                    });
-                    setSavedIds(newIds);
+                    if (unsaved.length === 0) return;
+
+                    const minimalFunders: Funder[] = unsaved.map(f => ({
+                      id: f.funderId, name: f.funderName, type: 'foundation',
+                      description: null, focus_areas: [], ntee_code: null,
+                      city: null, state: null, website: null,
+                      total_giving: f.totalAmount ?? null, asset_amount: null,
+                      grant_range_min: null, grant_range_max: null,
+                      contact_name: null, contact_title: null, contact_email: null,
+                      next_step: null,
+                    }));
+
+                    if (!user) {
+                      // Anonymous: save to localStorage so they aren't lost, then prompt
+                      // for login so they can sync to their account.
+                      minimalFunders.forEach(saveFunder);
+                      setSavedIds(prev => {
+                        const next = new Set(prev);
+                        minimalFunders.forEach(f => next.add(f.id));
+                        return next;
+                      });
+                      setPendingBulkFunders(minimalFunders);
+                      setShowLoginModal(true);
+                      return;
+                    }
+
+                    setBulkBusy(true);
+                    let successCount = 0;
+                    try {
+                      for (const f of minimalFunders) {
+                        try {
+                          await saveFunderToDB(f);
+                          successCount += 1;
+                        } catch (err) {
+                          console.error('Failed to save funder', f.id, err);
+                        }
+                      }
+                      setSavedIds(prev => {
+                        const next = new Set(prev);
+                        minimalFunders.forEach(f => next.add(f.id));
+                        return next;
+                      });
+                      setToastMsg(
+                        successCount === minimalFunders.length
+                          ? `Added ${successCount} funder${successCount === 1 ? '' : 's'} to your prospects`
+                          : `Added ${successCount} of ${minimalFunders.length} funders — some failed to save`
+                      );
+                    } finally {
+                      setBulkBusy(false);
+                    }
                   }}
-                  className="mt-3 w-full bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-xl py-2.5 transition-colors flex items-center justify-center gap-2"
+                  className="mt-3 w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl py-2.5 transition-colors flex items-center justify-center gap-2"
                 >
                   <Bookmark size={14} />
-                  Add All {visibleFunders.filter(f => !savedIds.has(f.funderId)).length} Funders to My Prospects
+                  {bulkBusy
+                    ? 'Adding…'
+                    : `Add All ${visibleFunders.filter(f => !savedIds.has(f.funderId)).length} Funders to My Prospects`}
                 </button>
               )}
             </>
@@ -447,7 +503,25 @@ export default function RecipientProfile() {
           </button>
         </div>
       </div>
-      {showLoginModal && <LoginModal onClose={() => setShowLoginModal(false)} />}
+      {showLoginModal && (
+        <LoginModal
+          pendingFunders={pendingBulkFunders.length > 0 ? pendingBulkFunders : undefined}
+          onClose={() => {
+            setShowLoginModal(false);
+            setPendingBulkFunders([]);
+          }}
+        />
+      )}
+      {toastMsg && (
+        <Toast
+          message={toastMsg}
+          action={{
+            label: 'View saved',
+            onClick: () => { setToastMsg(null); navigate('/saved'); },
+          }}
+          onClose={() => setToastMsg(null)}
+        />
+      )}
     </div>
     </>
   );

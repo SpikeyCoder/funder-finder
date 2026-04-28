@@ -23,11 +23,11 @@ interface AuthContextValue {
   session: Session | null;
   loading: boolean;
 
-  /** Sign in with an OAuth provider. Saves pendingFunder first so it is
-   *  auto-saved after the redirect completes. */
-  signInWithGoogle: (pendingFunder?: Funder) => Promise<void>;
-  signInWithLinkedIn: (pendingFunder?: Funder) => Promise<void>;
-  signInWithMicrosoft: (pendingFunder?: Funder) => Promise<void>;
+  /** Sign in with an OAuth provider. Saves pendingFunder (or pendingFunders
+   *  for bulk) first so they are auto-saved after the redirect completes. */
+  signInWithGoogle: (pendingFunder?: Funder, pendingFunders?: Funder[]) => Promise<void>;
+  signInWithLinkedIn: (pendingFunder?: Funder, pendingFunders?: Funder[]) => Promise<void>;
+  signInWithMicrosoft: (pendingFunder?: Funder, pendingFunders?: Funder[]) => Promise<void>;
   signOut: () => Promise<void>;
 
   /** Funder the user tried to save before being prompted to log in.
@@ -76,6 +76,8 @@ export function useAuth() {
 // ── Provider ──────────────────────────────────────────────────────────────────
 
 const PENDING_FUNDER_KEY = 'ff_pending_funder';
+// Bulk variant for "Add All to My Prospects" — array of funders auto-saved post-login.
+const PENDING_FUNDERS_BULK_KEY = 'ff_pending_funders_bulk';
 // Durable fallback: set before OAuth redirect, read by AnimatedRoutes on mount.
 // Survives the page reload that comes with OAuth without relying on React state timing.
 const REDIRECT_AFTER_LOGIN_KEY = 'ff_redirect_after_login';
@@ -94,15 +96,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
-  const storePendingFunder = (funder?: Funder) => {
-    if (!funder) return;
-    sessionStorage.setItem(PENDING_FUNDER_KEY, JSON.stringify(funder));
+  const storePendingFunder = (funder?: Funder, funders?: Funder[]) => {
+    if (!funder && (!funders || funders.length === 0)) return;
+    if (funder) {
+      sessionStorage.setItem(PENDING_FUNDER_KEY, JSON.stringify(funder));
+      setPendingFunder(funder);
+      pendingFunderRef.current = funder;
+    }
+    if (funders && funders.length > 0) {
+      sessionStorage.setItem(PENDING_FUNDERS_BULK_KEY, JSON.stringify(funders));
+    }
     // Also write the redirect target so AnimatedRoutes can read it directly
     // from sessionStorage on mount — this survives the OAuth page reload even
     // if the SIGNED_IN event fires before any React subscriber is registered.
     sessionStorage.setItem(REDIRECT_AFTER_LOGIN_KEY, '/saved');
-    setPendingFunder(funder);
-    pendingFunderRef.current = funder;
   };
 
   const loadPendingFunder = (): Funder | null => {
@@ -112,6 +119,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       return null;
     }
+  };
+
+  const loadPendingFundersBulk = (): Funder[] => {
+    try {
+      const raw = sessionStorage.getItem(PENDING_FUNDERS_BULK_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const clearPendingFundersBulk = () => {
+    sessionStorage.removeItem(PENDING_FUNDERS_BULK_KEY);
   };
 
   const clearPendingFunder = useCallback(() => {
@@ -247,10 +267,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInWith = async (
     provider: 'google' | 'linkedin_oidc' | 'azure',
-    pendingFunderArg?: Funder
+    pendingFunderArg?: Funder,
+    pendingFundersBulk?: Funder[]
   ) => {
-    // Stash the pending funder in sessionStorage before the OAuth redirect
-    storePendingFunder(pendingFunderArg);
+    // Stash the pending funder(s) in sessionStorage before the OAuth redirect
+    storePendingFunder(pendingFunderArg, pendingFundersBulk);
 
     // Get the OAuth URL without redirecting. The Supabase client builds the
     // authorize URL using the default project domain. We then swap it to the
@@ -282,9 +303,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signInWithGoogle = (pendingFunder?: Funder) => signInWith('google', pendingFunder);
-  const signInWithLinkedIn = (pendingFunder?: Funder) => signInWith('linkedin_oidc', pendingFunder);
-  const signInWithMicrosoft = (pendingFunder?: Funder) => signInWith('azure', pendingFunder);
+  const signInWithGoogle = (pendingFunder?: Funder, pendingFunders?: Funder[]) =>
+    signInWith('google', pendingFunder, pendingFunders);
+  const signInWithLinkedIn = (pendingFunder?: Funder, pendingFunders?: Funder[]) =>
+    signInWith('linkedin_oidc', pendingFunder, pendingFunders);
+  const signInWithMicrosoft = (pendingFunder?: Funder, pendingFunders?: Funder[]) =>
+    signInWith('azure', pendingFunder, pendingFunders);
 
   const signOut = async () => {
     await supabase.auth.signOut();
@@ -334,13 +358,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // saves for ordinary page-loads where no pending funder exists.
         if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && newSession?.user) {
           const pending = pendingFunderRef.current ?? loadPendingFunder();
-          if (pending) {
+          const pendingBulk = loadPendingFundersBulk();
+          if (pending || pendingBulk.length > 0) {
             try {
-              await saveFunderToDBWithUser(pending, newSession.user.id);
+              if (pending) {
+                await saveFunderToDBWithUser(pending, newSession.user.id);
+              }
+              for (const f of pendingBulk) {
+                try {
+                  await saveFunderToDBWithUser(f, newSession.user.id);
+                } catch (innerErr) {
+                  console.warn('Failed to auto-save bulk pending funder:', f.id, innerErr);
+                }
+              }
             } catch (e) {
               console.warn('Failed to auto-save pending funder after login:', e);
             } finally {
               clearPendingFunder();
+              clearPendingFundersBulk();
               // Signal the router to navigate to /saved whether or not the DB
               // save succeeded — the funder may already be persisted from a
               // previous attempt, and the user should always land on their list.
