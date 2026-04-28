@@ -275,7 +275,7 @@ export default function NewProjectPage() {
     return (
       <>
         <NavBar />
-        <main className="min-h-screen bg-[#0d1117] pt-20 px-4 flex items-center justify-center">
+        <main id="main-content" className="min-h-screen bg-[#0d1117] pt-20 px-4 flex items-center justify-center">
           <div className="text-gray-400">Loading...</div>
         </main>
       </>
@@ -285,7 +285,7 @@ export default function NewProjectPage() {
   return (
     <>
       <NavBar />
-      <main className="min-h-screen bg-[#0d1117] pt-20 px-4 sm:px-6 lg:px-8 pb-12">
+      <main id="main-content" className="min-h-screen bg-[#0d1117] pt-20 px-4 sm:px-6 lg:px-8 pb-12">
         <div className="max-w-2xl mx-auto">
           {/* Header */}
           <div className="mb-8">

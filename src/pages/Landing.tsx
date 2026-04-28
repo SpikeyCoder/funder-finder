@@ -16,8 +16,9 @@ export default function Landing() {
     <div className="min-h-screen bg-[#0d1117] text-white flex flex-col">
       <NavBar />
 
+      <main id="main-content">
       {/* Hero */}
-      <div id="main-content" className="flex flex-col items-center justify-center text-center px-6 pt-24 pb-12">
+      <div className="flex flex-col items-center justify-center text-center px-6 pt-24 pb-12">
         <h1 className="text-5xl md:text-7xl font-bold leading-tight tracking-tight max-w-4xl">
           Find Funders Aligned to Your Mission
         </h1>
@@ -146,6 +147,7 @@ export default function Landing() {
           Find Funders Now
         </button>
       </div>
+      </main>
 
       <Footer />
     </div>

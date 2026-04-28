@@ -68,7 +68,7 @@ export default function PortfolioPage() {
   };
 
   if (authLoading || loading) {
-    return (<><NavBar /><main className="min-h-screen bg-[#0d1117] pt-20 flex items-center justify-center"><Loader className="animate-spin text-gray-400" size={24} /></main></>);
+    return (<><NavBar /><main id="main-content" className="min-h-screen bg-[#0d1117] pt-20 flex items-center justify-center"><Loader className="animate-spin text-gray-400" size={24} /></main></>);
   }
 
   const totalCount = pipelineBreakdown.reduce((s, b) => s + b.count, 0);
@@ -76,7 +76,7 @@ export default function PortfolioPage() {
   return (
     <>
       <NavBar />
-      <main className="min-h-screen bg-[#0d1117] pt-20 px-4 sm:px-6 lg:px-8 pb-12">
+      <main id="main-content" className="min-h-screen bg-[#0d1117] pt-20 px-4 sm:px-6 lg:px-8 pb-12">
         <div className="max-w-6xl mx-auto">
           <div className="flex items-center justify-between mb-8">
             <h1 className="text-3xl font-bold text-white">Portfolio</h1>

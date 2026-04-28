@@ -165,7 +165,7 @@ export default function ApplicationsPage() {
   return (
     <div className="min-h-screen bg-[#0d1117] text-white">
       <NavBar />
-      <main className="max-w-6xl mx-auto px-4 py-8">
+      <main id="main-content" className="max-w-6xl mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold">Application Knowledge Base</h1>

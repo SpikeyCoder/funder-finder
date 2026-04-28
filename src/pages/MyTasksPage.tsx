@@ -61,7 +61,7 @@ export default function MyTasksPage() {
   };
 
   if (authLoading || loading) {
-    return (<><NavBar /><main className="min-h-screen bg-[#0d1117] pt-20 flex items-center justify-center"><Loader className="animate-spin text-gray-400" size={24} /></main></>);
+    return (<><NavBar /><main id="main-content" className="min-h-screen bg-[#0d1117] pt-20 flex items-center justify-center"><Loader className="animate-spin text-gray-400" size={24} /></main></>);
   }
 
   const allEmpty = Object.values(tasks).every(arr => arr.length === 0);
@@ -115,7 +115,7 @@ export default function MyTasksPage() {
   return (
     <>
       <NavBar />
-      <main className="min-h-screen bg-[#0d1117] pt-20 px-4 sm:px-6 lg:px-8 pb-12">
+      <main id="main-content" className="min-h-screen bg-[#0d1117] pt-20 px-4 sm:px-6 lg:px-8 pb-12">
         <div className="max-w-3xl mx-auto">
           <h1 className="text-3xl font-bold text-white mb-8">My Tasks</h1>
 

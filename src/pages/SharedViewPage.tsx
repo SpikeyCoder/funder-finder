@@ -77,7 +77,7 @@ export default function SharedViewPage() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 py-8">
+      <main id="main-content" className="max-w-6xl mx-auto px-4 py-8">
         <div className="mb-6">
           <h2 className="text-xl font-bold">{data?.project?.name || 'Shared Project'}</h2>
           {data?.project?.description && <p className="text-gray-400 text-sm mt-1">{data.project.description}</p>}
