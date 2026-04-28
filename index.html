@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
+    <link rel="icon" type="image/png" href="/favicon-48x48.png" sizes="48x48" />
+    <link rel="icon" type="image/png" href="/favicon-32x32.png" sizes="32x32" />
+    <link rel="icon" type="image/png" href="/favicon-16x16.png" sizes="16x16" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <!--
+      Content Security Policy (delivered via meta tag — GitHub Pages cannot set HTTP headers).
+      Limitations of meta-tag CSP: frame-ancestors and report-uri are not supported here.
+      For clickjacking protection see the X-Frame-Options note in SECURITY.md.
+
+      script-src:
+        'self'             – Vite-bundled JS (dist/assets/index-*.js)
+        'sha256-…'         – the inline SPA-routing script below (hash-pinned, no unsafe-inline)
+        gc.zgo.at          – GoatCounter analytics script
+        cdn.jsdelivr.net   – axe-core for automated a11y testing
+        cdnjs.cloudflare.com – axe-core for automated a11y testing
+
+      style-src:
+        'self'             – Tailwind CSS bundle
+        'unsafe-inline'    – Tailwind utility classes applied as inline styles by React
+
+      connect-src:
+        *.supabase.co      – Supabase REST API, Auth (OAuth), and Edge Functions
+        accounts.google.com – Google OAuth token exchange
+        fundermatch.goatcounter.com – GoatCounter beacon
+
+      img-src data:        – SVG data URIs used by Lucide icons
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-9Jn/cnXgKbJ7J7q33fTfvOmHEa+5yzYGzkbavQwjgws=' https://gc.zgo.at https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://tgtotjvdubhjxzybmdex.supabase.co https://accounts.google.com https://fundermatch.goatcounter.com; img-src 'self' data: https:; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self' https://tgtotjvdubhjxzybmdex.supabase.co; object-src 'none';" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Non-Profit Funder Finder — Free AI Funder Matching for 501(c)(3)s</title>
+    <meta name="description" content="Find foundations, DAFs, and corporate giving programs aligned to your nonprofit's mission in seconds. Free AI-powered funder matching — no account required." />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://fundermatch.org/" />
+    <meta property="og:title" content="Non-Profit Funder Finder — Free AI Funder Matching" />
+    <meta property="og:description" content="Find foundations, DAFs, and corporate giving programs aligned to your nonprofit's mission in seconds. Free — no account, no credit card, no setup." />
+    <meta property="og:image" content="https://fundermatch.org/og-image.png" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Non-Profit Funder Finder — Free AI Funder Matching" />
+    <meta name="twitter:description" content="Find foundations, DAFs, and corporate giving programs aligned to your nonprofit's mission in seconds. Free — no account required." />
+    <meta name="twitter:image" content="https://fundermatch.org/og-image.png" />
+
+    <!-- Google Search Console verification -->
+    <meta name="google-site-verification" content="BV6XNr6ev9mMAwmpuczFNBOX9ODTTrtbxuC96R6sLvM" />
+
+    <!-- Canonical -->
+    <link rel="canonical" href="https://fundermatch.org/" />
+
+    <!-- Structured data — WebApplication -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "FunderMatch",
+      "url": "https://fundermatch.org",
+      "description": "Free AI-powered funder matching and grant writing tool for 501(c)(3) nonprofits. Find foundations, DAFs, and corporate giving programs aligned to your mission in seconds.",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Web",
+      "browserRequirements": "Requires JavaScript",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "audience": {
+        "@type": "Audience",
+        "audienceType": "Nonprofit Organizations, 501(c)(3)s"
+      },
+      "featureList": [
+        "AI-powered funder matching",
+        "Grant application draft generation",
+        "Funder pipeline tracking",
+        "Contact information lookup"
+      ]
+    }
+    </script>
+
+    <script type="text/javascript">
+      (function(l) {
+        if (l.search[1] === '/') {
+          var decoded = l.search.slice(1).split('&').map(function(s) {
+            return s.replace(/~and~/g, '&')
+          }).join('?');
+          window.history.replaceState(null, null,
+            l.pathname.slice(0, -1) + decoded + l.hash
+          );
+        }
+      }(window.location))
+    </script>
+    <script type="module" crossorigin src="/assets/index-B7d1Nua_.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-Cuw0XpZs.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
