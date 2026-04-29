@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Filter, X, ChevronDown, ChevronUp, Search } from 'lucide-react';
 
 export interface FilterState {
@@ -605,10 +606,14 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
         {panelContent}
       </div>
 
-      {/* Mobile Bottom Sheet */}
-      <div className="md:hidden fixed bottom-6 right-6 z-40">
-        <FilterButton panelContent={panelContent} />
-      </div>
+      {/* Mobile Bottom Sheet - rendered into document.body so an ancestor's
+          CSS transform (e.g. page-fade-in) cannot break position: fixed. */}
+      {createPortal(
+        <div className="md:hidden fixed bottom-6 right-6 z-40">
+          <FilterButton panelContent={panelContent} />
+        </div>,
+        document.body
+      )}
     </>
   );
 };
