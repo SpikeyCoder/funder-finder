@@ -6,7 +6,7 @@ export default function TermsOfService() {
     <div className="min-h-screen bg-[#0d1117] text-white">
       <NavBar />
 
-      <div className="px-6 pt-24 pb-20 max-w-3xl mx-auto">
+      <main id="main-content" className="px-6 pt-24 pb-20 max-w-3xl mx-auto">
         <h1 className="text-4xl font-bold tracking-tight mb-2">Terms of Service</h1>
         <p className="text-sm text-gray-400 mb-10">Last updated: April 26, 2026</p>
 
@@ -145,7 +145,7 @@ export default function TermsOfService() {
             </p>
           </section>
         </div>
-      </div>
+      </main>
 
       <Footer />
     </div>

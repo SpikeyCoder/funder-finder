@@ -19,7 +19,7 @@ export default function ContactPage() {
     <div className="min-h-screen bg-[#0d1117] text-white">
       <NavBar />
 
-      <div className="px-6 pt-24 pb-20 max-w-2xl mx-auto">
+      <main id="main-content" className="px-6 pt-24 pb-20 max-w-2xl mx-auto">
         <h1 className="text-4xl font-bold tracking-tight mb-2">Contact Us</h1>
         <p className="text-gray-400 mb-10">
           Have a question, feedback, or need help? Send us a message and we'll get back to you.
@@ -99,7 +99,7 @@ export default function ContactPage() {
             kevinmarmstrong1990@gmail.com
           </a>.
         </p>
-      </div>
+      </main>
 
       <Footer />
     </div>

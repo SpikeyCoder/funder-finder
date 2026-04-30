@@ -503,7 +503,7 @@ export default function Results() {
   return (
     <div className="min-h-screen bg-[#0d1117] text-white">
       <NavBar />
-      <div className="max-w-3xl mx-auto px-6 pt-10 pb-12">
+      <main id="main-content" className="max-w-3xl mx-auto px-6 pt-10 pb-12">
         {/* Header */}
         <div className="flex items-start justify-between mb-4">
           <div>
@@ -990,7 +990,7 @@ export default function Results() {
             </div>
           </div>
         )}
-      </div>
+      </main>
 
       {/* Login modal — shown when an anonymous user tries to save. The
           pending funder is auto-saved to Supabase after sign-in. */}

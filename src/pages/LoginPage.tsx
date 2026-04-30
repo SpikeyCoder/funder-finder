@@ -119,7 +119,7 @@ export default function LoginPage() {
   return (
     <>
       <NavBar />
-      <div className="min-h-screen bg-[#0d1117] flex items-center justify-center px-4 py-12">
+      <main id="main-content" className="min-h-screen bg-[#0d1117] flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md">
           <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-8">
             <div className="mb-8">
@@ -232,7 +232,7 @@ export default function LoginPage() {
             </div>
           </div>
         </div>
-      </div>
+      </main>
     </>
   );
 }

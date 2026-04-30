@@ -184,7 +184,7 @@ export default function FunderDetail() {
     <>
       <NavBar />
       <div className="min-h-screen bg-[#0d1117] text-white py-12 px-6 flex flex-col">
-      <div className="max-w-2xl mx-auto">
+      <main id="main-content" className="max-w-2xl mx-auto">
         <button
           onClick={() => {
             // If there's real navigation history, go back; otherwise fall back to /search
@@ -747,7 +747,7 @@ export default function FunderDetail() {
             View Saved Funders
           </button>
         </div>
-      </div>
+      </main>
 
       {/* Login modal — shown when user explicitly clicks login */}
       {showLoginModal && (

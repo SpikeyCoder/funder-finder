@@ -303,6 +303,7 @@ export default function LocationAutocomplete({ value, onChange, hasError, placeh
           required={required}
           aria-required={required ? 'true' : undefined}
           aria-describedby={ariaDescribedBy}
+          aria-invalid={hasError ? 'true' : undefined}
           className={`w-full bg-[#0d1117] border rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 ${hasError ? 'border-red-500' : 'border-[#30363d]'}`}
         />
         {loading && (

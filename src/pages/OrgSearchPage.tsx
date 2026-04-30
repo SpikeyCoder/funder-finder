@@ -18,7 +18,7 @@ export default function OrgSearchPage() {
   return (
     <>
       <NavBar />
-      <div className="min-h-screen bg-[#0d1117] text-white py-12 px-6">
+      <main id="main-content" className="min-h-screen bg-[#0d1117] text-white py-12 px-6">
       <div className="max-w-2xl mx-auto">
         <button
           onClick={() => navigate(-1)}
@@ -62,7 +62,7 @@ export default function OrgSearchPage() {
           </div>
         </div>
       </div>
-    </div>
+    </main>
     </>
   );
 }

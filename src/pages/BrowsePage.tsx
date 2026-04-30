@@ -82,6 +82,11 @@ const BrowsePage: React.FC = () => {
     setCurrentPage(1);
   }, [searchParams]);
 
+  // Set document title — fixes stale title carryover when navigating from other SPA routes
+  useEffect(() => {
+    document.title = 'Browse Grants | FunderMatch';
+  }, []);
+
   // Debounced filter application
   const debouncedFetch = useMemo(() => {
     let timeoutId: NodeJS.Timeout;
@@ -253,6 +258,8 @@ const BrowsePage: React.FC = () => {
 
         {/* Main Content Area */}
         <main id="main-content" className="flex-1 flex flex-col overflow-hidden min-w-0">
+          {/* Page heading — visually hidden but available to screen readers and AT */}
+          <h1 className="sr-only">Browse Grants</h1>
           {/* Results Header */}
           <div className="border-b border-[#30363d] p-4 bg-[#161b22]">
             <div className="flex items-center justify-between flex-wrap gap-2">
