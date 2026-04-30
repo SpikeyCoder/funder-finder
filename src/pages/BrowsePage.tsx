@@ -70,7 +70,7 @@ const BrowsePage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
-  const [onlyWithWebsite, setOnlyWithWebsite] = useState(false);
+  // "Only Funders with Website" filter removed per Trello card #61
 
   const { user } = useAuth();
   const RESULTS_PER_PAGE = 25;
@@ -230,8 +230,8 @@ const BrowsePage: React.FC = () => {
   const startIndex = (currentPage - 1) * RESULTS_PER_PAGE + 1;
   const endIndex = Math.min(currentPage * RESULTS_PER_PAGE, totalCount);
 
-  const hasWebsite = (f: FunderResult) => f.website != null && f.website.trim() !== '';
-  const displayedResults = onlyWithWebsite ? results.filter(hasWebsite) : results;
+  // hasWebsite filter removed per Trello card #61
+  const displayedResults = results;
 
   const SortHeader: React.FC<{ field: SortField; label: string }> = ({ field, label }) => (
     <button
@@ -276,19 +276,7 @@ const BrowsePage: React.FC = () => {
               ) : (
                 <div className="text-sm text-gray-400">No funders found. Try adjusting your filters.</div>
               )}
-              <button
-                onClick={() => { setOnlyWithWebsite(!onlyWithWebsite); setCurrentPage(1); }}
-                aria-pressed={onlyWithWebsite}
-                className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                  onlyWithWebsite
-                    ? 'bg-blue-600 border-blue-500 text-white font-semibold'
-                    : 'border-[#30363d] text-gray-400 hover:border-gray-500 hover:text-gray-200'
-                }`}
-                aria-label={onlyWithWebsite ? 'Show all funders' : 'Only show funders with website'}
-              >
-                Only Funders with Website
-              </button>
-            </div>
+              </div>
           </div>
 
           {/* Results Table */}
@@ -334,10 +322,7 @@ const BrowsePage: React.FC = () => {
                           <span className="truncate">{funder.name}</span>
                           <ExternalLink size={14} className="opacity-50 flex-shrink-0" />
                         </button>
-                        {!hasWebsite(funder) && (
-                          <span className="inline-block mt-1 text-gray-500 text-xs">No website listed</span>
-                        )}
-                      </td>
+                        </td>
                       <td data-label="State" className="px-4 py-3 text-gray-300">{funder.state || '-'}</td>
                       <td data-label="Type" className="px-4 py-3 text-gray-300">{funder.entity_type || '-'}</td>
                       <td data-label="Avg Grant" className="px-4 py-3 text-gray-300">
@@ -383,9 +368,6 @@ const BrowsePage: React.FC = () => {
                       <span className="break-words min-w-0">{funder.name}</span>
                       <ExternalLink size={14} className="opacity-50 flex-shrink-0" />
                     </button>
-                    {!hasWebsite(funder) && (
-                      <span className="inline-block text-gray-500 text-xs">No website listed</span>
-                    )}
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       <div className="min-w-0">
                         <span className="text-gray-500">State:</span>{' '}

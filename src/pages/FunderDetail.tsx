@@ -712,12 +712,7 @@ export default function FunderDetail() {
                     {funder.website} ↗
                   </a>
                 </div>
-              ) : (
-                <div className="flex items-center gap-3 text-gray-400">
-                  <Globe size={18} />
-                  <p className="text-sm">No website available</p>
-                </div>
-              )}
+              ) : null}
             </div>
           </div>
         </div>

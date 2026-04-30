@@ -7,26 +7,27 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+import { corsHeaders as _corsHeaders } from "../_shared/cors.ts";
 
-function jsonResponse(data: unknown, status = 200) {
+const CORS_HEADERS_OPTS = { methods: "POST, OPTIONS" } as const;
+function CORS_HEADERS(req: Request | null = null): Record<string, string> {
+  return _corsHeaders(req?.headers.get("origin") ?? null, CORS_HEADERS_OPTS);
+}
+
+function jsonResponse(req: Request, data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+    headers: { ...CORS_HEADERS(req), 'Content-Type': 'application/json' },
   });
 }
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: CORS_HEADERS });
+    return new Response('ok', { headers: CORS_HEADERS(req) });
   }
 
   if (req.method !== 'POST') {
-    return jsonResponse({ error: 'Method not allowed' }, 405);
+    return jsonResponse(req, { error: 'Method not allowed' }, 405);
   }
 
   try {
@@ -37,7 +38,7 @@ Deno.serve(async (req: Request) => {
     const externalReminders = await scheduleExternalAssigneeReminders(supabase);
     const deadlineChanges = await detectDeadlineChanges(supabase);
 
-    return jsonResponse({
+    return jsonResponse(req, {
       deadline_reminders_scheduled: deadlineReminders,
       task_reminders_scheduled: taskReminders,
       external_assignee_reminders: externalReminders,
@@ -45,7 +46,7 @@ Deno.serve(async (req: Request) => {
     });
   } catch (err: any) {
     console.error('check-deadlines error:', err);
-    return jsonResponse({ error: err.message }, 500);
+    return jsonResponse(req, { error: err.message }, 500);
   }
 });
 
