@@ -930,7 +930,7 @@ export default function GrantWriter() {
 
             <div
               className="bg-[#161b22] border border-[#30363d] rounded-2xl p-6"
-              dangerouslySetInnerHTML={{ __html: renderMarkdown(output) }}
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(renderMarkdown(output)) }}
             />
 
             {/* Scroll anchor + inline streaming indicator */}
