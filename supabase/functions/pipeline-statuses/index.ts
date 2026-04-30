@@ -5,21 +5,31 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-};
+const ALLOWED_ORIGINS = [
+  'https://fundermatch.org',
+  'https://spikeycoder.github.io',
+];
 
-function jsonResponse(data: unknown, status = 200) {
+function corsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get('Origin') || '';
+  const headers: Record<string, string> = { 'Vary': 'Origin' };
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    headers['Access-Control-Allow-Origin'] = origin;
+    headers['Access-Control-Allow-Headers'] = 'authorization, x-client-info, apikey, content-type';
+    headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS';
+  }
+  return headers;
+}
+
+function jsonResponse(req: Request, data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
   });
 }
 
-function errorResponse(message: string, status = 400) {
-  return jsonResponse({ error: message }, status);
+function errorResponse(req: Request, message: string, status = 400) {
+  return jsonResponse(req, { error: message }, status);
 }
 
 async function getUserFromRequest(req: Request) {
@@ -34,12 +44,12 @@ async function getUserFromRequest(req: Request) {
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: CORS_HEADERS });
+    return new Response('ok', { headers: corsHeaders(req) });
   }
 
   try {
     const user = await getUserFromRequest(req);
-    if (!user) return errorResponse('Unauthorized', 401);
+    if (!user) return errorResponse(req, 'Unauthorized', 401);
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
@@ -53,14 +63,14 @@ Deno.serve(async (req: Request) => {
         .eq('user_id', user.id)
         .order('sort_order', { ascending: true });
 
-      if (error) return errorResponse(error.message, 500);
-      return jsonResponse(data || []);
+      if (error) return errorResponse(req, error.message, 500);
+      return jsonResponse(req, data || []);
     }
 
     if (req.method === 'POST') {
       const body = await req.json();
       const { name, color } = body;
-      if (!name) return errorResponse('Name is required');
+      if (!name) return errorResponse(req, 'Name is required');
 
       // Get max sort_order
       const { data: existing } = await supabase
@@ -83,14 +93,14 @@ Deno.serve(async (req: Request) => {
         is_terminal: body.is_terminal || false,
       }).select().single();
 
-      if (error) return errorResponse(error.message, 500);
-      return jsonResponse(data, 201);
+      if (error) return errorResponse(req, error.message, 500);
+      return jsonResponse(req, data, 201);
     }
 
     if (req.method === 'PUT') {
       const body = await req.json();
       const statusId = body.id;
-      if (!statusId) return errorResponse('Status ID required');
+      if (!statusId) return errorResponse(req, 'Status ID required');
 
       const updates: any = {};
       if (body.name !== undefined) updates.name = body.name;
@@ -117,7 +127,7 @@ Deno.serve(async (req: Request) => {
           .select('*')
           .eq('user_id', user.id)
           .order('sort_order');
-        return jsonResponse(data || []);
+        return jsonResponse(req, data || []);
       }
 
       const { data, error } = await supabase
@@ -128,14 +138,14 @@ Deno.serve(async (req: Request) => {
         .select()
         .single();
 
-      if (error) return errorResponse(error.message, 500);
-      return jsonResponse(data);
+      if (error) return errorResponse(req, error.message, 500);
+      return jsonResponse(req, data);
     }
 
     if (req.method === 'DELETE') {
       const url = new URL(req.url);
       const statusId = url.searchParams.get('id');
-      if (!statusId) return errorResponse('Status ID required');
+      if (!statusId) return errorResponse(req, 'Status ID required');
 
       // Check if it's a default status
       const { data: status } = await supabase
@@ -145,8 +155,8 @@ Deno.serve(async (req: Request) => {
         .eq('user_id', user.id)
         .single();
 
-      if (!status) return errorResponse('Status not found', 404);
-      if (status.is_default) return errorResponse('Cannot delete default statuses');
+      if (!status) return errorResponse(req, 'Status not found', 404);
+      if (status.is_default) return errorResponse(req, 'Cannot delete default statuses');
 
       // Get the body for reassignment target
       let reassignTo: string | null = null;
@@ -180,13 +190,13 @@ Deno.serve(async (req: Request) => {
         .eq('id', statusId)
         .eq('user_id', user.id);
 
-      if (error) return errorResponse(error.message, 500);
-      return jsonResponse({ success: true });
+      if (error) return errorResponse(req, error.message, 500);
+      return jsonResponse(req, { success: true });
     }
 
-    return errorResponse('Method not allowed', 405);
+    return errorResponse(req, 'Method not allowed', 405);
   } catch (err: any) {
     console.error('pipeline-statuses error:', err);
-    return errorResponse(err.message || 'Internal server error', 500);
+    return errorResponse(req, err.message || 'Internal server error', 500);
   }
 });

@@ -7,21 +7,31 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-};
+const ALLOWED_ORIGINS = [
+  'https://fundermatch.org',
+  'https://spikeycoder.github.io',
+];
 
-function jsonResponse(data: unknown, status = 200) {
+function corsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get('Origin') || '';
+  const headers: Record<string, string> = { 'Vary': 'Origin' };
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    headers['Access-Control-Allow-Origin'] = origin;
+    headers['Access-Control-Allow-Headers'] = 'authorization, x-client-info, apikey, content-type';
+    headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS';
+  }
+  return headers;
+}
+
+function jsonResponse(req: Request, data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
   });
 }
 
-function errorResponse(message: string, status = 400) {
-  return jsonResponse({ error: message }, status);
+function errorResponse(req: Request, message: string, status = 400) {
+  return jsonResponse(req, { error: message }, status);
 }
 
 async function getUserFromRequest(req: Request) {
@@ -37,12 +47,12 @@ async function getUserFromRequest(req: Request) {
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: CORS_HEADERS });
+    return new Response('ok', { headers: corsHeaders(req) });
   }
 
   try {
     const user = await getUserFromRequest(req);
-    if (!user) return errorResponse('Unauthorized', 401);
+    if (!user) return errorResponse(req, 'Unauthorized', 401);
 
     const url = new URL(req.url);
     const pathParts = url.pathname.split('/').filter(Boolean);
@@ -69,7 +79,7 @@ Deno.serve(async (req: Request) => {
           .eq('user_id', user.id)
           .single();
 
-        if (error || !grant) return errorResponse('Grant not found', 404);
+        if (error || !grant) return errorResponse(req, 'Grant not found', 404);
 
         // Get tasks for this grant
         const { data: tasks } = await supabase
@@ -85,7 +95,7 @@ Deno.serve(async (req: Request) => {
           .eq('tracked_grant_id', grantId)
           .order('changed_at', { ascending: false });
 
-        return jsonResponse({ ...grant, tasks: tasks || [], history: history || [] });
+        return jsonResponse(req, { ...grant, tasks: tasks || [], history: history || [] });
       }
 
       // LIST grants
@@ -134,7 +144,7 @@ Deno.serve(async (req: Request) => {
       query = query.range(from, from + perPage - 1);
 
       const { data: grants, error, count } = await query;
-      if (error) return errorResponse(error.message, 500);
+      if (error) return errorResponse(req, error.message, 500);
 
       if (isExport) {
         // CSV export
@@ -157,14 +167,14 @@ Deno.serve(async (req: Request) => {
         const csv = [csvHeader, ...csvRows].join('\n');
         return new Response(csv, {
           headers: {
-            ...CORS_HEADERS,
+            ...corsHeaders(req),
             'Content-Type': 'text/csv',
             'Content-Disposition': 'attachment; filename="tracked_grants.csv"',
           },
         });
       }
 
-      return jsonResponse({ grants: grants || [], total: count, page, per_page: perPage });
+      return jsonResponse(req, { grants: grants || [], total: count, page, per_page: perPage });
     }
 
     if (req.method === 'POST') {
@@ -173,7 +183,7 @@ Deno.serve(async (req: Request) => {
       // CSV import
       if (body.import && Array.isArray(body.rows)) {
         const projectId = body.project_id;
-        if (!projectId) return errorResponse('project_id required for import');
+        if (!projectId) return errorResponse(req, 'project_id required for import');
 
         // Get user's statuses for mapping
         const { data: userStatuses } = await supabase
@@ -183,7 +193,7 @@ Deno.serve(async (req: Request) => {
           .order('sort_order');
 
         const defaultStatusId = userStatuses?.find(s => s.slug === 'researching')?.id;
-        if (!defaultStatusId) return errorResponse('Pipeline statuses not configured', 500);
+        if (!defaultStatusId) return errorResponse(req, 'Pipeline statuses not configured', 500);
 
         const imported: any[] = [];
         const errors: any[] = [];
@@ -223,14 +233,14 @@ Deno.serve(async (req: Request) => {
           }
         }
 
-        return jsonResponse({ imported: imported.length, errors, total: body.rows.length });
+        return jsonResponse(req, { imported: imported.length, errors, total: body.rows.length });
       }
 
       // Regular create
       const { project_id, funder_ein, funder_name, grant_title, status_slug, amount, deadline, grant_url, notes, source, is_external } = body;
 
       if (!project_id || !funder_name) {
-        return errorResponse('project_id and funder_name are required');
+        return errorResponse(req, 'project_id and funder_name are required');
       }
 
       // Resolve status_slug to status_id
@@ -246,7 +256,7 @@ Deno.serve(async (req: Request) => {
           .eq('slug', slug)
           .single();
         statusId = status?.id;
-        if (!statusId) return errorResponse(`Status '${slug}' not found`, 400);
+        if (!statusId) return errorResponse(req, `Status '${slug}' not found`, 400);
       }
 
       const { data: grant, error } = await supabase.from('tracked_grants').insert({
@@ -264,14 +274,14 @@ Deno.serve(async (req: Request) => {
         is_external: is_external || false,
       }).select('*, pipeline_statuses(name, slug, color, is_terminal)').single();
 
-      if (error) return errorResponse(error.message, 500);
-      return jsonResponse(grant, 201);
+      if (error) return errorResponse(req, error.message, 500);
+      return jsonResponse(req, grant, 201);
     }
 
     if (req.method === 'PUT') {
       const body = await req.json();
       const grantId = body.id || url.searchParams.get('grant_id');
-      if (!grantId) return errorResponse('Grant ID required');
+      if (!grantId) return errorResponse(req, 'Grant ID required');
 
       const updates: any = {};
       if (body.funder_name !== undefined) updates.funder_name = body.funder_name;
@@ -304,14 +314,14 @@ Deno.serve(async (req: Request) => {
         .select('*, pipeline_statuses(name, slug, color, is_terminal)')
         .single();
 
-      if (error) return errorResponse(error.message, 500);
-      if (!grant) return errorResponse('Grant not found', 404);
-      return jsonResponse(grant);
+      if (error) return errorResponse(req, error.message, 500);
+      if (!grant) return errorResponse(req, 'Grant not found', 404);
+      return jsonResponse(req, grant);
     }
 
     if (req.method === 'DELETE') {
       const grantId = url.searchParams.get('grant_id');
-      if (!grantId) return errorResponse('Grant ID required');
+      if (!grantId) return errorResponse(req, 'Grant ID required');
 
       const { error } = await supabase
         .from('tracked_grants')
@@ -319,13 +329,13 @@ Deno.serve(async (req: Request) => {
         .eq('id', grantId)
         .eq('user_id', user.id);
 
-      if (error) return errorResponse(error.message, 500);
-      return jsonResponse({ success: true });
+      if (error) return errorResponse(req, error.message, 500);
+      return jsonResponse(req, { success: true });
     }
 
-    return errorResponse('Method not allowed', 405);
+    return errorResponse(req, 'Method not allowed', 405);
   } catch (err: any) {
     console.error('tracked-grants error:', err);
-    return errorResponse(err.message || 'Internal server error', 500);
+    return errorResponse(req, err.message || 'Internal server error', 500);
   }
 });

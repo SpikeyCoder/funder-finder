@@ -4,17 +4,27 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+const ALLOWED_ORIGINS = [
+  'https://fundermatch.org',
+  'https://spikeycoder.github.io',
+];
+
+function corsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get('Origin') || '';
+  const headers: Record<string, string> = { 'Vary': 'Origin' };
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    headers['Access-Control-Allow-Origin'] = origin;
+    headers['Access-Control-Allow-Headers'] = 'authorization, x-client-info, apikey, content-type';
+    headers['Access-Control-Allow-Methods'] = 'POST, GET, OPTIONS';
+  }
+  return headers;
+}
 
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders(req) });
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405, headers: { ...CORS, 'Content-Type': 'application/json' },
+      status: 405, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
     });
   }
 
@@ -24,7 +34,7 @@ Deno.serve(async (req: Request) => {
   const { data: { user }, error: authError } = await supabase.auth.getUser(jwt);
   if (!user) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401, headers: { ...CORS, 'Content-Type': 'application/json' },
+      status: 401, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
     });
   }
 
@@ -46,7 +56,7 @@ Deno.serve(async (req: Request) => {
 
       return new Response(header + rows, {
         headers: {
-          ...CORS,
+          ...corsHeaders(req),
           'Content-Type': 'text/csv',
           'Content-Disposition': `attachment; filename="fundermatch-report-${new Date().toISOString().split('T')[0]}.csv"`,
         },
@@ -55,11 +65,11 @@ Deno.serve(async (req: Request) => {
 
     // Return JSON summary for other formats
     return new Response(JSON.stringify({ grants: grants?.length || 0, format: 'json', data: grants }), {
-      headers: { ...CORS, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
     });
   } catch (err: any) {
     return new Response(JSON.stringify({ error: err.message }), {
-      status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
+      status: 500, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
     });
   }
 });

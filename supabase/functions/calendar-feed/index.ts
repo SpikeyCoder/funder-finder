@@ -6,21 +6,31 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
-};
+const ALLOWED_ORIGINS = [
+  'https://fundermatch.org',
+  'https://spikeycoder.github.io',
+];
 
-function jsonResponse(data: unknown, status = 200) {
+function corsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get('Origin') || '';
+  const headers: Record<string, string> = { 'Vary': 'Origin' };
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    headers['Access-Control-Allow-Origin'] = origin;
+    headers['Access-Control-Allow-Headers'] = 'authorization, x-client-info, apikey, content-type';
+    headers['Access-Control-Allow-Methods'] = 'GET, POST, DELETE, OPTIONS';
+  }
+  return headers;
+}
+
+function jsonResponse(req: Request, data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
   });
 }
 
-function errorResponse(message: string, status = 400) {
-  return jsonResponse({ error: message }, status);
+function errorResponse(req: Request, message: string, status = 400) {
+  return jsonResponse(req, { error: message }, status);
 }
 
 async function getUserFromRequest(req: Request) {
@@ -43,7 +53,7 @@ function escapeIcs(text: string): string {
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: CORS_HEADERS });
+    return new Response('ok', { headers: corsHeaders(req) });
   }
 
   const url = new URL(req.url);
@@ -167,14 +177,14 @@ Deno.serve(async (req: Request) => {
         'Content-Type': 'text/calendar; charset=utf-8',
         'Content-Disposition': 'attachment; filename="fundermatch.ics"',
         'Cache-Control': 'max-age=3600',
-        ...CORS_HEADERS,
+        ...corsHeaders(req),
       },
     });
   }
 
   // Authenticated endpoints for managing feeds
   const user = await getUserFromRequest(req);
-  if (!user) return errorResponse('Unauthorized', 401);
+  if (!user) return errorResponse(req, 'Unauthorized', 401);
 
   if (req.method === 'GET') {
     // List user's feeds
@@ -183,8 +193,8 @@ Deno.serve(async (req: Request) => {
       .select('*, projects(name)')
       .eq('user_id', user.id);
 
-    if (error) return errorResponse(error.message, 500);
-    return jsonResponse(feeds || []);
+    if (error) return errorResponse(req, error.message, 500);
+    return jsonResponse(req, feeds || []);
   }
 
   if (req.method === 'POST') {
@@ -202,15 +212,15 @@ Deno.serve(async (req: Request) => {
       include_tasks: includeTasks,
     }).select().single();
 
-    if (error) return errorResponse(error.message, 500);
+    if (error) return errorResponse(req, error.message, 500);
 
     const feedUrl = `${SUPABASE_URL}/functions/v1/calendar-feed?token=${token}`;
-    return jsonResponse({ ...feed, feed_url: feedUrl }, 201);
+    return jsonResponse(req, { ...feed, feed_url: feedUrl }, 201);
   }
 
   if (req.method === 'DELETE') {
     const feedId = url.searchParams.get('id');
-    if (!feedId) return errorResponse('Feed ID required');
+    if (!feedId) return errorResponse(req, 'Feed ID required');
 
     const { error } = await supabase
       .from('calendar_feeds')
@@ -218,9 +228,9 @@ Deno.serve(async (req: Request) => {
       .eq('id', feedId)
       .eq('user_id', user.id);
 
-    if (error) return errorResponse(error.message, 500);
-    return jsonResponse({ success: true });
+    if (error) return errorResponse(req, error.message, 500);
+    return jsonResponse(req, { success: true });
   }
 
-  return errorResponse('Method not allowed', 405);
+  return errorResponse(req, 'Method not allowed', 405);
 });

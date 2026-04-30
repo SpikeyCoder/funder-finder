@@ -4,18 +4,28 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
-};
+const ALLOWED_ORIGINS = [
+  'https://fundermatch.org',
+  'https://spikeycoder.github.io',
+];
 
-function json(data: unknown, status = 200) {
-  return new Response(JSON.stringify(data), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
+function corsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get('Origin') || '';
+  const headers: Record<string, string> = { 'Vary': 'Origin' };
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    headers['Access-Control-Allow-Origin'] = origin;
+    headers['Access-Control-Allow-Headers'] = 'authorization, x-client-info, apikey, content-type';
+    headers['Access-Control-Allow-Methods'] = 'GET, POST, DELETE, OPTIONS';
+  }
+  return headers;
+}
+
+function json(req: Request, data: unknown, status = 200) {
+  return new Response(JSON.stringify(data), { status, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' } });
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders(req) });
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
   const url = new URL(req.url);
@@ -30,8 +40,8 @@ Deno.serve(async (req: Request) => {
       .eq('is_active', true)
       .single();
 
-    if (!link) return json({ error: 'Link not found or expired' }, 404);
-    if (link.expires_at && new Date(link.expires_at) < new Date()) return json({ error: 'Link expired' }, 410);
+    if (!link) return json(req, { error: 'Link not found or expired' }, 404);
+    if (link.expires_at && new Date(link.expires_at) < new Date()) return json(req, { error: 'Link expired' }, 410);
 
     // Increment view count & log access
     await supabase.from('shareable_links').update({ view_count: link.view_count + 1 }).eq('id', link.id);
@@ -54,14 +64,14 @@ Deno.serve(async (req: Request) => {
       data.grants = grants;
     }
 
-    return json(data);
+    return json(req, data);
   }
 
   // Authenticated endpoints
   const authHeader = req.headers.get('authorization') || '';
   const jwt = authHeader.replace('Bearer ', '');
   const { data: { user }, error: authError } = await supabase.auth.getUser(jwt);
-  if (!user) return json({ error: 'Unauthorized' }, 401);
+  if (!user) return json(req, { error: 'Unauthorized' }, 401);
 
   try {
     if (req.method === 'GET') {
@@ -70,12 +80,12 @@ Deno.serve(async (req: Request) => {
         .select('*, projects(name)')
         .eq('created_by', user.id)
         .order('created_at', { ascending: false });
-      return json(links || []);
+      return json(req, links || []);
     }
 
     if (req.method === 'POST') {
       const { project_id, scope = 'tracker', expires_in_days } = await req.json();
-      if (!project_id) return json({ error: 'project_id required' }, 400);
+      if (!project_id) return json(req, { error: 'project_id required' }, 400);
 
       const expires_at = expires_in_days ? new Date(Date.now() + expires_in_days * 86400000).toISOString() : null;
 
@@ -86,18 +96,18 @@ Deno.serve(async (req: Request) => {
         .single();
 
       if (error) throw error;
-      return json(link, 201);
+      return json(req, link, 201);
     }
 
     if (req.method === 'DELETE') {
       const linkId = url.searchParams.get('id');
-      if (!linkId) return json({ error: 'id required' }, 400);
+      if (!linkId) return json(req, { error: 'id required' }, 400);
       await supabase.from('shareable_links').update({ is_active: false }).eq('id', linkId).eq('created_by', user.id);
-      return json({ success: true });
+      return json(req, { success: true });
     }
 
-    return json({ error: 'Method not allowed' }, 405);
+    return json(req, { error: 'Method not allowed' }, 405);
   } catch (err: any) {
-    return json({ error: err.message }, 500);
+    return json(req, { error: err.message }, 500);
   }
 });
