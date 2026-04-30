@@ -4,6 +4,7 @@ import {
   ArrowLeft, Check, CheckCircle2, ChevronDown, ChevronUp, Copy,
   FileText, Loader2, RefreshCw, Trash2, Upload, Wand2, X,
 } from 'lucide-react';
+import DOMPurify from 'dompurify';
 import { Funder, GenerationPhase, OrgDetails, UploadedGrantFile } from '../types';
 import { getEdgeFunctionHeaders, supabase } from '../lib/supabase';
 import { formatGrantRange, formatTotalGiving } from '../utils/matching';
@@ -76,7 +77,18 @@ function renderMarkdown(text: string): string {
     }
   }
 
-  return parts.join('');
+  // Defence-in-depth: even though every line is HTML-escaped before
+  // limited markdown transforms are applied, future edits to the inline
+  // regex set could re-introduce a sink. Run the assembled HTML through
+  // DOMPurify with a tight allowlist before handing it to
+  // dangerouslySetInnerHTML in the renderer.
+  return DOMPurify.sanitize(parts.join(''), {
+    ALLOWED_TAGS: [
+      'h2', 'h3', 'p', 'span', 'div', 'strong', 'em', 'hr', 'br',
+    ],
+    ALLOWED_ATTR: ['class'],
+    USE_PROFILES: { html: true },
+  });
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
