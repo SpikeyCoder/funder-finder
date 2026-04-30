@@ -6,14 +6,15 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || '';
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+import { corsHeaders as _corsHeaders } from "../_shared/cors.ts";
 
-function json(data: unknown, status = 200) {
-  return new Response(JSON.stringify(data), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
+const CORS_OPTS = { methods: "POST, OPTIONS" } as const;
+function CORS(req: Request | null = null): Record<string, string> {
+  return _corsHeaders(req?.headers.get("origin") ?? null, CORS_OPTS);
+}
+
+function json(req: Request, data: unknown, status = 200) {
+  return new Response(JSON.stringify(data), { status, headers: { ...CORS(req), 'Content-Type': 'application/json' } });
 }
 
 // Extract text from uploaded file in storage
@@ -33,14 +34,14 @@ async function extractFileText(supabase: any, storagePath: string): Promise<stri
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
-  if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS(req) });
+  if (req.method !== 'POST') return json(req, { error: 'Method not allowed' }, 405);
 
   const authHeader = req.headers.get('authorization') || '';
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
   const jwt = authHeader.replace('Bearer ', '');
   const { data: { user } } = await supabase.auth.getUser(jwt);
-  if (!user) return json({ error: 'Unauthorized' }, 401);
+  if (!user) return json(req, { error: 'Unauthorized' }, 401);
 
   try {
     const {
@@ -249,7 +250,7 @@ Please generate a complete, professional grant proposal. ${include_research ? 'I
       })),
     ];
 
-    return json({
+    return json(req, {
       draft,
       sources: allSources,
       citedSources,
@@ -258,6 +259,6 @@ Please generate a complete, professional grant proposal. ${include_research ? 'I
     });
   } catch (err: any) {
     console.error('AI draft error:', err);
-    return json({ error: err.message }, 500);
+    return json(req, { error: err.message }, 500);
   }
 });

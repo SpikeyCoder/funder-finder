@@ -4,24 +4,25 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
-};
+import { corsHeaders as _corsHeaders } from "../_shared/cors.ts";
 
-function json(data: unknown, status = 200) {
-  return new Response(JSON.stringify(data), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
+const CORS_OPTS = { methods: "GET, POST, PUT, OPTIONS" } as const;
+function CORS(req: Request | null = null): Record<string, string> {
+  return _corsHeaders(req?.headers.get("origin") ?? null, CORS_OPTS);
+}
+
+function json(req: Request, data: unknown, status = 200) {
+  return new Response(JSON.stringify(data), { status, headers: { ...CORS(req), 'Content-Type': 'application/json' } });
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS(req) });
 
   const authHeader = req.headers.get('authorization') || '';
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
   const jwt = authHeader.replace('Bearer ', '');
   const { data: { user }, error: authError } = await supabase.auth.getUser(jwt);
-  if (!user) return json({ error: 'Unauthorized' }, 401);
+  if (!user) return json(req, { error: 'Unauthorized' }, 401);
 
   try {
     if (req.method === 'GET') {
@@ -38,10 +39,10 @@ Deno.serve(async (req: Request) => {
           .insert({ user_id: user.id, current_step: 1 })
           .select()
           .single();
-        return json(newProgress);
+        return json(req, newProgress);
       }
 
-      return json(progress);
+      return json(req, progress);
     }
 
     if (req.method === 'PUT') {
@@ -69,7 +70,7 @@ Deno.serve(async (req: Request) => {
         .single();
 
       if (error) throw error;
-      return json(data);
+      return json(req, data);
     }
 
     if (req.method === 'POST') {
@@ -81,13 +82,13 @@ Deno.serve(async (req: Request) => {
           .upsert({ user_id: user.id, skipped: true, completed_at: new Date().toISOString() })
           .select()
           .single();
-        return json(data);
+        return json(req, data);
       }
-      return json({ error: 'Unknown action' }, 400);
+      return json(req, { error: 'Unknown action' }, 400);
     }
 
-    return json({ error: 'Method not allowed' }, 405);
+    return json(req, { error: 'Method not allowed' }, 405);
   } catch (err: any) {
-    return json({ error: err.message }, 500);
+    return json(req, { error: err.message }, 500);
   }
 });

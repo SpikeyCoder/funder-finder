@@ -4,25 +4,26 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-};
+import { corsHeaders as _corsHeaders } from "../_shared/cors.ts";
 
-function json(data: unknown, status = 200) {
-  return new Response(JSON.stringify(data), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
+const CORS_OPTS = { methods: "GET, OPTIONS" } as const;
+function CORS(req: Request | null = null): Record<string, string> {
+  return _corsHeaders(req?.headers.get("origin") ?? null, CORS_OPTS);
+}
+
+function json(req: Request, data: unknown, status = 200) {
+  return new Response(JSON.stringify(data), { status, headers: { ...CORS(req), 'Content-Type': 'application/json' } });
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
-  if (req.method !== 'GET') return json({ error: 'Method not allowed' }, 405);
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS(req) });
+  if (req.method !== 'GET') return json(req, { error: 'Method not allowed' }, 405);
 
   const authHeader = req.headers.get('authorization') || '';
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
   const jwt = authHeader.replace('Bearer ', '');
   const { data: { user }, error: authError } = await supabase.auth.getUser(jwt);
-  if (!user) return json({ error: 'Unauthorized' }, 401);
+  if (!user) return json(req, { error: 'Unauthorized' }, 401);
 
   try {
     // Get all tracked grants with statuses
@@ -31,7 +32,7 @@ Deno.serve(async (req: Request) => {
       .select('*, pipeline_statuses(name, color, is_terminal, sort_order), projects(name)')
       .eq('user_id', user.id);
 
-    if (!grants) return json({ kpis: {}, pipeline: [], byProject: [], timeline: [] });
+    if (!grants) return json(req, { kpis: {}, pipeline: [], byProject: [], timeline: [] });
 
     const totalGrants = grants.length;
     const submitted = grants.filter(g => {
@@ -98,7 +99,7 @@ Deno.serve(async (req: Request) => {
       overdue: compliance?.filter(c => c.due_date && new Date(c.due_date) < now && !['submitted', 'approved'].includes(c.status)).length || 0,
     };
 
-    return json({
+    return json(req, {
       kpis: {
         total_grants: totalGrants,
         proposals_submitted: submitted.length,
@@ -113,6 +114,6 @@ Deno.serve(async (req: Request) => {
       compliance: complianceSummary,
     });
   } catch (err: any) {
-    return json({ error: err.message }, 500);
+    return json(req, { error: err.message }, 500);
   }
 });
