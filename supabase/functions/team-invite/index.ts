@@ -4,14 +4,15 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-};
+import { corsHeaders as _corsHeaders } from "../_shared/cors.ts";
 
-function json(data: unknown, status = 200) {
-  return new Response(JSON.stringify(data), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
+const CORS_OPTS = { methods: "GET, POST, PUT, DELETE, OPTIONS" } as const;
+function CORS(req: Request | null = null): Record<string, string> {
+  return _corsHeaders(req?.headers.get("origin") ?? null, CORS_OPTS);
+}
+
+function json(req: Request, data: unknown, status = 200) {
+  return new Response(JSON.stringify(data), { status, headers: { ...CORS(req), 'Content-Type': 'application/json' } });
 }
 
 // Helper: verify the calling user is an admin (org owner or admin role)
@@ -35,13 +36,13 @@ async function isAdmin(supabase: any, userId: string): Promise<boolean> {
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS(req) });
 
   const authHeader = req.headers.get('authorization') || '';
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
   const jwt = authHeader.replace('Bearer ', '');
   const { data: { user } } = await supabase.auth.getUser(jwt);
-  if (!user) return json({ error: 'Unauthorized' }, 401);
+  if (!user) return json(req, { error: 'Unauthorized' }, 401);
 
   try {
     // ─── GET: List team members, invitations, and member project summaries ───
@@ -118,15 +119,15 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      return json({ members: memberDetails, invitations });
+      return json(req, { members: memberDetails, invitations });
     }
 
     // ─── POST: Send invitation ───────────────────────────────────────────────
     if (req.method === 'POST') {
       const { email, role = 'editor' } = await req.json();
-      if (!email) return json({ error: 'Email is required' }, 400);
+      if (!email) return json(req, { error: 'Email is required' }, 400);
       if (!['admin', 'editor', 'viewer'].includes(role)) {
-        return json({ error: 'Invalid role. Must be admin, editor, or viewer.' }, 400);
+        return json(req, { error: 'Invalid role. Must be admin, editor, or viewer.' }, 400);
       }
 
       // Check if already invited
@@ -138,7 +139,7 @@ Deno.serve(async (req: Request) => {
         .eq('status', 'pending')
         .limit(1);
 
-      if (existing && existing.length > 0) return json({ error: 'Already invited' }, 409);
+      if (existing && existing.length > 0) return json(req, { error: 'Already invited' }, 409);
 
       // Check if already an active member
       const { data: existingUsers } = await supabase.auth.admin.listUsers();
@@ -152,7 +153,7 @@ Deno.serve(async (req: Request) => {
           .eq('status', 'active')
           .limit(1);
         if (existingMember && existingMember.length > 0) {
-          return json({ error: 'This person is already a team member' }, 409);
+          return json(req, { error: 'This person is already a team member' }, 409);
         }
       }
 
@@ -177,17 +178,17 @@ Deno.serve(async (req: Request) => {
         await supabase.from('invitations').update({ status: 'accepted', accepted_at: new Date().toISOString() }).eq('id', invite.id);
       }
 
-      return json(invite, 201);
+      return json(req, invite, 201);
     }
 
     // ─── PUT: Update member role or status ───────────────────────────────────
     if (req.method === 'PUT') {
       const { member_id, role, action } = await req.json();
-      if (!member_id) return json({ error: 'member_id is required' }, 400);
+      if (!member_id) return json(req, { error: 'member_id is required' }, 400);
 
       // Verify caller is admin
       const callerIsAdmin = await isAdmin(supabase, user.id);
-      if (!callerIsAdmin) return json({ error: 'Only admins can manage team members' }, 403);
+      if (!callerIsAdmin) return json(req, { error: 'Only admins can manage team members' }, 403);
 
       // Get the target member
       const { data: target } = await supabase
@@ -196,52 +197,52 @@ Deno.serve(async (req: Request) => {
         .eq('id', member_id)
         .single();
 
-      if (!target) return json({ error: 'Member not found' }, 404);
+      if (!target) return json(req, { error: 'Member not found' }, 404);
 
       // Prevent self-demotion from admin (must have at least one admin)
       if (target.user_id === user.id && role && role !== 'admin') {
-        return json({ error: 'You cannot change your own role. Ask another admin to do this.' }, 400);
+        return json(req, { error: 'You cannot change your own role. Ask another admin to do this.' }, 400);
       }
 
       // Action: remove member
       if (action === 'remove') {
         if (target.user_id === user.id) {
-          return json({ error: 'You cannot remove yourself from the team' }, 400);
+          return json(req, { error: 'You cannot remove yourself from the team' }, 400);
         }
         await supabase
           .from('org_members')
           .update({ status: 'removed', updated_at: new Date().toISOString() })
           .eq('id', member_id);
-        return json({ success: true, message: 'Member removed' });
+        return json(req, { success: true, message: 'Member removed' });
       }
 
       // Action: change role
       if (role) {
         if (!['admin', 'editor', 'viewer'].includes(role)) {
-          return json({ error: 'Invalid role' }, 400);
+          return json(req, { error: 'Invalid role' }, 400);
         }
         await supabase
           .from('org_members')
           .update({ role, updated_at: new Date().toISOString() })
           .eq('id', member_id);
-        return json({ success: true, message: `Role updated to ${role}` });
+        return json(req, { success: true, message: `Role updated to ${role}` });
       }
 
-      return json({ error: 'No action specified' }, 400);
+      return json(req, { error: 'No action specified' }, 400);
     }
 
     // ─── DELETE: Revoke invitation ───────────────────────────────────────────
     if (req.method === 'DELETE') {
       const url = new URL(req.url);
       const inviteId = url.searchParams.get('id');
-      if (!inviteId) return json({ error: 'id required' }, 400);
+      if (!inviteId) return json(req, { error: 'id required' }, 400);
 
       await supabase.from('invitations').update({ status: 'revoked' }).eq('id', inviteId).eq('invited_by', user.id);
-      return json({ success: true });
+      return json(req, { success: true });
     }
 
-    return json({ error: 'Method not allowed' }, 405);
+    return json(req, { error: 'Method not allowed' }, 405);
   } catch (err: any) {
-    return json({ error: err.message }, 500);
+    return json(req, { error: err.message }, 500);
   }
 });

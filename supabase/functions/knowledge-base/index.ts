@@ -4,24 +4,25 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-};
+import { corsHeaders as _corsHeaders } from "../_shared/cors.ts";
 
-function json(data: unknown, status = 200) {
-  return new Response(JSON.stringify(data), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
+const CORS_OPTS = { methods: "GET, POST, PUT, DELETE, OPTIONS" } as const;
+function CORS(req: Request | null = null): Record<string, string> {
+  return _corsHeaders(req?.headers.get("origin") ?? null, CORS_OPTS);
+}
+
+function json(req: Request, data: unknown, status = 200) {
+  return new Response(JSON.stringify(data), { status, headers: { ...CORS(req), 'Content-Type': 'application/json' } });
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS(req) });
 
   const authHeader = req.headers.get('authorization') || '';
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
   const jwt = authHeader.replace('Bearer ', '');
   const { data: { user }, error: authError } = await supabase.auth.getUser(jwt);
-  if (!user) return json({ error: 'Unauthorized' }, 401);
+  if (!user) return json(req, { error: 'Unauthorized' }, 401);
 
   const url = new URL(req.url);
 
@@ -33,14 +34,14 @@ Deno.serve(async (req: Request) => {
 
       const { data, error } = await query.order('created_at', { ascending: false });
       if (error) throw error;
-      return json(data || []);
+      return json(req, data || []);
     }
 
     if (req.method === 'POST') {
       const body = await req.json();
       const { title, content, project_id, source_type = 'manual', file_name, file_type, sections } = body;
 
-      if (!title || !content) return json({ error: 'title and content required' }, 400);
+      if (!title || !content) return json(req, { error: 'title and content required' }, 400);
 
       const { data, error } = await supabase
         .from('application_knowledge_base')
@@ -62,28 +63,28 @@ Deno.serve(async (req: Request) => {
 
       // Generate embeddings in background
       if (data?.id) {
-        generateEmbedding(data.id, content, user.id, supabase).catch(err => {
+        generateEmbedding(req, data.id, content, user.id, supabase).catch(err => {
           console.error('Embedding generation error:', err);
         });
       }
 
-      return json(data, 201);
+      return json(req, data, 201);
     }
 
     if (req.method === 'DELETE') {
       const id = url.searchParams.get('id');
-      if (!id) return json({ error: 'id required' }, 400);
+      if (!id) return json(req, { error: 'id required' }, 400);
       await supabase.from('application_knowledge_base').delete().eq('id', id).eq('user_id', user.id);
-      return json({ success: true });
+      return json(req, { success: true });
     }
 
-    return json({ error: 'Method not allowed' }, 405);
+    return json(req, { error: 'Method not allowed' }, 405);
   } catch (err: any) {
-    return json({ error: err.message }, 500);
+    return json(req, { error: err.message }, 500);
   }
 });
 
-async function generateEmbedding(
+async function generateEmbedding(req: Request, 
   kbId: string,
   content: string,
   userId: string,

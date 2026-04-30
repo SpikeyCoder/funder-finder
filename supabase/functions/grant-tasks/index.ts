@@ -6,21 +6,22 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-};
+import { corsHeaders as _corsHeaders } from "../_shared/cors.ts";
 
-function jsonResponse(data: unknown, status = 200) {
+const CORS_HEADERS_OPTS = { methods: "GET, POST, PUT, DELETE, OPTIONS" } as const;
+function CORS_HEADERS(req: Request | null = null): Record<string, string> {
+  return _corsHeaders(req?.headers.get("origin") ?? null, CORS_HEADERS_OPTS);
+}
+
+function jsonResponse(req: Request, data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+    headers: { ...CORS_HEADERS(req), 'Content-Type': 'application/json' },
   });
 }
 
-function errorResponse(message: string, status = 400) {
-  return jsonResponse({ error: message }, status);
+function errorResponse(req: Request, message: string, status = 400) {
+  return jsonResponse(req, { error: message }, status);
 }
 
 async function getUserFromRequest(req: Request) {
@@ -35,12 +36,12 @@ async function getUserFromRequest(req: Request) {
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: CORS_HEADERS });
+    return new Response('ok', { headers: CORS_HEADERS(req) });
   }
 
   try {
     const user = await getUserFromRequest(req);
-    if (!user) return errorResponse('Unauthorized', 401);
+    if (!user) return errorResponse(req, 'Unauthorized', 401);
 
     const url = new URL(req.url);
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
@@ -57,7 +58,7 @@ Deno.serve(async (req: Request) => {
           .or(`user_id.eq.${user.id},assignee_user_id.eq.${user.id}`)
           .order('due_date', { ascending: true, nullsFirst: false });
 
-        if (error) return errorResponse(error.message, 500);
+        if (error) return errorResponse(req, error.message, 500);
 
         // Group by category
         const now = new Date();
@@ -73,7 +74,7 @@ Deno.serve(async (req: Request) => {
           completed: (tasks || []).filter((t: any) => t.status === 'done'),
         };
 
-        return jsonResponse(grouped);
+        return jsonResponse(req, grouped);
       }
 
       if (grantId) {
@@ -84,11 +85,11 @@ Deno.serve(async (req: Request) => {
           .order('is_overdue', { ascending: false })
           .order('due_date', { ascending: true, nullsFirst: false });
 
-        if (error) return errorResponse(error.message, 500);
-        return jsonResponse(tasks || []);
+        if (error) return errorResponse(req, error.message, 500);
+        return jsonResponse(req, tasks || []);
       }
 
-      return errorResponse('grant_id or my_tasks=true required');
+      return errorResponse(req, 'grant_id or my_tasks=true required');
     }
 
     if (req.method === 'POST') {
@@ -96,7 +97,7 @@ Deno.serve(async (req: Request) => {
       const { tracked_grant_id, project_id, title, description, assignee_email, due_date } = body;
 
       if (!tracked_grant_id || !title) {
-        return errorResponse('tracked_grant_id and title are required');
+        return errorResponse(req, 'tracked_grant_id and title are required');
       }
 
       // Resolve assignee_user_id from email
@@ -133,14 +134,14 @@ Deno.serve(async (req: Request) => {
         status: 'todo',
       }).select().single();
 
-      if (error) return errorResponse(error.message, 500);
-      return jsonResponse(task, 201);
+      if (error) return errorResponse(req, error.message, 500);
+      return jsonResponse(req, task, 201);
     }
 
     if (req.method === 'PUT') {
       const body = await req.json();
       const taskId = body.id || url.searchParams.get('task_id');
-      if (!taskId) return errorResponse('Task ID required');
+      if (!taskId) return errorResponse(req, 'Task ID required');
 
       const updates: any = {};
       if (body.title !== undefined) updates.title = body.title;
@@ -170,14 +171,14 @@ Deno.serve(async (req: Request) => {
         .select()
         .single();
 
-      if (error) return errorResponse(error.message, 500);
-      if (!task) return errorResponse('Task not found', 404);
-      return jsonResponse(task);
+      if (error) return errorResponse(req, error.message, 500);
+      if (!task) return errorResponse(req, 'Task not found', 404);
+      return jsonResponse(req, task);
     }
 
     if (req.method === 'DELETE') {
       const taskId = url.searchParams.get('task_id');
-      if (!taskId) return errorResponse('Task ID required');
+      if (!taskId) return errorResponse(req, 'Task ID required');
 
       const { error } = await supabase
         .from('tasks')
@@ -185,13 +186,13 @@ Deno.serve(async (req: Request) => {
         .eq('id', taskId)
         .eq('user_id', user.id);
 
-      if (error) return errorResponse(error.message, 500);
-      return jsonResponse({ success: true });
+      if (error) return errorResponse(req, error.message, 500);
+      return jsonResponse(req, { success: true });
     }
 
-    return errorResponse('Method not allowed', 405);
+    return errorResponse(req, 'Method not allowed', 405);
   } catch (err: any) {
     console.error('grant-tasks error:', err);
-    return errorResponse(err.message || 'Internal server error', 500);
+    return errorResponse(req, err.message || 'Internal server error', 500);
   }
 });

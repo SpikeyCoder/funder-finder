@@ -5,21 +5,22 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-};
+import { corsHeaders as _corsHeaders } from "../_shared/cors.ts";
 
-function jsonResponse(data: unknown, status = 200) {
+const CORS_HEADERS_OPTS = { methods: "GET, OPTIONS" } as const;
+function CORS_HEADERS(req: Request | null = null): Record<string, string> {
+  return _corsHeaders(req?.headers.get("origin") ?? null, CORS_HEADERS_OPTS);
+}
+
+function jsonResponse(req: Request, data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+    headers: { ...CORS_HEADERS(req), 'Content-Type': 'application/json' },
   });
 }
 
-function errorResponse(message: string, status = 400) {
-  return jsonResponse({ error: message }, status);
+function errorResponse(req: Request, message: string, status = 400) {
+  return jsonResponse(req, { error: message }, status);
 }
 
 async function getUserFromRequest(req: Request) {
@@ -34,16 +35,16 @@ async function getUserFromRequest(req: Request) {
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: CORS_HEADERS });
+    return new Response('ok', { headers: CORS_HEADERS(req) });
   }
 
   if (req.method !== 'GET') {
-    return errorResponse('Method not allowed', 405);
+    return errorResponse(req, 'Method not allowed', 405);
   }
 
   try {
     const user = await getUserFromRequest(req);
-    if (!user) return errorResponse('Unauthorized', 401);
+    if (!user) return errorResponse(req, 'Unauthorized', 401);
 
     const url = new URL(req.url);
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
@@ -55,7 +56,7 @@ Deno.serve(async (req: Request) => {
       .eq('user_id', user.id)
       .order('updated_at', { ascending: false });
 
-    if (grantsError) return errorResponse(grantsError.message, 500);
+    if (grantsError) return errorResponse(req, grantsError.message, 500);
     const grants = allGrants || [];
 
     // Compute metrics
@@ -169,14 +170,14 @@ Deno.serve(async (req: Request) => {
       const csv = [csvHeader, ...csvRows].join('\n');
       return new Response(csv, {
         headers: {
-          ...CORS_HEADERS,
+          ...CORS_HEADERS(req),
           'Content-Type': 'text/csv',
           'Content-Disposition': 'attachment; filename="portfolio_export.csv"',
         },
       });
     }
 
-    return jsonResponse({
+    return jsonResponse(req, {
       metrics: {
         total_tracked: totalTracked,
         active_proposals: activeGrants.length,
@@ -193,6 +194,6 @@ Deno.serve(async (req: Request) => {
     });
   } catch (err: any) {
     console.error('portfolio error:', err);
-    return errorResponse(err.message || 'Internal server error', 500);
+    return errorResponse(req, err.message || 'Internal server error', 500);
   }
 });
