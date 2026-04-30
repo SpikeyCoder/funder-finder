@@ -41,3 +41,6 @@ FILE_MANIFEST.txt
 # Supabase local dev artifacts
 supabase/.branches
 supabase/.temp
+
+# API key files - NEVER commit
+.env.enrich-websites
