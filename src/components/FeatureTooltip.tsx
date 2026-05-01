@@ -73,8 +73,8 @@ export default function FeatureTooltips() {
 
   return (
     <div className="fixed bottom-6 right-6 z-50 max-w-xs bg-blue-600 text-white rounded-lg shadow-2xl p-4 animate-fade-in">
-      <button onClick={() => dismiss(tooltip.id)} className="absolute top-2 right-2 text-white/70 hover:text-white">
-        <X size={14} />
+      <button onClick={() => dismiss(tooltip.id)} aria-label="Dismiss tooltip" className="absolute top-2 right-2 text-white/70 hover:text-white">
+        <X size={14} aria-hidden="true" />
       </button>
       <p className="text-sm font-semibold mb-1">{tooltip.title}</p>
       <p className="text-xs text-blue-100 leading-relaxed">{tooltip.description}</p>

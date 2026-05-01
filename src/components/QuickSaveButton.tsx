@@ -91,9 +91,11 @@ const QuickSaveButton: React.FC<QuickSaveButtonProps> = ({ funder, className = '
       <button
         onClick={toggle}
         disabled={busy}
+        aria-pressed={saved}
+        aria-label={`${saved ? 'Unsave' : 'Save'} ${funder?.name || 'funder'}`}
         className={`${baseClasses} ${colorClasses} disabled:opacity-50 ${className}`}
       >
-        {saved ? <BookmarkCheck size={compact ? 14 : 16} /> : <Bookmark size={compact ? 14 : 16} />}
+        {saved ? <BookmarkCheck size={compact ? 14 : 16} aria-hidden="true" /> : <Bookmark size={compact ? 14 : 16} aria-hidden="true" />}
         {saved ? 'Saved' : 'Save'}
       </button>
 

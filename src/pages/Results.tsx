@@ -928,9 +928,11 @@ export default function Results() {
                     )}
                     <button
                       onClick={() => toggleSave(funder)}
+                      aria-pressed={isSaved}
+                      aria-label={`${isSaved ? 'Unsave' : 'Save'} ${funder.name}`}
                       className={`flex items-center gap-2 border rounded-xl px-4 py-2 text-sm transition-colors ${isSaved ? 'border-blue-600 text-blue-400 bg-blue-900/20' : 'border-[#30363d] hover:bg-[#21262d]'}`}
                     >
-                      {isSaved ? <BookmarkCheck size={14} /> : <Bookmark size={14} />}
+                      {isSaved ? <BookmarkCheck size={14} aria-hidden="true" /> : <Bookmark size={14} aria-hidden="true" />}
                       {isSaved ? 'Saved' : 'Save'}
                     </button>
                     <button

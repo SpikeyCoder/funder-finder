@@ -555,6 +555,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
                 <input
                   type="number"
                   placeholder="Min"
+                  aria-label="Minimum grant amount in dollars"
                   value={filters.grant_size_min ?? ''}
                   onChange={(e) =>
                     onChange({
@@ -567,6 +568,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
                 <input
                   type="number"
                   placeholder="Max"
+                  aria-label="Maximum grant amount in dollars"
                   value={filters.grant_size_max ?? ''}
                   onChange={(e) =>
                     onChange({
