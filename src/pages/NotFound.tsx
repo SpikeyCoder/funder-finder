@@ -1,7 +1,14 @@
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import NavBar from '../components/NavBar';
 
 export default function NotFound() {
+  useEffect(() => {
+    document.title = 'Page Not Found | FunderMatch';
+    const desc = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    if (desc) desc.content = 'The page you’re looking for doesn’t exist on FunderMatch.';
+  }, []);
+
   const navigate = useNavigate();
   return (
     <>

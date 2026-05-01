@@ -73,6 +73,12 @@ const GRANT_SIZE_PRESETS = [
 ];
 
 export default function NewProjectPage() {
+  useEffect(() => {
+    document.title = 'New Project | FunderMatch';
+    const desc = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    if (desc) desc.content = 'Start a new fundraising project and invite collaborators.';
+  }, []);
+
   const navigate = useNavigate();
   const { user, loading } = useAuth();
   const [step, setStep] = useState(1);

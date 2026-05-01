@@ -40,6 +40,12 @@ const BUDGET_RANGES = [
 type SignupStep = 'account' | 'profile' | 'review';
 
 export default function SignupPage() {
+  useEffect(() => {
+    document.title = 'Create Account | FunderMatch';
+    const desc = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    if (desc) desc.content = 'Create a free FunderMatch account to save funders and manage grants.';
+  }, []);
+
   const navigate = useNavigate();
   const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState<SignupStep>('account');

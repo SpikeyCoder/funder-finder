@@ -43,6 +43,12 @@ const PROVIDERS = [
 ] as const;
 
 export default function LoginPage() {
+  useEffect(() => {
+    document.title = 'Sign In | FunderMatch';
+    const desc = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    if (desc) desc.content = 'Sign in to FunderMatch to access saved funders, projects, and grant tools.';
+  }, []);
+
   const navigate = useNavigate();
   const { user, signInWithGoogle, signInWithLinkedIn, signInWithMicrosoft } = useAuth();
   const [email, setEmail] = useState('');

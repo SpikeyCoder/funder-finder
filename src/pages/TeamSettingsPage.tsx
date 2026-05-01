@@ -72,6 +72,12 @@ function formatDate(dateStr: string): string {
 // ── Main Component ───────────────────────────────────────────────────────────
 
 export default function TeamSettingsPage() {
+  useEffect(() => {
+    document.title = 'Team Settings | FunderMatch';
+    const desc = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    if (desc) desc.content = 'Manage team members, roles, and access for your FunderMatch workspace.';
+  }, []);
+
   const navigate = useNavigate();
   const { user, loading } = useAuth();
   const [members, setMembers] = useState<TeamMember[]>([]);

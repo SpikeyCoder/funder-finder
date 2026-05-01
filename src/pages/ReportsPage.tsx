@@ -24,6 +24,12 @@ interface ComplianceSummary { total: number; compliant: number; upcoming: number
 interface FunderTypeItem { type: string; count: number; amount: number; }
 
 export default function ReportsPage() {
+  useEffect(() => {
+    document.title = 'Reports | FunderMatch';
+    const desc = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    if (desc) desc.content = 'Reporting tools for grant cycles, pipeline status, and outcomes.';
+  }, []);
+
   const { user, loading } = useAuth();
   const [kpis, setKpis] = useState<KPIs | null>(null);
   const [pipeline, setPipeline] = useState<PipelineItem[]>([]);

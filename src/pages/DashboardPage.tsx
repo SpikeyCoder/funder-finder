@@ -15,6 +15,12 @@ interface ProjectWithCounts {
 }
 
 export default function DashboardPage() {
+  useEffect(() => {
+    document.title = 'Dashboard | FunderMatch';
+    const desc = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    if (desc) desc.content = 'Your nonprofit fundraising hub — saved funders, projects, and tasks.';
+  }, []);
+
   const navigate = useNavigate();
   const { user, loading } = useAuth();
   const [projects, setProjects] = useState<ProjectWithCounts[]>([]);

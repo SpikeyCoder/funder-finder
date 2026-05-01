@@ -15,6 +15,12 @@ interface SharedGrant {
 }
 
 export default function SharedViewPage() {
+  useEffect(() => {
+    document.title = 'Shared View | FunderMatch';
+    const desc = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    if (desc) desc.content = 'A read-only shared view of a FunderMatch project or list.';
+  }, []);
+
   const { token } = useParams<{ token: string }>();
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);

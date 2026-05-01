@@ -820,5 +820,11 @@ function UserSettingsContent() {
 }
 
 export default function UserSettingsPage() {
+  useEffect(() => {
+    document.title = 'Account Settings | FunderMatch';
+    const desc = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    if (desc) desc.content = 'Manage your FunderMatch account, notifications, and profile.';
+  }, []);
+
   return <UserSettingsContent />;
 }

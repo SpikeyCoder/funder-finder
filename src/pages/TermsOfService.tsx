@@ -1,7 +1,14 @@
+import { useEffect } from 'react';
 import NavBar from '../components/NavBar';
 import Footer from '../components/Footer';
 
 export default function TermsOfService() {
+  useEffect(() => {
+    document.title = 'Terms of Service | FunderMatch';
+    const desc = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    if (desc) desc.content = 'The terms governing your use of FunderMatch.';
+  }, []);
+
   return (
     <div className="min-h-screen bg-[#0d1117] text-white">
       <NavBar />

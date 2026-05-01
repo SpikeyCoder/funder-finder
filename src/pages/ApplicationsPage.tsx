@@ -26,6 +26,12 @@ interface BookmarkedPassage {
 }
 
 export default function ApplicationsPage() {
+  useEffect(() => {
+    document.title = 'Grant Applications | FunderMatch';
+    const desc = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    if (desc) desc.content = 'Track every grant application in one place — deadlines, stages, and outcomes.';
+  }, []);
+
   const { user, loading } = useAuth();
   const [entries, setEntries] = useState<KBEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);

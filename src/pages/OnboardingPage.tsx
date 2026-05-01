@@ -17,6 +17,12 @@ const STEPS = [
 ];
 
 export default function OnboardingPage() {
+  useEffect(() => {
+    document.title = 'Welcome to FunderMatch';
+    const desc = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    if (desc) desc.content = 'Set up your nonprofit profile to get personalized funder matches.';
+  }, []);
+
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);

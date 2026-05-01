@@ -1,7 +1,14 @@
+import { useEffect } from 'react';
 import NavBar from '../components/NavBar';
 import Footer from '../components/Footer';
 
 export default function PrivacyPolicy() {
+  useEffect(() => {
+    document.title = 'Privacy Policy | FunderMatch';
+    const desc = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    if (desc) desc.content = 'How FunderMatch collects, uses, and protects your information.';
+  }, []);
+
   return (
     <div className="min-h-screen bg-[#0d1117] text-white">
       <NavBar />

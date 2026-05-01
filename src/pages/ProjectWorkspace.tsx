@@ -103,6 +103,12 @@ function fmtCurrency(amount: number | null | undefined): string {
 }
 
 export default function ProjectWorkspace() {
+  useEffect(() => {
+    document.title = 'Project Workspace | FunderMatch';
+    const desc = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    if (desc) desc.content = 'Collaborate with your team on a single grant project — tasks, funders, notes.';
+  }, []);
+
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();

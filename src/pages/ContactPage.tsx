@@ -1,8 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import NavBar from '../components/NavBar';
 import Footer from '../components/Footer';
 
 export default function ContactPage() {
+  useEffect(() => {
+    document.title = 'Contact Us | FunderMatch';
+    const desc = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    if (desc) desc.content = 'Reach the FunderMatch team — feedback, partnerships, and support.';
+  }, []);
+
   const [submitted, setSubmitted] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', message: '' });
 

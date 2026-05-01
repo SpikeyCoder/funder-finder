@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Database } from 'lucide-react';
 import OrgSearch from '../components/OrgSearch';
 import NavBar from '../components/NavBar';
+import Footer from '../components/Footer';
 
 export default function OrgSearchPage() {
   const navigate = useNavigate();
@@ -63,6 +64,7 @@ export default function OrgSearchPage() {
         </div>
       </div>
     </main>
+      <Footer />
     </>
   );
 }

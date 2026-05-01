@@ -19,6 +19,12 @@ interface GroupedTasks {
 }
 
 export default function MyTasksPage() {
+  useEffect(() => {
+    document.title = 'My Tasks | FunderMatch';
+    const desc = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    if (desc) desc.content = 'Personal task list across every grant project you contribute to.';
+  }, []);
+
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);

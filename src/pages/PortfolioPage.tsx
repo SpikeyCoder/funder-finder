@@ -17,6 +17,12 @@ function fmtCurrency(amount: number | null | undefined): string {
 }
 
 export default function PortfolioPage() {
+  useEffect(() => {
+    document.title = 'Portfolio | FunderMatch';
+    const desc = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    if (desc) desc.content = 'View all of your nonprofit’s active grant projects in one portfolio.';
+  }, []);
+
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
