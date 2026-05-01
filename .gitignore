@@ -44,3 +44,6 @@ supabase/.temp
 
 # API key files - NEVER commit
 .env.enrich-websites
+
+# Source artifact archives — keep them out of main
+*.tar.gz
