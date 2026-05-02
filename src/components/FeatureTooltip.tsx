@@ -12,9 +12,15 @@ interface TooltipConfig {
 const TOOLTIPS: TooltipConfig[] = [
   { id: 'tracker', target: '[data-tooltip="tracker"]', title: 'Grant Tracker', description: 'Track your grant applications through every pipeline stage. Click any grant to see details and manage tasks.', position: 'bottom' },
   { id: 'calendar', target: '[data-tooltip="calendar"]', title: 'Deadline Calendar', description: 'View all grant deadlines in a monthly calendar. Never miss an important date.', position: 'bottom' },
-  { id: 'reports', target: '[data-tooltip="reports"]', title: 'Portfolio Reports', description: 'See your grant performance at a glance — win rates, pipeline status, and funding trends.', position: 'bottom' },
+  { id: 'reports', target: '[data-tooltip="reports"]', title: 'Portfolio Reports', description: 'See your grant performance at a glance - win rates, pipeline status, and funding trends.', position: 'bottom' },
   { id: 'ai-draft', target: '[data-tooltip="ai-draft"]', title: 'AI Draft Assistant', description: 'Generate grant proposal drafts powered by AI. Build your knowledge base for better results.', position: 'bottom' },
 ];
+
+// Once the tour has been shown to a user, we never want to re-trigger it -
+// either within the same browser session or for a logged-in user across
+// sessions. We persist a single "seen" flag in localStorage which is set
+// the first time any tooltip appears.
+const SEEN_FLAG_KEY = 'fm_tooltips_seen';
 
 export default function FeatureTooltips() {
   const [dismissed, setDismissed] = useState<string[]>([]);
@@ -22,11 +28,16 @@ export default function FeatureTooltips() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
+    // If the tour has already been displayed once on this device/profile,
+    // do not show it again. This satisfies the "show once per browser
+    // session or for a logged-in user" requirement.
+    if (localStorage.getItem(SEEN_FLAG_KEY) === 'true') return;
+
     const stored = localStorage.getItem('fm_tooltips_dismissed');
     if (stored) {
       const parsed = JSON.parse(stored);
       setDismissed(parsed);
-      if (parsed.length >= TOOLTIPS.length) return; // All dismissed
+      if (parsed.length >= TOOLTIPS.length) return; // All dismissed previously
     }
 
     // Check if within first 7 days
@@ -45,6 +56,10 @@ export default function FeatureTooltips() {
       if (next) {
         setActive(next.id);
         setVisible(true);
+        // Mark the tour as seen so it never re-triggers in a future
+        // session, even if the user closes the browser before stepping
+        // through every tooltip.
+        localStorage.setItem(SEEN_FLAG_KEY, 'true');
       }
     }, 2000);
 
