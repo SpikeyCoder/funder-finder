@@ -1,14 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import NavBar from '../components/NavBar';
 import Footer from '../components/Footer';
 
 export default function ContactPage() {
-  useEffect(() => {
-    document.title = 'Contact Us | FunderMatch';
-    const desc = document.querySelector<HTMLMetaElement>('meta[name="description"]');
-    if (desc) desc.content = 'Reach the FunderMatch team — feedback, partnerships, and support.';
-  }, []);
-
   const [submitted, setSubmitted] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', message: '' });
 
@@ -16,9 +10,39 @@ export default function ContactPage() {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSubmitted(true);
+    setSending(true);
+    setError('');
+
+    try {
+      const res = await fetch(
+        'https://tgtotjvdubhjxzybmdex.supabase.co/functions/v1/contact-form',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: form.name,
+            email: form.email,
+            message: form.message,
+          }),
+        }
+      );
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || 'Failed to send message');
+      }
+
+      setSubmitted(true);
+    } catch (err: any) {
+      setError(err.message || 'Something went wrong. Please try again.');
+    } finally {
+      setSending(false);
+    }
   }
 
   return (
@@ -90,19 +114,26 @@ export default function ContactPage() {
               />
             </div>
 
+            {error && (
+              <div className="rounded-md border border-red-700 bg-red-900/30 px-4 py-3 text-sm text-red-300">
+                {error}
+              </div>
+            )}
+
             <button
               type="submit"
-              className="w-full rounded-md bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[#0d1117] transition-colors"
+              disabled={sending}
+              className="w-full rounded-md bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[#0d1117] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Send message
+              {sending ? 'Sending...' : 'Send message'}
             </button>
           </form>
         )}
 
         <p className="mt-8 text-sm text-gray-500">
           You can also email us directly at{' '}
-          <a href="mailto:kevinmarmstrong1990@gmail.com" className="text-blue-400 hover:text-blue-300 underline">
-            kevinmarmstrong1990@gmail.com
+          <a href="mailto:support@fundermatch.org" className="text-blue-400 hover:text-blue-300 underline">
+            support@fundermatch.org
           </a>.
         </p>
       </main>

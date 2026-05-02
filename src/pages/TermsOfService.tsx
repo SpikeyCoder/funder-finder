@@ -1,14 +1,7 @@
-import { useEffect } from 'react';
 import NavBar from '../components/NavBar';
 import Footer from '../components/Footer';
 
 export default function TermsOfService() {
-  useEffect(() => {
-    document.title = 'Terms of Service | FunderMatch';
-    const desc = document.querySelector<HTMLMetaElement>('meta[name="description"]');
-    if (desc) desc.content = 'The terms governing your use of FunderMatch.';
-  }, []);
-
   return (
     <div className="min-h-screen bg-[#0d1117] text-white">
       <NavBar />
@@ -146,8 +139,8 @@ export default function TermsOfService() {
             <h2 className="text-xl font-semibold text-white mb-3">10. Contact</h2>
             <p>
               If you have questions about these Terms, please contact us at{' '}
-              <a href="mailto:kevinmarmstrong1990@gmail.com" className="text-blue-400 hover:text-blue-300 underline">
-                kevinmarmstrong1990@gmail.com
+              <a href="mailto:support@fundermatch.org" className="text-blue-400 hover:text-blue-300 underline">
+                support@fundermatch.org
               </a>.
             </p>
           </section>
