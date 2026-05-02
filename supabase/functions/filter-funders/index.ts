@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
+import { createUserScopedClient } from "../_shared/user-client.ts";
 
 import { corsHeaders as _corsHeaders } from "../_shared/cors.ts";
 
@@ -13,9 +14,21 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    // Phase 4: Use user-scoped client for project_matches access
+    // But we also need public anon access for the matview
+    let userScopedClient = null;
+    try {
+      const result = await createUserScopedClient(req);
+      userScopedClient = result.supabase;
+    } catch {
+      // Auth is optional for public funder search, but required if filtering by project
+      // Will check later if needed
+    }
+
+    // Always use anon key for public matview access
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
     const body = await req.json();
     const {
@@ -112,20 +125,8 @@ Deno.serve(async (req: Request) => {
 
     // Count query
     const countSql = `SELECT COUNT(*) as total FROM mv_funder_search_index ${whereClause}`;
-    const { data: countData, error: countError } = await supabase.rpc('exec_sql_readonly', {
-      sql_query: countSql,
-      sql_params: params,
-    });
 
-    // If the RPC doesn't exist, fall back to direct query
-    let total = 0;
-    let results: any[] = [];
-
-    // Use direct SQL via the pg connection
-    // Since we can't use parameterized queries directly with supabase-js on a matview,
-    // build a safe query using the Supabase PostgREST-compatible approach
-
-    // Alternative approach: query the matview using supabase client filters
+    // Query the public matview
     let query_builder = supabase
       .from('mv_funder_search_index')
       .select('funder_id, ein, name, state, entity_type, ntee_code, total_giving, avg_grant_size, grant_count, grant_range_min, grant_range_max, focus_areas', { count: 'exact' });
@@ -160,11 +161,8 @@ Deno.serve(async (req: Request) => {
     // Only show funders with grants
     query_builder = query_builder.gt('grant_count', 0);
 
-    // International location filter: search focus_areas array or use keyword text search
-    // When locations_served contains continents/countries, we combine them with websearch
-    // on the search_vector so funders whose descriptions/focus areas mention those regions appear.
+    // International location filter
     if (locations_served.length > 0) {
-      // Build a websearch query from the location terms (OR logic via pipe in websearch mode)
       const locationQuery = locations_served.join(' | ');
       query_builder = query_builder.textSearch('search_vector', locationQuery, { type: 'websearch' });
     }
@@ -186,12 +184,21 @@ Deno.serve(async (req: Request) => {
     }
 
     // If project_id is provided and gives_to_peers is true, filter by peer connection
-    // This is a secondary filter applied after the main query
     let filteredResults = data || [];
 
     if (project_id && gives_to_peers) {
+      if (!userScopedClient) {
+        return new Response(
+          JSON.stringify({ error: 'Authentication required for peer filtering' }),
+          {
+            status: 401,
+            headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+          }
+        );
+      }
+
       // Get project matches that have gives_to_peers = true
-      const { data: peerMatches } = await supabase
+      const { data: peerMatches } = await userScopedClient
         .from('project_matches')
         .select('funder_ein')
         .eq('project_id', project_id)
