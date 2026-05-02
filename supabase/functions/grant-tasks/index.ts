@@ -1,11 +1,7 @@
 // Phase 3B: Task Management CRUD Edge Function
 // Handles tasks on tracked grants + My Tasks view
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
-const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-
+import { createUserScopedClient } from "../_shared/user-client.ts";
 import { corsHeaders as _corsHeaders } from "../_shared/cors.ts";
 
 const CORS_HEADERS_OPTS = { methods: "GET, POST, PUT, DELETE, OPTIONS" } as const;
@@ -24,27 +20,15 @@ function errorResponse(req: Request, message: string, status = 400) {
   return jsonResponse(req, { error: message }, status);
 }
 
-async function getUserFromRequest(req: Request) {
-  const authHeader = req.headers.get('Authorization') || '';
-  const token = authHeader.replace('Bearer ', '');
-  if (!token) return null;
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-  const { data: { user }, error } = await supabase.auth.getUser(token);
-  if (error || !user) return null;
-  return user;
-}
-
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: CORS_HEADERS(req) });
   }
 
   try {
-    const user = await getUserFromRequest(req);
-    if (!user) return errorResponse(req, 'Unauthorized', 401);
+    const { supabase, user } = await createUserScopedClient(req);
 
     const url = new URL(req.url);
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
     if (req.method === 'GET') {
       const grantId = url.searchParams.get('grant_id');

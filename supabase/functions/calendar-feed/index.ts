@@ -1,12 +1,12 @@
 // Phase 3D: Calendar feed (.ics) generation
-// Public endpoint authenticated by token in URL
+// Public endpoint authenticated by token in URL, authenticated endpoints use JWT
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
+import { createUserScopedClient } from "../_shared/user-client.ts";
+import { corsHeaders as _corsHeaders } from "../_shared/cors.ts";
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-
-import { corsHeaders as _corsHeaders } from "../_shared/cors.ts";
 
 const CORS_HEADERS_OPTS = { allowAny: true, methods: "GET, POST, DELETE, OPTIONS" } as const;
 function CORS_HEADERS(req: Request | null = null): Record<string, string> {
@@ -24,16 +24,6 @@ function errorResponse(req: Request, message: string, status = 400) {
   return jsonResponse(req, { error: message }, status);
 }
 
-async function getUserFromRequest(req: Request) {
-  const authHeader = req.headers.get('Authorization') || '';
-  const token = authHeader.replace('Bearer ', '');
-  if (!token) return null;
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-  const { data: { user }, error } = await supabase.auth.getUser(token);
-  if (error || !user) return null;
-  return user;
-}
-
 function formatDate(dateStr: string): string {
   return dateStr.replace(/-/g, '');
 }
@@ -48,13 +38,13 @@ Deno.serve(async (req: Request) => {
   }
 
   const url = new URL(req.url);
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+  const serviceRoleClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
   // GET with token parameter = serve .ics feed (public, no auth needed)
   const feedToken = url.searchParams.get('token');
   if (req.method === 'GET' && feedToken) {
     // Look up feed by token
-    const { data: feed, error: feedError } = await supabase
+    const { data: feed, error: feedError } = await serviceRoleClient
       .from('calendar_feeds')
       .select('*')
       .eq('token', feedToken)
@@ -65,13 +55,13 @@ Deno.serve(async (req: Request) => {
     }
 
     // Update last_accessed
-    await supabase
+    await serviceRoleClient
       .from('calendar_feeds')
       .update({ last_accessed: new Date().toISOString() })
       .eq('id', feed.id);
 
     // Get tracked grants with deadlines
-    let grantsQuery = supabase
+    let grantsQuery = serviceRoleClient
       .from('tracked_grants')
       .select('*, pipeline_statuses(name, slug)')
       .eq('user_id', feed.user_id)
@@ -86,7 +76,7 @@ Deno.serve(async (req: Request) => {
     // Get project name for calendar title
     let calName = 'FunderMatch Deadlines';
     if (feed.project_id) {
-      const { data: project } = await supabase
+      const { data: project } = await serviceRoleClient
         .from('projects')
         .select('name')
         .eq('id', feed.project_id)
@@ -120,7 +110,7 @@ Deno.serve(async (req: Request) => {
 
     // Include tasks if enabled
     if (feed.include_tasks) {
-      let tasksQuery = supabase
+      let tasksQuery = serviceRoleClient
         .from('tasks')
         .select('*, tracked_grants(funder_name, grant_title)')
         .eq('user_id', feed.user_id)
@@ -173,55 +163,58 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  // Authenticated endpoints for managing feeds
-  const user = await getUserFromRequest(req);
-  if (!user) return errorResponse(req, 'Unauthorized', 401);
+  // Authenticated endpoints for managing feeds - use user-scoped client
+  try {
+    const { supabase, user } = await createUserScopedClient(req);
 
-  if (req.method === 'GET') {
-    // List user's feeds
-    const { data: feeds, error } = await supabase
-      .from('calendar_feeds')
-      .select('*, projects(name)')
-      .eq('user_id', user.id);
+    if (req.method === 'GET') {
+      // List user's feeds
+      const { data: feeds, error } = await supabase
+        .from('calendar_feeds')
+        .select('*, projects(name)')
+        .eq('user_id', user.id);
 
-    if (error) return errorResponse(req, error.message, 500);
-    return jsonResponse(req, feeds || []);
+      if (error) return errorResponse(req, error.message, 500);
+      return jsonResponse(req, feeds || []);
+    }
+
+    if (req.method === 'POST') {
+      const body = await req.json();
+      const projectId = body.project_id || null;
+      const includeTasks = body.include_tasks !== false;
+
+      // Generate a secure random token
+      const token = crypto.randomUUID() + '-' + crypto.randomUUID();
+
+      const { data: feed, error } = await supabase.from('calendar_feeds').insert({
+        user_id: user.id,
+        project_id: projectId,
+        token,
+        include_tasks: includeTasks,
+      }).select().single();
+
+      if (error) return errorResponse(req, error.message, 500);
+
+      const feedUrl = `${SUPABASE_URL}/functions/v1/calendar-feed?token=${token}`;
+      return jsonResponse(req, { ...feed, feed_url: feedUrl }, 201);
+    }
+
+    if (req.method === 'DELETE') {
+      const feedId = url.searchParams.get('id');
+      if (!feedId) return errorResponse(req, 'Feed ID required');
+
+      const { error } = await supabase
+        .from('calendar_feeds')
+        .delete()
+        .eq('id', feedId)
+        .eq('user_id', user.id);
+
+      if (error) return errorResponse(req, error.message, 500);
+      return jsonResponse(req, { success: true });
+    }
+
+    return errorResponse(req, 'Method not allowed', 405);
+  } catch (err: any) {
+    return errorResponse(req, err.message || 'Unauthorized', 401);
   }
-
-  if (req.method === 'POST') {
-    const body = await req.json();
-    const projectId = body.project_id || null;
-    const includeTasks = body.include_tasks !== false;
-
-    // Generate a secure random token
-    const token = crypto.randomUUID() + '-' + crypto.randomUUID();
-
-    const { data: feed, error } = await supabase.from('calendar_feeds').insert({
-      user_id: user.id,
-      project_id: projectId,
-      token,
-      include_tasks: includeTasks,
-    }).select().single();
-
-    if (error) return errorResponse(req, error.message, 500);
-
-    const feedUrl = `${SUPABASE_URL}/functions/v1/calendar-feed?token=${token}`;
-    return jsonResponse(req, { ...feed, feed_url: feedUrl }, 201);
-  }
-
-  if (req.method === 'DELETE') {
-    const feedId = url.searchParams.get('id');
-    if (!feedId) return errorResponse(req, 'Feed ID required');
-
-    const { error } = await supabase
-      .from('calendar_feeds')
-      .delete()
-      .eq('id', feedId)
-      .eq('user_id', user.id);
-
-    if (error) return errorResponse(req, error.message, 500);
-    return jsonResponse(req, { success: true });
-  }
-
-  return errorResponse(req, 'Method not allowed', 405);
 });

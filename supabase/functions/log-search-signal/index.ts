@@ -174,6 +174,7 @@ Deno.serve(async (req) => {
       ? body.metadata
       : {};
 
+    // Extract user_id from JWT if present (optional - this endpoint can be called anonymously)
     const authorization = req.headers.get('authorization');
     const userId = parseAuthUserId(authorization);
 
