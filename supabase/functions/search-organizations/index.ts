@@ -6,7 +6,7 @@
  */
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-const SUPABASE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const SUPABASE_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 
 const ALLOWED_ORIGINS = new Set([
   'https://fundermatch.org',
