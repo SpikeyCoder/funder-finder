@@ -20,8 +20,11 @@
         'self'             – Vite-bundled JS (dist/assets/index-*.js)
         'sha256-…'         – the inline SPA-routing script below (hash-pinned, no unsafe-inline)
         gc.zgo.at          – GoatCounter analytics script
-        cdn.jsdelivr.net   – axe-core for automated a11y testing
-        cdnjs.cloudflare.com – axe-core for automated a11y testing
+
+        Note: axe-core is a dev-only dependency invoked via @axe-core/cli
+        (see package.json devDependencies); it is never loaded by the
+        production bundle, so the previous cdn.jsdelivr.net /
+        cdnjs.cloudflare.com allowances have been dropped to keep CSP tight.
 
       style-src:
         'self'             – Tailwind CSS bundle
@@ -34,7 +37,7 @@
 
       img-src data:        – SVG data URIs used by Lucide icons
     -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-9Jn/cnXgKbJ7J7q33fTfvOmHEa+5yzYGzkbavQwjgws=' https://gc.zgo.at https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://tgtotjvdubhjxzybmdex.supabase.co https://accounts.google.com https://fundermatch.goatcounter.com; img-src 'self' data: https:; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self' https://tgtotjvdubhjxzybmdex.supabase.co; object-src 'none';" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-9Jn/cnXgKbJ7J7q33fTfvOmHEa+5yzYGzkbavQwjgws=' https://gc.zgo.at; style-src 'self' 'unsafe-inline'; connect-src 'self' https://tgtotjvdubhjxzybmdex.supabase.co https://accounts.google.com https://fundermatch.goatcounter.com; img-src 'self' data: https:; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self' https://tgtotjvdubhjxzybmdex.supabase.co; object-src 'none';" />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Non-Profit Funder Finder — Free AI Funder Matching for 501(c)(3)s</title>
