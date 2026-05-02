@@ -17,6 +17,7 @@ import { extractText } from './text-extract.ts';
 import { analyzeStyle, type StyleGuide } from './style-analysis.ts';
 import { performResearch, type ResearchData } from './research.ts';
 import { buildPrompt } from './prompt-builder.ts';
+import { createUserScopedClient } from "../_shared/user-client.ts";
 
 // ── Config ──────────────────────────────────────────────────────────────────
 
@@ -107,6 +108,9 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Verify user is authenticated
+    const { user } = await createUserScopedClient(req);
+
     const body = await req.json();
     const funder = body.funder;
     const mission = typeof body.mission === 'string' ? body.mission.trim() : '';
@@ -284,9 +288,9 @@ Deno.serve(async (req) => {
     console.error('Request error:', err);
     return new Response(
       JSON.stringify({
-        error: 'Internal server error',
+        error: 'Unauthorized',
       }),
-      { status: 500, headers: corsHeaders(origin) },
+      { status: 401, headers: corsHeaders(origin) },
     );
   }
 });

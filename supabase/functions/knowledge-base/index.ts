@@ -1,9 +1,5 @@
 // Phase 5C: Application knowledge base management
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
-const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-
+import { createUserScopedClient } from "../_shared/user-client.ts";
 import { corsHeaders as _corsHeaders } from "../_shared/cors.ts";
 
 const CORS_OPTS = { methods: "GET, POST, PUT, DELETE, OPTIONS" } as const;
@@ -18,15 +14,10 @@ function json(req: Request, data: unknown, status = 200) {
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS(req) });
 
-  const authHeader = req.headers.get('authorization') || '';
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-  const jwt = authHeader.replace('Bearer ', '');
-  const { data: { user }, error: authError } = await supabase.auth.getUser(jwt);
-  if (!user) return json(req, { error: 'Unauthorized' }, 401);
-
-  const url = new URL(req.url);
-
   try {
+    const { supabase, user } = await createUserScopedClient(req);
+    const url = new URL(req.url);
+
     if (req.method === 'GET') {
       const projectId = url.searchParams.get('project_id');
       let query = supabase.from('application_knowledge_base').select('*').eq('user_id', user.id);
@@ -80,11 +71,11 @@ Deno.serve(async (req: Request) => {
 
     return json(req, { error: 'Method not allowed' }, 405);
   } catch (err: any) {
-    return json(req, { error: err.message }, 500);
+    return json(req, { error: err.message }, 401);
   }
 });
 
-async function generateEmbedding(req: Request, 
+async function generateEmbedding(req: Request,
   kbId: string,
   content: string,
   userId: string,

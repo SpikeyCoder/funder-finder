@@ -1,9 +1,5 @@
 // Phase 5A: Generate PDF report from portfolio data
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
-const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-
+import { createUserScopedClient } from "../_shared/user-client.ts";
 import { corsHeaders as _corsHeaders } from "../_shared/cors.ts";
 
 const CORS_OPTS = { methods: "POST, OPTIONS" } as const;
@@ -19,17 +15,9 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  const authHeader = req.headers.get('authorization') || '';
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-  const jwt = authHeader.replace('Bearer ', '');
-  const { data: { user }, error: authError } = await supabase.auth.getUser(jwt);
-  if (!user) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401, headers: { ...CORS(req), 'Content-Type': 'application/json' },
-    });
-  }
-
   try {
+    const { supabase, user } = await createUserScopedClient(req);
+
     const { format = 'csv' } = await req.json().catch(() => ({}));
 
     // Fetch all grants for export
@@ -60,7 +48,7 @@ Deno.serve(async (req: Request) => {
     });
   } catch (err: any) {
     return new Response(JSON.stringify({ error: err.message }), {
-      status: 500, headers: { ...CORS(req), 'Content-Type': 'application/json' },
+      status: 401, headers: { ...CORS(req), 'Content-Type': 'application/json' },
     });
   }
 });
