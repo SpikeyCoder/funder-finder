@@ -28,7 +28,6 @@ const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') || '';
 const ALLOWED_ORIGINS = new Set([
   'https://fundermatch.org',
   'https://www.fundermatch.org',
-  'https://spikeycoder.github.io',
   'http://localhost:5173',
 ]);
 

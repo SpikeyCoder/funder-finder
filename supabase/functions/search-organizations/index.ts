@@ -11,7 +11,6 @@ const SUPABASE_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const ALLOWED_ORIGINS = new Set([
   'https://fundermatch.org',
   'https://www.fundermatch.org',
-  'https://spikeycoder.github.io',
   'http://localhost:5173',
 ]);
 

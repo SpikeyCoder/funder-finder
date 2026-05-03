@@ -81,7 +81,6 @@ const SCORING_WEIGHTS = {
 const ALLOWED_ORIGINS = new Set([
   'https://fundermatch.org',
   'https://www.fundermatch.org',
-  'https://spikeycoder.github.io',
   'http://localhost:5173',
 ]);
 
