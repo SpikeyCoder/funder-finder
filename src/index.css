@@ -91,6 +91,90 @@ html.light-mode .placeholder-gray-600::placeholder {
   color: #6e7681;
 }
 
+/* WCAG contrast fixes for light mode.
+   Light Tailwind shades (200/300/400) have very low contrast on white;
+   remap to darker shades (700-level) that meet WCAG AA. */
+html.light-mode .text-gray-200,
+html.light-mode .text-gray-100 {
+  color: #1f2328;
+}
+
+html.light-mode .text-blue-400,
+html.light-mode .text-blue-300 {
+  color: #1d4ed8;
+}
+
+html.light-mode .text-green-400,
+html.light-mode .text-green-300 {
+  color: #15803d;
+}
+
+html.light-mode .text-purple-400,
+html.light-mode .text-purple-300 {
+  color: #7e22ce;
+}
+
+html.light-mode .text-yellow-400,
+html.light-mode .text-yellow-300 {
+  color: #a16207;
+}
+
+html.light-mode .text-amber-400,
+html.light-mode .text-amber-300 {
+  color: #b45309;
+}
+
+html.light-mode .text-red-400,
+html.light-mode .text-red-300 {
+  color: #b91c1c;
+}
+
+html.light-mode .text-orange-400,
+html.light-mode .text-orange-300 {
+  color: #c2410c;
+}
+
+html.light-mode .text-pink-400 {
+  color: #be185d;
+}
+
+html.light-mode .text-indigo-400 {
+  color: #4338ca;
+}
+
+html.light-mode .text-teal-400 {
+  color: #0f766e;
+}
+
+html.light-mode .text-cyan-400 {
+  color: #0e7490;
+}
+
+html.light-mode .text-sky-400 {
+  color: #0369a1;
+}
+
+html.light-mode .text-emerald-400 {
+  color: #047857;
+}
+
+html.light-mode .text-rose-400 {
+  color: #be123c;
+}
+
+html.light-mode .text-violet-400 {
+  color: #6d28d9;
+}
+
+/* Brand accent (#58a6ff) — only ~3.0:1 on white. Remap in light mode. */
+html.light-mode .text-\[\#58a6ff\] {
+  color: #0969da;
+}
+
+html.light-mode .hover\:text-\[\#58a6ff\]:hover {
+  color: #0969da;
+}
+
 @keyframes pageFadeIn {
   from {
     opacity: 0;

@@ -157,6 +157,9 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
 
   const [stateSearchTerm, setStateSearchTerm] = useState('');
   const [intlSearchTerm, setIntlSearchTerm] = useState('');
+  // Mobile bottom sheet open state (lifted so the sheet can be triggered from
+  // either the top mobile filter bar or the floating button).
+  const [isMobileSheetOpen, setIsMobileSheetOpen] = useState(false);
 
   const toggleSection = (section: string) => {
     setExpandedSections((prev) => ({
@@ -608,42 +611,35 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
         {panelContent}
       </div>
 
+      {/* Mobile - Visible top filter bar (always shown on mobile so users can
+          easily discover and open the filter panel). */}
+      <div className="md:hidden bg-[#161b22] border-b border-[#30363d] px-4 py-3">
+        <button
+          onClick={() => setIsMobileSheetOpen(true)}
+          aria-label="Open filters"
+          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[#58a6ff] text-white rounded-lg shadow-lg hover:bg-[#1f6feb] transition-colors"
+        >
+          <Filter size={18} />
+          <span className="text-sm font-medium">
+            Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+          </span>
+        </button>
+      </div>
+
       {/* Mobile Bottom Sheet - rendered into document.body so an ancestor's
           CSS transform (e.g. page-fade-in) cannot break position: fixed. */}
-      {createPortal(
-        <div className="md:hidden fixed bottom-6 right-6 z-40">
-          <FilterButton panelContent={panelContent} />
-        </div>,
-        document.body
-      )}
-    </>
-  );
-};
-
-const FilterButton: React.FC<{ panelContent: React.ReactNode }> = ({ panelContent }) => {
-  const [isOpen, setIsOpen] = useState(false);
-
-  return (
-    <>
-      <button
-        onClick={() => setIsOpen(true)}
-        className="flex items-center gap-2 px-4 py-2 bg-[#58a6ff] text-white rounded-lg shadow-lg hover:bg-[#1f6feb] transition-colors"
-      >
-        <Filter size={20} />
-        <span className="text-sm font-medium">Filters</span>
-      </button>
-
-      {isOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col">
+      {isMobileSheetOpen && createPortal(
+        <div className="md:hidden fixed inset-0 z-50 flex flex-col">
           <div
             className="flex-1 bg-black bg-opacity-50"
-            onClick={() => setIsOpen(false)}
+            onClick={() => setIsMobileSheetOpen(false)}
           />
-          <div className="bg-[#161b22] rounded-t-lg max-h-[80vh] overflow-hidden flex flex-col">
+          <div className="bg-[#161b22] rounded-t-lg max-h-[85vh] overflow-hidden flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-[#30363d]">
               <h3 className="text-lg font-semibold text-white">Filters</h3>
               <button
-                onClick={() => setIsOpen(false)}
+                onClick={() => setIsMobileSheetOpen(false)}
+                aria-label="Close filters"
                 className="p-1 hover:bg-[#0d1117] rounded transition-colors"
               >
                 <X size={20} className="text-gray-400" />
@@ -652,8 +648,17 @@ const FilterButton: React.FC<{ panelContent: React.ReactNode }> = ({ panelConten
             <div className="flex-1 overflow-y-auto">
               {panelContent}
             </div>
+            <div className="border-t border-[#30363d] p-3 bg-[#161b22]">
+              <button
+                onClick={() => setIsMobileSheetOpen(false)}
+                className="w-full px-4 py-2 bg-[#58a6ff] text-white rounded-lg hover:bg-[#1f6feb] transition-colors text-sm font-medium"
+              >
+                Apply Filters
+              </button>
+            </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
