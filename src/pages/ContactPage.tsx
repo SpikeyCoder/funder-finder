@@ -1,8 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import NavBar from '../components/NavBar';
 import Footer from '../components/Footer';
 
 export default function ContactPage() {
+  // Fix stale-title carryover when navigating from other SPA routes (audit P2 2026-05-04).
+  useEffect(() => {
+    document.title = 'Contact Us | FunderMatch';
+  }, []);
+
   const [submitted, setSubmitted] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', message: '' });
 
