@@ -114,6 +114,28 @@ async function sha256Hex(input: string): Promise<string> {
   return arr.map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+
+// Per-IP token bucket — best-effort, in-memory, scoped to a single function
+// instance. Bounds anonymous writes if LOG_SEARCH_SIGNAL_ALLOW_ANON=1.
+// Threshold: 60 events per ip_hash per 60-second sliding window. Pen-test
+// 2026-05-04 finding FM-2026-05-04-03.
+const _IP_BUCKET = new Map<string, { count: number; reset: number }>();
+const _IP_BUCKET_LIMIT = 60;
+const _IP_BUCKET_WINDOW_MS = 60_000;
+
+function _ipBucketAllow(ipHash: string | null): boolean {
+  if (!ipHash) return false;
+  const now = Date.now();
+  const slot = _IP_BUCKET.get(ipHash);
+  if (!slot || slot.reset < now) {
+    _IP_BUCKET.set(ipHash, { count: 1, reset: now + _IP_BUCKET_WINDOW_MS });
+    return true;
+  }
+  if (slot.count >= _IP_BUCKET_LIMIT) return false;
+  slot.count += 1;
+  return true;
+}
+
 Deno.serve(async (req) => {
   const headers = corsHeaders(req.headers.get('origin'));
   if (req.method === 'OPTIONS') return new Response('ok', { headers });
@@ -173,13 +195,34 @@ Deno.serve(async (req) => {
       ? body.metadata
       : {};
 
-    // Extract user_id from JWT if present (optional - this endpoint can be called anonymously)
+    // SECURITY: per pen-test 2026-05-04 finding FM-2026-05-04-03, the
+    // endpoint previously accepted any anonymous POST and wrote a row with
+    // SERVICE_ROLE_KEY, bypassing RLS. We now require either (a) a valid
+    // Supabase session JWT, or (b) the LOG_SEARCH_SIGNAL_ALLOW_ANON env var
+    // is set to "1" AND the caller passes a per-IP soft rate limit
+    // (see _ipBucketAllow below).
     const authorization = req.headers.get('authorization');
     const userId = parseAuthUserId(authorization);
 
     const xForwardedFor = normalizeString(req.headers.get('x-forwarded-for'), 256);
     const ipHash = xForwardedFor ? await sha256Hex(xForwardedFor) : null;
     const userAgent = normalizeString(req.headers.get('user-agent'), 256);
+
+    if (!userId) {
+      const allowAnon = Deno.env.get('LOG_SEARCH_SIGNAL_ALLOW_ANON') === '1';
+      if (!allowAnon) {
+        return new Response(JSON.stringify({ error: 'Authentication required' }), {
+          status: 401,
+          headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      if (!_ipBucketAllow(ipHash)) {
+        return new Response(JSON.stringify({ error: 'Rate limit exceeded' }), {
+          status: 429,
+          headers: { ...headers, 'Content-Type': 'application/json', 'Retry-After': '60' },
+        });
+      }
+    }
 
     await sbFetch('search_signal_events?on_conflict=event_id', {
       method: 'POST',
