@@ -47,3 +47,10 @@ supabase/.temp
 
 # Source artifact archives — keep them out of main
 *.tar.gz
+
+# TypeScript incremental build cache — never commit
+*.tsbuildinfo
+
+# Compiled vite config (build artifact of vite.config.ts)
+vite.config.js
+vite.config.d.ts
