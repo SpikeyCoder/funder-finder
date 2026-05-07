@@ -3,8 +3,12 @@
 # Each call processes ~200 recipients (most active first)
 # Run this script to process all 108K+ recipients in shards
 
-SUPABASE_URL="https://tgtotjvdubhjxzybmdex.supabase.co/functions/v1/update-ntee-codes"
-ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRndG90anZkdWJoanh6eWJtZGV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwNTA5NTQsImV4cCI6MjA4NzYyNjk1NH0.Wehk_mEUN0G7qzvYKlKbajL1tJqgFqu1joR1DG0M8cs"
+# Configuration via environment variables — see README for setup.
+# SUPABASE_URL  : project URL for the update-ntee-codes function
+# SUPABASE_ANON_KEY : the publishable/anon key (RLS-protected, safe to be public,
+#                     but keeping it out of source so rotation is a one-line env change).
+SUPABASE_URL="${SUPABASE_FUNCTION_URL:-https://tgtotjvdubhjxzybmdex.supabase.co/functions/v1/update-ntee-codes}"
+ANON_KEY="${SUPABASE_ANON_KEY:?Set SUPABASE_ANON_KEY in your shell or .env.local before running this script}"
 
 BATCH_SIZE=200
 TOTAL_BATCHES=550  # ~108K / 200 = 540 batches, plus buffer

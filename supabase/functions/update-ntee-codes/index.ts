@@ -111,7 +111,14 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const batchSize = Math.min(body?.batch_size || 200, 500);
+    // Sanitize batch_size: must be a positive finite integer.
+    // Negative or non-numeric input falls back to the default of 200.
+    // Pen-test 2026-05-07 finding FM-2026-05-07-02.
+    const _rawBatchSize = Number(body?.batch_size);
+    const batchSize =
+      Number.isFinite(_rawBatchSize) && _rawBatchSize > 0
+        ? Math.min(Math.floor(_rawBatchSize), 500)
+        : 200;
 
     // Count remaining
     const countRows = (await restQuery(

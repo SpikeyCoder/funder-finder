@@ -1,6 +1,7 @@
 #!/bin/bash
-SUPABASE_URL="https://tgtotjvdubhjxzybmdex.supabase.co"
-ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRndG90anZkdWJoanh6eWJtZGV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwNTA5NTQsImV4cCI6MjA4NzYyNjk1NH0.Wehk_mEUN0G7qzvYKlKbajL1tJqgFqu1joR1DG0M8cs"
+# Configuration via environment variables — see README for setup.
+SUPABASE_URL="${SUPABASE_URL:-https://tgtotjvdubhjxzybmdex.supabase.co}"
+ANON_KEY="${SUPABASE_ANON_KEY:?Set SUPABASE_ANON_KEY in your shell or .env.local before running this script}"
 
 fetch_chunk() {
   local order=$1
