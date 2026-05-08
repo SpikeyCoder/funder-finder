@@ -35,8 +35,8 @@ git history and the keys must be treated as compromised.
 
 | # | Action | Owner | Status |
 |---|---|---|---|
-| 1 | Rotate `BRAVE_API_KEY` in the Brave Search dashboard; update Supabase secrets and any local `.env.enrich-websites` files | Kevin | TODO — confirm in writing |
-| 2 | Rotate `GOOGLE_API_KEY`; tighten the new key's referrer + IP restrictions to the minimum required | Kevin | TODO — confirm in writing |
+| 1 | Rotate `BRAVE_API_KEY` in the Brave Search dashboard; update the runtime secret store used by `scripts/enrich-websites.js` (shell env, CI secret manager, or a git-ignored local file if you must) | Kevin | TODO — confirm in writing |
+| 2 | Rotate `GOOGLE_API_KEY`; tighten the new key's referrer + IP restrictions to the minimum required; update the same runtime secret store used by `scripts/enrich-websites.js` | Kevin | TODO — confirm in writing |
 | 3 | Verify the old keys return `401 Unauthorized` against their respective APIs | Kevin | TODO |
 | 4 | Audit the last 60 days of usage on both providers' dashboards for anomalous request volume or geo origin | Kevin | TODO |
 | 5 | (Optional, destructive) Use `git filter-repo` or BFG to purge the file from history; force-push, then ask collaborators to re-clone | Kevin | Decline unless rotation is delayed |
@@ -48,6 +48,8 @@ git history and the keys must be treated as compromised.
 - **Forward exposure:** closed. `.env.enrich-websites` is in `.gitignore`,
   and a `.env.enrich-websites.example` template now lives next to it for
   onboarding.
+- **Operational guardrail:** prefer injecting API keys at runtime (shell
+  env or CI secret manager) over storing long-lived keys in local files.
 - **Backward exposure:** open until rotation is confirmed. The destructive
   history-rewrite is a *contingent* mitigation — not required if rotation
   is verified and abuse is not observed.
