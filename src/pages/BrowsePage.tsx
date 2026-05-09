@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { ExternalLink, ArrowUpDown } from 'lucide-react';
 import NavBar from '../components/NavBar';
@@ -86,6 +86,8 @@ const BrowsePage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
+  const latestRequestIdRef = useRef(0);
+  const currentAbortControllerRef = useRef<AbortController | null>(null);
   // "Only Funders with Website" filter removed per Trello card #61
 
   const { user } = useAuth();
@@ -118,6 +120,12 @@ const BrowsePage: React.FC = () => {
   useEffect(() => {
     debouncedFetch(filters, currentPage);
   }, [filters, currentPage, sortField, sortOrder, debouncedFetch]);
+
+  useEffect(() => {
+    return () => {
+      currentAbortControllerRef.current?.abort();
+    };
+  }, []);
 
   const parseUrlParams = (params: URLSearchParams): FilterState => {
     const states = params.get('states')?.split(',').filter(Boolean) || [];
@@ -181,6 +189,11 @@ const BrowsePage: React.FC = () => {
   };
 
   const fetchFunders = async (newFilters: FilterState, page: number) => {
+    currentAbortControllerRef.current?.abort();
+    const abortController = new AbortController();
+    currentAbortControllerRef.current = abortController;
+    const requestId = ++latestRequestIdRef.current;
+
     setLoading(true);
     setError(null);
 
@@ -210,23 +223,31 @@ const BrowsePage: React.FC = () => {
           'Content-Type': 'application/json',
           ...edgeHeaders,
         },
+        signal: abortController.signal,
         body: JSON.stringify(requestBody),
       });
+
+      if (requestId !== latestRequestIdRef.current) return;
 
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
       }
 
       const data: FilterResponse = await response.json();
+      if (requestId !== latestRequestIdRef.current) return;
       setResults(data.results || []);
       setTotalCount(data.total ?? 0);
     } catch (err) {
+      if (abortController.signal.aborted) return;
+      if (requestId !== latestRequestIdRef.current) return;
       console.error('Error fetching funders:', err);
       setError(err instanceof Error ? err.message : 'Failed to load funders');
       setResults([]);
       setTotalCount(0);
     } finally {
-      setLoading(false);
+      if (requestId === latestRequestIdRef.current) {
+        setLoading(false);
+      }
     }
   };
 
