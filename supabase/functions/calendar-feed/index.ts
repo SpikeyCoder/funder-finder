@@ -32,6 +32,41 @@ function escapeIcs(text: string): string {
   return text.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
 }
 
+// ---------------------------------------------------------------------------
+// Per-IP rate limit for the public token GET path.
+//
+// Threat model: anyone with a calendar feed token can fetch the .ics endpoint
+// without authentication. The token has high entropy (gen_random_uuid()), so
+// online brute-force is impractical. Adding a sliding-window per-IP bucket is
+// a defense-in-depth control to make abuse easier to detect and to short-
+// circuit before we touch the database. Pattern mirrors log-search-signal.
+// Pen-test 2026-05-09 finding FM-2026-05-09-01.
+// ---------------------------------------------------------------------------
+async function sha256Hex(input: string): Promise<string> {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+const _IP_BUCKET: Map<string, { count: number; reset: number }> = new Map();
+const _IP_BUCKET_LIMIT = 60;            // requests
+const _IP_BUCKET_WINDOW_MS = 60_000;    // per minute
+
+function _ipBucketAllow(ipHash: string | null): boolean {
+  if (!ipHash) return true; // unknown IP — fail open; the SELECT itself is cheap
+  const now = Date.now();
+  const slot = _IP_BUCKET.get(ipHash);
+  if (!slot || slot.reset < now) {
+    _IP_BUCKET.set(ipHash, { count: 1, reset: now + _IP_BUCKET_WINDOW_MS });
+    return true;
+  }
+  if (slot.count >= _IP_BUCKET_LIMIT) return false;
+  slot.count += 1;
+  return true;
+}
+
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: CORS_HEADERS(req) });
@@ -43,6 +78,18 @@ Deno.serve(async (req: Request) => {
   // GET with token parameter = serve .ics feed (public, no auth needed)
   const feedToken = url.searchParams.get('token');
   if (req.method === 'GET' && feedToken) {
+    // Defense-in-depth per-IP rate limit (60 req/min/IP). The token has high
+    // entropy, but adding a sliding-window bucket makes abuse easier to detect
+    // and short-circuits before we touch the database.
+    const xForwardedFor = req.headers.get('x-forwarded-for') || '';
+    const ipHash = xForwardedFor ? await sha256Hex(xForwardedFor) : null;
+    if (!_ipBucketAllow(ipHash)) {
+      return new Response('Too Many Requests', {
+        status: 429,
+        headers: { 'Retry-After': '60', ...CORS_HEADERS(req) },
+      });
+    }
+
     // Look up feed by token
     const { data: feed, error: feedError } = await serviceRoleClient
       .from('calendar_feeds')
