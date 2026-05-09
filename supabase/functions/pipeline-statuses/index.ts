@@ -1,11 +1,7 @@
 // Phase 3A: Pipeline Statuses CRUD Edge Function
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
-const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-
 import { corsHeaders as _corsHeaders } from "../_shared/cors.ts";
+import { createUserScopedClient } from "../_shared/user-client.ts";
 
 const CORS_HEADERS_OPTS = { methods: "GET, POST, PUT, DELETE, OPTIONS" } as const;
 function CORS_HEADERS(req: Request | null = null): Record<string, string> {
@@ -24,13 +20,32 @@ function errorResponse(req: Request, message: string, status = 400) {
 }
 
 async function getUserFromRequest(req: Request) {
-  const authHeader = req.headers.get('Authorization') || '';
-  const token = authHeader.replace('Bearer ', '');
-  if (!token) return null;
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-  const { data: { user }, error } = await supabase.auth.getUser(token);
-  if (error || !user) return null;
-  return user;
+  try {
+    return await createUserScopedClient(req);
+  } catch {
+    return null;
+  }
+}
+
+async function ensureDefaultStatuses(supabase: any, userId: string) {
+  const { data: existing, error } = await supabase
+    .from('pipeline_statuses')
+    .select('id')
+    .eq('user_id', userId)
+    .limit(1);
+
+  if (error || (existing && existing.length > 0)) return;
+
+  await supabase.from('pipeline_statuses').insert([
+    { user_id: userId, name: 'Researching', slug: 'researching', color: '#95A5A6', sort_order: 0, is_default: true, is_terminal: false },
+    { user_id: userId, name: 'Planned', slug: 'planned', color: '#3498DB', sort_order: 1, is_default: true, is_terminal: false },
+    { user_id: userId, name: 'LOI Submitted', slug: 'loi_submitted', color: '#9B59B6', sort_order: 2, is_default: true, is_terminal: false },
+    { user_id: userId, name: 'Application Submitted', slug: 'application_submitted', color: '#2ECC71', sort_order: 3, is_default: true, is_terminal: false },
+    { user_id: userId, name: 'Under Review', slug: 'under_review', color: '#F39C12', sort_order: 4, is_default: true, is_terminal: false },
+    { user_id: userId, name: 'Awarded', slug: 'awarded', color: '#27AE60', sort_order: 5, is_default: true, is_terminal: true },
+    { user_id: userId, name: 'Rejected', slug: 'rejected', color: '#E74C3C', sort_order: 6, is_default: true, is_terminal: true },
+    { user_id: userId, name: 'On Hold', slug: 'on_hold', color: '#BDC3C7', sort_order: 7, is_default: true, is_terminal: false },
+  ]);
 }
 
 Deno.serve(async (req: Request) => {
@@ -39,13 +54,12 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const user = await getUserFromRequest(req);
-    if (!user) return errorResponse(req, 'Unauthorized', 401);
-
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+    const auth = await getUserFromRequest(req);
+    if (!auth) return errorResponse(req, 'Unauthorized', 401);
+    const { supabase, user } = auth;
 
     // Ensure user has default statuses
-    await supabase.rpc('seed_pipeline_statuses', { p_user_id: user.id });
+    await ensureDefaultStatuses(supabase, user.id);
 
     if (req.method === 'GET') {
       const { data, error } = await supabase

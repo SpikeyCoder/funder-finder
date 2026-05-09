@@ -21,8 +21,6 @@ import { createUserScopedClient } from "../_shared/user-client.ts";
 
 // ── Config ──────────────────────────────────────────────────────────────────
 
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-const SUPABASE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') || '';
 const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY') || '';
 
@@ -46,13 +44,10 @@ function corsHeaders(requestOrigin: string | null): Record<string, string> {
   };
 }
 
-// ── Supabase client (service role for storage access) ───────────────────────
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-
 // ── Download file from Supabase Storage ─────────────────────────────────────
 
 async function downloadFile(
+  supabase: ReturnType<typeof createClient>,
   path: string,
 ): Promise<{ bytes: Uint8Array; mimeType: string } | null> {
   const { data, error } = await supabase.storage
@@ -108,7 +103,7 @@ Deno.serve(async (req) => {
 
   try {
     // Verify user is authenticated
-    const { user } = await createUserScopedClient(req);
+    const { supabase, user } = await createUserScopedClient(req);
 
     const body = await req.json();
     const funder = body.funder;
@@ -146,7 +141,7 @@ Deno.serve(async (req) => {
             const grantTexts: string[] = [];
 
             for (const path of uploadedFilePaths.slice(0, 3)) {
-              const file = await downloadFile(path);
+              const file = await downloadFile(supabase, path);
               if (file) {
                 try {
                   const text = await extractText(file.bytes, file.mimeType);

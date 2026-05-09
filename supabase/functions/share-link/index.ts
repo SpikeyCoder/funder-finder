@@ -1,5 +1,6 @@
 // Phase 4B: Shareable link management
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
+import { createUserScopedClient } from "../_shared/user-client.ts";
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
@@ -18,13 +19,15 @@ function json(req: Request, data: unknown, status = 200) {
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS(req) });
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
   const url = new URL(req.url);
 
   // Public access: GET with token param (no auth required)
   const token = url.searchParams.get('token');
   if (req.method === 'GET' && token) {
-    const { data: link } = await supabase
+    // Public token shares intentionally bypass user RLS: the token is the
+    // credential, and the response is scoped to that single active link.
+    const serviceRole = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+    const { data: link } = await serviceRole
       .from('shareable_links')
       .select('*, projects(id, name, description)')
       .eq('token', token)
@@ -35,20 +38,20 @@ Deno.serve(async (req: Request) => {
     if (link.expires_at && new Date(link.expires_at) < new Date()) return json(req, { error: 'Link expired' }, 410);
 
     // Increment view count & log access
-    await supabase.from('shareable_links').update({ view_count: link.view_count + 1 }).eq('id', link.id);
-    await supabase.from('access_log').insert({ link_id: link.id, user_agent: req.headers.get('user-agent') });
+    await serviceRole.from('shareable_links').update({ view_count: link.view_count + 1 }).eq('id', link.id);
+    await serviceRole.from('access_log').insert({ link_id: link.id, user_agent: req.headers.get('user-agent') });
 
     // Fetch project data based on scope
     let data: any = { project: link.projects, scope: link.scope };
 
     if (link.scope === 'tracker') {
-      const { data: grants } = await supabase
+      const { data: grants } = await serviceRole
         .from('tracked_grants')
         .select('id, funder_name, grant_title, status_id, deadline, awarded_amount, pipeline_statuses(name, color)')
         .eq('project_id', link.project_id);
       data.grants = grants;
     } else if (link.scope === 'portfolio') {
-      const { data: grants } = await supabase
+      const { data: grants } = await serviceRole
         .from('tracked_grants')
         .select('id, funder_name, grant_title, status_id, deadline, awarded_amount, pipeline_statuses(name, color, is_terminal)')
         .eq('project_id', link.project_id);
@@ -59,10 +62,13 @@ Deno.serve(async (req: Request) => {
   }
 
   // Authenticated endpoints
-  const authHeader = req.headers.get('authorization') || '';
-  const jwt = authHeader.replace('Bearer ', '');
-  const { data: { user }, error: authError } = await supabase.auth.getUser(jwt);
-  if (!user) return json(req, { error: 'Unauthorized' }, 401);
+  let auth;
+  try {
+    auth = await createUserScopedClient(req);
+  } catch {
+    return json(req, { error: 'Unauthorized' }, 401);
+  }
+  const { supabase, user } = auth;
 
   try {
     if (req.method === 'GET') {
@@ -77,6 +83,14 @@ Deno.serve(async (req: Request) => {
     if (req.method === 'POST') {
       const { project_id, scope = 'tracker', expires_in_days } = await req.json();
       if (!project_id) return json(req, { error: 'project_id required' }, 400);
+
+      const { data: project } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('id', project_id)
+        .eq('user_id', user.id)
+        .single();
+      if (!project) return json(req, { error: 'Project not found' }, 404);
 
       const expires_at = expires_in_days ? new Date(Date.now() + expires_in_days * 86400000).toISOString() : null;
 

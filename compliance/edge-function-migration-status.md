@@ -3,7 +3,7 @@ title: Edge Function SERVICE_ROLE_KEY → User-Scoped Migration Status
 tsc: CC6, CC8
 owner: Kevin Armstrong
 review-cadence: monthly
-last-reviewed: 2026-05-08
+last-reviewed: 2026-05-09
 relates-to: supabase/functions/_shared/user-client.ts, src/lib/supabase.ts
 ---
 
@@ -24,27 +24,31 @@ any function that can run on behalf of an authenticated user —
 those should mint a per-request client from the caller's JWT
 instead. See risk-register entry **R-01**.
 
-## Current state — 2026-05-08
+## Current state — 2026-05-09
 
 | Function | Uses SERVICE_ROLE_KEY today | Migration plan |
 |---|---|---|
 | `ai-draft` | No (user-scoped) | ✅ Migrated |
+| `pipeline-statuses` | No (user-scoped) | ✅ Migrated. The edge function now seeds missing defaults with user-scoped inserts instead of the revoked `seed_pipeline_statuses(uuid)` RPC. |
+| `grant-writer` | No (user-scoped) | ✅ Migrated. Uploaded grant files are downloaded through the caller's user-scoped storage client. |
 | `match-funders` | Yes | RLS policies on `recipient_organizations` and `foundation_grants` are in place (migration `20260502151459_phase1_rls_foundation.sql`) — function eligible for Phase 4 cutover. |
 | `compute-peers` | Yes | Public reference data only; eligible for Phase 4. |
 | `update-ntee-codes` | Yes | Scheduled task — keep as service-role (no end-user request). |
 | `process-notifications` | Yes | Scheduled task — keep as service-role. |
 | `team-invite` | Yes | Cross-user write (insert into `invitations`) — keep as service-role with explicit RLS-bypass justification documented in function header. |
-| `share-link` | Yes | Public-by-token GET path needs service-role for unauth reads; authenticated POST/DELETE paths can move to user-scoped. |
+| `share-link` | Partial | Public-by-token GET path keeps service-role for unauth reads; authenticated GET/POST/DELETE paths now use the caller's user-scoped client. |
 | `suggest-peers` | Yes | Eligible for Phase 4. |
 | `check-deadlines` | Yes | Scheduled task — keep as service-role. |
 | `calendar-feed` | Yes | Public-by-token (.ics) — keep service-role for token-scoped reads. |
 | `send-reminders` | Yes | Scheduled task — keep as service-role. |
-| `pipeline-statuses` | Yes | Eligible for Phase 4. |
 | `filter-funders` | Yes | Eligible for Phase 4. |
-| `grant-writer` | Yes | Eligible for Phase 4. |
 | `log-search-signal` | Yes | Anonymous logging — keep service-role; rate-limited. |
 | `get-funder-990-insights` | Yes | Eligible for Phase 4. |
 | `report-bug` | N/A (Trello key only) | ✅ No service-role |
+
+Current grep count: 13 Edge Function files still read
+`SUPABASE_SERVICE_ROLE_KEY`; one of those (`share-link`) is now limited to
+the public-token branch only.
 
 ## Ownership and cadence
 
