@@ -59,6 +59,14 @@ html.light-mode .bg-\[\#21262d\] {
   background-color: #eaeef2;
 }
 
+html.light-mode .bg-\[\#111723\] {
+  background-color: #f6f8fa;
+}
+
+html.light-mode .bg-\[\#0d1421\] {
+  background-color: #f6f8fa;
+}
+
 html.light-mode .border-\[\#30363d\] {
   border-color: #d1d9e0;
 }
@@ -197,4 +205,32 @@ html.light-mode .hover\:text-\[\#58a6ff\]:hover {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+
+/* In light mode, the global text-white remap (above) turns text dark, which
+   breaks primary buttons that pair white text with a saturated colored
+   background (e.g. bg-blue-600 text-white "Add Grant" button). Keep the text
+   white when the same element also carries a saturated 600/700/800 bg. */
+html.light-mode [class*="text-white"][class*="bg-blue-6"],
+html.light-mode [class*="text-white"][class*="bg-blue-7"],
+html.light-mode [class*="text-white"][class*="bg-blue-8"],
+html.light-mode [class*="text-white"][class*="bg-green-6"],
+html.light-mode [class*="text-white"][class*="bg-green-7"],
+html.light-mode [class*="text-white"][class*="bg-green-8"],
+html.light-mode [class*="text-white"][class*="bg-red-6"],
+html.light-mode [class*="text-white"][class*="bg-red-7"],
+html.light-mode [class*="text-white"][class*="bg-red-8"],
+html.light-mode [class*="text-white"][class*="bg-purple-6"],
+html.light-mode [class*="text-white"][class*="bg-purple-7"],
+html.light-mode [class*="text-white"][class*="bg-purple-8"],
+html.light-mode [class*="text-white"][class*="bg-amber-6"],
+html.light-mode [class*="text-white"][class*="bg-amber-7"],
+html.light-mode [class*="text-white"][class*="bg-orange-6"],
+html.light-mode [class*="text-white"][class*="bg-orange-7"],
+html.light-mode [class*="text-white"][class*="bg-pink-6"],
+html.light-mode [class*="text-white"][class*="bg-pink-7"],
+html.light-mode [class*="text-white"][class*="bg-indigo-6"],
+html.light-mode [class*="text-white"][class*="bg-indigo-7"] {
+  color: #ffffff;
 }

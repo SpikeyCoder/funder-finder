@@ -327,8 +327,17 @@ const BrowsePage: React.FC = () => {
           <div className="flex-1 overflow-auto">
             {displayedResults.length > 0 ? (
               <>
-              <table className="w-full text-sm browse-table hidden md:table">
+              <table className="w-full text-sm browse-table hidden md:table" style={{ tableLayout: 'fixed' }}>
                 <caption className="sr-only">Funder search results table</caption>
+                <colgroup>
+                  <col style={{ width: '32%', minWidth: '180px' }} />
+                  <col style={{ width: '8%', minWidth: '60px' }} />
+                  <col style={{ width: '14%', minWidth: '90px' }} />
+                  <col style={{ width: '14%', minWidth: '110px' }} />
+                  <col style={{ width: '14%', minWidth: '110px' }} className="hidden md:table-column" />
+                  <col style={{ width: '8%', minWidth: '70px' }} className="hidden md:table-column" />
+                  <col style={{ width: '10%', minWidth: '100px' }} />
+                </colgroup>
                 <thead className="sticky top-0 bg-[#161b22] border-b border-[#30363d]">
                   <tr>
                     <th scope="col" className="px-4 py-3 text-left text-gray-400 font-medium">
@@ -358,12 +367,13 @@ const BrowsePage: React.FC = () => {
                       key={`${funder.ein}-${idx}`}
                       className="border-b border-[#30363d] hover:bg-[#161b22] transition-colors"
                     >
-                      <td data-label="Funder" className="px-4 py-3 text-white max-w-[250px]">
+                      <td data-label="Funder" className="px-4 py-3 text-white overflow-hidden">
                         <button
                           onClick={() => navigate(`/funder/${funder.ein}`)}
-                          className="text-[#58a6ff] hover:underline flex items-center gap-2 min-w-0 text-left"
+                          className="text-[#58a6ff] hover:underline flex items-center gap-2 min-w-0 max-w-full text-left w-full"
+                          title={funder.name}
                         >
-                          <span className="truncate">{funder.name}</span>
+                          <span className="truncate min-w-0 flex-1">{funder.name}</span>
                           <ExternalLink size={14} className="opacity-50 flex-shrink-0" />
                         </button>
                         </td>

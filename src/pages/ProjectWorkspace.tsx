@@ -459,16 +459,26 @@ export default function ProjectWorkspace() {
 
   // Update grant status
   const handleUpdateGrantStatus = async (grantId: string, statusId: string) => {
+    const previous = trackedGrants;
+    // Optimistic update
+    setTrackedGrants(prev => prev.map(g => g.id === grantId ? { ...g, status_id: statusId, pipeline_statuses: pipelineStatuses.find(s => s.id === statusId) ? { name: pipelineStatuses.find(s => s.id === statusId)!.name, slug: pipelineStatuses.find(s => s.id === statusId)!.slug, color: pipelineStatuses.find(s => s.id === statusId)!.color, is_terminal: pipelineStatuses.find(s => s.id === statusId)!.is_terminal } : g.pipeline_statuses } : g));
     try {
       const headers = await getEdgeFunctionHeaders();
-      await fetch(TRACKED_GRANTS_URL, {
+      const res = await fetch(TRACKED_GRANTS_URL, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...headers },
         body: JSON.stringify({ id: grantId, status_id: statusId }),
       });
-      setTrackedGrants(prev => prev.map(g => g.id === grantId ? { ...g, status_id: statusId, pipeline_statuses: pipelineStatuses.find(s => s.id === statusId) ? { name: pipelineStatuses.find(s => s.id === statusId)!.name, slug: pipelineStatuses.find(s => s.id === statusId)!.slug, color: pipelineStatuses.find(s => s.id === statusId)!.color, is_terminal: pipelineStatuses.find(s => s.id === statusId)!.is_terminal } : g.pipeline_statuses } : g));
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        setError(errBody.error || `Failed to update status (HTTP ${res.status})`);
+        // Revert optimistic update
+        setTrackedGrants(previous);
+      }
     } catch (err) {
       console.error('Error updating grant status:', err);
+      setError(err instanceof Error ? err.message : 'Failed to update grant status');
+      setTrackedGrants(previous);
     }
   };
 
@@ -503,6 +513,8 @@ export default function ProjectWorkspace() {
   // Add external grant
   const handleAddExternalGrant = async () => {
     if (!newGrant.funder_name.trim()) return;
+    setSaving(true);
+    setError(null);
     try {
       const headers = await getEdgeFunctionHeaders();
       const res = await fetch(TRACKED_GRANTS_URL, {
@@ -525,9 +537,15 @@ export default function ProjectWorkspace() {
         setAddGrantOpen(false);
         setNewGrant({ funder_name: '', grant_title: '', amount: '', deadline: '', grant_url: '', notes: '', status_slug: 'researching' });
         await loadTrackerData();
+      } else {
+        const errBody = await res.json().catch(() => ({}));
+        setError(errBody.error || `Failed to add grant (HTTP ${res.status})`);
       }
     } catch (err) {
       console.error('Error adding grant:', err);
+      setError(err instanceof Error ? err.message : 'Failed to add grant');
+    } finally {
+      setSaving(false);
     }
   };
 
