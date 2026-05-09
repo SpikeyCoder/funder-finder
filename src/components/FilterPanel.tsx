@@ -102,10 +102,8 @@ const FUNDING_TYPES = [
 ];
 
 const FUNDER_TYPES = [
-  { id: 'private_foundation', label: 'Private Foundation' },
-  { id: 'community_foundation', label: 'Community Foundation' },
+  { id: 'foundation', label: 'Foundation' },
   { id: 'corporate', label: 'Corporate' },
-  { id: 'government', label: 'Government' },
   { id: 'daf', label: 'Donor Advised Fund' },
 ];
 

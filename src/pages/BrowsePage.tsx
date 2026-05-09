@@ -35,6 +35,22 @@ interface FilterResponse {
 type SortField = 'name' | 'state' | 'entity_type' | 'avg_grant_size' | 'total_giving' | 'grant_count';
 type SortOrder = 'asc' | 'desc';
 
+const VALID_FUNDER_TYPES = new Set(['foundation', 'corporate', 'daf']);
+const LEGACY_FUNDER_TYPE_MAP: Record<string, string> = {
+  private_foundation: 'foundation',
+  community_foundation: 'foundation',
+};
+
+function normalizeFunderTypes(types: string[]): string[] {
+  return Array.from(
+    new Set(
+      types
+        .map((type) => LEGACY_FUNDER_TYPE_MAP[type] ?? type)
+        .filter((type) => VALID_FUNDER_TYPES.has(type))
+    )
+  );
+}
+
 /** Convert a Browse FunderResult to a minimal Funder so QuickSaveButton can persist it. */
 function toFunder(r: FunderResult): Funder {
   return {
@@ -107,7 +123,9 @@ const BrowsePage: React.FC = () => {
     const states = params.get('states')?.split(',').filter(Boolean) || [];
     const ntee = params.get('ntee')?.split(',').filter(Boolean) || [];
     const fundingTypes = params.get('funding_types')?.split(',').filter(Boolean) || [];
-    const funderTypes = params.get('funder_types')?.split(',').filter(Boolean) || [];
+    const funderTypes = normalizeFunderTypes(
+      params.get('funder_types')?.split(',').filter(Boolean) || []
+    );
     const minGrant = params.get('min_grant') ? parseInt(params.get('min_grant')!) : null;
     const maxGrant = params.get('max_grant') ? parseInt(params.get('max_grant')!) : null;
     const keyword = params.get('keyword') || '';
@@ -129,6 +147,7 @@ const BrowsePage: React.FC = () => {
 
   const updateUrlParams = (newFilters: FilterState) => {
     const params = new URLSearchParams();
+    const normalizedFunderTypes = normalizeFunderTypes(newFilters.funder_types);
 
     if (newFilters.states.length > 0) {
       params.set('states', newFilters.states.join(','));
@@ -139,8 +158,8 @@ const BrowsePage: React.FC = () => {
     if (newFilters.funding_types.length > 0) {
       params.set('funding_types', newFilters.funding_types.join(','));
     }
-    if (newFilters.funder_types.length > 0) {
-      params.set('funder_types', newFilters.funder_types.join(','));
+    if (normalizedFunderTypes.length > 0) {
+      params.set('funder_types', normalizedFunderTypes.join(','));
     }
     if (newFilters.grant_size_min !== null) {
       params.set('min_grant', newFilters.grant_size_min.toString());
@@ -172,7 +191,7 @@ const BrowsePage: React.FC = () => {
           states: newFilters.states,
           ntee_codes: newFilters.ntee_codes,
           funding_types: newFilters.funding_types,
-          funder_types: newFilters.funder_types,
+          funder_types: normalizeFunderTypes(newFilters.funder_types),
           grant_size_min: newFilters.grant_size_min,
           grant_size_max: newFilters.grant_size_max,
           gives_to_peers: newFilters.gives_to_peers,

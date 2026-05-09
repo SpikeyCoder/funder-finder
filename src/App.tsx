@@ -1,41 +1,48 @@
 import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
-import { useEffect, useRef } from 'react';
+import { Suspense, lazy, useEffect, useRef } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import AnalyticsTracker from './components/AnalyticsTracker';
 import AuthGuard from './components/AuthGuard';
 import FeatureTooltips from './components/FeatureTooltip';
-import Landing from './pages/Landing';
-import MissionInput from './pages/MissionInput';
-import Results from './pages/Results';
-import FunderDetail from './pages/FunderDetail';
-import SavedFunders from './pages/SavedFunders';
-import GrantWriter from './pages/GrantWriter';
-import OrgSearchPage from './pages/OrgSearchPage';
-import RecipientProfile from './pages/RecipientProfile';
-import LoginPage from './pages/LoginPage';
-import SignupPage from './pages/SignupPage';
-import DashboardPage from './pages/DashboardPage';
-import NewProjectPage from './pages/NewProjectPage';
-import ProjectWorkspace from './pages/ProjectWorkspace';
-import BrowsePage from './pages/BrowsePage';
-import UserSettingsPage from './pages/UserSettingsPage';
-import PortfolioPage from './pages/PortfolioPage';
-import MyTasksPage from './pages/MyTasksPage';
-import TeamSettingsPage from './pages/TeamSettingsPage';
-import SharedViewPage from './pages/SharedViewPage';
-import ReportsPage from './pages/ReportsPage';
-import ApplicationsPage from './pages/ApplicationsPage';
-import MigrationImportPage from './pages/MigrationImportPage';
-import OnboardingPage from './pages/OnboardingPage';
-import NotFound from './pages/NotFound';
-import PrivacyPolicy from './pages/PrivacyPolicy';
-import ContactPage from './pages/ContactPage';
-import TermsOfService from './pages/TermsOfService';
 import BugReportButton from './components/BugReportButton';
 import ThemeToggle from './components/ThemeToggle';
 
 // Must match the key used in AuthContext.storePendingFunder
 const REDIRECT_AFTER_LOGIN_KEY = 'ff_redirect_after_login';
+
+const Landing = lazy(() => import('./pages/Landing'));
+const MissionInput = lazy(() => import('./pages/MissionInput'));
+const Results = lazy(() => import('./pages/Results'));
+const FunderDetail = lazy(() => import('./pages/FunderDetail'));
+const SavedFunders = lazy(() => import('./pages/SavedFunders'));
+const GrantWriter = lazy(() => import('./pages/GrantWriter'));
+const OrgSearchPage = lazy(() => import('./pages/OrgSearchPage'));
+const RecipientProfile = lazy(() => import('./pages/RecipientProfile'));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const SignupPage = lazy(() => import('./pages/SignupPage'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const NewProjectPage = lazy(() => import('./pages/NewProjectPage'));
+const ProjectWorkspace = lazy(() => import('./pages/ProjectWorkspace'));
+const BrowsePage = lazy(() => import('./pages/BrowsePage'));
+const UserSettingsPage = lazy(() => import('./pages/UserSettingsPage'));
+const PortfolioPage = lazy(() => import('./pages/PortfolioPage'));
+const MyTasksPage = lazy(() => import('./pages/MyTasksPage'));
+const TeamSettingsPage = lazy(() => import('./pages/TeamSettingsPage'));
+const SharedViewPage = lazy(() => import('./pages/SharedViewPage'));
+const ReportsPage = lazy(() => import('./pages/ReportsPage'));
+const ApplicationsPage = lazy(() => import('./pages/ApplicationsPage'));
+const MigrationImportPage = lazy(() => import('./pages/MigrationImportPage'));
+const OnboardingPage = lazy(() => import('./pages/OnboardingPage'));
+const NotFound = lazy(() => import('./pages/NotFound'));
+const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
+const ContactPage = lazy(() => import('./pages/ContactPage'));
+const TermsOfService = lazy(() => import('./pages/TermsOfService'));
+
+const RouteFallback = () => (
+  <div className="min-h-[40vh] flex items-center justify-center text-gray-400 text-sm">
+    Loading...
+  </div>
+);
 
 // Wrap Routes in a component that reads location so we can key on pathname.
 // Changing the key forces a remount, which re-triggers the CSS fade-in animation.
@@ -81,51 +88,53 @@ function AnimatedRoutes() {
 
   return (
     <div key={location.pathname} className="page-fade-in">
-      <Routes location={location}>
-        {/* Public routes */}
-        <Route path="/" element={<Landing />} />
-        <Route path="/mission" element={<MissionInput />} />
-        <Route path="/results" element={<Results />} />
-        <Route path="/funder/:id" element={<FunderDetail />} />
-        <Route path="/saved" element={<SavedFunders />} />
-        <Route path="/grant-writer" element={<GrantWriter />} />
-        <Route path="/search" element={<OrgSearchPage />} />
-        <Route path="/recipient/:id" element={<RecipientProfile />} />
-        <Route path="/browse" element={<BrowsePage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/signup" element={<SignupPage />} />
+      <Suspense fallback={<RouteFallback />}>
+        <Routes location={location}>
+          {/* Public routes */}
+          <Route path="/" element={<Landing />} />
+          <Route path="/mission" element={<MissionInput />} />
+          <Route path="/results" element={<Results />} />
+          <Route path="/funder/:id" element={<FunderDetail />} />
+          <Route path="/saved" element={<SavedFunders />} />
+          <Route path="/grant-writer" element={<GrantWriter />} />
+          <Route path="/search" element={<OrgSearchPage />} />
+          <Route path="/recipient/:id" element={<RecipientProfile />} />
+          <Route path="/browse" element={<BrowsePage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignupPage />} />
 
-        {/* Auth-gated routes */}
-        <Route path="/dashboard" element={<AuthGuard><DashboardPage /></AuthGuard>} />
-        <Route path="/projects/new" element={<AuthGuard><NewProjectPage /></AuthGuard>} />
-        <Route path="/projects/:id" element={<AuthGuard><ProjectWorkspace /></AuthGuard>} />
-        <Route path="/projects/:id/matches" element={<AuthGuard><ProjectWorkspace /></AuthGuard>} />
-        <Route path="/projects/:id/tracker" element={<AuthGuard><ProjectWorkspace /></AuthGuard>} />
-        <Route path="/projects/:id/calendar" element={<AuthGuard><ProjectWorkspace /></AuthGuard>} />
-        <Route path="/projects/:id/peers" element={<AuthGuard><ProjectWorkspace /></AuthGuard>} />
-        <Route path="/projects/:id/settings" element={<AuthGuard><ProjectWorkspace /></AuthGuard>} />
-        <Route path="/settings" element={<AuthGuard><UserSettingsPage /></AuthGuard>} />
-        <Route path="/settings/team" element={<AuthGuard><TeamSettingsPage /></AuthGuard>} />
-        <Route path="/settings/team/activity" element={<AuthGuard><TeamSettingsPage /></AuthGuard>} />
-        <Route path="/portfolio" element={<AuthGuard><PortfolioPage /></AuthGuard>} />
-        <Route path="/tasks" element={<AuthGuard><MyTasksPage /></AuthGuard>} />
-        <Route path="/reports" element={<AuthGuard><ReportsPage /></AuthGuard>} />
-        <Route path="/applications" element={<AuthGuard><ApplicationsPage /></AuthGuard>} />
-        <Route path="/import" element={<AuthGuard><MigrationImportPage /></AuthGuard>} />
-        <Route path="/onboarding/welcome" element={<AuthGuard><OnboardingPage /></AuthGuard>} />
-        <Route path="/onboarding/profile" element={<AuthGuard><OnboardingPage /></AuthGuard>} />
-        <Route path="/onboarding/first-project" element={<AuthGuard><OnboardingPage /></AuthGuard>} />
-        <Route path="/onboarding/matches" element={<AuthGuard><OnboardingPage /></AuthGuard>} />
-        <Route path="/onboarding/save" element={<AuthGuard><OnboardingPage /></AuthGuard>} />
+          {/* Auth-gated routes */}
+          <Route path="/dashboard" element={<AuthGuard><DashboardPage /></AuthGuard>} />
+          <Route path="/projects/new" element={<AuthGuard><NewProjectPage /></AuthGuard>} />
+          <Route path="/projects/:id" element={<AuthGuard><ProjectWorkspace /></AuthGuard>} />
+          <Route path="/projects/:id/matches" element={<AuthGuard><ProjectWorkspace /></AuthGuard>} />
+          <Route path="/projects/:id/tracker" element={<AuthGuard><ProjectWorkspace /></AuthGuard>} />
+          <Route path="/projects/:id/calendar" element={<AuthGuard><ProjectWorkspace /></AuthGuard>} />
+          <Route path="/projects/:id/peers" element={<AuthGuard><ProjectWorkspace /></AuthGuard>} />
+          <Route path="/projects/:id/settings" element={<AuthGuard><ProjectWorkspace /></AuthGuard>} />
+          <Route path="/settings" element={<AuthGuard><UserSettingsPage /></AuthGuard>} />
+          <Route path="/settings/team" element={<AuthGuard><TeamSettingsPage /></AuthGuard>} />
+          <Route path="/settings/team/activity" element={<AuthGuard><TeamSettingsPage /></AuthGuard>} />
+          <Route path="/portfolio" element={<AuthGuard><PortfolioPage /></AuthGuard>} />
+          <Route path="/tasks" element={<AuthGuard><MyTasksPage /></AuthGuard>} />
+          <Route path="/reports" element={<AuthGuard><ReportsPage /></AuthGuard>} />
+          <Route path="/applications" element={<AuthGuard><ApplicationsPage /></AuthGuard>} />
+          <Route path="/import" element={<AuthGuard><MigrationImportPage /></AuthGuard>} />
+          <Route path="/onboarding/welcome" element={<AuthGuard><OnboardingPage /></AuthGuard>} />
+          <Route path="/onboarding/profile" element={<AuthGuard><OnboardingPage /></AuthGuard>} />
+          <Route path="/onboarding/first-project" element={<AuthGuard><OnboardingPage /></AuthGuard>} />
+          <Route path="/onboarding/matches" element={<AuthGuard><OnboardingPage /></AuthGuard>} />
+          <Route path="/onboarding/save" element={<AuthGuard><OnboardingPage /></AuthGuard>} />
 
-        {/* Public shared view (no auth required) */}
-        <Route path="/shared/:token" element={<SharedViewPage />} />
-        <Route path="/privacy" element={<PrivacyPolicy />} />
-        <Route path="/contact" element={<ContactPage />} />
-        <Route path="/terms" element={<TermsOfService />} />
+          {/* Public shared view (no auth required) */}
+          <Route path="/shared/:token" element={<SharedViewPage />} />
+          <Route path="/privacy" element={<PrivacyPolicy />} />
+          <Route path="/contact" element={<ContactPage />} />
+          <Route path="/terms" element={<TermsOfService />} />
 
-        <Route path="*" element={<NotFound />} />
-      </Routes>
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </Suspense>
     </div>
   );
 }
