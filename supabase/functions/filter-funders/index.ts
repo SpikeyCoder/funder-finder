@@ -30,10 +30,18 @@ Deno.serve(async (req: Request) => {
       // Auth is optional for public browse queries.
     }
 
-    // Public browse search is anonymous; SQL function handles grant-level filtering.
+    // Read mv_funder_search_index with the service-role key.
+    //
+    // Migration 20260408153622_fix_materialized_view_api_exposure REVOKEd
+    // SELECT on this matview from `anon` and `authenticated` to keep it off
+    // the public PostgREST surface. The matview holds only 990-derived
+    // public funder data, so reading it from the function with elevated
+    // privileges is fine — auth-gated paths below (peer filtering, etc.)
+    // still use the user-scoped client so per-user authorization is
+    // unchanged.
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body = await req.json();
     const {
