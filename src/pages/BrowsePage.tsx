@@ -194,6 +194,10 @@ const BrowsePage: React.FC = () => {
     currentAbortControllerRef.current = abortController;
     const requestId = ++latestRequestIdRef.current;
 
+    // Clear previous rows immediately so stale data is not shown while
+    // slower filtered queries are still running.
+    setResults([]);
+    setTotalCount(0);
     setLoading(true);
     setError(null);
 
