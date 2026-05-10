@@ -53,16 +53,6 @@ Deno.serve(async (req: Request) => {
 
     // ── Gather context ────────────────────────────────────────────────────
 
-    // Get project info
-    const { data: project } = await supabase
-      .from('projects')
-      .select('name, description, location_scope, fields_of_work, keywords')
-      .eq('id', project_id)
-      .single();
-
-    // Get grant info
-    } = await req.json();
-
     // Load grant, project, and user profile in parallel
     const [grantInfo, project, userProfile] = await Promise.all([
       grant_id
@@ -81,7 +71,6 @@ Deno.serve(async (req: Request) => {
     // ── Load reference documents ──────────────────────────────────────────
 
     let referenceDocContent = '';
-    const reference_doc_ids = Array.isArray(prompt) ? [] : [];
     if (reference_doc_ids.length > 0) {
       const { data: refDocs } = await supabase
         .from('application_knowledge_base')
