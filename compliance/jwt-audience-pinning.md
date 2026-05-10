@@ -11,25 +11,20 @@ relates-to: supabase/functions/_shared/user-client.ts
 
 ## Background
 
-Commit `503973d` (2026-05-09) replaced the per-request HTTP roundtrip
-to `/auth/v1/user` with **local HS256 verification** of the caller's
-JWT in `supabase/functions/_shared/user-client.ts`. Local verification
-fixed an availability bug (the auth-service occasionally returned an
-HTML error page that supabase-js could not JSON-parse, surfacing as
-"JWT verification failed: Unexpected token '<', '<html>...' is not
-valid JSON" on the Tracker tab) and removed a per-request dependency
-on the auth service.
+`supabase/functions/_shared/user-client.ts` verifies the caller's JWT
+by calling `supabase.auth.getUser(token)` against `/auth/v1/user`, with
+a small retry loop to absorb the transient gateway failures that
+previously surfaced as "JWT verification failed: Unexpected token '<',
+'<html>...' is not valid JSON" on the Tracker tab. Keeping the auth
+service as the source of truth means password resets, bans, and
+JWT-secret rotations take effect immediately, rather than on token
+expiry.
 
-The local verifier as shipped on 2026-05-09 checks:
-
-- `header.alg === 'HS256'` (no algorithm-confusion attack)
-- HMAC signature using `SUPABASE_JWT_SECRET`, compared in constant time
-- `exp` (expiry) and `nbf` (not-before) bounds
-- `sub` claim is a non-empty string (used as `user.id`)
-
-It did **not** check `aud` (audience) or `is_anonymous`. The Supabase
+Before this PR, the verifier checked only that `getUser` returned a
+non-error response with a `user` object — it did not inspect the
+`aud` (audience) or `is_anonymous` fields on that user. The Supabase
 authentication docs explicitly recommend pinning `aud === "authenticated"`
-when verifying tokens locally (https://supabase.com/docs/guides/auth/jwts).
+when verifying tokens (https://supabase.com/docs/guides/auth/jwts).
 
 ## Threat model — pen-test 2026-05-10 finding FM-2026-05-10-01
 
@@ -57,10 +52,17 @@ Without an `aud` check, the user-scoped client accepts:
 
 ## Control implemented (PR #65)
 
-`verifyJWTLocally` now requires `payload.aud === "authenticated"` and
-explicitly rejects `payload.is_anonymous === true`. The new constant
-`EXPECTED_AUDIENCE` is module-scoped so future callers can re-import it
-if needed. Failure modes:
+After `supabase.auth.getUser(token)` returns successfully,
+`createUserScopedClient` (and `extractAndVerifyJWT`) now call
+`enforceAudienceAndIdentity`, which:
+
+- requires `user.aud === "authenticated"` (`EXPECTED_AUDIENCE` constant
+  is module-scoped so future callers can re-import it if needed); and
+- rejects `user.is_anonymous === true`.
+
+Both checks run on the user object returned by the Supabase Auth
+service, so they reflect the canonical claims the auth service itself
+attaches to the token. Failure modes:
 
 | Token type | Behaviour before | Behaviour after |
 |---|---|---|
@@ -68,21 +70,24 @@ if needed. Failure modes:
 | Service-role JWT | Accepted as user | **401** with "unexpected audience service_role" |
 | Anonymous-auth JWT | Accepted as user | **401** with "anonymous tokens not accepted" |
 | Token with no `aud` claim | Accepted as user | **401** with "unexpected audience undefined" |
-| Expired / nbf-in-future / wrong signature | 401 | 401 (unchanged) |
+| Expired / wrong signature | 401 | 401 (unchanged — surfaced by `getUser`) |
 
 ## Verification
 
 After deploy:
 
 1. Sign in normally and confirm Tracker / Dashboard / Projects continue
-   to load. (Regression check: the 2026-05-09 fix that prompted local
-   verification stays intact.)
+   to load. (Regression check: the retry loop must keep absorbing the
+   transient HTML/5xx responses from `/auth/v1/user` so the original
+   "Unexpected token '<'" error stays gone.)
 2. Mint a service-role JWT in Supabase Studio, copy it into an
    `Authorization: Bearer ...` header, and confirm any user-scoped
-   Edge Function returns **401**.
+   Edge Function returns **401** with body containing
+   "unexpected audience service_role".
 3. (Optional) If anonymous auth is ever enabled at the project level,
    `signInAnonymously()` followed by an Edge Function call should
-   return **401** until the function is explicitly opted in.
+   return **401** with "anonymous tokens not accepted" until the
+   function is explicitly opted in.
 
 ## References
 
