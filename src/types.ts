@@ -373,6 +373,21 @@ export interface OnboardingProgress {
   completed_at: string | null;
 }
 
+// ── Grant Drafts types ──────────────────────────────────────────────────────
+
+export interface GrantDraft {
+  id: string;
+  user_id: string;
+  funder_id: string;
+  funder_name: string;
+  funder_ein: string | null;
+  title: string;
+  content: string;
+  mission: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // ── Peer Intelligence types ─────────────────────────────────────────────────
 
 export interface PeerEntry {
