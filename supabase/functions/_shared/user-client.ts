@@ -37,6 +37,7 @@ interface UserScopedClientResult {
 }
 
 const TEXT_ENCODER = new TextEncoder();
+const EXPECTED_AUDIENCE = 'authenticated';
 
 function base64UrlDecode(input: string): Uint8Array {
   const padded = input.replace(/-/g, '+').replace(/_/g, '/');
@@ -112,6 +113,27 @@ async function verifyJWTLocally(token: string): Promise<VerifiedUser> {
 
   if (typeof payload.sub !== 'string' || payload.sub.length === 0) {
     throw new Error('JWT verification failed: missing sub claim');
+  }
+
+  // Audience pinning. Supabase mints user JWTs with `aud: "authenticated"`
+  // and service-role JWTs with `aud: "service_role"`. We only accept
+  // "authenticated" here, since the user-scoped client surface is for
+  // end-user requests. This rejects:
+  //   * Anonymous-auth JWTs if the project setting is ever enabled
+  //     (`signInAnonymously()` mints "authenticated" audience but
+  //     `is_anonymous: true`; we additionally reject those below).
+  //   * Service-role JWTs accidentally forwarded from the browser.
+  //   * Tokens minted for a different audience by an attacker who
+  //     somehow obtained the shared SUPABASE_JWT_SECRET (defense-in-
+  //     depth against secret reuse across environments).
+  // Pen-test 2026-05-10 finding FM-2026-05-10-01.
+  if (payload.aud !== EXPECTED_AUDIENCE) {
+    throw new Error(
+      `JWT verification failed: unexpected audience ${String(payload.aud)}`,
+    );
+  }
+  if (payload.is_anonymous === true) {
+    throw new Error('JWT verification failed: anonymous tokens not accepted');
   }
 
   return {
