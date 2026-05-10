@@ -1,6 +1,7 @@
 // Phase 4B: Shareable link management
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { createUserScopedClient } from "../_shared/user-client.ts";
+import { ipRateLimit } from "../_shared/rate_limit.ts";
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
@@ -24,6 +25,19 @@ Deno.serve(async (req: Request) => {
   // Public access: GET with token param (no auth required)
   const token = url.searchParams.get('token');
   if (req.method === 'GET' && token) {
+    // Defense-in-depth per-IP rate limit (60 req/min/IP) on the public,
+    // unauthenticated GET-by-token path. Token entropy already makes
+    // online brute-force impractical (two concatenated gen_random_uuid()
+    // values, ~256 bits); the rate limit short-circuits token-replay
+    // floods before they touch the SELECT, and surfaces abuse signals as
+    // 429s in the access log. Mirrors the calendar-feed pattern (PR #62,
+    // finding FM-2026-05-09-01) -- pen-test 2026-05-10 finding
+    // FM-2026-05-10-02 closes the parallel gap on share-link.
+    const limited = await ipRateLimit(req, {
+      namespace: "share-link-public-get",
+      extraHeaders: CORS(req),
+    });
+    if (!limited.allow && limited.response) return limited.response;
     // Public token shares intentionally bypass user RLS: the token is the
     // credential, and the response is scoped to that single active link.
     const serviceRole = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
