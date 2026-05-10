@@ -234,3 +234,76 @@ html.light-mode [class*="text-white"][class*="bg-indigo-6"],
 html.light-mode [class*="text-white"][class*="bg-indigo-7"] {
   color: #ffffff;
 }
+
+
+/* ==============================================================
+   Light-mode WCAG fixes (added by automated bug fixer 2026-05-10)
+   ==============================================================
+   Addresses bug reports about:
+   - Error banners unreadable in light mode (#1, #8)
+   - Black-on-blue brand-color button buttons (#4)
+   - Low-contrast hover/highlight states (#11)
+*/
+
+/* 1. Error / warning banners ---------------------------------- */
+/*    Match the very common pattern <div class="bg-red-900/20 border border-red-800 text-red-200">
+      Tailwind compiles `bg-red-900/20` to a CSS var on the parent and an opacity
+      modifier; the resulting class string contains "bg-red-900". Match on that. */
+html.light-mode [class*="bg-red-900"][class*="text-red-2"],
+html.light-mode [class*="bg-red-900"][class*="text-red-3"],
+html.light-mode [class*="bg-red-800"][class*="text-red-2"],
+html.light-mode [class*="bg-red-800"][class*="text-red-3"] {
+  background-color: #fef2f2 !important;
+  border-color: #fca5a5 !important;
+  color: #991b1b !important;
+}
+
+/* Generic alert blocks using yellow / amber for warnings */
+html.light-mode [class*="bg-yellow-900"][class*="text-yellow-2"],
+html.light-mode [class*="bg-yellow-900"][class*="text-yellow-3"],
+html.light-mode [class*="bg-amber-900"][class*="text-amber-2"],
+html.light-mode [class*="bg-amber-900"][class*="text-amber-3"] {
+  background-color: #fffbeb !important;
+  border-color: #fcd34d !important;
+  color: #92400e !important;
+}
+
+/* 2. Brand-blue buttons (#58a6ff, #1f6feb) -------------------- */
+/*    These pair `bg-[#58a6ff] text-white`. The global text-white remap turns
+      the text dark, producing low contrast against the lighter blue. Force
+      the readable combination by overriding both. */
+html.light-mode [class*="bg-[#58a6ff]"][class*="text-white"] {
+  background-color: #0969da !important;  /* darker blue, AAA on white text */
+  color: #ffffff !important;
+}
+
+html.light-mode [class*="bg-[#1f6feb]"][class*="text-white"] {
+  background-color: #0858c4 !important;
+  color: #ffffff !important;
+}
+
+html.light-mode [class*="bg-[#388bfd]"][class*="text-white"] {
+  background-color: #0969da !important;
+  color: #ffffff !important;
+}
+
+/* 3. Hover / selected highlight contrast ---------------------- */
+/*    Avoid white-on-white when a `text-white` element gets a light hover bg. */
+html.light-mode [class*="hover:bg-[#"]:hover [class*="text-white"],
+html.light-mode [class*="hover:bg-gray-1"]:hover,
+html.light-mode [class*="hover:bg-gray-2"]:hover {
+  color: #0f172a !important;
+}
+
+/* Selected row / highlighted item */
+html.light-mode [class*="bg-blue-900"][class*="text-blue-2"],
+html.light-mode [class*="bg-blue-900"][class*="text-blue-3"],
+html.light-mode [class*="bg-blue-900"][class*="text-blue-4"] {
+  background-color: #dbeafe !important;
+  color: #1e3a8a !important;
+}
+
+/* 4. Pagination active page button on Browse ------------------ */
+/*    Pattern: `bg-[#58a6ff] text-white` when currentPage === pageNum.
+      Already handled by rule #2 above, but be explicit for safety. */
+

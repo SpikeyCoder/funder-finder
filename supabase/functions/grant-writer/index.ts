@@ -279,12 +279,19 @@ Deno.serve(async (req) => {
 
     return new Response(stream, { headers });
   } catch (err) {
-    console.error('Request error:', err);
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('Request error:', message);
+
+    // Detect auth-related errors specifically; everything else is a server error.
+    const isAuthError = /authorization|jwt|token|unauthorized|missing.*auth/i.test(message);
+    const status = isAuthError ? 401 : 500;
+    const userMessage = isAuthError
+      ? 'Your session has expired. Please sign in again to continue.'
+      : 'Something went wrong while preparing your draft. Please try again in a moment.';
+
     return new Response(
-      JSON.stringify({
-        error: 'Unauthorized',
-      }),
-      { status: 401, headers: corsHeaders(origin) },
+      JSON.stringify({ error: userMessage }),
+      { status, headers: { ...corsHeaders(origin), 'Content-Type': 'application/json' } },
     );
   }
 });

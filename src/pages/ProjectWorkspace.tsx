@@ -4,6 +4,7 @@ import { ArrowLeft, Save, Loader, Users, RefreshCw, Plus, Download, Upload, X, C
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
+import { friendlyError } from '../lib/friendlyErrors';
 import type { PipelineStatus, TrackedGrant, GrantTask, ComplianceRequirement } from '../types';
 
 const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
@@ -135,6 +136,7 @@ export default function ProjectWorkspace() {
 
   // External grant modal
   const [addGrantOpen, setAddGrantOpen] = useState(false);
+  const [addGrantError, setAddGrantError] = useState<string | null>(null);
   const [newGrant, setNewGrant] = useState({ funder_name: '', grant_title: '', amount: '', deadline: '', grant_url: '', notes: '', status_slug: 'researching' });
 
   // CSV import modal
@@ -512,7 +514,15 @@ export default function ProjectWorkspace() {
 
   // Add external grant
   const handleAddExternalGrant = async () => {
-    if (!newGrant.funder_name.trim()) return;
+    setAddGrantError(null);
+    // Required-field validation with a customer-friendly message
+    const missing: string[] = [];
+    if (!newGrant.funder_name.trim()) missing.push('Funder Name');
+    if (!newGrant.status_slug) missing.push('Status');
+    if (missing.length > 0) {
+      setAddGrantError(`Please fill in the required field${missing.length > 1 ? 's' : ''}: ${missing.join(', ')}.`);
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -535,15 +545,16 @@ export default function ProjectWorkspace() {
       });
       if (res.ok) {
         setAddGrantOpen(false);
+        setAddGrantError(null);
         setNewGrant({ funder_name: '', grant_title: '', amount: '', deadline: '', grant_url: '', notes: '', status_slug: 'researching' });
         await loadTrackerData();
       } else {
         const errBody = await res.json().catch(() => ({}));
-        setError(errBody.error || `Failed to add grant (HTTP ${res.status})`);
+        setAddGrantError(friendlyError(errBody.error || `Failed to add grant (HTTP ${res.status})`));
       }
     } catch (err) {
       console.error('Error adding grant:', err);
-      setError(err instanceof Error ? err.message : 'Failed to add grant');
+      setAddGrantError(friendlyError(err, 'Failed to add grant. Please try again.'));
     } finally {
       setSaving(false);
     }
@@ -1022,7 +1033,7 @@ export default function ProjectWorkspace() {
             </div>
           </div>
 
-          {error && <div className="mb-6 p-4 bg-red-900/20 border border-red-800 rounded-lg text-red-200">{error}</div>}
+          {error && <div role="alert" aria-live="polite" className="mb-6 p-4 bg-red-900/20 border border-red-800 rounded-lg text-red-200">{friendlyError(error)}</div>}
 
           {/* Tabs */}
           <div className="mb-8 overflow-x-auto">
@@ -1638,13 +1649,18 @@ export default function ProjectWorkspace() {
           <div className="bg-[#161b22] border border-[#30363d] rounded-xl w-full max-w-lg p-6" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-white">Add Grant to Tracker</h3>
-              <button onClick={() => setAddGrantOpen(false)} className="text-gray-400 hover:text-white"><X size={20} /></button>
+              <button onClick={() => { setAddGrantOpen(false); setAddGrantError(null); }} className="text-gray-400 hover:text-white"><X size={20} /></button>
             </div>
+            {addGrantError && (
+              <div role="alert" aria-live="polite" className="mb-3 p-3 bg-red-900/20 border border-red-800 rounded-lg text-red-200 text-sm">
+                {addGrantError}
+              </div>
+            )}
             <div className="space-y-3">
               <div>
-                <label className="block text-sm text-gray-400 mb-1">Funder Name *</label>
-                <input type="text" value={newGrant.funder_name} onChange={e => setNewGrant(p => ({ ...p, funder_name: e.target.value }))} placeholder="e.g. Ford Foundation"
-                  className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
+                <label className="block text-sm text-gray-400 mb-1">Funder Name <span className="text-red-400" aria-hidden="true">*</span><span className="sr-only"> (required)</span></label>
+                <input type="text" required aria-required="true" aria-invalid={!newGrant.funder_name.trim() && addGrantError !== null} value={newGrant.funder_name} onChange={e => setNewGrant(p => ({ ...p, funder_name: e.target.value }))} placeholder="e.g. Ford Foundation"
+                  className={"w-full bg-[#0d1117] border rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500 " + (!newGrant.funder_name.trim() && addGrantError ? "border-red-600" : "border-[#30363d]")} />
               </div>
               <div>
                 <label className="block text-sm text-gray-400 mb-1">Grant Title</label>
@@ -1669,7 +1685,7 @@ export default function ProjectWorkspace() {
                   className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
               </div>
               <div>
-                <label className="block text-sm text-gray-400 mb-1">Status</label>
+                <label className="block text-sm text-gray-400 mb-1">Status <span className="text-red-400" aria-hidden="true">*</span><span className="sr-only"> (required)</span></label>
                 <select value={newGrant.status_slug} onChange={e => setNewGrant(p => ({ ...p, status_slug: e.target.value }))}
                   className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm">
                   {pipelineStatuses.map(s => <option key={s.id} value={s.slug}>{s.name}</option>)}

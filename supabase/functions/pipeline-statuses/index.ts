@@ -39,12 +39,14 @@ async function ensureDefaultStatuses(supabase: any, userId: string) {
   await supabase.from('pipeline_statuses').insert([
     { user_id: userId, name: 'Researching', slug: 'researching', color: '#95A5A6', sort_order: 0, is_default: true, is_terminal: false },
     { user_id: userId, name: 'Planned', slug: 'planned', color: '#3498DB', sort_order: 1, is_default: true, is_terminal: false },
-    { user_id: userId, name: 'LOI Submitted', slug: 'loi_submitted', color: '#9B59B6', sort_order: 2, is_default: true, is_terminal: false },
-    { user_id: userId, name: 'Application Submitted', slug: 'application_submitted', color: '#2ECC71', sort_order: 3, is_default: true, is_terminal: false },
-    { user_id: userId, name: 'Under Review', slug: 'under_review', color: '#F39C12', sort_order: 4, is_default: true, is_terminal: false },
-    { user_id: userId, name: 'Awarded', slug: 'awarded', color: '#27AE60', sort_order: 5, is_default: true, is_terminal: true },
-    { user_id: userId, name: 'Rejected', slug: 'rejected', color: '#E74C3C', sort_order: 6, is_default: true, is_terminal: true },
-    { user_id: userId, name: 'On Hold', slug: 'on_hold', color: '#BDC3C7', sort_order: 7, is_default: true, is_terminal: false },
+    { user_id: userId, name: 'In Progress', slug: 'in_progress', color: '#2980B9', sort_order: 2, is_default: true, is_terminal: false },
+    { user_id: userId, name: 'LOI Submitted', slug: 'loi_submitted', color: '#9B59B6', sort_order: 3, is_default: true, is_terminal: false },
+    { user_id: userId, name: 'Submitted', slug: 'submitted', color: '#1ABC9C', sort_order: 4, is_default: true, is_terminal: false },
+    { user_id: userId, name: 'Application Submitted', slug: 'application_submitted', color: '#2ECC71', sort_order: 5, is_default: true, is_terminal: false },
+    { user_id: userId, name: 'Under Review', slug: 'under_review', color: '#F39C12', sort_order: 6, is_default: true, is_terminal: false },
+    { user_id: userId, name: 'Awarded', slug: 'awarded', color: '#27AE60', sort_order: 7, is_default: true, is_terminal: true },
+    { user_id: userId, name: 'Rejected', slug: 'rejected', color: '#E74C3C', sort_order: 8, is_default: true, is_terminal: true },
+    { user_id: userId, name: 'On Hold', slug: 'on_hold', color: '#BDC3C7', sort_order: 9, is_default: true, is_terminal: false },
   ]);
 }
 

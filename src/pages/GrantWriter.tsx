@@ -7,6 +7,7 @@ import {
 import DOMPurify from 'dompurify';
 import { Funder, GenerationPhase, OrgDetails, UploadedGrantFile } from '../types';
 import { getEdgeFunctionHeaders, supabase } from '../lib/supabase';
+import { friendlyError } from '../lib/friendlyErrors';
 import { formatGrantRange, formatTotalGiving } from '../utils/matching';
 import NavBar from '../components/NavBar';
 import { useAuth } from '../contexts/AuthContext';
@@ -786,8 +787,8 @@ export default function GrantWriter() {
 
             {/* Error */}
             {error && (
-              <div className="bg-red-900/20 border border-red-800 rounded-xl px-4 py-3 text-sm text-red-400">
-                {error}
+              <div role="alert" aria-live="polite" className="bg-red-900/20 border border-red-800 rounded-xl px-4 py-3 text-sm text-red-400">
+                {friendlyError(error)}
               </div>
             )}
 
