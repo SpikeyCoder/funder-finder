@@ -1,10 +1,39 @@
-// Phase 4A: Team invitation & member management
+// Phase 4A: Team invitation & member management.
+//
+// MIGRATED TO USER-SCOPED AUTH (Pen-test 2026-05-11 / FM-2026-05-11-01):
+// The previous implementation verified the caller's JWT with a
+// service-role client and then performed all subsequent DB queries with
+// that service-role client, bypassing RLS. That defeated the purpose of
+// the FM-2026-05-10-01 audience-pinning hardening already applied to
+// 14 other Edge Functions.
+//
+// This rewrite:
+//   1. Verifies the caller's JWT via `createUserScopedClient`, which:
+//      - HTTP-verifies via `supabase.auth.getUser(token)` (with retry
+//        backoff on transient gateway 5xx),
+//      - pins `aud === "authenticated"`,
+//      - rejects `is_anonymous === true`.
+//   2. Uses the user-scoped client for ALL reads/writes against app
+//      tables (org_members, projects, invitations, user_profiles,
+//      tracked_grants) — letting RLS enforce row-level isolation.
+//   3. Keeps a separate, locally-scoped service-role client only for
+//      the narrow Supabase auth admin lookups that have no user-scope
+//      equivalent: `auth.admin.getUserById()` (to resolve a member's
+//      email for display) and a *paginated, early-exit* email lookup
+//      (replacing the previous full-table `listUsers()` enumeration —
+//      see FM-2026-05-11-01b).
+//
+// TODO (future PR): replace the paginated `listUsers` walk with a
+// SECURITY DEFINER Postgres function `find_user_by_email(text)`
+// returning `(id uuid, exists bool)` so the lookup is O(1) and never
+// returns more than one record. Tracked in compliance/risk-register.md.
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
+import { createUserScopedClient } from "../_shared/user-client.ts";
+import { corsHeaders as _corsHeaders } from "../_shared/cors.ts";
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-
-import { corsHeaders as _corsHeaders } from "../_shared/cors.ts";
 
 const CORS_OPTS = { methods: "GET, POST, PUT, DELETE, OPTIONS" } as const;
 function CORS(req: Request | null = null): Record<string, string> {
@@ -12,10 +41,82 @@ function CORS(req: Request | null = null): Record<string, string> {
 }
 
 function json(req: Request, data: unknown, status = 200) {
-  return new Response(JSON.stringify(data), { status, headers: { ...CORS(req), 'Content-Type': 'application/json' } });
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { ...CORS(req), 'Content-Type': 'application/json' },
+  });
 }
 
-// Helper: verify the calling user is an admin (org owner or admin role)
+// Lazily create a service-role client only when an admin auth lookup is
+// required. Kept module-local so it is never accidentally used as the
+// data-plane client.
+let _adminClient: ReturnType<typeof createClient> | null = null;
+function adminClient() {
+  if (!_adminClient) {
+    if (!SUPABASE_SERVICE_KEY) {
+      throw new Error('SUPABASE_SERVICE_ROLE_KEY not configured');
+    }
+    _adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+  }
+  return _adminClient;
+}
+
+/**
+ * Resolve a user's email by id via the auth admin API. Used only for
+ * displaying member emails on the team list; never used for auth.
+ * Returns the empty string if the user cannot be resolved.
+ */
+async function lookupEmailById(userId: string): Promise<string> {
+  try {
+    const { data } = await adminClient().auth.admin.getUserById(userId);
+    return data?.user?.email || '';
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Find an auth user by email using a paginated `listUsers` walk with
+ * **early exit on first match**. Bounds the per-request data returned
+ * to one page (perPage=200) at a time and aborts as soon as the target
+ * is found, instead of materialising the full user table in memory the
+ * way the previous implementation did.
+ *
+ * Returns `null` if no user with that email exists across all pages
+ * checked, up to MAX_PAGES (~10k users at perPage=200 — well above
+ * current org size; revisit before scaling).
+ *
+ * Pen-test 2026-05-11 FM-2026-05-11-01b. This is a defensive interim
+ * fix; a SECURITY DEFINER Postgres function for O(1) lookup is the
+ * intended successor (see TODO above).
+ */
+async function findAuthUserByEmail(email: string): Promise<{ id: string; email: string } | null> {
+  const target = email.toLowerCase().trim();
+  if (!target) return null;
+  const PER_PAGE = 200;
+  const MAX_PAGES = 50;
+  const admin = adminClient();
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    // The supabase-js admin client returns at most `perPage` users per
+    // call; an empty page indicates the end of the user table.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (admin.auth.admin as any).listUsers({ page, perPage: PER_PAGE });
+    if (error) throw error;
+    const users = data?.users || [];
+    if (users.length === 0) return null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const hit = users.find((u: any) => (u.email || '').toLowerCase() === target);
+    if (hit) return { id: hit.id, email: hit.email };
+    if (users.length < PER_PAGE) return null;
+  }
+  return null;
+}
+
+// Helper: verify the calling user is an admin (org owner or admin role).
+// Runs through the user-scoped client so RLS applies.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function isAdmin(supabase: any, userId: string): Promise<boolean> {
   const { data } = await supabase
     .from('org_members')
@@ -24,9 +125,7 @@ async function isAdmin(supabase: any, userId: string): Promise<boolean> {
     .eq('status', 'active')
     .eq('role', 'admin')
     .limit(1);
-  // Also consider the org creator (invited_by is null or is themselves) as admin
   if (data && data.length > 0) return true;
-  // Check if user owns any projects (i.e. is the primary account holder)
   const { data: projects } = await supabase
     .from('projects')
     .select('id')
@@ -38,19 +137,24 @@ async function isAdmin(supabase: any, userId: string): Promise<boolean> {
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS(req) });
 
-  const authHeader = req.headers.get('authorization') || '';
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-  const jwt = authHeader.replace('Bearer ', '');
-  const { data: { user } } = await supabase.auth.getUser(jwt);
-  if (!user) return json(req, { error: 'Unauthorized' }, 401);
+  let supabase: ReturnType<typeof createClient>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let user: any;
+  try {
+    const scoped = await createUserScopedClient(req);
+    supabase = scoped.supabase;
+    user = scoped.user;
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unauthorized';
+    return json(req, { error: message }, 401);
+  }
 
   try {
-    // ─── GET: List team members, invitations, and member project summaries ───
+    // ─── GET: List team members, invitations, member project summaries ───
     if (req.method === 'GET') {
       const url = new URL(req.url);
       const includeProjects = url.searchParams.get('include_projects') === 'true';
 
-      // List team members
       const { data: members } = await supabase
         .from('org_members')
         .select('*')
@@ -63,13 +167,13 @@ Deno.serve(async (req: Request) => {
         .eq('invited_by', user.id)
         .eq('status', 'pending');
 
-      // Get emails and display names for members
       const memberDetails = [];
       for (const m of members || []) {
-        const { data: ud } = await supabase.auth.admin.getUserById(m.user_id);
-        const email = ud?.user?.email || 'unknown';
+        // Email resolution uses the auth admin API (no user-scope
+        // equivalent). Everything else uses the user-scoped client so
+        // RLS applies.
+        const email = await lookupEmailById(m.user_id);
 
-        // Get user profile for display_name
         const { data: profile } = await supabase
           .from('user_profiles')
           .select('display_name, organization_name')
@@ -78,15 +182,13 @@ Deno.serve(async (req: Request) => {
 
         let projectSummary = null;
         if (includeProjects) {
-          // Get project count and details for this member
           const { data: projects } = await supabase
             .from('projects')
             .select('id, name, created_at, updated_at')
             .eq('user_id', m.user_id)
             .order('updated_at', { ascending: false });
 
-          // Get tracked grant counts per project
-          const projectIds = (projects || []).map((p: any) => p.id);
+          const projectIds = (projects || []).map((p: { id: string }) => p.id);
           let grantCounts: Record<string, number> = {};
           if (projectIds.length > 0) {
             const { data: grants } = await supabase
@@ -94,13 +196,14 @@ Deno.serve(async (req: Request) => {
               .select('project_id')
               .in('project_id', projectIds);
             for (const g of grants || []) {
-              grantCounts[g.project_id] = (grantCounts[g.project_id] || 0) + 1;
+              const pid = (g as { project_id: string }).project_id;
+              grantCounts[pid] = (grantCounts[pid] || 0) + 1;
             }
           }
 
           projectSummary = {
             total: (projects || []).length,
-            projects: (projects || []).slice(0, 5).map((p: any) => ({
+            projects: (projects || []).slice(0, 5).map((p: { id: string; name: string; created_at: string; updated_at: string }) => ({
               id: p.id,
               name: p.name,
               created_at: p.created_at,
@@ -112,7 +215,7 @@ Deno.serve(async (req: Request) => {
 
         memberDetails.push({
           ...m,
-          email,
+          email: email || 'unknown',
           display_name: profile?.display_name || null,
           organization_name: profile?.organization_name || null,
           project_summary: projectSummary,
@@ -122,7 +225,7 @@ Deno.serve(async (req: Request) => {
       return json(req, { members: memberDetails, invitations });
     }
 
-    // ─── POST: Send invitation ───────────────────────────────────────────────
+    // ─── POST: Send invitation ───────────────────────────────────────────
     if (req.method === 'POST') {
       const { email, role = 'editor' } = await req.json();
       if (!email) return json(req, { error: 'Email is required' }, 400);
@@ -130,20 +233,28 @@ Deno.serve(async (req: Request) => {
         return json(req, { error: 'Invalid role. Must be admin, editor, or viewer.' }, 400);
       }
 
-      // Check if already invited
+      // Only existing admins may send invites — gates the auth-admin
+      // email lookup below behind an authorised caller.
+      const callerIsAdmin = await isAdmin(supabase, user.id);
+      if (!callerIsAdmin) {
+        return json(req, { error: 'Only admins can invite team members' }, 403);
+      }
+
+      const normalisedEmail = String(email).toLowerCase().trim();
+
       const { data: existing } = await supabase
         .from('invitations')
         .select('id')
-        .eq('email', email.toLowerCase())
+        .eq('email', normalisedEmail)
         .eq('invited_by', user.id)
         .eq('status', 'pending')
         .limit(1);
 
       if (existing && existing.length > 0) return json(req, { error: 'Already invited' }, 409);
 
-      // Check if already an active member
-      const { data: existingUsers } = await supabase.auth.admin.listUsers();
-      const existingUser = existingUsers?.users?.find((u: any) => u.email === email.toLowerCase());
+      // Replaces the previous `auth.admin.listUsers()` full-table walk
+      // (FM-2026-05-11-01b) with paginated, early-exit lookup.
+      const existingUser = await findAuthUserByEmail(normalisedEmail);
 
       if (existingUser) {
         const { data: existingMember } = await supabase
@@ -157,40 +268,42 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      // Create invitation
       const { data: invite, error } = await supabase
         .from('invitations')
-        .insert({ email: email.toLowerCase(), role, invited_by: user.id })
+        .insert({ email: normalisedEmail, role, invited_by: user.id })
         .select()
         .single();
 
       if (error) throw error;
 
-      // If user already exists, auto-add to org_members
       if (existingUser) {
-        await supabase.from('org_members').upsert({
-          user_id: existingUser.id,
-          role,
-          invited_by: user.id,
-          status: 'active',
-        }, { onConflict: 'user_id' });
+        await supabase.from('org_members').upsert(
+          {
+            user_id: existingUser.id,
+            role,
+            invited_by: user.id,
+            status: 'active',
+          },
+          { onConflict: 'user_id' },
+        );
 
-        await supabase.from('invitations').update({ status: 'accepted', accepted_at: new Date().toISOString() }).eq('id', invite.id);
+        await supabase
+          .from('invitations')
+          .update({ status: 'accepted', accepted_at: new Date().toISOString() })
+          .eq('id', invite.id);
       }
 
       return json(req, invite, 201);
     }
 
-    // ─── PUT: Update member role or status ───────────────────────────────────
+    // ─── PUT: Update member role or status ───────────────────────────────
     if (req.method === 'PUT') {
       const { member_id, role, action } = await req.json();
       if (!member_id) return json(req, { error: 'member_id is required' }, 400);
 
-      // Verify caller is admin
       const callerIsAdmin = await isAdmin(supabase, user.id);
       if (!callerIsAdmin) return json(req, { error: 'Only admins can manage team members' }, 403);
 
-      // Get the target member
       const { data: target } = await supabase
         .from('org_members')
         .select('*')
@@ -199,12 +312,10 @@ Deno.serve(async (req: Request) => {
 
       if (!target) return json(req, { error: 'Member not found' }, 404);
 
-      // Prevent self-demotion from admin (must have at least one admin)
       if (target.user_id === user.id && role && role !== 'admin') {
         return json(req, { error: 'You cannot change your own role. Ask another admin to do this.' }, 400);
       }
 
-      // Action: remove member
       if (action === 'remove') {
         if (target.user_id === user.id) {
           return json(req, { error: 'You cannot remove yourself from the team' }, 400);
@@ -216,7 +327,6 @@ Deno.serve(async (req: Request) => {
         return json(req, { success: true, message: 'Member removed' });
       }
 
-      // Action: change role
       if (role) {
         if (!['admin', 'editor', 'viewer'].includes(role)) {
           return json(req, { error: 'Invalid role' }, 400);
@@ -231,18 +341,23 @@ Deno.serve(async (req: Request) => {
       return json(req, { error: 'No action specified' }, 400);
     }
 
-    // ─── DELETE: Revoke invitation ───────────────────────────────────────────
+    // ─── DELETE: Revoke invitation ───────────────────────────────────────
     if (req.method === 'DELETE') {
       const url = new URL(req.url);
       const inviteId = url.searchParams.get('id');
       if (!inviteId) return json(req, { error: 'id required' }, 400);
 
-      await supabase.from('invitations').update({ status: 'revoked' }).eq('id', inviteId).eq('invited_by', user.id);
+      await supabase
+        .from('invitations')
+        .update({ status: 'revoked' })
+        .eq('id', inviteId)
+        .eq('invited_by', user.id);
       return json(req, { success: true });
     }
 
     return json(req, { error: 'Method not allowed' }, 405);
-  } catch (err: any) {
-    return json(req, { error: err.message }, 500);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Internal error';
+    return json(req, { error: message }, 500);
   }
 });

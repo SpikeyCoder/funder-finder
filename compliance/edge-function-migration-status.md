@@ -3,7 +3,7 @@ title: Edge Function SERVICE_ROLE_KEY → User-Scoped Migration Status
 tsc: CC6, CC8
 owner: Kevin Armstrong
 review-cadence: monthly
-last-reviewed: 2026-05-09
+last-reviewed: 2026-05-11
 relates-to: supabase/functions/_shared/user-client.ts, src/lib/supabase.ts
 ---
 
@@ -24,7 +24,7 @@ any function that can run on behalf of an authenticated user —
 those should mint a per-request client from the caller's JWT
 instead. See risk-register entry **R-01**.
 
-## Current state — 2026-05-09
+## Current state — 2026-05-11
 
 | Function | Uses SERVICE_ROLE_KEY today | Migration plan |
 |---|---|---|
@@ -35,7 +35,7 @@ instead. See risk-register entry **R-01**.
 | `compute-peers` | Yes | Public reference data only; eligible for Phase 4. |
 | `update-ntee-codes` | Yes | Scheduled task — keep as service-role (no end-user request). |
 | `process-notifications` | Yes | Scheduled task — keep as service-role. |
-| `team-invite` | Yes | Cross-user write (insert into `invitations`) — keep as service-role with explicit RLS-bypass justification documented in function header. |
+| `team-invite` | Partial (auth admin only) | ✅ Migrated 2026-05-11 (FM-2026-05-11-01). All app-table reads/writes (`org_members`, `projects`, `invitations`, `user_profiles`, `tracked_grants`) now go through the user-scoped client. A lazily-initialised service-role client is retained ONLY for `auth.admin.getUserById()` (email lookup for display) and a paginated, early-exit `auth.admin.listUsers()` walk (replacing the previous full-table enumeration — TODO: replace with SECURITY DEFINER `find_user_by_email(text)` Postgres function for O(1) lookup). |
 | `share-link` | Partial | Public-by-token GET path keeps service-role for unauth reads; authenticated GET/POST/DELETE paths now use the caller's user-scoped client. |
 | `suggest-peers` | Yes | Eligible for Phase 4. |
 | `check-deadlines` | Yes | Scheduled task — keep as service-role. |
