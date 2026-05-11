@@ -206,6 +206,19 @@ html.light-mode .bg-\[\#0f1d2e\] .text-gray-100 {
   color: #f3f4f6; /* tailwind gray-100 */
 }
 
+/* Peer-nonprofit chips inside the .bg-[#0f1d2e] card carry their own
+   .bg-[#161b22], which gets remapped to a light #f6f8fa in light mode.
+   The text-gray-200 above would render almost-white text on that light chip
+   bg (~1:1). Restore dark text for elements that carry BOTH the dark-card
+   inner bg utility AND a light text-gray-* utility, so chip text stays
+   readable on the chip's light bg. */
+html.light-mode .bg-\[\#0f1d2e\] .bg-\[\#161b22\].text-gray-200,
+html.light-mode .bg-\[\#0f1d2e\] .bg-\[\#161b22\] .text-gray-200,
+html.light-mode .bg-\[\#0f1d2e\] .bg-\[\#161b22\].text-gray-100,
+html.light-mode .bg-\[\#0f1d2e\] .bg-\[\#161b22\] .text-gray-100 {
+  color: #1f2328; /* GitHub Primer ink — 14:1 on #f6f8fa */
+}
+
 /* Score-badge fix: bg-gray-800 / bg-green-900/40 / bg-blue-900/40 are dark
    backgrounds that stay dark even in light mode. Keep light text on them. */
 html.light-mode .bg-gray-800 .text-gray-400,
