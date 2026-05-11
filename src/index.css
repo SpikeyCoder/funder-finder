@@ -183,6 +183,49 @@ html.light-mode .hover\:text-\[\#58a6ff\]:hover {
   color: #0969da;
 }
 
+
+/* WCAG fix (2026-05-11 daily-usability-audit):
+   Some cards on the Results page intentionally keep dark-theme styling
+   (e.g. the peer-nonprofit blue card bg-[#0f1d2e]) even in light mode.
+   The light-mode color remaps further up turn light Tailwind text utilities
+   (text-blue-300, text-gray-400) into dark colors that fail WCAG AA contrast
+   against the dark card background. Restore the original light-theme colors
+   for descendants of these dark cards. */
+html.light-mode .bg-\[\#0f1d2e\] .text-blue-300,
+html.light-mode .bg-\[\#0f1d2e\] .text-blue-400 {
+  color: #93c5fd; /* tailwind blue-300 — 7.8:1 on #0f1d2e */
+}
+
+html.light-mode .bg-\[\#0f1d2e\] .text-gray-400,
+html.light-mode .bg-\[\#0f1d2e\] .text-gray-300 {
+  color: #d1d5db; /* tailwind gray-300 — 11:1 on #0f1d2e */
+}
+
+html.light-mode .bg-\[\#0f1d2e\] .text-gray-200,
+html.light-mode .bg-\[\#0f1d2e\] .text-gray-100 {
+  color: #f3f4f6; /* tailwind gray-100 */
+}
+
+/* Score-badge fix: bg-gray-800 / bg-green-900/40 / bg-blue-900/40 are dark
+   backgrounds that stay dark even in light mode. Keep light text on them. */
+html.light-mode .bg-gray-800 .text-gray-400,
+html.light-mode .bg-green-900\/40 .text-green-400,
+html.light-mode .bg-blue-900\/40 .text-blue-400 {
+  color: inherit;
+}
+
+html.light-mode .bg-gray-800.text-gray-400 {
+  color: #d1d5db; /* gray-300 — 9.3:1 on bg-gray-800 (#1f2937) */
+}
+
+html.light-mode .bg-green-900\/40.text-green-400 {
+  color: #4ade80; /* green-400 — restore original on dark badge */
+}
+
+html.light-mode .bg-blue-900\/40.text-blue-400 {
+  color: #60a5fa; /* blue-400 — restore original on dark badge */
+}
+
 @keyframes pageFadeIn {
   from {
     opacity: 0;
