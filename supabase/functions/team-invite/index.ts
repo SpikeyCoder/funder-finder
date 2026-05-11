@@ -155,16 +155,19 @@ Deno.serve(async (req: Request) => {
       const url = new URL(req.url);
       const includeProjects = url.searchParams.get('include_projects') === 'true';
 
+      // RLS now scopes visibility to same-org members/invitations
+      // (org_scope SELECT policies, migration 20260511180000).
+      // No application-level user filter is needed here — adding one
+      // would re-narrow visibility to "rows the caller owns" and
+      // re-introduce the cross-admin blind spot the broadening fixed.
       const { data: members } = await supabase
         .from('org_members')
         .select('*')
-        .or(`user_id.eq.${user.id},invited_by.eq.${user.id}`)
         .eq('status', 'active');
 
       const { data: invitations } = await supabase
         .from('invitations')
         .select('*')
-        .eq('invited_by', user.id)
         .eq('status', 'pending');
 
       const memberDetails = [];
