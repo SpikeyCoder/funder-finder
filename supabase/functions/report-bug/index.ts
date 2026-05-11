@@ -39,11 +39,36 @@ interface BugReportPayload {
 
 const SUPABASE_STORAGE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co/storage/v1/object/public/bug-screenshots/';
 
+// Pre-parsed reference so we can compare hostname + path-prefix structurally
+// instead of via brittle string-prefix matching. Pen-test 2026-05-11
+// (FM-2026-05-11-02): a `startsWith` check accepts crafted paths like
+// `…/bug-screenshots/../something/foo.png` because the literal characters
+// match, but the resolved URL points elsewhere. Using URL parsing forces
+// the runtime to normalise the path before we compare.
+const STORAGE_REFERENCE = new URL(SUPABASE_STORAGE_URL);
+const STORAGE_PATH_PREFIX = STORAGE_REFERENCE.pathname; // "/storage/v1/object/public/bug-screenshots/"
+
 const MAX_DESCRIPTION_LENGTH = 2000;
 
 function isValidScreenshotUrl(url: string): boolean {
-  // Only allow URLs pointing to our own Supabase storage bucket
-  return url.startsWith(SUPABASE_STORAGE_URL);
+  // Only allow URLs pointing to our own Supabase storage bucket.
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== 'https:') return false;
+  if (parsed.hostname !== STORAGE_REFERENCE.hostname) return false;
+  // The normalised pathname must start with the bucket prefix AND not
+  // escape it via traversal segments. URL parsing already resolves `..`,
+  // so an attempt like ".../bug-screenshots/../other" comes through with
+  // a pathname of "/storage/v1/object/public/other" and fails here.
+  if (!parsed.pathname.startsWith(STORAGE_PATH_PREFIX)) return false;
+  // Defence-in-depth: reject any residual traversal markers.
+  const tail = parsed.pathname.slice(STORAGE_PATH_PREFIX.length);
+  if (tail.split('/').some((seg) => seg === '..' || seg === '.')) return false;
+  return true;
 }
 
 function buildCardDescription(payload: BugReportPayload): string {
