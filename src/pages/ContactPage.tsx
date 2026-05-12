@@ -80,6 +80,7 @@ export default function ContactPage() {
                 name="name"
                 type="text"
                 required
+                autoComplete="name"
                 value={form.name}
                 onChange={handleChange}
                 className="w-full rounded-md border border-[#1b2130] bg-[#161b27] px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -96,6 +97,7 @@ export default function ContactPage() {
                 name="email"
                 type="email"
                 required
+                autoComplete="email"
                 value={form.email}
                 onChange={handleChange}
                 className="w-full rounded-md border border-[#1b2130] bg-[#161b27] px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"

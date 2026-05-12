@@ -362,7 +362,7 @@ export default function DemoVideo() {
                   <p
                     className="text-5xl font-bold tabular-nums"
                     style={{
-                      color: score >= 80 ? '#4ade80' : score >= 60 ? '#60a5fa' : '#9ca3af',
+                      color: score >= 80 ? '#4ade80' : score >= 60 ? '#60a5fa' : '#6b7280',
                     }}
                   >
                     {score}
