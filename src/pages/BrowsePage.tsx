@@ -394,12 +394,13 @@ const BrowsePage: React.FC = () => {
                       </td>
                       <td data-label="" className="px-4 py-3 text-center">
                         <div className="flex items-center gap-2 justify-center">
-                          <QuickSaveButton funder={toFunder(funder)} compact />
-                          {user && (
+                          {user ? (
                             <SaveToProjectButton
                               funderEin={funder.ein}
                               funderName={funder.name}
                             />
+                          ) : (
+                            <QuickSaveButton funder={toFunder(funder)} compact />
                           )}
                         </div>
                       </td>
@@ -445,9 +446,10 @@ const BrowsePage: React.FC = () => {
                       </div>
                     </div>
                     <div className="pt-2 flex items-center gap-2">
-                      <QuickSaveButton funder={toFunder(funder)} compact />
-                      {user && (
+                      {user ? (
                         <SaveToProjectButton funderEin={funder.ein} funderName={funder.name} />
+                      ) : (
+                        <QuickSaveButton funder={toFunder(funder)} compact />
                       )}
                     </div>
                   </div>

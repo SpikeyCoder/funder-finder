@@ -1090,7 +1090,7 @@ export default function ProjectWorkspace() {
                       </thead>
                       <tbody className="divide-y divide-[#30363d]">
                         {matches.map(m => (
-                          <tr key={m.id} className="hover:bg-[#0d1117] transition-colors cursor-pointer" onClick={() => navigate(`/funder/${m.funder_ein}`)}>
+                          <tr key={m.id} className="hover:bg-[#21262d] transition-colors cursor-pointer" onClick={() => navigate(`/funder/${m.funder_ein}`)}>
                             <td className="px-6 py-4 text-white">{m.funder_name || m.funder_ein}</td>
                             <td className="px-6 py-4">
                               <span className={`text-xs font-medium px-2 py-1 rounded-full ${Number(m.match_score) >= 70 ? 'bg-green-900/30 text-green-400' : Number(m.match_score) >= 40 ? 'bg-yellow-900/30 text-yellow-400' : 'bg-gray-800 text-gray-400'}`}>
@@ -1185,7 +1185,7 @@ export default function ProjectWorkspace() {
                           const statusInfo = grant.pipeline_statuses || getStatusById(grant.status_id);
                           const isOverdue = grant.deadline && new Date(grant.deadline) < new Date() && !statusInfo?.is_terminal;
                           return (
-                            <tr key={grant.id} className="hover:bg-[#0d1117] transition-colors cursor-pointer" onClick={() => openGrantDetail(grant)}>
+                            <tr key={grant.id} className="hover:bg-[#21262d] transition-colors cursor-pointer" onClick={() => openGrantDetail(grant)}>
                               <td className="px-4 py-3">
                                 <div className="text-blue-400 hover:text-blue-300 text-sm font-medium">{grant.funder_name}</div>
                                 {grant.grant_title && <div className="text-xs text-gray-500 mt-0.5">{grant.grant_title}</div>}
@@ -1280,7 +1280,7 @@ export default function ProjectWorkspace() {
                       </thead>
                       <tbody className="divide-y divide-[#30363d]">
                         {peers.map((peer, idx) => (
-                          <tr key={peer.ein || `peer-${idx}`} className="hover:bg-[#0d1117] transition-colors cursor-pointer" onClick={() => peer.ein && navigate(`/recipient/${peer.ein}`)}>
+                          <tr key={peer.ein || `peer-${idx}`} className="hover:bg-[#21262d] transition-colors cursor-pointer" onClick={() => peer.ein && navigate(`/recipient/${peer.ein}`)}>
                             <td className="px-6 py-4 text-blue-400 hover:text-blue-300 font-medium text-sm">{peer.name}</td>
                             <td className="px-6 py-4 text-gray-400 text-sm">{peer.state || '—'}</td>
                             <td className="px-6 py-4 text-gray-400 text-sm">

@@ -190,7 +190,7 @@ export default function PortfolioPage() {
                     {grants.map(g => {
                       const isOverdue = g.deadline && new Date(g.deadline) < new Date() && !['awarded', 'rejected'].includes(g.status_slug);
                       return (
-                        <tr key={g.id} className="hover:bg-[#0d1117] transition-colors cursor-pointer" onClick={() => navigate(`/projects/${g.project_id}/tracker`)}>
+                        <tr key={g.id} className="hover:bg-[#21262d] transition-colors cursor-pointer" onClick={() => navigate(`/projects/${g.project_id}/tracker`)}>
                           <td className="px-4 py-3 text-gray-400 text-sm">{g.project_name}</td>
                           <td className="px-4 py-3">
                             <div className="text-white text-sm font-medium">{g.funder_name}</div>
