@@ -17,8 +17,8 @@ function jsonResponse(req: Request, data: unknown, status = 200) {
   });
 }
 
-function errorResponse(req: Request, message: string, status = 400) {
-  return jsonResponse(req, { error: message }, status);
+function errorResponse(req: Request, message: string, status = 400, extra: Record<string, unknown> = {}) {
+  return jsonResponse(req, { error: message, ...extra }, status);
 }
 
 Deno.serve(async (req: Request) => {
@@ -26,25 +26,34 @@ Deno.serve(async (req: Request) => {
     return new Response('ok', { headers: CORS_HEADERS(req) });
   }
 
+  let stage = 'init';
   try {
+    stage = 'auth';
     const { supabase, user } = await createUserScopedClient(req);
 
     const url = new URL(req.url);
-    const pathParts = url.pathname.split('/').filter(Boolean);
-    // Expected paths: /tracked-grants, /tracked-grants/:id, /tracked-grants/import, /tracked-grants/export
 
-    // Ensure user has pipeline statuses
-    await supabase.rpc('seed_pipeline_statuses', { p_user_id: user.id });
+    // Ensure user has pipeline statuses. Best-effort: a permission denied
+    // here used to kill every tracked-grants request. Pipeline statuses are
+    // also seeded for new users via DB trigger and by the pipeline-statuses
+    // edge function, so missing this RPC is non-fatal for callers who
+    // already have statuses (which is the common case).
+    stage = 'seed_pipeline_statuses';
+    try {
+      await supabase.rpc('seed_pipeline_statuses', { p_user_id: user.id });
+    } catch (seedErr) {
+      console.error('seed_pipeline_statuses rpc failed (non-fatal):', seedErr);
+    }
 
     if (req.method === 'GET') {
-      // Check for export
+      stage = 'get';
       const isExport = url.searchParams.get('export') === 'true';
 
       const projectId = url.searchParams.get('project_id');
       const grantId = url.searchParams.get('grant_id');
 
       if (grantId) {
-        // GET single grant with tasks
+        stage = 'get_one';
         const { data: grant, error } = await supabase
           .from('tracked_grants')
           .select('*, pipeline_statuses(name, slug, color, is_terminal)')
@@ -54,14 +63,12 @@ Deno.serve(async (req: Request) => {
 
         if (error || !grant) return errorResponse(req, 'Grant not found', 404);
 
-        // Get tasks for this grant
         const { data: tasks } = await supabase
           .from('tasks')
           .select('*')
           .eq('tracked_grant_id', grantId)
           .order('due_date', { ascending: true, nullsFirst: false });
 
-        // Get status history
         const { data: history } = await supabase
           .from('grant_status_history')
           .select('*, from_status:pipeline_statuses!grant_status_history_from_status_id_fkey(name, color), to_status:pipeline_statuses!grant_status_history_to_status_id_fkey(name, color)')
@@ -71,7 +78,7 @@ Deno.serve(async (req: Request) => {
         return jsonResponse(req, { ...grant, tasks: tasks || [], history: history || [] });
       }
 
-      // LIST grants
+      stage = 'list';
       let query = supabase
         .from('tracked_grants')
         .select('*, pipeline_statuses(name, slug, color, is_terminal)')
@@ -81,7 +88,6 @@ Deno.serve(async (req: Request) => {
         query = query.eq('project_id', projectId);
       }
 
-      // Filtering
       const statuses = url.searchParams.get('statuses');
       if (statuses) {
         const statusSlugs = statuses.split(',');
@@ -91,7 +97,7 @@ Deno.serve(async (req: Request) => {
           .eq('user_id', user.id)
           .in('slug', statusSlugs);
         if (statusIds && statusIds.length > 0) {
-          query = query.in('status_id', statusIds.map(s => s.id));
+          query = query.in('status_id', statusIds.map((s: { id: string }) => s.id));
         }
       }
 
@@ -105,22 +111,19 @@ Deno.serve(async (req: Request) => {
       if (deadlineFrom) query = query.gte('deadline', deadlineFrom);
       if (deadlineTo) query = query.lte('deadline', deadlineTo);
 
-      // Sorting
       const sortBy = url.searchParams.get('sort_by') || 'added_at';
       const sortOrder = url.searchParams.get('sort_order') === 'asc';
       query = query.order(sortBy, { ascending: sortOrder });
 
-      // Pagination
       const page = parseInt(url.searchParams.get('page') || '1');
       const perPage = parseInt(url.searchParams.get('per_page') || '50');
       const from = (page - 1) * perPage;
       query = query.range(from, from + perPage - 1);
 
       const { data: grants, error, count } = await query;
-      if (error) return errorResponse(req, error.message, 500);
+      if (error) return errorResponse(req, error.message, 500, { stage, details: error });
 
       if (isExport) {
-        // CSV export
         const csvHeader = 'Funder Name,Grant Title,Status,Amount,Deadline,Notes,URL,Source,Added,Updated';
         const csvRows = (grants || []).map((g: any) => {
           const status = g.pipeline_statuses?.name || '';
@@ -151,21 +154,21 @@ Deno.serve(async (req: Request) => {
     }
 
     if (req.method === 'POST') {
+      stage = 'post';
       const body = await req.json();
 
-      // CSV import
       if (body.import && Array.isArray(body.rows)) {
+        stage = 'post_import';
         const projectId = body.project_id;
         if (!projectId) return errorResponse(req, 'project_id required for import');
 
-        // Get user's statuses for mapping
         const { data: userStatuses } = await supabase
           .from('pipeline_statuses')
           .select('id, name, slug')
           .eq('user_id', user.id)
           .order('sort_order');
 
-        const defaultStatusId = userStatuses?.find(s => s.slug === 'researching')?.id;
+        const defaultStatusId = (userStatuses as any[] | null)?.find((s) => s.slug === 'researching')?.id;
         if (!defaultStatusId) return errorResponse(req, 'Pipeline statuses not configured', 500);
 
         const imported: any[] = [];
@@ -174,10 +177,9 @@ Deno.serve(async (req: Request) => {
         for (let i = 0; i < body.rows.length; i++) {
           const row = body.rows[i];
           try {
-            // Map status name to status_id (case-insensitive)
             let statusId = defaultStatusId;
             if (row.status) {
-              const match = userStatuses?.find(s =>
+              const match = (userStatuses as any[] | null)?.find((s) =>
                 s.name.toLowerCase() === row.status.toLowerCase() ||
                 s.slug === row.status.toLowerCase().replace(/\s+/g, '_')
               );
@@ -209,15 +211,14 @@ Deno.serve(async (req: Request) => {
         return jsonResponse(req, { imported: imported.length, errors, total: body.rows.length });
       }
 
-      // Regular create
+      stage = 'post_create';
       const { project_id, funder_ein, funder_name, grant_title, status_slug, amount, deadline, grant_url, notes, source, is_external } = body;
 
       if (!project_id || !funder_name) {
         return errorResponse(req, 'project_id and funder_name are required');
       }
 
-      // Resolve status_slug to status_id
-      let statusId: string;
+      let statusId: string | undefined;
       if (body.status_id) {
         statusId = body.status_id;
       } else {
@@ -228,7 +229,7 @@ Deno.serve(async (req: Request) => {
           .eq('user_id', user.id)
           .eq('slug', slug)
           .single();
-        statusId = status?.id;
+        statusId = (status as { id: string } | null)?.id;
         if (!statusId) return errorResponse(req, `Status '${slug}' not found`, 400);
       }
 
@@ -247,11 +248,12 @@ Deno.serve(async (req: Request) => {
         is_external: is_external || false,
       }).select('*, pipeline_statuses(name, slug, color, is_terminal)').single();
 
-      if (error) return errorResponse(req, error.message, 500);
+      if (error) return errorResponse(req, error.message, 500, { stage, details: error });
       return jsonResponse(req, grant, 201);
     }
 
     if (req.method === 'PUT') {
+      stage = 'put';
       const body = await req.json();
       const grantId = body.id || url.searchParams.get('grant_id');
       if (!grantId) return errorResponse(req, 'Grant ID required');
@@ -266,7 +268,6 @@ Deno.serve(async (req: Request) => {
       if (body.awarded_amount !== undefined) updates.awarded_amount = body.awarded_amount ? parseFloat(body.awarded_amount) : null;
       if (body.awarded_date !== undefined) updates.awarded_date = body.awarded_date || null;
 
-      // Handle status change via slug or id
       if (body.status_id) {
         updates.status_id = body.status_id;
       } else if (body.status_slug) {
@@ -276,7 +277,7 @@ Deno.serve(async (req: Request) => {
           .eq('user_id', user.id)
           .eq('slug', body.status_slug)
           .single();
-        if (status) updates.status_id = status.id;
+        if (status) updates.status_id = (status as { id: string }).id;
       }
 
       const { data: grant, error } = await supabase
@@ -287,12 +288,13 @@ Deno.serve(async (req: Request) => {
         .select('*, pipeline_statuses(name, slug, color, is_terminal)')
         .single();
 
-      if (error) return errorResponse(req, error.message, 500);
+      if (error) return errorResponse(req, error.message, 500, { stage, details: error });
       if (!grant) return errorResponse(req, 'Grant not found', 404);
       return jsonResponse(req, grant);
     }
 
     if (req.method === 'DELETE') {
+      stage = 'delete';
       const grantId = url.searchParams.get('grant_id');
       if (!grantId) return errorResponse(req, 'Grant ID required');
 
@@ -302,13 +304,13 @@ Deno.serve(async (req: Request) => {
         .eq('id', grantId)
         .eq('user_id', user.id);
 
-      if (error) return errorResponse(req, error.message, 500);
+      if (error) return errorResponse(req, error.message, 500, { stage, details: error });
       return jsonResponse(req, { success: true });
     }
 
     return errorResponse(req, 'Method not allowed', 405);
   } catch (err: any) {
-    console.error('tracked-grants error:', err);
-    return errorResponse(req, err.message || 'Internal server error', 500);
+    console.error('tracked-grants error at stage', stage, ':', err);
+    return errorResponse(req, err?.message || 'Internal server error', 500, { stage });
   }
 });
