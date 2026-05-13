@@ -232,7 +232,7 @@ export default function MissionInput() {
                   }`}
                 >
                   <p className={`text-sm font-medium ${selected ? 'text-blue-200' : 'text-white'}`}>{band.label}</p>
-                  <p className="text-xs text-gray-400 mt-1">{band.hint}</p>
+                  <p className={`text-xs mt-1 ${selected ? 'text-blue-100' : 'text-gray-400'}`}>{band.hint}</p>
                 </div>
               );
             })}
