@@ -24,7 +24,7 @@ function errorResponse(req: Request, message: string, status = 400) {
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS(req) });
   try {
-    const { userId } = authFromRequest(req);
+    const { userId } = await authFromRequest(req);
     const supabase = adminClient();
     const url = new URL(req.url);
 

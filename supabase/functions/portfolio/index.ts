@@ -26,7 +26,7 @@ Deno.serve(async (req: Request) => {
   if (req.method !== 'GET') return errorResponse(req, 'Method not allowed', 405);
 
   try {
-    const { userId } = authFromRequest(req);
+    const { userId } = await authFromRequest(req);
     const supabase = adminClient();
     const url = new URL(req.url);
 
