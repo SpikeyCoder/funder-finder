@@ -30,7 +30,7 @@ Deno.serve(async (req: Request) => {
   let stage = 'init';
   try {
     stage = 'auth';
-    const { userId } = authFromRequest(req);
+    const { userId } = await authFromRequest(req);
     const supabase = adminClient();
     const url = new URL(req.url);
 

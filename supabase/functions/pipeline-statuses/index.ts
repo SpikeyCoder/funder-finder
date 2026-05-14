@@ -45,7 +45,7 @@ async function ensureDefaultStatuses(supabase: any, userId: string) {
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS(req) });
   try {
-    const { userId } = authFromRequest(req);
+    const { userId } = await authFromRequest(req);
     const supabase = adminClient();
     await ensureDefaultStatuses(supabase, userId);
 
