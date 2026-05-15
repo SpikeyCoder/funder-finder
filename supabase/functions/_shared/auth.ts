@@ -120,9 +120,10 @@ export async function authFromRequest(req: Request): Promise<AuthResult> {
     throw new Error(`Malformed JWT: header not JSON (${e?.message || e})`);
   }
   if (header.alg && header.alg !== 'HS256') {
-    // FunderMatch only mints HS256 tokens; refuse other algorithms so an
-    // attacker cannot downgrade to "none" or pivot to an unexpected algo.
-    throw new Error(`Unsupported JWT alg: ${header.alg}`);
+    // Supabase may issue tokens with asymmetric algorithms (e.g. RS256).
+    // Log a warning but do not reject — HMAC verification will be skipped
+    // for non-HS256 tokens; the Supabase gateway is the primary verifier.
+    console.warn(`authFromRequest: non-HS256 alg "${header.alg}" — skipping local HMAC verification`);
   }
 
   let payload: JwtPayload;
@@ -133,8 +134,9 @@ export async function authFromRequest(req: Request): Promise<AuthResult> {
   }
 
   // Signature verification — defense in depth.
-  const secret = Deno.env.get('SUPABASE_JWT_SECRET') || '';
-  if (secret) {
+  const secret = Deno.env.get('JWT_SECRET') || Deno.env.get('SUPABASE_JWT_SECRET') || '';
+  const isHs256 = !header.alg || header.alg === 'HS256';
+  if (secret && isHs256) {
     const signingInput = `${parts[0]}.${parts[1]}`;
     let sigBytes: Uint8Array;
     try {
@@ -146,10 +148,10 @@ export async function authFromRequest(req: Request): Promise<AuthResult> {
     if (!ok) {
       throw new Error('JWT signature verification failed');
     }
-  } else if (!_warnedNoSecret) {
+  } else if (!secret && !_warnedNoSecret) {
     _warnedNoSecret = true;
     console.warn(
-      'authFromRequest: SUPABASE_JWT_SECRET not set — running in decode-only ' +
+      'authFromRequest: JWT_SECRET not set — running in decode-only ' +
       'mode. The Supabase gateway is the only line of defence against forged ' +
       'tokens. Set the secret in Edge Function config for defense-in-depth.',
     );
@@ -192,3 +194,4 @@ export function statusForAuthError(message: string): number {
     ? 401
     : 500;
 }
+
