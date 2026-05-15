@@ -206,7 +206,7 @@ export default function FunderDetail() {
             <h1 className="text-3xl font-bold">{funder.name}</h1>
             <button
               onClick={toggleSave}
-              className={`flex items-center gap-2 border rounded-xl px-4 py-2 text-sm transition-colors ${saved ? 'border-blue-600 text-blue-400 bg-blue-900/20' : 'border-[#30363d] hover:bg-[#21262d]'}`}
+              className={`inline-flex items-center gap-2 border rounded-xl px-4 py-2 min-h-[44px] text-sm transition-colors ${saved ? 'border-blue-600 text-blue-400 bg-blue-900/20' : 'border-[#30363d] hover:bg-[#21262d]'}`}
             >
               {saved ? <BookmarkCheck size={16} /> : <Bookmark size={16} />}
               {saved ? 'Saved' : 'Save Funder'}
