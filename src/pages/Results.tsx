@@ -920,7 +920,7 @@ export default function Results() {
                     {funder.contact_email && (
                       <button
                         onClick={() => copyEmail(funder.contact_email!, funder.id)}
-                        className="flex items-center gap-2 border border-[#30363d] rounded-xl px-4 py-2 text-sm hover:bg-[#21262d] transition-colors"
+                        className="inline-flex items-center gap-2 border border-[#30363d] rounded-xl px-4 py-2 min-h-[44px] text-sm hover:bg-[#21262d] transition-colors"
                       >
                         <Copy size={14} />
                         {copied === funder.id ? 'Copied!' : 'Copy Email'}
@@ -930,7 +930,7 @@ export default function Results() {
                       onClick={() => toggleSave(funder)}
                       aria-pressed={isSaved}
                       aria-label={`${isSaved ? 'Unsave' : 'Save'} ${funder.name}`}
-                      className={`flex items-center gap-2 border rounded-xl px-4 py-2 text-sm transition-colors ${isSaved ? 'border-blue-600 text-blue-400 bg-blue-900/20' : 'border-[#30363d] hover:bg-[#21262d]'}`}
+                      className={`inline-flex items-center gap-2 border rounded-xl px-4 py-2 min-h-[44px] text-sm transition-colors ${isSaved ? 'border-blue-600 text-blue-400 bg-blue-900/20' : 'border-[#30363d] hover:bg-[#21262d]'}`}
                     >
                       {isSaved ? <BookmarkCheck size={14} aria-hidden="true" /> : <Bookmark size={14} aria-hidden="true" />}
                       {isSaved ? 'Saved' : 'Save'}
@@ -940,7 +940,7 @@ export default function Results() {
                         logResultSignal('result_view_details', funder);
                         navigate(`/funder/${funder.id}`, { state: { funder, mission, keywords, budgetBand } });
                       }}
-                      className="flex items-center gap-2 bg-white text-gray-900 font-semibold rounded-xl px-4 py-2 text-sm hover:bg-gray-100 transition-colors ml-auto"
+                      className="inline-flex items-center gap-2 bg-white text-gray-900 font-semibold rounded-xl px-4 py-2 min-h-[44px] text-sm hover:bg-gray-100 transition-colors ml-auto"
                     >
                       View Details
                       <ChevronRight size={14} />

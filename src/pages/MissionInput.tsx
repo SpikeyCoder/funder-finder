@@ -242,7 +242,7 @@ export default function MissionInput() {
 
       <button
         type="submit"
-        className="mt-8 flex items-center gap-3 bg-white text-gray-900 font-semibold px-10 py-4 rounded-xl text-lg hover:bg-gray-100 transition-colors"
+        className="mt-8 inline-flex items-center justify-center gap-3 bg-white text-gray-900 font-semibold px-10 py-4 min-h-[44px] rounded-xl text-lg hover:bg-gray-100 transition-colors"
       >
         Find Matching Funders
         <ArrowRight size={20} />

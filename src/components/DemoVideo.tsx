@@ -158,8 +158,27 @@ export default function DemoVideo() {
 
   const missionDone = missionChars >= MISSION_TEXT.length;
   return (
-    <div className="w-full flex justify-center px-4 py-8">
-      {/* Outer wrapper — max width, aspect ratio preserved */}
+    <div
+      className="w-full flex justify-center px-4 py-8 demo-dark-card"
+      aria-hidden="true"
+      role="presentation"
+    >
+      {/* Outer wrapper — max width, aspect ratio preserved.
+
+          The demo simulates a dark browser window. The `.demo-dark-card` class
+          opts this subtree out of the light-mode AA contrast remaps in
+          src/index.css so Tailwind 300/400 shades render at their original
+          (light) values against the hardcoded dark interior — preventing
+          dark-on-dark text in light mode (P2 fix, audit 2026-05-14).
+
+          aria-hidden="true" + role="presentation" hide the entire animated
+          mockup from assistive tech. The demo screens contain non-interactive
+          duplicates of real page content (notably an <h2> "Find Funders
+          Aligned to Your Mission" that mirrors the page H1), which would
+          otherwise produce duplicate-heading noise for screen reader users.
+          The sighted-only demo loses nothing — sighted users see the demo,
+          AT users get the surrounding hero copy and product explanation
+          (P3 fix, audit 2026-05-14). */}
       <div className="w-full max-w-[336rem]">
         {/* Browser chrome mock */}
         <div className="rounded-2xl overflow-hidden border border-[#30363d] shadow-2xl shadow-black/50">
