@@ -1191,16 +1191,23 @@ export default function ProjectWorkspace() {
                                 {grant.grant_title && <div className="text-xs text-gray-500 mt-0.5">{grant.grant_title}</div>}
                               </td>
                               <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
-                                <select
-                                  value={grant.status_id}
-                                  onChange={e => handleUpdateGrantStatus(grant.id, e.target.value)}
-                                  className="bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-sm"
-                                  style={{ color: statusInfo?.color || '#fff' }}
-                                >
-                                  {pipelineStatuses.map(s => (
-                                    <option key={s.id} value={s.id} style={{ color: s.color }}>{s.name}</option>
-                                  ))}
-                                </select>
+                                <div className="inline-flex items-center gap-2 bg-[#0d1117] border border-[#30363d] rounded px-2 py-1">
+                                  <span
+                                    className="w-2 h-2 rounded-full flex-shrink-0"
+                                    style={{ backgroundColor: statusInfo?.color || '#9ca3af' }}
+                                    aria-hidden="true"
+                                  />
+                                  <select
+                                    value={grant.status_id}
+                                    onChange={e => handleUpdateGrantStatus(grant.id, e.target.value)}
+                                    className="bg-transparent border-0 text-sm text-white focus:outline-none cursor-pointer"
+                                    aria-label="Grant status"
+                                  >
+                                    {pipelineStatuses.map(s => (
+                                      <option key={s.id} value={s.id} className="bg-[#0d1117] text-white">{s.name}</option>
+                                    ))}
+                                  </select>
+                                </div>
                               </td>
                               <td className="px-4 py-3 text-gray-300 text-sm">{fmtCurrency(grant.amount)}</td>
                               <td className="px-4 py-3">
@@ -1805,11 +1812,19 @@ export default function ProjectWorkspace() {
               </div>
               {/* Quick status row */}
               <div className="flex items-center gap-3 mt-3">
-                <select value={selectedGrant.status_id}
-                  onChange={e => { handleUpdateGrantStatus(selectedGrant.id, e.target.value); setSelectedGrant(prev => prev ? { ...prev, status_id: e.target.value } : prev); }}
-                  className="bg-[#0d1117] border border-[#30363d] rounded-lg px-2.5 py-1.5 text-white text-xs font-medium">
-                  {pipelineStatuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
+                <div className="inline-flex items-center gap-2 bg-[#0d1117] border border-[#30363d] rounded-lg px-2.5 py-1.5">
+                  <span
+                    className="w-2 h-2 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: (pipelineStatuses.find(s => s.id === selectedGrant.status_id)?.color) || '#9ca3af' }}
+                    aria-hidden="true"
+                  />
+                  <select value={selectedGrant.status_id}
+                    onChange={e => { handleUpdateGrantStatus(selectedGrant.id, e.target.value); setSelectedGrant(prev => prev ? { ...prev, status_id: e.target.value } : prev); }}
+                    className="bg-transparent border-0 text-white text-xs font-medium focus:outline-none cursor-pointer"
+                    aria-label="Grant status">
+                    {pipelineStatuses.map(s => <option key={s.id} value={s.id} className="bg-[#0d1117] text-white">{s.name}</option>)}
+                  </select>
+                </div>
                 <span className="text-sm text-white font-medium">{fmtCurrency(selectedGrant.amount)}</span>
                 {selectedGrant.deadline && (
                   <span className="text-xs text-gray-400 flex items-center gap-1">
