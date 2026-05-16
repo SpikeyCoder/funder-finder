@@ -10,6 +10,8 @@
  *
  * Receives: { funder, mission, orgDetails, uploadedFilePaths?, sessionId? }
  * Returns:  Server-Sent Events stream with { text } chunks
+ *
+ * MIGRATED TO LOCAL JWT AUTH: Uses auth.ts (local JWT decode + service-role client)
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
@@ -17,7 +19,7 @@ import { extractText } from './text-extract.ts';
 import { analyzeStyle, type StyleGuide } from './style-analysis.ts';
 import { performResearch, type ResearchData } from './research.ts';
 import { buildPrompt } from './prompt-builder.ts';
-import { createUserScopedClient } from "../_shared/user-client.ts";
+import { authFromRequest, adminClient } from "../_shared/auth.ts";
 
 // ── Config ──────────────────────────────────────────────────────────────────
 
@@ -103,7 +105,8 @@ Deno.serve(async (req) => {
 
   try {
     // Verify user is authenticated
-    const { supabase, user } = await createUserScopedClient(req);
+    const { userId } = await authFromRequest(req);
+    const supabase = adminClient();
 
     const body = await req.json();
     const funder = body.funder;
