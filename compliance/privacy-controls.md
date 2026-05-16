@@ -30,6 +30,10 @@ last-reviewed: 2026-05-04
 
 ## P5 Access (data subject requests)
 - DSR contact: `kevinmarmstrong1990@gmail.com`.
-- SLA: 30 days, per GDPR Art. 12(3).
-- Process: identity check → SQL export from Supabase → encrypted email
-  to requester. For deletion, cascade-delete with verification email.
+- SLA: 30 calendar days for the substantive response, 5 business days
+  for the acknowledgement, per GDPR Art. 12(3).
+- Full runbook: see [`dsar-runbook.md`](./dsar-runbook.md) — covers
+  triage, identity verification, the SQL paths for each request type
+  (ACCESS / RECTIFICATION / ERASURE / PORTABILITY / OBJECTION /
+  RESTRICTION), backup-tier handling, denial bases, and the
+  acknowledgement and log-entry templates.
