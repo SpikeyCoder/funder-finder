@@ -31,6 +31,15 @@
  * When `SUPABASE_JWT_SECRET` is not configured (e.g. local dev), the
  * helper continues to operate in decode-only mode but logs a warning,
  * so missing-config never silently weakens the production posture.
+ *
+ * Pen-test 2026-05-17 finding FM-2026-05-17-01: the non-HS256 path
+ * ("log a warning and fall through to the gateway") is a sensible
+ * default for forward-compatibility with Supabase's asymmetric-key
+ * rollout, but on production it should be possible to demand HS256
+ * explicitly. Setting `JWT_STRICT_ALG=1` makes a non-HS256 header
+ * (or a missing `alg`) a hard reject instead of a warning, removing
+ * the silent-fallback corner where gateway misconfig would otherwise
+ * let an RS256-shaped token reach this function unverified.
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
@@ -119,11 +128,29 @@ export async function authFromRequest(req: Request): Promise<AuthResult> {
   } catch (e: any) {
     throw new Error(`Malformed JWT: header not JSON (${e?.message || e})`);
   }
+  // FM-2026-05-17-01: when `JWT_STRICT_ALG=1` is set, reject any token
+  // whose header does not advertise HS256 (or which omits the `alg`
+  // claim entirely). The default (unset) preserves forward-compatibility
+  // with Supabase's asymmetric-key rollout: warn-and-fall-through to
+  // gateway verification. Strict mode removes the silent-fallback
+  // corner where a Supabase gateway misconfiguration could let an
+  // RS256-shaped (or alg=none) token reach this function unverified.
+  const strictAlg = (Deno.env.get('JWT_STRICT_ALG') || '').trim() === '1';
   if (header.alg && header.alg !== 'HS256') {
+    if (strictAlg) {
+      throw new Error(`JWT alg "${header.alg}" not accepted (JWT_STRICT_ALG=1; HS256 required)`);
+    }
     // Supabase may issue tokens with asymmetric algorithms (e.g. RS256).
     // Log a warning but do not reject — HMAC verification will be skipped
     // for non-HS256 tokens; the Supabase gateway is the primary verifier.
     console.warn(`authFromRequest: non-HS256 alg "${header.alg}" — skipping local HMAC verification`);
+  } else if (!header.alg) {
+    if (strictAlg) {
+      throw new Error('JWT header missing alg claim (JWT_STRICT_ALG=1; HS256 required)');
+    }
+    // Missing `alg` is unusual but PyJWT-style libraries accept it; warn so
+    // operators see the anomaly even outside strict mode.
+    console.warn('authFromRequest: JWT header missing alg claim — falling back to gateway verification');
   }
 
   let payload: JwtPayload;
