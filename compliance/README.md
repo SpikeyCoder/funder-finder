@@ -7,6 +7,7 @@ review cadence.
 | File | TSC | Cadence |
 |---|---|---|
 | `incident-response.md`     | CC4, CC7   | annually |
+| `monitoring-and-alerting.md` | CC4.1, CC4.2, CC7.1 | annually |
 | `vendor-inventory.md`      | CC9        | quarterly |
 | `data-classification.md`   | C1, P1     | annually |
 | `retention-and-deletion.md`| C1, P4     | annually |
