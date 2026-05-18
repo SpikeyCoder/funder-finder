@@ -14,6 +14,8 @@ review cadence.
 | `risk-register.md`         | CC3        | quarterly |
 | `business-continuity.md`   | A, CC9     | annually |
 | `privacy-controls.md`      | P1-P5      | annually |
+| `availability-rto-rpo.md`  | A1         | quarterly |
+| `disaster-recovery-plan.md`| A1         | quarterly |
 
 Public-facing privacy and terms pages live in `src/pages/PrivacyPolicy.tsx`
 and `src/pages/TermsOfService.tsx`; the documents here are the
