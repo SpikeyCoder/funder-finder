@@ -379,10 +379,9 @@ export default function DemoVideo() {
                 <div className="bg-[#161b22] border border-[#30363d] rounded-2xl px-8 py-4 text-center">
                   <p className="text-xs text-gray-400 mb-1">Funder-Fit Score</p>
                   <p
-                    className="text-5xl font-bold tabular-nums"
-                    style={{
-                      color: score >= 80 ? '#4ade80' : score >= 60 ? '#60a5fa' : '#6b7280',
-                    }}
+                    className={`text-5xl font-bold tabular-nums ${
+                      score >= 80 ? 'text-green-400' : score >= 60 ? 'text-blue-400' : 'text-gray-500'
+                    }`}
                   >
                     {score}
                   </p>
