@@ -80,7 +80,7 @@ html.light-mode .text-white {
 }
 
 html.light-mode .text-gray-400 {
-  color: #656d76;
+  color: #59636e; /* ~6.5:1 on white, ~5.5:1 on #f6f8fa — clears 4.5:1 with margin */
 }
 
 html.light-mode .text-gray-300 {
@@ -88,7 +88,7 @@ html.light-mode .text-gray-300 {
 }
 
 html.light-mode .text-gray-500 {
-  color: #6e7681;
+  color: #59636e; /* was #6e7681 (~4.97:1) — bump to clear 4.5:1 with comfortable margin */
 }
 
 html.light-mode .text-gray-600 {
@@ -108,7 +108,9 @@ html.light-mode .text-gray-100 {
 }
 
 html.light-mode .text-blue-400,
-html.light-mode .text-blue-300 {
+html.light-mode .text-blue-300,
+html.light-mode .text-blue-200,
+html.light-mode .text-blue-100 {
   color: #1d4ed8;
 }
 
@@ -349,4 +351,47 @@ html.light-mode [class*="bg-blue-900"][class*="text-blue-4"] {
 /* 4. Pagination active page button on Browse ------------------ */
 /*    Pattern: `bg-[#58a6ff] text-white` when currentPage === pageNum.
       Already handled by rule #2 above, but be explicit for safety. */
+
+
+/* ==============================================================
+   Light-mode WCAG fixes (added 2026-05-19 daily-usability-audit)
+   ==============================================================
+   Addresses: OAuth button visibility, input border contrast,
+   text-blue-200 on selected budget card, and the demo mockup's
+   inline-color score badge.
+*/
+
+/* 5. OAuth provider buttons (bg-white) need a visible border in light mode.
+      The OAuth buttons use `bg-white text-gray-900` with no border. On the
+      light-mode card background (#f6f8fa), the button edges are nearly
+      invisible (~1.24:1). Add a 1px border at ~3.4:1 against the card bg
+      so the clickable-button affordance is visible (WCAG 1.4.11). */
+html.light-mode button.bg-white,
+html.light-mode a.bg-white {
+  border-width: 1px;
+  border-style: solid;
+  border-color: #8c959f;
+}
+
+/* 6. Form-control borders — `border-[#30363d]` is remapped to #d1d9e0 in
+      light mode (~1.5:1 on white). WCAG 1.4.11 requires 3:1 for UI
+      components. Darken specifically for interactive form controls; cards
+      and decorative dividers keep the lighter remap. */
+html.light-mode input.border-\[\#30363d\],
+html.light-mode select.border-\[\#30363d\],
+html.light-mode textarea.border-\[\#30363d\] {
+  border-color: #8c959f; /* ~3.2:1 on white — clears 1.4.11 minimum */
+}
+
+/* 7. Mission-page selected budget card.
+      Markup is parent <div class="bg-blue-900/30"> with child
+      <p class="text-blue-200">. The bg-on-parent / text-on-child split
+      means the bg-blue-900 + text-blue-2 same-element rule above doesn't
+      trigger. Apply a descendant selector so the child gets dark text.
+      Also lighten the bg-blue-900/30 parent so the contrast is calculated
+      against a stable light tint rather than alpha-composited noise. */
+html.light-mode [class*="bg-blue-900\/30"] .text-blue-200,
+html.light-mode [class*="bg-blue-900\/30"] .text-blue-100 {
+  color: #1e3a8a; /* blue-900 — ~9:1 on the lightened bg */
+}
 
