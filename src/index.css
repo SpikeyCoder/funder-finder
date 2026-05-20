@@ -384,3 +384,49 @@ html.light-mode [class*="bg-blue-900"][class*="text-blue-4"] {
 /*    Pattern: `bg-[#58a6ff] text-white` when currentPage === pageNum.
       Already handled by rule #2 above, but be explicit for safety. */
 
+
+/* ── Light-mode contrast fixes (usability audit 2026-05-19) ───────── */
+
+/* 1. Budget card selected state (MissionInput.tsx)
+      text-blue-200 / text-blue-100 on bg-blue-900/30 → invisible in light mode.
+      Remap to dark blue for legibility. */
+html.light-mode .text-blue-200 {
+  color: #1e40af !important;
+}
+html.light-mode .text-blue-100 {
+  color: #1e3a8a !important;
+}
+
+/* The selected card bg-blue-900/30 composites to near-white in light mode.
+   Give it a visible light-blue background instead. */
+html.light-mode [class*="bg-blue-900\/30"],
+html.light-mode [class*="bg-blue-900/30"] {
+  background-color: rgba(219, 234, 254, 0.7) !important;
+}
+
+/* 2. OAuth login button borders — nearly invisible at 1.24:1
+      Darken to gray-300 in light mode for clear button affordance. */
+html.light-mode button[class*="border-[#30363d]"],
+html.light-mode [class*="border-[#30363d]"] {
+  border-color: #d1d5db !important;
+}
+
+/* 3. Input field borders — below 3:1 UI component threshold.
+      Darken to a visible gray. */
+html.light-mode input[class*="border"],
+html.light-mode select[class*="border"],
+html.light-mode textarea[class*="border"] {
+  border-color: #9ca3af !important;
+}
+
+/* 4. Nav links and footer — currently 4.93:1, strengthen to 7:1+ */
+html.light-mode nav a,
+html.light-mode footer a {
+  color: #374151 !important;
+}
+
+/* 5. Demo mockup inline bg gradients — prevent dark gradients
+      from appearing in light mode on the DemoVideo component. */
+html.light-mode [class*="from-[#020"] {
+  background: linear-gradient(to bottom, #f8fafc, #f1f5f9) !important;
+}
