@@ -10,6 +10,8 @@
  *
  * Receives: { funder, mission, orgDetails, uploadedFilePaths?, sessionId? }
  * Returns:  Server-Sent Events stream with { text } chunks
+ *
+ * MIGRATED TO LOCAL JWT AUTH: Uses auth.ts (local JWT decode + service-role client)
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
@@ -17,7 +19,7 @@ import { extractText } from './text-extract.ts';
 import { analyzeStyle, type StyleGuide } from './style-analysis.ts';
 import { performResearch, type ResearchData } from './research.ts';
 import { buildPrompt } from './prompt-builder.ts';
-import { createUserScopedClient } from "../_shared/user-client.ts";
+import { authFromRequest, adminClient } from "../_shared/auth.ts";
 
 // ── Config ──────────────────────────────────────────────────────────────────
 
@@ -103,19 +105,132 @@ Deno.serve(async (req) => {
 
   try {
     // Verify user is authenticated
-    const { supabase, user } = await createUserScopedClient(req);
+    const { userId } = await authFromRequest(req);
+    const supabase = adminClient();
 
     const body = await req.json();
     const funder = body.funder;
     const mission = typeof body.mission === 'string' ? body.mission.trim() : '';
     const orgDetails = body.orgDetails || {};
-    const uploadedFilePaths: string[] = body.uploadedFilePaths || [];
+    const requestedFilePaths: string[] = Array.isArray(body.uploadedFilePaths)
+      ? (body.uploadedFilePaths as unknown[]).filter(
+          (p): p is string => typeof p === 'string',
+        )
+      : [];
 
     if (!funder || !mission) {
       return new Response(
         JSON.stringify({ error: 'Missing required fields: funder, mission' }),
         { status: 400, headers: corsHeaders(origin) },
       );
+    }
+
+    // ── Authorize uploaded storage paths ──────────────────────────────────
+    //
+    // SECURITY (BOLA / IDOR — OWASP API1:2023, A01:2021, CWE-639, CWE-285,
+    // CWE-22): `uploadedFilePaths` is fully attacker-controlled and every
+    // download below runs under the service-role client, which bypasses
+    // storage RLS entirely. The frontend uploads transient session files to
+    // the `grant-uploads` bucket using the path convention
+    // `${sessionId}/${uuid}.${ext}`, where `sessionId` is a client-side
+    // random UUID — the path contains NO user identifier, so it proves
+    // nothing about ownership and these objects are never recorded in
+    // `application_knowledge_base`. The authoritative owner is the auth uid
+    // Supabase Storage records on the object row when the file is uploaded
+    // through the authenticated browser client. We verify every requested
+    // path is owned by the caller via a service-role lookup against
+    // `storage.objects` before any download. Any path that is missing,
+    // malformed, or not owned by the caller fails the whole request with a
+    // clear error — files are never silently dropped.
+    const validatedFilePaths: string[] = [];
+    if (requestedFilePaths.length > 0) {
+      // Shape must match the upload convention (`<folder>/<file>`, exactly
+      // two non-empty segments) with no traversal. Off-shape paths can never
+      // be owned, so they fall through to the rejection below.
+      const SHAPE_RE = /^[^/]+\/[^/]+$/;
+      const wellFormed = requestedFilePaths.filter(
+        (p) =>
+          p.length > 0 &&
+          p.length <= 512 &&
+          !p.includes('..') &&
+          !p.startsWith('/') &&
+          SHAPE_RE.test(p),
+      );
+
+      // `userId` is the verified JWT `sub`; it must be a UUID before we
+      // build a PostgREST filter from it. Bail closed if that invariant
+      // ever breaks rather than issuing a query with an unexpected value.
+      if (
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          userId,
+        )
+      ) {
+        throw new Error('Unexpected authenticated user id format');
+      }
+
+      let ownedNames = new Set<string>();
+      if (wellFormed.length > 0) {
+        const { data: objs, error: objErr } = await supabase
+          .schema('storage')
+          .from('objects')
+          .select('name, owner, owner_id')
+          .eq('bucket_id', 'grant-uploads')
+          .in('name', wellFormed);
+
+        if (objErr) {
+          console.error(
+            'grant-writer: storage ownership lookup failed:',
+            objErr.message,
+          );
+          return new Response(
+            JSON.stringify({
+              error:
+                'Unable to verify your uploaded files right now. Please try again in a moment.',
+            }),
+            {
+              status: 503,
+              headers: {
+                ...corsHeaders(origin),
+                'Content-Type': 'application/json',
+              },
+            },
+          );
+        }
+
+        ownedNames = new Set(
+          ((objs ?? []) as Array<{
+            name: string;
+            owner: string | null;
+            owner_id: string | null;
+          }>)
+            .filter((o) => o.owner === userId || o.owner_id === userId)
+            .map((o) => o.name),
+        );
+      }
+
+      const accepted = requestedFilePaths.filter((p) => ownedNames.has(p));
+      if (accepted.length !== requestedFilePaths.length) {
+        console.warn(
+          `grant-writer: rejecting request — user ${userId} referenced ` +
+            `${requestedFilePaths.length - accepted.length} storage path(s) ` +
+            `that are malformed or not owned by them`,
+        );
+        return new Response(
+          JSON.stringify({
+            error:
+              'Some uploaded files could not be verified as belonging to you. Please re-upload your files and try again.',
+          }),
+          {
+            status: 403,
+            headers: {
+              ...corsHeaders(origin),
+              'Content-Type': 'application/json',
+            },
+          },
+        );
+      }
+
+      validatedFilePaths.push(...accepted);
     }
 
     if (!ANTHROPIC_API_KEY) {
@@ -135,12 +250,14 @@ Deno.serve(async (req) => {
           // ── Phase 1: Extract text from uploaded grants (if any) ────────
           let styleGuide: StyleGuide | null = null;
 
-          if (uploadedFilePaths.length > 0) {
+          if (validatedFilePaths.length > 0) {
             send(ssePhase('analyzing'));
 
             const grantTexts: string[] = [];
 
-            for (const path of uploadedFilePaths.slice(0, 3)) {
+            for (const path of validatedFilePaths.slice(0, 3)) {
+              // Ownership was authoritatively verified above before this
+              // service-role download is allowed to run.
               const file = await downloadFile(supabase, path);
               if (file) {
                 try {

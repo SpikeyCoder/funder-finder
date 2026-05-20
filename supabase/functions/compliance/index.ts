@@ -1,7 +1,6 @@
 // Phase 4: Compliance requirement CRUD
-// MIGRATED TO USER-SCOPED AUTH: Uses authenticated user context instead of SERVICE_ROLE_KEY
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-import { createUserScopedClient } from "../_shared/user-client.ts";
+// MIGRATED TO LOCAL JWT AUTH: Uses auth.ts (local JWT decode + service-role client)
+import { authFromRequest, adminClient } from "../_shared/auth.ts";
 
 import { corsHeaders as _corsHeaders } from "../_shared/cors.ts";
 
@@ -18,8 +17,8 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS(req) });
 
   try {
-    // Phase 4: Use user-scoped client with JWT validation
-    const { supabase, user } = await createUserScopedClient(req);
+    const { userId } = await authFromRequest(req);
+    const supabase = adminClient();
 
     const url = new URL(req.url);
 
@@ -27,7 +26,7 @@ Deno.serve(async (req: Request) => {
       const grantId = url.searchParams.get('grant_id');
       const projectId = url.searchParams.get('project_id');
 
-      let query = supabase.from('compliance_requirements').select('*').eq('user_id', user.id);
+      let query = supabase.from('compliance_requirements').select('*').eq('user_id', userId);
       if (grantId) query = query.eq('tracked_grant_id', grantId);
       if (projectId) query = query.eq('project_id', projectId);
 
@@ -48,7 +47,7 @@ Deno.serve(async (req: Request) => {
       const body = await req.json();
       const { data, error } = await supabase
         .from('compliance_requirements')
-        .insert({ ...body, user_id: user.id })
+        .insert({ ...body, user_id: userId })
         .select()
         .single();
       if (error) throw error;
@@ -68,7 +67,7 @@ Deno.serve(async (req: Request) => {
         .from('compliance_requirements')
         .update(updates)
         .eq('id', id)
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .select()
         .single();
       if (error) throw error;
@@ -78,7 +77,7 @@ Deno.serve(async (req: Request) => {
     if (req.method === 'DELETE') {
       const id = url.searchParams.get('id');
       if (!id) return json(req, { error: 'id required' }, 400);
-      await supabase.from('compliance_requirements').delete().eq('id', id).eq('user_id', user.id);
+      await supabase.from('compliance_requirements').delete().eq('id', id).eq('user_id', userId);
       return json(req, { success: true });
     }
 

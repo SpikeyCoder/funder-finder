@@ -1,10 +1,8 @@
 // Phase 4: AI-assisted grant proposal draft generation
-// MIGRATED TO USER-SCOPED AUTH: Uses authenticated user context instead of SERVICE_ROLE_KEY
+// MIGRATED TO LOCAL JWT AUTH: Uses auth.ts (local JWT decode + service-role client)
 // Enhanced: reference doc style matching, deep research, MLA citations
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-import { createUserScopedClient } from "../_shared/user-client.ts";
+import { authFromRequest, adminClient } from "../_shared/auth.ts";
 
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || '';
 
 import { corsHeaders as _corsHeaders } from "../_shared/cors.ts";
@@ -39,8 +37,8 @@ Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return json(req, { error: 'Method not allowed' }, 405);
 
   try {
-    // Phase 4: Use user-scoped client with JWT validation
-    const { supabase, user } = await createUserScopedClient(req);
+    const { userId } = await authFromRequest(req);
+    const supabase = adminClient();
 
     const {
       grant_id,
@@ -53,18 +51,34 @@ Deno.serve(async (req: Request) => {
 
     // ── Gather context ────────────────────────────────────────────────────
 
-    // Load grant, project, and user profile in parallel
+    // Load grant, project, and user profile in parallel.
+    // SECURITY: each query is scoped to the authenticated user's own rows.
+    // Without the user_id filter the service-role client would bypass RLS and
+    // allow cross-tenant disclosure of grants/projects via the returned draft
+    // (BOLA / IDOR — OWASP API1:2023, CWE-639). Reference docs are also
+    // restricted to the caller's own knowledge-base rows below.
     const [grantInfo, project, userProfile] = await Promise.all([
       grant_id
-        ? supabase.from('tracked_grants').select('*').eq('id', grant_id).single()
+        ? supabase
+            .from('tracked_grants')
+            .select('*')
+            .eq('id', grant_id)
+            .eq('user_id', userId)
+            .single()
         : Promise.resolve({ data: null, error: null }),
       project_id
-        ? supabase.from('projects').select('*').eq('id', project_id).single()
+        ? supabase
+            .from('projects')
+            .select('*')
+            .eq('id', project_id)
+            .eq('user_id', userId)
+            .single()
         : Promise.resolve({ data: null, error: null }),
-      supabase.from('user_profiles').select('*').eq('id', user.id).single(),
+      supabase.from('user_profiles').select('*').eq('id', userId).single(),
     ]);
 
     if ((grantInfo.error && grant_id) || (project.error && project_id) || userProfile.error) {
+      // Generic message — do not echo Postgres error strings to the client.
       return json(req, { error: 'Could not load required data' }, 400);
     }
 
@@ -75,7 +89,9 @@ Deno.serve(async (req: Request) => {
       const { data: refDocs } = await supabase
         .from('application_knowledge_base')
         .select('title, content, storage_path, source_type')
-        .in('id', reference_doc_ids);
+        .in('id', reference_doc_ids)
+        // SECURITY: restrict reference documents to those owned by the caller.
+        .eq('user_id', userId);
 
       const docTexts: string[] = [];
       for (const doc of refDocs || []) {
@@ -96,7 +112,7 @@ Deno.serve(async (req: Request) => {
     const { data: kbEntries } = await supabase
       .from('application_knowledge_base')
       .select('title, content')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .neq('source_type', 'reference_doc')
       .order('created_at', { ascending: false })
       .limit(3);

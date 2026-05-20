@@ -128,7 +128,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-white truncate">{r.name}</p>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-400">
                   {r.state && `${r.state} · `}
                   {r.entity_type === 'funder' ? 'Funder' : 'Recipient'}
                   {r.grant_count > 0 && ` · ${r.grant_count} grants`}

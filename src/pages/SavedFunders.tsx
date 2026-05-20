@@ -261,7 +261,7 @@ export default function SavedFunders() {
             {entries.length > 0 && (
               <button
                 onClick={exportCSV}
-                className="flex items-center gap-2 border border-[#30363d] rounded-xl px-4 py-2 text-sm hover:bg-[#161b22] transition-colors"
+                className="inline-flex items-center gap-2 border border-[#30363d] rounded-xl px-4 py-2 min-h-[44px] text-sm hover:bg-[#161b22] transition-colors"
               >
                 <Download size={16} />
                 Export CSV
@@ -284,7 +284,7 @@ export default function SavedFunders() {
             ) : (
               <button
                 onClick={() => setShowLoginModal(true)}
-                className="flex items-center gap-2 border border-blue-700 text-blue-400 rounded-xl px-4 py-2 text-sm hover:bg-blue-900/20 transition-colors"
+                className="inline-flex items-center gap-2 border border-blue-700 text-blue-400 rounded-xl px-4 py-2 min-h-[44px] text-sm hover:bg-blue-900/20 transition-colors"
               >
                 Log in to sync
               </button>
@@ -451,7 +451,7 @@ export default function SavedFunders() {
                       <div className="flex gap-3 mt-4 flex-wrap">
                         <button
                           onClick={() => remove(f.id)}
-                          className="flex items-center gap-2 border border-red-900 text-red-400 rounded-xl px-4 py-2 text-sm hover:bg-red-900/20 transition-colors"
+                          className="inline-flex items-center gap-2 border border-red-900 text-red-400 rounded-xl px-4 py-2 min-h-[44px] text-sm hover:bg-red-900/20 transition-colors"
                         >
                           <BookmarkX size={14} />
                           Remove
@@ -459,7 +459,7 @@ export default function SavedFunders() {
                         {user && (
                           <button
                             onClick={() => navigate('/grant-writer', { state: { funder: f } })}
-                            className="flex items-center gap-2 border border-purple-700 text-purple-400 rounded-xl px-4 py-2 text-sm hover:bg-purple-900/20 transition-colors"
+                            className="inline-flex items-center gap-2 border border-purple-700 text-purple-400 rounded-xl px-4 py-2 min-h-[44px] text-sm hover:bg-purple-900/20 transition-colors"
                           >
                             <PenLine size={14} />
                             Write Grant
@@ -468,7 +468,7 @@ export default function SavedFunders() {
                         {user && draftsByFunder[f.id]?.length > 0 && (
                           <button
                             onClick={() => setViewingDraft(draftsByFunder[f.id][0])}
-                            className="flex items-center gap-2 border border-[#30363d] text-gray-300 rounded-xl px-4 py-2 text-sm hover:bg-[#21262d] transition-colors"
+                            className="inline-flex items-center gap-2 border border-[#30363d] text-gray-300 rounded-xl px-4 py-2 min-h-[44px] text-sm hover:bg-[#21262d] transition-colors"
                           >
                             <FileText size={14} />
                             Drafts ({draftsByFunder[f.id].length})
@@ -476,7 +476,7 @@ export default function SavedFunders() {
                         )}
                         <button
                           onClick={() => navigate(`/funder/${f.id}`, { state: { funder: f } })}
-                          className="flex items-center gap-2 border border-[#30363d] rounded-xl px-4 py-2 text-sm hover:bg-[#21262d] transition-colors ml-auto"
+                          className="inline-flex items-center gap-2 border border-[#30363d] rounded-xl px-4 py-2 min-h-[44px] text-sm hover:bg-[#21262d] transition-colors ml-auto"
                         >
                           View Details
                           <ChevronRight size={14} />

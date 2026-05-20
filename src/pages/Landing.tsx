@@ -36,7 +36,7 @@ export default function Landing() {
       </div>
 
       {/* Trust Signals */}
-      <div className="flex flex-wrap items-center justify-center gap-6 px-6 pb-8 text-xs text-gray-500">
+      <div className="flex flex-wrap items-center justify-center gap-6 px-6 pb-8 text-sm text-gray-400">
         <span className="flex items-center gap-1.5">
           <Shield size={13} />
           Powered by IRS 990 public filings
@@ -137,7 +137,7 @@ export default function Landing() {
       <div className="text-center pb-24 px-6">
         <h2 className="text-3xl font-bold mb-4">Ready to find your funders?</h2>
         <p className="text-gray-400 mb-8 max-w-xl mx-auto">
-          Join hundreds of nonprofits using FunderMatch to connect with aligned funders.
+          Find your next funder in seconds, not weeks.
         </p>
         <button
           onClick={() => navigate('/mission')}

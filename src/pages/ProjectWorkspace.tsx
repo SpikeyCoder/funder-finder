@@ -1090,7 +1090,7 @@ export default function ProjectWorkspace() {
                       </thead>
                       <tbody className="divide-y divide-[#30363d]">
                         {matches.map(m => (
-                          <tr key={m.id} className="hover:bg-[#0d1117] transition-colors cursor-pointer" onClick={() => navigate(`/funder/${m.funder_ein}`)}>
+                          <tr key={m.id} className="hover:bg-[#21262d] transition-colors cursor-pointer" onClick={() => navigate(`/funder/${m.funder_ein}`)}>
                             <td className="px-6 py-4 text-white">{m.funder_name || m.funder_ein}</td>
                             <td className="px-6 py-4">
                               <span className={`text-xs font-medium px-2 py-1 rounded-full ${Number(m.match_score) >= 70 ? 'bg-green-900/30 text-green-400' : Number(m.match_score) >= 40 ? 'bg-yellow-900/30 text-yellow-400' : 'bg-gray-800 text-gray-400'}`}>
@@ -1185,22 +1185,29 @@ export default function ProjectWorkspace() {
                           const statusInfo = grant.pipeline_statuses || getStatusById(grant.status_id);
                           const isOverdue = grant.deadline && new Date(grant.deadline) < new Date() && !statusInfo?.is_terminal;
                           return (
-                            <tr key={grant.id} className="hover:bg-[#0d1117] transition-colors cursor-pointer" onClick={() => openGrantDetail(grant)}>
+                            <tr key={grant.id} className="hover:bg-[#21262d] transition-colors cursor-pointer" onClick={() => openGrantDetail(grant)}>
                               <td className="px-4 py-3">
                                 <div className="text-blue-400 hover:text-blue-300 text-sm font-medium">{grant.funder_name}</div>
                                 {grant.grant_title && <div className="text-xs text-gray-500 mt-0.5">{grant.grant_title}</div>}
                               </td>
                               <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
-                                <select
-                                  value={grant.status_id}
-                                  onChange={e => handleUpdateGrantStatus(grant.id, e.target.value)}
-                                  className="bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-sm"
-                                  style={{ color: statusInfo?.color || '#fff' }}
-                                >
-                                  {pipelineStatuses.map(s => (
-                                    <option key={s.id} value={s.id} style={{ color: s.color }}>{s.name}</option>
-                                  ))}
-                                </select>
+                                <div className="inline-flex items-center gap-2 bg-[#0d1117] border border-[#30363d] rounded px-2 py-1">
+                                  <span
+                                    className="w-2 h-2 rounded-full flex-shrink-0"
+                                    style={{ backgroundColor: statusInfo?.color || '#9ca3af' }}
+                                    aria-hidden="true"
+                                  />
+                                  <select
+                                    value={grant.status_id}
+                                    onChange={e => handleUpdateGrantStatus(grant.id, e.target.value)}
+                                    className="bg-transparent border-0 text-sm text-white focus:outline-none cursor-pointer"
+                                    aria-label="Grant status"
+                                  >
+                                    {pipelineStatuses.map(s => (
+                                      <option key={s.id} value={s.id} className="bg-[#0d1117] text-white">{s.name}</option>
+                                    ))}
+                                  </select>
+                                </div>
                               </td>
                               <td className="px-4 py-3 text-gray-300 text-sm">{fmtCurrency(grant.amount)}</td>
                               <td className="px-4 py-3">
@@ -1280,7 +1287,7 @@ export default function ProjectWorkspace() {
                       </thead>
                       <tbody className="divide-y divide-[#30363d]">
                         {peers.map((peer, idx) => (
-                          <tr key={peer.ein || `peer-${idx}`} className="hover:bg-[#0d1117] transition-colors cursor-pointer" onClick={() => peer.ein && navigate(`/recipient/${peer.ein}`)}>
+                          <tr key={peer.ein || `peer-${idx}`} className="hover:bg-[#21262d] transition-colors cursor-pointer" onClick={() => peer.ein && navigate(`/recipient/${peer.ein}`)}>
                             <td className="px-6 py-4 text-blue-400 hover:text-blue-300 font-medium text-sm">{peer.name}</td>
                             <td className="px-6 py-4 text-gray-400 text-sm">{peer.state || '—'}</td>
                             <td className="px-6 py-4 text-gray-400 text-sm">
@@ -1805,11 +1812,19 @@ export default function ProjectWorkspace() {
               </div>
               {/* Quick status row */}
               <div className="flex items-center gap-3 mt-3">
-                <select value={selectedGrant.status_id}
-                  onChange={e => { handleUpdateGrantStatus(selectedGrant.id, e.target.value); setSelectedGrant(prev => prev ? { ...prev, status_id: e.target.value } : prev); }}
-                  className="bg-[#0d1117] border border-[#30363d] rounded-lg px-2.5 py-1.5 text-white text-xs font-medium">
-                  {pipelineStatuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
+                <div className="inline-flex items-center gap-2 bg-[#0d1117] border border-[#30363d] rounded-lg px-2.5 py-1.5">
+                  <span
+                    className="w-2 h-2 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: (pipelineStatuses.find(s => s.id === selectedGrant.status_id)?.color) || '#9ca3af' }}
+                    aria-hidden="true"
+                  />
+                  <select value={selectedGrant.status_id}
+                    onChange={e => { handleUpdateGrantStatus(selectedGrant.id, e.target.value); setSelectedGrant(prev => prev ? { ...prev, status_id: e.target.value } : prev); }}
+                    className="bg-transparent border-0 text-white text-xs font-medium focus:outline-none cursor-pointer"
+                    aria-label="Grant status">
+                    {pipelineStatuses.map(s => <option key={s.id} value={s.id} className="bg-[#0d1117] text-white">{s.name}</option>)}
+                  </select>
+                </div>
                 <span className="text-sm text-white font-medium">{fmtCurrency(selectedGrant.amount)}</span>
                 {selectedGrant.deadline && (
                   <span className="text-xs text-gray-400 flex items-center gap-1">

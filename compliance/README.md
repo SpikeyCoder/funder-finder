@@ -7,6 +7,7 @@ review cadence.
 | File | TSC | Cadence |
 |---|---|---|
 | `incident-response.md`     | CC4, CC7   | annually |
+| `monitoring-and-alerting.md` | CC4.1, CC4.2, CC7.1 | annually |
 | `vendor-inventory.md`      | CC9        | quarterly |
 | `data-classification.md`   | C1, P1     | annually |
 | `retention-and-deletion.md`| C1, P4     | annually |
@@ -14,6 +15,8 @@ review cadence.
 | `risk-register.md`         | CC3        | quarterly |
 | `business-continuity.md`   | A, CC9     | annually |
 | `privacy-controls.md`      | P1-P5      | annually |
+| `availability-rto-rpo.md`  | A1         | quarterly |
+| `disaster-recovery-plan.md`| A1         | quarterly |
 
 Public-facing privacy and terms pages live in `src/pages/PrivacyPolicy.tsx`
 and `src/pages/TermsOfService.tsx`; the documents here are the

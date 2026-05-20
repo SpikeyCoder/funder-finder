@@ -1,7 +1,13 @@
+import { useEffect } from 'react';
 import NavBar from '../components/NavBar';
 import Footer from '../components/Footer';
 
 export default function TermsOfService() {
+  // Fix stale-title carryover when navigating from other SPA routes (audit P1 2026-05-12).
+  useEffect(() => {
+    document.title = 'Terms of Service | FunderMatch';
+  }, []);
+
   return (
     <div className="min-h-screen bg-[#0d1117] text-white">
       <NavBar />

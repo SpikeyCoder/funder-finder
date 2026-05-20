@@ -1,6 +1,8 @@
-// Phase 3A: Cross-project portfolio view with aggregate metrics
+// Phase 3A: Cross-project portfolio view with aggregate metrics.
+// Auth: see _shared/auth.ts -- decodes JWT payload locally and queries via
+// service-role client filtered by user_id.
 
-import { createUserScopedClient } from "../_shared/user-client.ts";
+import { authFromRequest, adminClient, statusForAuthError } from "../_shared/auth.ts";
 import { corsHeaders as _corsHeaders } from "../_shared/cors.ts";
 
 const CORS_HEADERS_OPTS = { methods: "GET, OPTIONS" } as const;
@@ -20,39 +22,28 @@ function errorResponse(req: Request, message: string, status = 400) {
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: CORS_HEADERS(req) });
-  }
-
-  if (req.method !== 'GET') {
-    return errorResponse(req, 'Method not allowed', 405);
-  }
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS(req) });
+  if (req.method !== 'GET') return errorResponse(req, 'Method not allowed', 405);
 
   try {
-    const { supabase, user } = await createUserScopedClient(req);
-
+    const { userId } = await authFromRequest(req);
+    const supabase = adminClient();
     const url = new URL(req.url);
 
-    // Get all user's tracked grants with status info and project name
     const { data: allGrants, error: grantsError } = await supabase
       .from('tracked_grants')
       .select('*, pipeline_statuses(name, slug, color, is_terminal), projects(name)')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .order('updated_at', { ascending: false });
-
     if (grantsError) return errorResponse(req, grantsError.message, 500);
     const grants = allGrants || [];
 
-    // Compute metrics
     const totalTracked = grants.length;
-    const terminalGrants = grants.filter((g: any) => g.pipeline_statuses?.is_terminal);
     const awardedGrants = grants.filter((g: any) => g.pipeline_statuses?.slug === 'awarded');
     const rejectedGrants = grants.filter((g: any) => g.pipeline_statuses?.slug === 'rejected');
     const activeGrants = grants.filter((g: any) => !g.pipeline_statuses?.is_terminal);
-
     const pendingAsk = activeGrants.reduce((sum: number, g: any) => sum + (parseFloat(g.amount) || 0), 0);
     const totalAwarded = awardedGrants.reduce((sum: number, g: any) => sum + (parseFloat(g.awarded_amount) || parseFloat(g.amount) || 0), 0);
-
     const decided = awardedGrants.length + rejectedGrants.length;
     const winRate = decided > 0 ? Math.round((awardedGrants.length / decided) * 100) : null;
 
@@ -64,7 +55,6 @@ Deno.serve(async (req: Request) => {
       return dl >= now && dl <= thirtyDaysOut;
     }).length;
 
-    // Pipeline breakdown
     const statusCounts: Record<string, { name: string; color: string; count: number }> = {};
     for (const g of grants) {
       const slug = (g as any).pipeline_statuses?.slug || 'unknown';
@@ -79,28 +69,23 @@ Deno.serve(async (req: Request) => {
     }
     const pipelineBreakdown = Object.values(statusCounts);
 
-    // Apply filters for grant list
     let filteredGrants = grants;
-
     const projectIds = url.searchParams.get('project_ids');
     if (projectIds) {
       const ids = projectIds.split(',');
       filteredGrants = filteredGrants.filter((g: any) => ids.includes(g.project_id));
     }
-
     const statuses = url.searchParams.get('statuses');
     if (statuses) {
       const slugs = statuses.split(',');
       filteredGrants = filteredGrants.filter((g: any) => slugs.includes((g as any).pipeline_statuses?.slug));
     }
-
     const funderSearch = url.searchParams.get('funder');
     if (funderSearch) {
       const search = funderSearch.toLowerCase();
       filteredGrants = filteredGrants.filter((g: any) => g.funder_name?.toLowerCase().includes(search));
     }
 
-    // Sorting
     const sortBy = url.searchParams.get('sort_by') || 'updated_at';
     const sortAsc = url.searchParams.get('sort_order') === 'asc';
     filteredGrants.sort((a: any, b: any) => {
@@ -110,13 +95,11 @@ Deno.serve(async (req: Request) => {
       return sortAsc ? cmp : -cmp;
     });
 
-    // Pagination
     const page = parseInt(url.searchParams.get('page') || '1');
     const perPage = parseInt(url.searchParams.get('per_page') || '50');
     const total = filteredGrants.length;
     const paged = filteredGrants.slice((page - 1) * perPage, page * perPage);
 
-    // Format grants for response
     const formattedGrants = paged.map((g: any) => ({
       id: g.id,
       project_id: g.project_id,
@@ -134,7 +117,6 @@ Deno.serve(async (req: Request) => {
       updated_at: g.updated_at,
     }));
 
-    // CSV export
     const isExport = url.searchParams.get('export') === 'true';
     if (isExport) {
       const csvHeader = 'Project,Funder Name,Grant Title,Status,Amount,Deadline,Notes,URL,Source,Added,Updated';
@@ -178,6 +160,7 @@ Deno.serve(async (req: Request) => {
     });
   } catch (err: any) {
     console.error('portfolio error:', err);
-    return errorResponse(req, err.message || 'Internal server error', 500);
+    const msg = err?.message || 'Internal server error';
+    return errorResponse(req, msg, statusForAuthError(msg));
   }
 });

@@ -176,6 +176,27 @@ html.light-mode .text-violet-400 {
   color: #6d28d9;
 }
 
+/* Light-mode contrast remaps above are intended for site UI on light backgrounds.
+   The Landing-page DemoVideo (`.demo-dark-card`) hardcodes a dark browser window
+   interior (bg-[#0d1117]) for all theme modes, so Tailwind 300/400 shades inside
+   it need to STAY light to keep readable contrast. Restore the original Tailwind
+   v3 hex values for that subtree. Fixes P2 (audit 2026-05-14): DemoVideo
+   Write-Grant button class/computed-color mismatch in light mode. */
+html.light-mode .demo-dark-card .text-gray-200 { color: #e5e7eb; }
+html.light-mode .demo-dark-card .text-gray-300 { color: #d1d5db; }
+html.light-mode .demo-dark-card .text-gray-400 { color: #9ca3af; }
+html.light-mode .demo-dark-card .text-gray-500 { color: #6b7280; }
+html.light-mode .demo-dark-card .text-blue-300  { color: #93c5fd; }
+html.light-mode .demo-dark-card .text-blue-400  { color: #60a5fa; }
+html.light-mode .demo-dark-card .text-green-300 { color: #86efac; }
+html.light-mode .demo-dark-card .text-green-400 { color: #4ade80; }
+html.light-mode .demo-dark-card .text-purple-300 { color: #d8b4fe; }
+html.light-mode .demo-dark-card .text-purple-400 { color: #c084fc; }
+html.light-mode .demo-dark-card .text-amber-300 { color: #fcd34d; }
+html.light-mode .demo-dark-card .text-amber-400 { color: #fbbf24; }
+html.light-mode .demo-dark-card .text-red-300   { color: #fca5a5; }
+html.light-mode .demo-dark-card .text-red-400   { color: #f87171; }
+
 /* Brand accent (#58a6ff) — only ~3.0:1 on white. Remap in light mode. */
 html.light-mode .text-\[\#58a6ff\] {
   color: #0969da;
@@ -206,6 +227,19 @@ html.light-mode .bg-\[\#0f1d2e\] .text-gray-300 {
 html.light-mode .bg-\[\#0f1d2e\] .text-gray-200,
 html.light-mode .bg-\[\#0f1d2e\] .text-gray-100 {
   color: #f3f4f6; /* tailwind gray-100 */
+}
+
+/* Peer-nonprofit chips inside the .bg-[#0f1d2e] card carry their own
+   .bg-[#161b22], which gets remapped to a light #f6f8fa in light mode.
+   The text-gray-200 above would render almost-white text on that light chip
+   bg (~1:1). Restore dark text for elements that carry BOTH the dark-card
+   inner bg utility AND a light text-gray-* utility, so chip text stays
+   readable on the chip's light bg. */
+html.light-mode .bg-\[\#0f1d2e\] .bg-\[\#161b22\].text-gray-200,
+html.light-mode .bg-\[\#0f1d2e\] .bg-\[\#161b22\] .text-gray-200,
+html.light-mode .bg-\[\#0f1d2e\] .bg-\[\#161b22\].text-gray-100,
+html.light-mode .bg-\[\#0f1d2e\] .bg-\[\#161b22\] .text-gray-100 {
+  color: #1f2328; /* GitHub Primer ink — 14:1 on #f6f8fa */
 }
 
 /* Score-badge fix: bg-gray-800 / bg-green-900/40 / bg-blue-900/40 are dark
