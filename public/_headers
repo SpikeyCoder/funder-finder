@@ -14,7 +14,7 @@
   X-Frame-Options: DENY
   X-XSS-Protection: 0
   Referrer-Policy: strict-origin-when-cross-origin
-  Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=()
+  Permissions-Policy: accelerometer=(), ambient-light-sensor=(), attribution-reporting=(), autoplay=(), battery=(), bluetooth=(), browsing-topics=(), camera=(), clipboard-read=(), display-capture=(), document-domain=(), encrypted-media=(), fullscreen=(self), gamepad=(), geolocation=(), gyroscope=(), hid=(), idle-detection=(), interest-cohort=(), keyboard-map=(), local-fonts=(), magnetometer=(), microphone=(), midi=(), otp-credentials=(), payment=(), picture-in-picture=(self), publickey-credentials-create=(), publickey-credentials-get=(), screen-wake-lock=(), serial=(), speaker-selection=(), storage-access=(), usb=(), web-share=(self), window-management=(), xr-spatial-tracking=()
   Content-Security-Policy: default-src 'none'; script-src 'self' 'sha256-9Jn/cnXgKbJ7J7q33fTfvOmHEa+5yzYGzkbavQwjgws=' https://gc.zgo.at; style-src 'self' 'unsafe-inline'; connect-src 'self' https://tgtotjvdubhjxzybmdex.supabase.co https://accounts.google.com https://fundermatch.goatcounter.com; img-src 'self' data: https:; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self' https://tgtotjvdubhjxzybmdex.supabase.co; object-src 'none'; frame-src 'none'; worker-src 'self'; frame-ancestors 'none'; upgrade-insecure-requests;
   Cross-Origin-Opener-Policy: same-origin
   Cross-Origin-Resource-Policy: same-origin
