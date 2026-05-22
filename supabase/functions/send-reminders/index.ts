@@ -1,3 +1,4 @@
+import { sanitiseError } from '../_shared/errors.ts';
 // send-reminders: Process pending notifications from the queue and send emails
 // This is a convenience wrapper around process-notifications with action=process
 
@@ -74,7 +75,7 @@ Deno.serve(async (req: Request) => {
     return jsonResponse(req, { sent, failed, total: pending.length });
   } catch (err: any) {
     console.error('send-reminders error:', err);
-    return jsonResponse(req, { error: err.message }, 500);
+    return jsonResponse(req, { error: sanitiseError(err, 'Internal server error') }, 500);
   }
 });
 

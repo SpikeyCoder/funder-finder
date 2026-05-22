@@ -1,3 +1,4 @@
+import { sanitiseError } from '../_shared/errors.ts';
 // Phase 4: Compliance requirement CRUD
 // MIGRATED TO LOCAL JWT AUTH: Uses auth.ts (local JWT decode + service-role client)
 import { authFromRequest, adminClient } from "../_shared/auth.ts";
@@ -84,6 +85,7 @@ Deno.serve(async (req: Request) => {
     return json(req, { error: 'Method not allowed' }, 405);
   } catch (err: any) {
     const status = err.message?.includes('Unauthorized') || err.message?.includes('JWT') ? 401 : 500;
-    return json(req, { error: err.message || 'Internal server error' }, status);
+    if (status === 401) return json(req, { error: err.message }, status);
+    return json(req, { error: sanitiseError(err, 'Internal server error') }, status);
   }
 });

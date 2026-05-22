@@ -1,3 +1,4 @@
+import { sanitiseError } from '../_shared/errors.ts';
 /**
  * compute-peers v14 — Supabase Edge Function
  *
@@ -674,7 +675,7 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         peers: [],
-        error: err instanceof Error ? err.message : 'Internal server error',
+        error: sanitiseError(err, 'Internal server error'),
       }),
       { status: 500, headers: { ...headers, 'Content-Type': 'application/json' } },
     );

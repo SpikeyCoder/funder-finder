@@ -1,3 +1,4 @@
+import { sanitiseError } from '../_shared/errors.ts';
 /**
  * get-funder-990-insights — Supabase Edge Function
  *
@@ -322,7 +323,7 @@ Deno.serve(async (req) => {
     console.error('get-funder-990-insights error:', err);
     return new Response(
       JSON.stringify({
-        error: err instanceof Error ? err.message : 'Internal server error',
+        error: sanitiseError(err, 'Internal server error'),
       }),
       {
         status: 500,

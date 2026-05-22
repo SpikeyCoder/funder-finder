@@ -1,3 +1,4 @@
+import { sanitiseError } from '../_shared/errors.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { createUserScopedClient } from '../_shared/user-client.ts';
 import { corsHeaders as _corsHeaders } from '../_shared/cors.ts';
@@ -81,7 +82,7 @@ Deno.serve(async (req: Request) => {
 
     if (error) {
       console.error('filter_funders_grant_level RPC error:', error);
-      return new Response(JSON.stringify({ error: 'Query failed', details: error.message }), {
+      return new Response(JSON.stringify({ error: 'Query failed', details: sanitiseError(error, 'Database operation failed') }), {
         status: 500,
         headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
