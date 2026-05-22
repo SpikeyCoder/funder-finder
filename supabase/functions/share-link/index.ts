@@ -1,3 +1,4 @@
+import { sanitiseError } from '../_shared/errors.ts';
 // Phase 4B: Shareable link management
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { createUserScopedClient } from "../_shared/user-client.ts";
@@ -127,6 +128,6 @@ Deno.serve(async (req: Request) => {
 
     return json(req, { error: 'Method not allowed' }, 405);
   } catch (err: any) {
-    return json(req, { error: err.message }, 500);
+    return json(req, { error: sanitiseError(err, 'Internal server error') }, 500);
   }
 });

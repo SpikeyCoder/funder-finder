@@ -1,3 +1,4 @@
+import { sanitiseError } from '../_shared/errors.ts';
 // check-deadlines: Scan tracked grants and tasks for upcoming deadlines,
 // then queue reminder notifications based on user preferences.
 // Designed to be called by pg_cron or manually.
@@ -46,7 +47,7 @@ Deno.serve(async (req: Request) => {
     });
   } catch (err: any) {
     console.error('check-deadlines error:', err);
-    return jsonResponse(req, { error: err.message }, 500);
+    return jsonResponse(req, { error: sanitiseError(err, 'Internal server error') }, 500);
   }
 });
 

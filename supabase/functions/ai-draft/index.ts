@@ -1,3 +1,4 @@
+import { sanitiseError } from '../_shared/errors.ts';
 // Phase 4: AI-assisted grant proposal draft generation
 // MIGRATED TO LOCAL JWT AUTH: Uses auth.ts (local JWT decode + service-role client)
 // Enhanced: reference doc style matching, deep research, MLA citations
@@ -218,6 +219,8 @@ ${kbContext ? `\n\nORGANIZATIONAL KNOWLEDGE BASE:\n${kbContext}` : ''}
     return json(req, { draft });
   } catch (err: any) {
     const status = err.message?.includes('Unauthorized') || err.message?.includes('JWT') ? 401 : 500;
-    return json(req, { error: err.message || 'Internal server error' }, status);
+    // FM-2026-05-22-01: only leak the message on auth-classified statuses.
+    if (status === 401) return json(req, { error: err.message }, status);
+    return json(req, { error: sanitiseError(err, 'Internal server error') }, status);
   }
 });

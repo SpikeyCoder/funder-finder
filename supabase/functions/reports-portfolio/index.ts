@@ -1,3 +1,4 @@
+import { sanitiseError } from '../_shared/errors.ts';
 // Phase 4: Advanced portfolio reporting with breakdowns and charts data
 // MIGRATED TO USER-SCOPED AUTH: Uses authenticated user context instead of SERVICE_ROLE_KEY
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
@@ -111,6 +112,7 @@ Deno.serve(async (req: Request) => {
     });
   } catch (err: any) {
     const status = err.message?.includes('Unauthorized') || err.message?.includes('JWT') ? 401 : 500;
-    return json(req, { error: err.message || 'Internal server error' }, status);
+    if (status === 401) return json(req, { error: err.message }, status);
+    return json(req, { error: sanitiseError(err, 'Internal server error') }, status);
   }
 });
