@@ -1,6 +1,8 @@
 // Phase 5D: Guided onboarding flow management
 import { createUserScopedClient } from "../_shared/user-client.ts";
 import { corsHeaders as _corsHeaders } from "../_shared/cors.ts";
+import { sanitiseError } from "../_shared/errors.ts";
+import { statusForAuthError } from "../_shared/auth.ts";
 
 const CORS_OPTS = { methods: "GET, POST, PUT, OPTIONS" } as const;
 function CORS(req: Request | null = null): Record<string, string> {
@@ -81,6 +83,14 @@ Deno.serve(async (req: Request) => {
 
     return json(req, { error: 'Method not allowed' }, 405);
   } catch (err: any) {
-    return json(req, { error: err.message }, 401);
+    // Classify auth errors (descriptive, schema-free) vs everything else
+    // (sanitised). Mirrors the share-link / ai-draft pattern.
+    // Finding WA-2026-05-23-02.
+    const msg = err instanceof Error ? err.message : String(err);
+    const status = statusForAuthError(msg);
+    if (status === 401 || status === 403) {
+      return json(req, { error: msg }, status);
+    }
+    return json(req, { error: sanitiseError(err, 'Internal server error') }, 500);
   }
 });
