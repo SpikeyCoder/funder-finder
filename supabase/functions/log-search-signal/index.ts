@@ -5,6 +5,8 @@
  * This endpoint is intentionally log-only; it never updates live ranking weights.
  */
 
+import { authFromRequest } from '../_shared/auth.ts';
+
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
@@ -69,6 +71,8 @@ function base64UrlDecode(value: string): string | null {
   }
 }
 
+// Deprecated by WA-2026-05-23-11 in favour of authFromRequest. Retained
+// as a fallback if a future change needs a decode-only parse (unused today).
 function parseAuthUserId(authorization: string | null): string | null {
   if (!authorization || !authorization.startsWith('Bearer ')) return null;
   const token = authorization.slice(7).trim();
@@ -201,8 +205,17 @@ Deno.serve(async (req) => {
     // Supabase session JWT, or (b) the LOG_SEARCH_SIGNAL_ALLOW_ANON env var
     // is set to "1" AND the caller passes a per-IP soft rate limit
     // (see _ipBucketAllow below).
-    const authorization = req.headers.get('authorization');
-    const userId = parseAuthUserId(authorization);
+    // WA-2026-05-23-11: replace decode-only JWT parse with authFromRequest
+    // from _shared/auth.ts so signature verification (HS256) is applied
+    // when SUPABASE_JWT_SECRET is set. This adds defense-in-depth on top
+    // of the Supabase gateway rather than relying on it as the only check.
+    let userId: string | null = null;
+    try {
+      const auth = await authFromRequest(req);
+      userId = auth.userId;
+    } catch (_err) {
+      userId = null; // fall through to the existing ALLOW_ANON / rate-limit path
+    }
 
     const xForwardedFor = normalizeString(req.headers.get('x-forwarded-for'), 256);
     const ipHash = xForwardedFor ? await sha256Hex(xForwardedFor) : null;
