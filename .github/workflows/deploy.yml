@@ -3,6 +3,7 @@ name: Deploy
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -11,45 +12,30 @@ permissions:
   id-token: write
 
 concurrency:
-  group: deploy
-  cancel-in-progress: false
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    # Only reference the github-pages environment on main (not PRs).
+    # Protected environments block PR jobs until manually approved.
+    environment: ${{ github.ref == 'refs/heads/main' && 'github-pages' || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      # SECURITY: install from the committed lockfile so integrity hashes are
-      # enforced for every dependency (CWE-1357 / OWASP A08:2021). The old
-      # workflow deleted package-lock.json to work around a platform-specific
-      # rollup optional-dep resolution bug; `npm ci --include=optional` plus
-      # the platform-correct optional deps in package.json resolves that
-      # without losing supply-chain integrity. If `npm ci` fails because of
-      # a stale lockfile, run `npm install` locally, commit the updated
-      # lockfile, and re-trigger CI — do not delete the lockfile in CI.
       - run: npm ci --include=optional
       - name: Audit high/critical advisories (informational)
         run: npm audit --omit=dev --audit-level=high || echo "::warning::npm audit found high/critical advisories; review before merging"
       - run: npm run build
-      - name: Deploy to Netlify
-        uses: nwtgck/actions-netlify@v3
-        with:
-          publish-dir: './dist'
-          production-branch: main
-          production-deploy: true
-        env:
-          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
       - name: Upload GitHub Pages artifact
+        if: github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v5
         with:
           path: ./dist
       - name: Deploy to GitHub Pages
+        if: github.ref == 'refs/heads/main'
         id: deployment
         uses: actions/deploy-pages@v5
