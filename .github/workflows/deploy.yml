@@ -38,7 +38,8 @@ jobs:
         run: npm audit --omit=dev --audit-level=high || echo "::warning::npm audit found high/critical advisories; review before merging"
       - run: npm run build
       - name: Deploy to Netlify
-        uses: nwtgck/actions-netlify@v3
+        # Pinned to the v3.0 release commit SHA (CWE-829 / OWASP A08:2021 — third-party Action supply-chain hardening). Bump when nwtgck/actions-netlify cuts a new tagged release and the SHA can be re-verified against the release page.
+        uses: nwtgck/actions-netlify@4cbaf4c08f1a7bfa537d6113472ef4424e4eb654 # v3.0
         with:
           publish-dir: './dist'
           production-branch: main
