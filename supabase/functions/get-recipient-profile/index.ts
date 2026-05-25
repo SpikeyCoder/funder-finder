@@ -1,3 +1,4 @@
+import { sanitiseError } from '../_shared/errors.ts';
 /**
  * get-recipient-profile — Supabase Edge Function
  *
@@ -306,7 +307,7 @@ Deno.serve(async (req) => {
   } catch (err: unknown) {
     console.error('get-recipient-profile error:', err);
     return new Response(
-      JSON.stringify({ error: err instanceof Error ? err.message : 'Internal server error' }),
+      JSON.stringify({ error: sanitiseError(err, 'Internal server error') }),
       { status: 500, headers: { ...headers, 'Content-Type': 'application/json' } },
     );
   }

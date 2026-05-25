@@ -1,3 +1,4 @@
+import { sanitiseError } from '../_shared/errors.ts';
 // Phase 3C: Process notification queue
 // Called by pg_cron or manually to send pending email notifications
 // Also handles deadline reminder scheduling
@@ -57,7 +58,7 @@ Deno.serve(async (req: Request) => {
     return jsonResponse(req, results);
   } catch (err: any) {
     console.error('process-notifications error:', err);
-    return jsonResponse(req, { error: err.message }, 500);
+    return jsonResponse(req, { error: sanitiseError(err, 'Internal server error') }, 500);
   }
 });
 

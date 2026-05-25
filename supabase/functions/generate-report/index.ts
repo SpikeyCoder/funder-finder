@@ -1,3 +1,4 @@
+import { sanitiseError } from '../_shared/errors.ts';
 // Phase 5A: Generate PDF report from portfolio data
 import { createUserScopedClient } from "../_shared/user-client.ts";
 import { corsHeaders as _corsHeaders } from "../_shared/cors.ts";
@@ -47,7 +48,7 @@ Deno.serve(async (req: Request) => {
       headers: { ...CORS(req), 'Content-Type': 'application/json' },
     });
   } catch (err: any) {
-    return new Response(JSON.stringify({ error: err.message }), {
+    return new Response(JSON.stringify({ error: sanitiseError(err, 'Internal server error') }), {
       status: 401, headers: { ...CORS(req), 'Content-Type': 'application/json' },
     });
   }

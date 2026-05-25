@@ -1,3 +1,4 @@
+import { sanitiseError } from '../_shared/errors.ts';
 /**
  * update-ntee-codes — Supabase Edge Function
  *
@@ -204,7 +205,7 @@ Deno.serve(async (req) => {
     console.error('update-ntee error:', err);
     return new Response(
       JSON.stringify({
-        error: err instanceof Error ? err.message : 'Internal server error',
+        error: sanitiseError(err, 'Internal server error'),
       }),
       { status: 500, headers: { ...headers, 'Content-Type': 'application/json' } },
     );
