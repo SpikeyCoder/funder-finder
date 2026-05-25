@@ -18,22 +18,14 @@ concurrency:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    # Only reference the github-pages environment on main (not PRs).
+    # Protected environments block PR jobs until manually approved.
+    environment: ${{ github.ref == 'refs/heads/main' && 'github-pages' || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      # SECURITY: install from the committed lockfile so integrity hashes are
-      # enforced for every dependency (CWE-1357 / OWASP A08:2021). The old
-      # workflow deleted package-lock.json to work around a platform-specific
-      # rollup optional-dep resolution bug; `npm ci --include=optional` plus
-      # the platform-correct optional deps in package.json resolves that
-      # without losing supply-chain integrity. If `npm ci` fails because of
-      # a stale lockfile, run `npm install` locally, commit the updated
-      # lockfile, and re-trigger CI — do not delete the lockfile in CI.
       - run: npm ci --include=optional
       - name: Audit high/critical advisories (informational)
         run: npm audit --omit=dev --audit-level=high || echo "::warning::npm audit found high/critical advisories; review before merging"
