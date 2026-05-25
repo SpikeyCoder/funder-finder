@@ -46,9 +46,18 @@ Deno.serve(async (req: Request) => {
 
     if (req.method === 'POST') {
       const body = await req.json();
+      // WA-2026-05-23-12: explicit column allowlist on insert. Previously
+      // `{ ...body, user_id: userId }` let callers set any column that
+      // exists today or is added tomorrow (audit columns, internal flags,
+      // org_id, etc.). user_id was correctly hardcoded but other restricted
+      // fields were attacker-controllable on schema drift.
+      const allowed = pickAllowedInsert(body);
+      if (!allowed.requirement_text) {
+        return json(req, { error: 'requirement_text required' }, 400);
+      }
       const { data, error } = await supabase
         .from('compliance_requirements')
-        .insert({ ...body, user_id: userId })
+        .insert({ ...allowed, user_id: userId })
         .select()
         .single();
       if (error) throw error;
@@ -59,14 +68,16 @@ Deno.serve(async (req: Request) => {
       const { id, ...updates } = await req.json();
       if (!id) return json(req, { error: 'id required' }, 400);
 
-      if (updates.status === 'submitted' || updates.status === 'approved') {
-        updates.completed_at = new Date().toISOString();
+      // WA-2026-05-23-12: explicit column allowlist on update.
+      const safeUpdates = pickAllowedUpdate(updates);
+      if (safeUpdates.status === 'submitted' || safeUpdates.status === 'approved') {
+        safeUpdates.completed_at = new Date().toISOString();
       }
-      updates.updated_at = new Date().toISOString();
+      safeUpdates.updated_at = new Date().toISOString();
 
       const { data, error } = await supabase
         .from('compliance_requirements')
-        .update(updates)
+        .update(safeUpdates)
         .eq('id', id)
         .eq('user_id', userId)
         .select()
@@ -89,3 +100,40 @@ Deno.serve(async (req: Request) => {
     return json(req, { error: sanitiseError(err, 'Internal server error') }, status);
   }
 });
+
+// WA-2026-05-23-12: column allowlists for compliance_requirements.
+type ComplianceInsert = {
+  grant_id?: string | null;
+  project_id?: string | null;
+  requirement_text?: string;
+  category?: string | null;
+  due_date?: string | null;
+  status?: string | null;
+  priority?: string | null;
+  notes?: string | null;
+};
+type ComplianceUpdate = ComplianceInsert & { completed_at?: string; updated_at?: string };
+
+const INSERT_KEYS: (keyof ComplianceInsert)[] = [
+  'grant_id', 'project_id', 'requirement_text', 'category',
+  'due_date', 'status', 'priority', 'notes',
+];
+const UPDATE_KEYS: (keyof ComplianceUpdate)[] = [
+  ...INSERT_KEYS, 'completed_at', 'updated_at',
+];
+
+function pickAllowedInsert(body: Record<string, unknown>): ComplianceInsert {
+  const out: ComplianceInsert = {};
+  for (const k of INSERT_KEYS) {
+    if (k in body) (out as any)[k] = (body as any)[k];
+  }
+  return out;
+}
+
+function pickAllowedUpdate(body: Record<string, unknown>): ComplianceUpdate {
+  const out: ComplianceUpdate = {};
+  for (const k of UPDATE_KEYS) {
+    if (k in body) (out as any)[k] = (body as any)[k];
+  }
+  return out;
+}
