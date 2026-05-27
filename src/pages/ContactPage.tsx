@@ -70,7 +70,7 @@ export default function ContactPage() {
             </p>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} aria-busy={sending} className="space-y-5">
             <div>
               <label htmlFor="name" className="block text-sm font-medium text-gray-300 mb-1">
                 Name
