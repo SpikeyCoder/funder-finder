@@ -7,6 +7,20 @@
 # cannot enforce `frame-ancestors`).
 #
 # Closes pentest finding FM-2026-05-12-01 / FM-2026-05-12-02.
+#
+# FM-2026-05-27-01 (Armstrong HoldCo pen-test 2026-05-27): close the
+# COEP parity gap with kevinarmstrong.io (KA-2026-05-13-02) and
+# website-auditor.io (WA-2026-05-22-01). Cross-Origin-Embedder-Policy:
+# credentialless pairs with the existing COOP: same-origin to place the
+# HTML document in a cross-origin isolated context. This (a) hardens
+# against Spectre-style cross-origin side-channel attacks on
+# shared-memory features (SharedArrayBuffer, high-resolution timers)
+# and (b) surfaces accidental cross-origin subresource loading without
+# explicit CORP/CORS opt-in. 'credentialless' strips ambient cookies
+# on cross-origin hops (e.g. the goatcounter beacon) instead of
+# blocking outright, so analytics keeps working. Tighten to
+# 'require-corp' once every cross-origin dependency advertises a CORP
+# header.
 
 /*
   Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
@@ -17,4 +31,5 @@
   Permissions-Policy: accelerometer=(), ambient-light-sensor=(), attribution-reporting=(), autoplay=(), battery=(), bluetooth=(), browsing-topics=(), camera=(), clipboard-read=(), display-capture=(), document-domain=(), encrypted-media=(), fullscreen=(self), gamepad=(), geolocation=(), gyroscope=(), hid=(), idle-detection=(), interest-cohort=(), keyboard-map=(), local-fonts=(), magnetometer=(), microphone=(), midi=(), otp-credentials=(), payment=(), picture-in-picture=(self), publickey-credentials-create=(), publickey-credentials-get=(), screen-wake-lock=(), serial=(), speaker-selection=(), storage-access=(), usb=(), web-share=(self), window-management=(), xr-spatial-tracking=()
   Content-Security-Policy: default-src 'none'; script-src 'self' 'sha256-9Jn/cnXgKbJ7J7q33fTfvOmHEa+5yzYGzkbavQwjgws=' https://gc.zgo.at; style-src 'self' 'unsafe-inline'; connect-src 'self' https://tgtotjvdubhjxzybmdex.supabase.co https://accounts.google.com https://fundermatch.goatcounter.com; img-src 'self' data: https:; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self' https://tgtotjvdubhjxzybmdex.supabase.co; object-src 'none'; frame-src 'none'; worker-src 'self'; frame-ancestors 'none'; upgrade-insecure-requests;
   Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: credentialless
   Cross-Origin-Resource-Policy: same-origin
