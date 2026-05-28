@@ -1,3 +1,4 @@
+import { ipRateLimit } from "../_shared/rate_limit.ts";
 const ALLOWED_ORIGINS = new Set([
   'https://fundermatch.org',
   'https://www.fundermatch.org',
@@ -103,6 +104,21 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: cors });
   }
+
+  // FM-2026-05-28-01: defence-in-depth per-IP rate limit on the public,
+  // unauthenticated POST endpoint. Without this, anyone able to reach the
+  // function URL (or any allowed origin) can flood Trello with cards and
+  // exhaust the Trello API quota / pollute the bug-triage board.
+  // Mirrors share-link / calendar-feed (FM-2026-05-09-01, FM-2026-05-10-02).
+  // 20 req/min/IP is well above any plausible legitimate per-user
+  // reporting cadence and short-circuits abuse before Trello is touched.
+  const limited = await ipRateLimit(req, {
+    namespace: "report-bug",
+    limit: 20,
+    windowMs: 60_000,
+    extraHeaders: cors,
+  });
+  if (!limited.allow && limited.response) return limited.response;
 
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
