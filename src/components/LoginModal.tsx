@@ -141,7 +141,7 @@ export default function LoginModal({ pendingFunder, pendingFunders, onClose }: L
 
         {/* Error message */}
         {error && (
-          <p className="mt-4 text-xs text-red-400 text-center">{error}</p>
+          <p role="alert" aria-live="assertive" className="mt-4 text-xs text-red-400 text-center">{error}</p>
         )}
 
         {/* Not now */}

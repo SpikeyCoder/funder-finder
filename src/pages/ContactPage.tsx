@@ -122,7 +122,7 @@ export default function ContactPage() {
             </div>
 
             {error && (
-              <div className="rounded-md border border-red-700 bg-red-900/30 px-4 py-3 text-sm text-red-300">
+              <div role="alert" aria-live="assertive" className="rounded-md border border-red-700 bg-red-900/30 px-4 py-3 text-sm text-red-300">
                 {error}
               </div>
             )}
