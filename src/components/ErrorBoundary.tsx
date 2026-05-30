@@ -10,6 +10,25 @@ interface State {
   error: Error | null;
 }
 
+// Guards against an infinite reload loop if a chunk is genuinely gone.
+const CHUNK_RELOAD_KEY = 'ff_chunk_reload_at';
+const CHUNK_RELOAD_COOLDOWN_MS = 10_000;
+
+// A lazy/dynamic import that fails to download throws one of these. It usually
+// means a new deploy rotated the hashed chunk filenames out from under a client
+// that still has the old index.html, so the route's chunk 404s.
+function isChunkLoadError(error: Error | null): boolean {
+  if (!error) return false;
+  const msg = error.message || '';
+  return (
+    error.name === 'ChunkLoadError' ||
+    /failed to fetch dynamically imported module/i.test(msg) ||
+    /error loading dynamically imported module/i.test(msg) ||
+    /importing a module script failed/i.test(msg) ||
+    /dynamically imported module/i.test(msg)
+  );
+}
+
 export default class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
@@ -22,6 +41,25 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('ErrorBoundary caught error:', error, errorInfo);
+
+    // For a failed chunk load, reloading pulls a fresh index.html plus valid
+    // chunks and almost always recovers — so do it automatically, once.
+    if (isChunkLoadError(error)) {
+      let lastReload = 0;
+      try {
+        lastReload = Number(sessionStorage.getItem(CHUNK_RELOAD_KEY)) || 0;
+      } catch {
+        /* sessionStorage unavailable (private mode); fall through to manual UI */
+      }
+      if (Date.now() - lastReload > CHUNK_RELOAD_COOLDOWN_MS) {
+        try {
+          sessionStorage.setItem(CHUNK_RELOAD_KEY, String(Date.now()));
+        } catch {
+          /* ignore */
+        }
+        window.location.reload();
+      }
+    }
   }
 
   handleTryAgain = () => {
@@ -31,6 +69,7 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.hasError) {
+      const chunkError = isChunkLoadError(this.state.error);
       return (
         <div className="min-h-screen bg-[#0d1117] flex items-center justify-center px-4">
           <div className="max-w-md text-center">
@@ -38,12 +77,14 @@ export default class ErrorBoundary extends Component<Props, State> {
               <AlertCircle size={48} className="text-red-400" />
             </div>
             <h1 className="text-2xl font-bold text-white mb-3">
-              Oops! Something went wrong
+              {chunkError ? 'A new version is available' : 'Oops! Something went wrong'}
             </h1>
             <p className="text-gray-400 mb-6">
-              We encountered an unexpected error. Please try again or contact support if the problem persists.
+              {chunkError
+                ? 'The app was updated. Reload to get the latest version.'
+                : 'We encountered an unexpected error. Please try again or contact support if the problem persists.'}
             </p>
-            {this.state.error && (
+            {!chunkError && this.state.error && (
               <details className="mb-6 text-left bg-[#161b22] border border-[#30363d] rounded-lg p-4">
                 <summary className="cursor-pointer text-sm text-gray-400 font-medium">
                   Error details
@@ -57,7 +98,7 @@ export default class ErrorBoundary extends Component<Props, State> {
               onClick={this.handleTryAgain}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
             >
-              Try Again
+              {chunkError ? 'Reload' : 'Try Again'}
             </button>
           </div>
         </div>

@@ -6,6 +6,7 @@ import AuthGuard from './components/AuthGuard';
 import FeatureTooltips from './components/FeatureTooltip';
 import BugReportButton from './components/BugReportButton';
 import ThemeToggle from './components/ThemeToggle';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // Must match the key used in AuthContext.storePendingFunder
 const REDIRECT_AFTER_LOGIN_KEY = 'ff_redirect_after_login';
@@ -88,6 +89,7 @@ function AnimatedRoutes() {
 
   return (
     <div key={location.pathname} className="page-fade-in">
+      <ErrorBoundary>
       <Suspense fallback={<RouteFallback />}>
         <Routes location={location}>
           {/* Public routes */}
@@ -135,6 +137,7 @@ function AnimatedRoutes() {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>
+      </ErrorBoundary>
     </div>
   );
 }
