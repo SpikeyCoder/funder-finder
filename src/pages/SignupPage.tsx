@@ -51,6 +51,7 @@ export default function SignupPage() {
   const [currentStep, setCurrentStep] = useState<SignupStep>('account');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [signupComplete, setSignupComplete] = useState(false);
 
   // Account data
   const [email, setEmail] = useState('');
@@ -147,10 +148,26 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      // Create auth account
+      // Create auth account. The profile fields are passed as user metadata
+      // so the SECURITY DEFINER handle_new_user() trigger can write the full
+      // user_profiles row server-side. We can't write the profile from the
+      // client here because, with email confirmation enabled, signUp() returns
+      // no session and the insert would run as anon (auth.uid() IS NULL),
+      // which the user_profiles RLS policies reject.
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          data: {
+            organization_name: organizationName,
+            ein: ein || null,
+            mission_statement: missionStatement || null,
+            city,
+            state,
+            ntee_codes: nteeCodes,
+            budget_range: budgetRange,
+          },
+        },
       });
 
       if (signUpError) {
@@ -165,32 +182,16 @@ export default function SignupPage() {
         return;
       }
 
-      // Upsert user profile
-      const { error: profileError } = await supabase
-        .from('user_profiles')
-        .upsert(
-          {
-            id: authData.user.id,
-            display_name: organizationName,
-            organization_name: organizationName,
-            ein: ein || null,
-            mission_statement: missionStatement || null,
-            city,
-            state,
-            ntee_codes: nteeCodes,
-            budget_range: budgetRange,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'id' }
-        );
-
-      if (profileError) {
-        setError('Failed to save profile: ' + profileError.message);
+      // If email confirmation is required, signUp returns no session — the user
+      // must verify their email before they can sign in. Show a confirmation
+      // screen instead of routing them to a page that requires auth.
+      if (!authData.session) {
+        setSignupComplete(true);
         setLoading(false);
         return;
       }
 
-      // Redirect to dashboard or email verification page
+      // Session established (email confirmation disabled): go straight in.
       const redirectUrl = sessionStorage.getItem('authRedirect') || '/dashboard';
       sessionStorage.removeItem('authRedirect');
       navigate(redirectUrl);
@@ -205,6 +206,32 @@ export default function SignupPage() {
       prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]
     );
   };
+
+  if (signupComplete) {
+    return (
+      <>
+        <NavBar />
+        <div className="min-h-screen bg-[#0d1117] flex items-center justify-center px-4 py-12">
+          <div className="w-full max-w-md">
+            <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-8 text-center">
+              <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-4" />
+              <h1 className="text-2xl font-bold text-white mb-2">Check your email</h1>
+              <p className="text-gray-400">
+                We sent a confirmation link to <span className="text-white">{email}</span>.
+                Click it to verify your account, then sign in to get started.
+              </p>
+              <Link
+                to="/login"
+                className="inline-block mt-6 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+              >
+                Go to sign in
+              </Link>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
