@@ -93,6 +93,13 @@ function UserSettingsContent() {
   const [nteeCodes, setNteeCodes] = useState<string[]>([]);
   const [budgetRange, setBudgetRange] = useState('');
 
+  // Password change state
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+
   // Notification preferences state
   const [_notifPrefs, setNotifPrefs] = useState<NotificationPreferences | null>(null);
   const [notifLoading, setNotifLoading] = useState(false);
@@ -279,6 +286,40 @@ function UserSettingsContent() {
       console.error(err);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleUpdatePassword = async () => {
+    setPasswordError('');
+    setPasswordSuccess(false);
+
+    if (newPassword.length < 8) {
+      setPasswordError('Password must be at least 8 characters');
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setPasswordError('Passwords do not match');
+      return;
+    }
+
+    setPasswordSaving(true);
+    try {
+      const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+
+      if (updateError) {
+        setPasswordError(updateError.message);
+        return;
+      }
+
+      setNewPassword('');
+      setConfirmNewPassword('');
+      setPasswordSuccess(true);
+      setTimeout(() => setPasswordSuccess(false), 3000);
+    } catch (err) {
+      setPasswordError('An unexpected error occurred');
+      console.error(err);
+    } finally {
+      setPasswordSaving(false);
     }
   };
 
@@ -491,6 +532,42 @@ function UserSettingsContent() {
                       className="w-full px-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-gray-400 cursor-not-allowed"
                     />
                     <p className="text-xs text-gray-500 mt-1">Contact support to change email</p>
+                  </div>
+
+                  {/* Password */}
+                  <div className="mt-6 pt-6 border-t border-[#30363d]">
+                    <h3 className="text-base font-semibold text-white mb-4">Password</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label htmlFor="newPassword" className={labelClass}>New password</label>
+                        <input id="newPassword" type="password" autoComplete="new-password"
+                          value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
+                          placeholder="At least 8 characters" className={inputClass} />
+                      </div>
+                      <div>
+                        <label htmlFor="confirmNewPassword" className={labelClass}>Confirm new password</label>
+                        <input id="confirmNewPassword" type="password" autoComplete="new-password"
+                          value={confirmNewPassword} onChange={(e) => setConfirmNewPassword(e.target.value)}
+                          placeholder="Re-enter new password" className={inputClass} />
+                      </div>
+                    </div>
+                    {passwordError && (
+                      <div className="mt-3 flex items-center gap-2 text-sm text-red-400">
+                        <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                        <span>{passwordError}</span>
+                      </div>
+                    )}
+                    {passwordSuccess && (
+                      <div className="mt-3 flex items-center gap-2 text-sm text-green-400">
+                        <CheckCircle className="w-4 h-4 flex-shrink-0" />
+                        <span>Password updated</span>
+                      </div>
+                    )}
+                    <button onClick={handleUpdatePassword}
+                      disabled={passwordSaving || !newPassword || !confirmNewPassword}
+                      className="mt-4 flex items-center justify-center gap-2 px-4 py-2 bg-[#21262d] hover:bg-[#30363d] disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors border border-[#30363d]">
+                      {passwordSaving ? (<><Loader className="w-4 h-4 animate-spin" /> Updating...</>) : 'Update password'}
+                    </button>
                   </div>
                 </div>
 
