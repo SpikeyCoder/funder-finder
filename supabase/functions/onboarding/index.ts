@@ -68,8 +68,8 @@ Deno.serve(async (req: Request) => {
     }
 
     if (req.method === 'POST') {
-      // Skip onboarding
-      const { action } = await req.json();
+      const body = await req.json();
+      const { action } = body;
       if (action === 'skip') {
         const { data } = await supabase
           .from('onboarding_progress')
@@ -78,6 +78,53 @@ Deno.serve(async (req: Request) => {
           .single();
         return json(req, data);
       }
+
+      // FM-IC-ONB-003: persist the org-profile fields captured in
+      // OnboardingPage Step 2 — including county-level location and
+      // plain-language fields_of_work. Previously the Step 2 inputs
+      // were not wired to anything; the audit graded ONB-003 PARTIAL
+      // because county granularity was advertised but never collected
+      // through the in-app onboarding flow.
+      if (action === 'save_profile') {
+        const profile = body.profile || {};
+        // Allowlist exactly the columns we expect to receive from Step 2.
+        const allowed: Record<string, unknown> = {};
+        const stringFields = [
+          'organization_name', 'mission_statement', 'city', 'state',
+          'county', 'org_type', 'budget_range',
+        ];
+        for (const k of stringFields) {
+          if (typeof profile[k] === 'string') {
+            const v = profile[k].trim();
+            if (v.length > 0) allowed[k] = v;
+          }
+        }
+        if (Array.isArray(profile.fields_of_work)) {
+          allowed.fields_of_work = (profile.fields_of_work as unknown[])
+            .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+            .map((v) => v.trim())
+            .slice(0, 12);
+        }
+        allowed.id = user.id;
+        allowed.updated_at = new Date().toISOString();
+
+        const { error: upErr } = await supabase
+          .from('user_profiles')
+          .upsert(allowed, { onConflict: 'id' });
+        if (upErr) throw upErr;
+
+        // Best-effort flag onboarding profile step complete
+        await supabase
+          .from('onboarding_progress')
+          .upsert({
+            user_id: user.id,
+            profile_complete: true,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'user_id' });
+
+        return json(req, { ok: true, fields_saved: Object.keys(allowed).filter((k) => k !== 'id' && k !== 'updated_at') });
+      }
+
       return json(req, { error: 'Unknown action' }, 400);
     }
 

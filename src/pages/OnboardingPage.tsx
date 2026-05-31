@@ -29,6 +29,50 @@ export default function OnboardingPage() {
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  // FM-IC-ONB-003: capture county-level location + plain-language fields of
+  // work in the onboarding tutorial. These previously had placeholder
+  // inputs that weren't wired anywhere, so the audit graded ONB-003
+  // PARTIAL ("county-level granularity not enforced"). The save_profile
+  // action on the onboarding edge function persists them to
+  // public.user_profiles.
+  const [orgName, setOrgName] = useState('');
+  const [missionStatement, setMissionStatement] = useState('');
+  const [city, setCity] = useState('');
+  const [stateAbbr, setStateAbbr] = useState('');
+  const [county, setCounty] = useState('');
+  const [orgType, setOrgType] = useState('');
+  const [fieldsOfWork, setFieldsOfWork] = useState<string[]>([]);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const FIELDS_OF_WORK_OPTIONS: string[] = [
+    'Arts & Culture',
+    'Civic Engagement',
+    'Community Development',
+    'Disability Services',
+    'Education',
+    'Environment',
+    'Food Security',
+    'Health',
+    'Housing',
+    'Human Services',
+    'Immigrant Services',
+    'Mental Health',
+    'Public Safety',
+    'Racial Equity',
+    'Research',
+    'Veterans',
+    'Workforce Development',
+    'Youth Development',
+  ];
+
+  const toggleFieldOfWork = (label: string) => {
+    setFieldsOfWork((prev) =>
+      prev.includes(label) ? prev.filter((v) => v !== label) : [...prev, label],
+    );
+  };
+
+
   useEffect(() => {
     if (!loading && user) loadProgress();
   }, [user, loading]);
@@ -53,6 +97,44 @@ export default function OnboardingPage() {
     }
   };
 
+  // FM-IC-ONB-003: persist Step 2 profile via the onboarding edge function.
+  const saveProfile = async (): Promise<boolean> => {
+    setSaveError(null);
+    setIsSaving(true);
+    try {
+      const headers = await getEdgeFunctionHeaders();
+      const res = await fetch(ONBOARDING_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({
+          action: 'save_profile',
+          profile: {
+            organization_name: orgName,
+            mission_statement: missionStatement,
+            city,
+            state: stateAbbr,
+            county,
+            org_type: orgType,
+            fields_of_work: fieldsOfWork,
+          },
+        }),
+      });
+      if (!res.ok) {
+        let msg = 'Could not save profile';
+        try { const j = await res.json(); if (j?.error) msg = j.error; } catch { /* ignore */ }
+        setSaveError(msg);
+        return false;
+      }
+      return true;
+    } catch (err: any) {
+      console.error('Error saving profile:', err);
+      setSaveError(err?.message || 'Could not save profile');
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const saveProgress = async (step: number, completed: number[]) => {
     try {
       const headers = await getEdgeFunctionHeaders();
@@ -67,6 +149,19 @@ export default function OnboardingPage() {
   };
 
   const handleNext = async () => {
+    // FM-IC-ONB-003: when leaving Step 2 (profile), persist what the user
+    // entered so the data is captured even if they bounce out of the
+    // tutorial. Skip the save quietly if every field is blank.
+    if (currentStep === 2) {
+      const anyProfileField = !!(
+        orgName || missionStatement || city || stateAbbr || county || orgType || fieldsOfWork.length
+      );
+      if (anyProfileField) {
+        const ok = await saveProfile();
+        if (!ok) return; // surface the error to the user and stay on step
+      }
+    }
+
     const newCompleted = [...completedSteps, currentStep].filter((v, i, a) => a.indexOf(v) === i);
     setCompletedSteps(newCompleted);
 
@@ -173,23 +268,61 @@ export default function OnboardingPage() {
           {currentStep === 2 && (
             <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-5 mb-6 text-left space-y-4">
               <p className="text-sm font-semibold text-white">Organization Profile</p>
-              <input type="text" placeholder="Organization name"
+              <input type="text" placeholder="Organization name" aria-label="Organization name"
+                value={orgName} onChange={(e) => setOrgName(e.target.value)}
                 className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
-              <input type="text" placeholder="Mission statement"
+              <input type="text" placeholder="Mission statement" aria-label="Mission statement"
+                value={missionStatement} onChange={(e) => setMissionStatement(e.target.value)}
                 className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
-              <div className="grid grid-cols-2 gap-3">
-                <input type="text" placeholder="City"
+              <div className="grid grid-cols-3 gap-3">
+                <input type="text" placeholder="City" aria-label="City"
+                  value={city} onChange={(e) => setCity(e.target.value)}
                   className="bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
-                <input type="text" placeholder="State"
+                <input type="text" placeholder="County" aria-label="County"
+                  value={county} onChange={(e) => setCounty(e.target.value)}
+                  className="bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
+                <input type="text" placeholder="State" aria-label="State" maxLength={2}
+                  value={stateAbbr} onChange={(e) => setStateAbbr(e.target.value.toUpperCase())}
                   className="bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
               </div>
-              <select className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm">
+              <p className="text-[11px] text-gray-500 -mt-2">
+                County-level location helps us match you to local funders that fund specifically in your area (FM-IC-ONB-003).
+              </p>
+              <select aria-label="Organization type"
+                value={orgType} onChange={(e) => setOrgType(e.target.value)}
+                className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm">
                 <option value="">Select organization type...</option>
                 <option value="501c3">501(c)(3) Public Charity</option>
                 <option value="501c4">501(c)(4) Social Welfare</option>
                 <option value="foundation">Private Foundation</option>
                 <option value="fiscal">Fiscal Sponsorship</option>
               </select>
+              <div>
+                <p className="text-xs font-medium text-gray-300 mb-2">Fields of work <span className="text-gray-500 font-normal">(plain-language, pick any that apply)</span></p>
+                <div className="flex flex-wrap gap-2">
+                  {FIELDS_OF_WORK_OPTIONS.map((label) => {
+                    const selected = fieldsOfWork.includes(label);
+                    return (
+                      <button type="button" key={label}
+                        onClick={() => toggleFieldOfWork(label)}
+                        aria-pressed={selected}
+                        className={`px-2.5 py-1 rounded-full text-xs border transition-colors ${
+                          selected
+                            ? 'bg-blue-600 border-blue-500 text-white'
+                            : 'bg-[#0d1117] border-[#30363d] text-gray-300 hover:border-blue-400'
+                        }`}>
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              {saveError && (
+                <p role="alert" className="text-xs text-red-400">{saveError}</p>
+              )}
+              {isSaving && (
+                <p className="text-xs text-gray-500">Saving your profile…</p>
+              )}
               <p className="text-xs text-gray-500">This info helps us match you with relevant funders. You can update it later in Settings.</p>
             </div>
           )}
