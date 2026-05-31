@@ -23,6 +23,7 @@ const LoginPage = lazy(() => import('./pages/LoginPage'));
 const SignupPage = lazy(() => import('./pages/SignupPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const NewProjectPage = lazy(() => import('./pages/NewProjectPage'));
+const ConversationalProjectSetup = lazy(() => import('./pages/ConversationalProjectSetup'));
 const ProjectWorkspace = lazy(() => import('./pages/ProjectWorkspace'));
 const BrowsePage = lazy(() => import('./pages/BrowsePage'));
 const UserSettingsPage = lazy(() => import('./pages/UserSettingsPage'));
@@ -108,6 +109,7 @@ function AnimatedRoutes() {
           {/* Auth-gated routes */}
           <Route path="/dashboard" element={<AuthGuard><DashboardPage /></AuthGuard>} />
           <Route path="/projects/new" element={<AuthGuard><NewProjectPage /></AuthGuard>} />
+          <Route path="/projects/new/chat" element={<AuthGuard><ConversationalProjectSetup /></AuthGuard>} />
           <Route path="/projects/:id" element={<AuthGuard><ProjectWorkspace /></AuthGuard>} />
           <Route path="/projects/:id/matches" element={<AuthGuard><ProjectWorkspace /></AuthGuard>} />
           <Route path="/projects/:id/tracker" element={<AuthGuard><ProjectWorkspace /></AuthGuard>} />
