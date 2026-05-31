@@ -230,11 +230,15 @@ Deno.serve(async (req: Request) => {
 
     // ─── POST: Send invitation ───────────────────────────────────────────
     if (req.method === 'POST') {
-      const { email, role = 'editor' } = await req.json();
+      const { email, role = 'editor', partner_org_name = null, partner_type = null } = await req.json();
       if (!email) return json(req, { error: 'Email is required' }, 400);
-      if (!['admin', 'editor', 'viewer'].includes(role)) {
-        return json(req, { error: 'Invalid role. Must be admin, editor, or viewer.' }, 400);
+      if (!['admin', 'editor', 'viewer', 'partner'].includes(role)) {
+        return json(req, { error: 'Invalid role. Must be admin, editor, viewer, or partner.' }, 400);
       }
+      // FM-IC-COL-002: partners cannot invite other members or escalate to admin.
+      // Only existing admins may invite anyone (enforced below); the role-cap
+      // check belongs at PUT-time as well.
+
 
       // Only existing admins may send invites — gates the auth-admin
       // email lookup below behind an authorised caller.
@@ -286,6 +290,7 @@ Deno.serve(async (req: Request) => {
             role,
             invited_by: user.id,
             status: 'active',
+            ...(role === 'partner' ? { partner_org_name, partner_type } : {}),
           },
           { onConflict: 'user_id' },
         );
@@ -331,7 +336,7 @@ Deno.serve(async (req: Request) => {
       }
 
       if (role) {
-        if (!['admin', 'editor', 'viewer'].includes(role)) {
+        if (!['admin', 'editor', 'viewer', 'partner'].includes(role)) {
           return json(req, { error: 'Invalid role' }, 400);
         }
         await supabase
