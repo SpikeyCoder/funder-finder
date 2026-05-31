@@ -68,13 +68,19 @@ interface UserProfile {
 type SettingsTab = 'profile' | 'notifications' | 'calendar';
 
 function UserSettingsContent() {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
   const [_profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+
+  // Delete-account state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   // Profile form state
   const [displayName, setDisplayName] = useState('');
@@ -86,6 +92,13 @@ function UserSettingsContent() {
   const [county, setCounty] = useState('');
   const [nteeCodes, setNteeCodes] = useState<string[]>([]);
   const [budgetRange, setBudgetRange] = useState('');
+
+  // Password change state
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
 
   // Notification preferences state
   const [_notifPrefs, setNotifPrefs] = useState<NotificationPreferences | null>(null);
@@ -276,6 +289,40 @@ function UserSettingsContent() {
     }
   };
 
+  const handleUpdatePassword = async () => {
+    setPasswordError('');
+    setPasswordSuccess(false);
+
+    if (newPassword.length < 8) {
+      setPasswordError('Password must be at least 8 characters');
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setPasswordError('Passwords do not match');
+      return;
+    }
+
+    setPasswordSaving(true);
+    try {
+      const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+
+      if (updateError) {
+        setPasswordError(updateError.message);
+        return;
+      }
+
+      setNewPassword('');
+      setConfirmNewPassword('');
+      setPasswordSuccess(true);
+      setTimeout(() => setPasswordSuccess(false), 3000);
+    } catch (err) {
+      setPasswordError('An unexpected error occurred');
+      console.error(err);
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
+
   const handleSaveNotifications = async () => {
     setError('');
     setSuccess(false);
@@ -398,6 +445,28 @@ function UserSettingsContent() {
     );
   }
 
+  const handleDeleteAccount = async () => {
+    setDeleteError('');
+    setDeleting(true);
+    try {
+      const headers = await getEdgeFunctionHeaders();
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/delete-account`, {
+        method: 'POST',
+        headers,
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Server error (${res.status})`);
+      }
+      // Account is gone — clear the session and return to the public site.
+      await signOut();
+      window.location.assign('/');
+    } catch (err: any) {
+      setDeleteError(err?.message || 'Failed to delete account');
+      setDeleting(false);
+    }
+  };
+
   const inputClass = "w-full px-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500";
   const labelClass = "block text-sm font-medium text-white mb-2";
 
@@ -463,6 +532,42 @@ function UserSettingsContent() {
                       className="w-full px-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-gray-400 cursor-not-allowed"
                     />
                     <p className="text-xs text-gray-500 mt-1">Contact support to change email</p>
+                  </div>
+
+                  {/* Password */}
+                  <div className="mt-6 pt-6 border-t border-[#30363d]">
+                    <h3 className="text-base font-semibold text-white mb-4">Password</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label htmlFor="newPassword" className={labelClass}>New password</label>
+                        <input id="newPassword" type="password" autoComplete="new-password"
+                          value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
+                          placeholder="At least 8 characters" className={inputClass} />
+                      </div>
+                      <div>
+                        <label htmlFor="confirmNewPassword" className={labelClass}>Confirm new password</label>
+                        <input id="confirmNewPassword" type="password" autoComplete="new-password"
+                          value={confirmNewPassword} onChange={(e) => setConfirmNewPassword(e.target.value)}
+                          placeholder="Re-enter new password" className={inputClass} />
+                      </div>
+                    </div>
+                    {passwordError && (
+                      <div className="mt-3 flex items-center gap-2 text-sm text-red-400">
+                        <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                        <span>{passwordError}</span>
+                      </div>
+                    )}
+                    {passwordSuccess && (
+                      <div className="mt-3 flex items-center gap-2 text-sm text-green-400">
+                        <CheckCircle className="w-4 h-4 flex-shrink-0" />
+                        <span>Password updated</span>
+                      </div>
+                    )}
+                    <button onClick={handleUpdatePassword}
+                      disabled={passwordSaving || !newPassword || !confirmNewPassword}
+                      className="mt-4 flex items-center justify-center gap-2 px-4 py-2 bg-[#21262d] hover:bg-[#30363d] disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors border border-[#30363d]">
+                      {passwordSaving ? (<><Loader className="w-4 h-4 animate-spin" /> Updating...</>) : 'Update password'}
+                    </button>
                   </div>
                 </div>
 
@@ -564,6 +669,64 @@ function UserSettingsContent() {
                   {saving ? (<><Loader className="w-5 h-5 animate-spin" /> Saving...</>) : (<><Save className="w-5 h-5" /> Save changes</>)}
                 </button>
               </div>
+
+              {/* Danger Zone */}
+              <div className="mt-6 bg-[#161b22] border border-red-900/50 rounded-lg p-8">
+                <h2 className="text-lg font-semibold text-red-400 mb-2">Danger Zone</h2>
+                <p className="text-sm text-gray-400 mb-4">
+                  Permanently delete your account and all associated data — profile, projects,
+                  tracked grants, tasks, and saved funders. This cannot be undone.
+                </p>
+                <button
+                  onClick={() => { setDeleteConfirmText(''); setDeleteError(''); setShowDeleteModal(true); }}
+                  className="flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors">
+                  <Trash2 className="w-4 h-4" /> Delete account
+                </button>
+              </div>
+
+              {/* Delete confirmation modal */}
+              {showDeleteModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+                  <div className="w-full max-w-md bg-[#161b22] border border-[#30363d] rounded-lg p-6">
+                    <div className="flex items-center gap-2 mb-3">
+                      <AlertCircle className="w-5 h-5 text-red-400" />
+                      <h3 className="text-lg font-semibold text-white">Delete account</h3>
+                    </div>
+                    <p className="text-sm text-gray-400 mb-4">
+                      This permanently deletes your account and all your data. This action cannot
+                      be undone. Type <span className="font-mono font-semibold text-white">DELETE</span> to confirm.
+                    </p>
+                    <input
+                      type="text"
+                      value={deleteConfirmText}
+                      onChange={(e) => setDeleteConfirmText(e.target.value)}
+                      placeholder="DELETE"
+                      autoFocus
+                      className={inputClass}
+                    />
+                    {deleteError && (
+                      <div className="mt-3 flex items-center gap-2 text-sm text-red-400">
+                        <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                        <span>{deleteError}</span>
+                      </div>
+                    )}
+                    <div className="mt-5 flex gap-3 justify-end">
+                      <button
+                        onClick={() => setShowDeleteModal(false)}
+                        disabled={deleting}
+                        className="px-4 py-2 bg-[#21262d] hover:bg-[#30363d] text-white rounded-lg font-medium transition-colors border border-[#30363d] disabled:opacity-50">
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleDeleteAccount}
+                        disabled={deleting || deleteConfirmText !== 'DELETE'}
+                        className="flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors">
+                        {deleting ? (<><Loader className="w-4 h-4 animate-spin" /> Deleting...</>) : 'Permanently delete'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </>
           )}
 
