@@ -233,15 +233,18 @@ async function scheduleExternalAssigneeReminders(supabase: any): Promise<number>
 }
 
 // Detect deadline changes on tracked grants and alert users
+// FM-IC-NTF-002: broadened lookback to 7d so a missed cron run doesn't drop
+// alerts, and the queued payload now carries days_diff + direction so the
+// email template can render a richer message.
 async function detectDeadlineChanges(supabase: any): Promise<number> {
   let detected = 0;
-  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
   const { data: grants } = await supabase
     .from('tracked_grants')
-    .select('id, user_id, funder_name, grant_title, deadline, project_id, previous_deadline')
+    .select('id, user_id, funder_name, grant_title, deadline, project_id, previous_deadline, updated_at')
     .not('deadline', 'is', null)
-    .gt('updated_at', oneDayAgo);
+    .gt('updated_at', sevenDaysAgo);
 
   if (!grants) return 0;
 
@@ -251,16 +254,28 @@ async function detectDeadlineChanges(supabase: any): Promise<number> {
     const { data: userData } = await supabase.auth.admin.getUserById(grant.user_id);
     if (!userData?.user?.email) continue;
 
+    // Dedupe: same (grant_id, new_deadline) — never alert twice for same change.
     const { data: existing } = await supabase
       .from('notification_queue')
       .select('id')
       .eq('user_id', grant.user_id)
       .eq('type', 'deadline_changed')
-      .filter('payload->grant_id', 'eq', grant.id)
-      .filter('payload->new_deadline', 'eq', grant.deadline)
+      .filter('payload->>grant_id', 'eq', grant.id)
+      .filter('payload->>new_deadline', 'eq', grant.deadline)
       .limit(1);
 
     if (existing && existing.length > 0) continue;
+
+    const oldMs = Date.parse(grant.previous_deadline);
+    const newMs = Date.parse(grant.deadline);
+    const daysDiff = Number.isFinite(oldMs) && Number.isFinite(newMs)
+      ? Math.round((newMs - oldMs) / (1000 * 60 * 60 * 24))
+      : null;
+    const direction = daysDiff == null
+      ? 'changed'
+      : daysDiff > 0 ? 'extended'
+      : daysDiff < 0 ? 'moved_earlier'
+      : 'unchanged';
 
     await supabase.from('notification_queue').insert({
       user_id: grant.user_id,
@@ -272,6 +287,9 @@ async function detectDeadlineChanges(supabase: any): Promise<number> {
         funder_name: grant.funder_name,
         old_deadline: grant.previous_deadline,
         new_deadline: grant.deadline,
+        days_diff: daysDiff,
+        direction,
+        detected_at: new Date().toISOString(),
         link: `https://fundermatch.org/projects/${grant.project_id}/tracker`,
       },
       scheduled_for: new Date().toISOString(),
