@@ -140,7 +140,7 @@ export default function LoginPage() {
                   key={key}
                   onClick={() => handleOAuth(key)}
                   disabled={loadingProvider !== null || loading}
-                  className="w-full flex items-center justify-center gap-3 bg-white text-gray-900 font-medium rounded-xl px-4 py-3 text-sm hover:bg-gray-100 transition-colors disabled:opacity-60"
+                  className="oauth-provider-btn w-full flex items-center justify-center gap-3 bg-white text-gray-900 font-medium rounded-xl px-4 py-3 text-sm border border-[#30363d] hover:bg-gray-100 transition-colors disabled:opacity-60"
                 >
                   {loadingProvider === key ? <Loader size={18} className="animate-spin" /> : icon}
                   {label}

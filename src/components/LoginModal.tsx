@@ -127,7 +127,7 @@ export default function LoginModal({ pendingFunder, pendingFunders, onClose }: L
               key={key}
               onClick={() => handleProvider(key)}
               disabled={loadingProvider !== null}
-              className="w-full flex items-center justify-center gap-3 bg-white text-gray-900 font-medium rounded-xl px-4 py-3 text-sm hover:bg-gray-100 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              className="oauth-provider-btn w-full flex items-center justify-center gap-3 bg-white text-gray-900 font-medium rounded-xl px-4 py-3 text-sm border border-[#30363d] hover:bg-gray-100 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {loadingProvider === key ? (
                 <Loader2 size={18} className="animate-spin text-gray-600" />
