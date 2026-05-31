@@ -61,6 +61,7 @@ interface UserProfile {
   state: string | null;
   county: string | null;
   ntee_codes: string[] | null;
+  fields_of_work: string[] | null;
   budget_range: string | null;
   updated_at: string | null;
 }
@@ -91,6 +92,7 @@ function UserSettingsContent() {
   const [state, setState] = useState('');
   const [county, setCounty] = useState('');
   const [nteeCodes, setNteeCodes] = useState<string[]>([]);
+  const [fieldsOfWork, setFieldsOfWork] = useState('');
   const [budgetRange, setBudgetRange] = useState('');
 
   // Password change state
@@ -144,6 +146,7 @@ function UserSettingsContent() {
           setState(data.state || '');
           setCounty(data.county || '');
           setNteeCodes(data.ntee_codes || []);
+          setFieldsOfWork(Array.isArray(data.fields_of_work) ? data.fields_of_work.join(', ') : '');
           setBudgetRange(data.budget_range || '');
         } else {
           setProfile({
@@ -156,6 +159,7 @@ function UserSettingsContent() {
             state: null,
             county: null,
             ntee_codes: null,
+            fields_of_work: null,
             budget_range: null,
             updated_at: null,
           });
@@ -267,6 +271,7 @@ function UserSettingsContent() {
             state: state || null,
             county: county || null,
             ntee_codes: nteeCodes.length > 0 ? nteeCodes : null,
+            fields_of_work: (() => { const arr = fieldsOfWork.split(',').map((v) => v.trim()).filter(Boolean); return arr.length > 0 ? arr : null; })(),
             budget_range: budgetRange || null,
             updated_at: new Date().toISOString(),
           },
@@ -660,6 +665,18 @@ function UserSettingsContent() {
                       </label>
                     ))}
                   </div>
+                </div>
+
+                {/* Fields of work (FM-IC-ONB-003) */}
+                <div>
+                  <label htmlFor="fields_of_work" className={labelClass}>Fields of work</label>
+                  <input id="fields_of_work" type="text" value={fieldsOfWork}
+                    onChange={(e) => setFieldsOfWork(e.target.value)}
+                    placeholder="Workforce Development, Youth Mentoring, Food Security"
+                    className={inputClass} />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Comma-separated plain-language program areas. Complements NTEE codes for finer-grained funder matching.
+                  </p>
                 </div>
               </div>
 
