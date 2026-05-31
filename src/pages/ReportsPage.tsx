@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
-import { Download, Filter, TrendingUp, DollarSign, Target, Award, Clock, BarChart3, PieChart } from 'lucide-react';
+import { Download, Filter, TrendingUp, DollarSign, Target, Award, Clock, BarChart3, PieChart, Plus, Check, AlertTriangle, Trash2, X } from 'lucide-react';
 
 const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const REPORTS_URL = `${SUPABASE_URL}/functions/v1/reports-portfolio`;
 const GENERATE_URL = `${SUPABASE_URL}/functions/v1/generate-report`;
+const COMPLIANCE_URL = `${SUPABASE_URL}/functions/v1/compliance`;
 
 interface KPIs {
   total_grants: number;
@@ -21,6 +22,20 @@ interface PipelineItem { name: string; color: string; count: number; amount: num
 interface ProjectItem { name: string; count: number; awarded: number; pending: number; }
 interface TimelineItem { quarter: string; submitted: number; awarded: number; }
 interface ComplianceSummary { total: number; compliant: number; upcoming: number; overdue: number; }
+interface ComplianceRequirement {
+  id: string;
+  user_id: string;
+  grant_id: string | null;
+  project_id: string | null;
+  requirement_text: string;
+  category: string | null;
+  due_date: string | null;
+  status: 'pending' | 'in_progress' | 'submitted' | 'approved' | string;
+  priority: string | null;
+  notes: string | null;
+  completed_at: string | null;
+  is_overdue?: boolean;
+}
 interface FunderTypeItem { type: string; count: number; amount: number; }
 
 export default function ReportsPage() {
@@ -36,6 +51,15 @@ export default function ReportsPage() {
   const [byProject, setByProject] = useState<ProjectItem[]>([]);
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [compliance, setCompliance] = useState<ComplianceSummary | null>(null);
+  // FM-IC-RPT-002: full requirements workflow
+  const [requirements, setRequirements] = useState<ComplianceRequirement[]>([]);
+  const [reqLoading, setReqLoading] = useState(false);
+  const [reqError, setReqError] = useState<string | null>(null);
+  const [showAddReq, setShowAddReq] = useState(false);
+  const [newReqText, setNewReqText] = useState('');
+  const [newReqCategory, setNewReqCategory] = useState<string>('report');
+  const [newReqDueDate, setNewReqDueDate] = useState('');
+  const [newReqPriority, setNewReqPriority] = useState<string>('medium');
   const [byFunderType, setByFunderType] = useState<FunderTypeItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filterPeriod, setFilterPeriod] = useState('all');
@@ -43,7 +67,7 @@ export default function ReportsPage() {
   const [filterStatus, setFilterStatus] = useState('all');
 
   useEffect(() => {
-    if (!loading && user) loadReport();
+    if (!loading && user) { loadReport(); loadRequirements(); }
   }, [user, loading]);
 
   const loadReport = async () => {
@@ -97,6 +121,79 @@ export default function ReportsPage() {
   const maxProjectAmt = Math.max(...byProject.map(p => p.awarded + p.pending), 1);
 
   if (loading) return null;
+
+
+  // ── FM-IC-RPT-002: Compliance requirements CRUD ─────────────────────
+  const loadRequirements = async () => {
+    try {
+      setReqLoading(true);
+      setReqError(null);
+      const headers = await getEdgeFunctionHeaders();
+      const res = await fetch(COMPLIANCE_URL, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setRequirements(Array.isArray(data) ? data : []);
+      } else {
+        setReqError('Failed to load requirements');
+      }
+    } catch (err) {
+      console.error(err);
+      setReqError('Failed to load requirements');
+    } finally {
+      setReqLoading(false);
+    }
+  };
+
+  const addRequirement = async () => {
+    if (!newReqText.trim()) return;
+    try {
+      const headers = await getEdgeFunctionHeaders();
+      const res = await fetch(COMPLIANCE_URL, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requirement_text: newReqText.trim(),
+          category: newReqCategory,
+          due_date: newReqDueDate || null,
+          priority: newReqPriority,
+          status: 'pending',
+        }),
+      });
+      if (res.ok) {
+        setNewReqText(''); setNewReqDueDate(''); setShowAddReq(false);
+        await loadRequirements();
+      } else {
+        setReqError('Could not add requirement');
+      }
+    } catch (err) { console.error(err); setReqError('Could not add requirement'); }
+  };
+
+  const updateRequirementStatus = async (id: string, status: string) => {
+    try {
+      const headers = await getEdgeFunctionHeaders();
+      const res = await fetch(COMPLIANCE_URL, {
+        method: 'PUT',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status }),
+      });
+      if (res.ok) {
+        // optimistic local update
+        setRequirements(rs => rs.map(r => r.id === id ? { ...r, status } : r));
+      }
+    } catch (err) { console.error(err); }
+  };
+
+  const deleteRequirement = async (id: string) => {
+    if (!confirm('Delete this requirement?')) return;
+    try {
+      const headers = await getEdgeFunctionHeaders();
+      const res = await fetch(`${COMPLIANCE_URL}?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE', headers,
+      });
+      if (res.ok) setRequirements(rs => rs.filter(r => r.id !== id));
+    } catch (err) { console.error(err); }
+  };
+
 
   return (
     <div className="min-h-screen bg-[#0d1117] text-white">
@@ -261,6 +358,124 @@ export default function ReportsPage() {
                 </div>
               </div>
             )}
+
+            {/* FM-IC-RPT-002: Post-award reporting requirements workflow */}
+            <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-sm font-semibold">Reporting requirements</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">Track post-award reports, financial filings, and grantee deliverables.</p>
+                </div>
+                <button
+                  onClick={() => setShowAddReq(v => !v)}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium"
+                >
+                  {showAddReq ? <><X size={12} /> Cancel</> : <><Plus size={12} /> Add requirement</>}
+                </button>
+              </div>
+
+              {showAddReq && (
+                <div className="mb-4 p-3 bg-[#0d1117] border border-[#30363d] rounded-lg space-y-2">
+                  <input
+                    type="text"
+                    value={newReqText}
+                    onChange={(e) => setNewReqText(e.target.value)}
+                    placeholder="e.g. Submit Q1 financial report to funder"
+                    className="w-full bg-[#161b22] border border-[#30363d] rounded px-3 py-2 text-sm text-white placeholder-gray-500"
+                  />
+                  <div className="grid grid-cols-3 gap-2">
+                    <select value={newReqCategory} onChange={(e) => setNewReqCategory(e.target.value)}
+                      className="bg-[#161b22] border border-[#30363d] rounded px-2 py-1.5 text-xs text-gray-200">
+                      <option value="report">Report</option>
+                      <option value="financial">Financial</option>
+                      <option value="narrative">Narrative</option>
+                      <option value="evaluation">Evaluation</option>
+                      <option value="other">Other</option>
+                    </select>
+                    <input type="date" value={newReqDueDate} onChange={(e) => setNewReqDueDate(e.target.value)}
+                      className="bg-[#161b22] border border-[#30363d] rounded px-2 py-1.5 text-xs text-gray-200" />
+                    <select value={newReqPriority} onChange={(e) => setNewReqPriority(e.target.value)}
+                      className="bg-[#161b22] border border-[#30363d] rounded px-2 py-1.5 text-xs text-gray-200">
+                      <option value="low">Low priority</option>
+                      <option value="medium">Medium priority</option>
+                      <option value="high">High priority</option>
+                    </select>
+                  </div>
+                  <button onClick={addRequirement} disabled={!newReqText.trim()}
+                    className="px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-green-600/40 text-white rounded text-xs font-medium">
+                    Save
+                  </button>
+                </div>
+              )}
+
+              {reqError && <p className="text-xs text-red-400 mb-2">{reqError}</p>}
+
+              {reqLoading ? (
+                <p className="text-xs text-gray-500">Loading requirements…</p>
+              ) : requirements.length === 0 ? (
+                <p className="text-xs text-gray-500">No reporting requirements tracked yet. Add one above.</p>
+              ) : (
+                <div className="space-y-2">
+                  {requirements.map(r => {
+                    const overdue = r.is_overdue;
+                    const done = ['submitted', 'approved'].includes(r.status);
+                    return (
+                      <div key={r.id} className={`flex items-center gap-3 p-3 rounded-lg border ${
+                        done ? 'bg-green-600/5 border-green-700/40'
+                        : overdue ? 'bg-red-600/5 border-red-700/40'
+                        : 'bg-[#0d1117] border-[#30363d]'}`}>
+                        <button
+                          onClick={() => updateRequirementStatus(r.id, done ? 'pending' : 'submitted')}
+                          aria-label={done ? 'Mark pending' : 'Mark submitted'}
+                          className={`w-5 h-5 rounded flex items-center justify-center border ${
+                            done ? 'bg-green-600 border-green-600 text-white' : 'border-[#484f58]'
+                          }`}
+                        >
+                          {done && <Check size={12} />}
+                        </button>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm ${done ? 'line-through text-gray-500' : 'text-white'}`}>
+                            {r.requirement_text}
+                          </p>
+                          <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                            {r.category && <span className="capitalize">{r.category}</span>}
+                            {r.due_date && (
+                              <span className={overdue && !done ? 'text-red-400 font-medium' : ''}>
+                                {overdue && !done && <AlertTriangle size={10} className="inline mr-0.5" />}
+                                Due {new Date(r.due_date).toLocaleDateString()}
+                              </span>
+                            )}
+                            {r.priority && (
+                              <span className={
+                                r.priority === 'high' ? 'text-orange-400'
+                                : r.priority === 'low' ? 'text-gray-500'
+                                : 'text-yellow-400'
+                              }>{r.priority} priority</span>
+                            )}
+                          </div>
+                        </div>
+                        <select
+                          value={r.status}
+                          onChange={(e) => updateRequirementStatus(r.id, e.target.value)}
+                          className="bg-[#161b22] border border-[#30363d] rounded px-2 py-1 text-xs text-gray-200"
+                          aria-label="Requirement status"
+                        >
+                          <option value="pending">Pending</option>
+                          <option value="in_progress">In progress</option>
+                          <option value="submitted">Submitted</option>
+                          <option value="approved">Approved</option>
+                        </select>
+                        <button onClick={() => deleteRequirement(r.id)}
+                          aria-label="Delete requirement"
+                          className="text-gray-500 hover:text-red-400">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </>
         )}
       </main>
