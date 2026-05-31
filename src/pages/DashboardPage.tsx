@@ -120,7 +120,7 @@ export default function DashboardPage() {
               <p className="text-gray-400 mt-2">Manage and track your funding initiatives</p>
             </div>
             <button
-              onClick={() => navigate('/projects/new')}
+              onClick={() => navigate('/projects/new/chat')}
               className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors w-full sm:w-auto justify-center sm:justify-start"
             >
               <Plus size={20} />
@@ -144,7 +144,7 @@ export default function DashboardPage() {
                   Create your first project to start discovering funders tailored to a specific initiative.
                 </p>
                 <button
-                  onClick={() => navigate('/projects/new')}
+                  onClick={() => navigate('/projects/new/chat')}
                   className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
                 >
                   <Plus size={20} />
