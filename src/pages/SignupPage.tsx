@@ -64,7 +64,9 @@ export default function SignupPage() {
   const [missionStatement, setMissionStatement] = useState('');
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
+  const [county, setCounty] = useState('');
   const [nteeCodes, setNteeCodes] = useState<string[]>([]);
+  const [fieldsOfWork, setFieldsOfWork] = useState('');
   const [budgetRange, setBudgetRange] = useState('');
 
   // Redirect if already authenticated
@@ -164,7 +166,9 @@ export default function SignupPage() {
             mission_statement: missionStatement || null,
             city,
             state,
+            county: county || null,
             ntee_codes: nteeCodes,
+            fields_of_work: fieldsOfWork.split(',').map((v) => v.trim()).filter(Boolean),
             budget_range: budgetRange,
           },
         },
@@ -404,6 +408,23 @@ export default function SignupPage() {
               </div>
 
               <div>
+                <label htmlFor="county" className="block text-sm font-medium text-white mb-2">
+                  County <span className="text-gray-500 font-normal">(optional)</span>
+                </label>
+                <input
+                  id="county"
+                  type="text"
+                  value={county}
+                  onChange={(e) => setCounty(e.target.value)}
+                  placeholder="e.g. King County"
+                  className="w-full px-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Helps match funders that prefer local grantmaking.
+                </p>
+              </div>
+
+              <div>
                 <label className="block text-sm font-medium text-white mb-3">
                   Primary focus areas *
                 </label>
@@ -420,6 +441,23 @@ export default function SignupPage() {
                     </label>
                   ))}
                 </div>
+              </div>
+
+              <div>
+                <label htmlFor="fields_of_work" className="block text-sm font-medium text-white mb-2">
+                  Fields of work <span className="text-gray-500 font-normal">(optional)</span>
+                </label>
+                <input
+                  id="fields_of_work"
+                  type="text"
+                  value={fieldsOfWork}
+                  onChange={(e) => setFieldsOfWork(e.target.value)}
+                  placeholder="Workforce Development, Youth Mentoring, Food Security"
+                  className="w-full px-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Comma-separated plain-language program areas. Complements the NTEE codes above and improves funder matching.
+                </p>
               </div>
 
               <div>
