@@ -37,12 +37,18 @@ Deno.serve(async (req: Request) => {
     const deadlineReminders = await scheduleDeadlineReminders(supabase);
     const taskReminders = await scheduleTaskReminders(supabase);
     const externalReminders = await scheduleExternalAssigneeReminders(supabase);
+    // FM-IC-NTF-002 (consolidated from PR #21): re-scrape funder URLs first
+    // so any deadline changes get written to tracked_grants. The track_deadline
+    // _change DB trigger captures previous_deadline, and the existing
+    // detectDeadlineChanges() routine then queues the alert email.
+    const deadlinesSynced = await syncDeadlinesFromUrls(supabase);
     const deadlineChanges = await detectDeadlineChanges(supabase);
 
     return jsonResponse(req, {
       deadline_reminders_scheduled: deadlineReminders,
       task_reminders_scheduled: taskReminders,
       external_assignee_reminders: externalReminders,
+      deadlines_synced_from_urls: deadlinesSynced,
       deadline_changes_detected: deadlineChanges,
     });
   } catch (err: any) {
@@ -297,4 +303,119 @@ async function detectDeadlineChanges(supabase: any): Promise<number> {
     detected++;
   }
   return detected;
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// FM-IC-NTF-002 / PR #21 consolidation:
+// Auto-sync grant deadlines from funder websites.
+//
+// For each tracked grant that:
+//   (a) has a grant_url
+//   (b) is NOT in a terminal pipeline status (awarded/rejected)
+//   (c) was last synced > 24h ago (or never)
+// we call the fetch-grant-deadline edge function (Claude-Haiku-backed
+// scraper). When the extractor returns a high/medium-confidence date
+// that differs from the current deadline, we write it; the
+// track_deadline_change DB trigger then snapshots previous_deadline so
+// detectDeadlineChanges() will queue an alert in the same cron tick.
+//
+// The batch is capped (BATCH_LIMIT) so a single cron run stays bounded
+// even when the funder portfolio grows. deadline_synced_at is updated
+// regardless of outcome to throttle.
+// ──────────────────────────────────────────────────────────────────────
+const BATCH_LIMIT = 25;
+const STALE_HOURS = 24;
+const FETCH_DEADLINE_URL = `${SUPABASE_URL}/functions/v1/fetch-grant-deadline`;
+
+async function syncDeadlinesFromUrls(supabase: any): Promise<number> {
+  const staleCutoff = new Date(Date.now() - STALE_HOURS * 60 * 60 * 1000).toISOString();
+
+  // Skip grants in terminal pipeline statuses (awarded/rejected).
+  const { data: terminalStatuses } = await supabase
+    .from('pipeline_statuses')
+    .select('id')
+    .eq('is_terminal', true);
+  const terminalIds = (terminalStatuses || []).map((p: any) => p.id);
+
+  let query = supabase
+    .from('tracked_grants')
+    .select('id, user_id, funder_name, grant_url, deadline, deadline_synced_at, status_id')
+    .not('grant_url', 'is', null)
+    .or(`deadline_synced_at.is.null,deadline_synced_at.lt.${staleCutoff}`)
+    .limit(BATCH_LIMIT);
+
+  if (terminalIds.length > 0) {
+    query = query.not('status_id', 'in', `(${terminalIds.join(',')})`);
+  }
+
+  const { data: grants, error } = await query;
+  if (error) {
+    console.error('[syncDeadlinesFromUrls] select error:', error);
+    return 0;
+  }
+  if (!grants || grants.length === 0) return 0;
+
+  let synced = 0;
+
+  for (const grant of grants) {
+    let extracted: { deadline: string | null; confidence: string; notes: string } = {
+      deadline: null, confidence: 'error', notes: '',
+    };
+
+    try {
+      const resp = await fetch(FETCH_DEADLINE_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+        },
+        body: JSON.stringify({
+          url: grant.grant_url,
+          funder_name: grant.funder_name || '',
+        }),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        extracted = {
+          deadline: typeof data.deadline === 'string' ? data.deadline : null,
+          confidence: typeof data.confidence === 'string' ? data.confidence : 'none',
+          notes: typeof data.notes === 'string' ? data.notes : '',
+        };
+      } else {
+        extracted.notes = `Extractor returned HTTP ${resp.status}`;
+      }
+    } catch (err: any) {
+      console.error('[syncDeadlinesFromUrls] fetch error for grant', grant.id, err?.message);
+      extracted.notes = 'Could not reach extractor';
+    }
+
+    const updates: Record<string, unknown> = {
+      deadline_synced_at: new Date().toISOString(),
+      deadline_sync_status: extracted.confidence,
+      deadline_sync_note: extracted.notes?.slice(0, 500) || null,
+    };
+
+    // Only write deadline when high/medium confidence and it actually differs.
+    // Low/none confidence is recorded as a sync attempt but we don't overwrite
+    // a user-curated date with a speculative one.
+    if (
+      extracted.deadline &&
+      /^\d{4}-\d{2}-\d{2}$/.test(extracted.deadline) &&
+      ['high', 'medium'].includes(extracted.confidence) &&
+      extracted.deadline !== grant.deadline
+    ) {
+      updates.deadline = extracted.deadline;
+      synced++;
+    }
+
+    const { error: upErr } = await supabase
+      .from('tracked_grants')
+      .update(updates)
+      .eq('id', grant.id);
+    if (upErr) {
+      console.error('[syncDeadlinesFromUrls] update error for grant', grant.id, upErr.message);
+    }
+  }
+
+  return synced;
 }
