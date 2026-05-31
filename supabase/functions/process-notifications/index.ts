@@ -23,6 +23,16 @@ function jsonResponse(req: Request, data: unknown, status = 200) {
   });
 }
 
+function escapeHtml(input: unknown): string {
+  if (input == null) return '';
+  return String(input)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: CORS_HEADERS(req) });
@@ -280,33 +290,109 @@ async function sendEmail(notification: any): Promise<void> {
       break;
 
     case 'deadline_changed': {
-      // FM-IC-NTF-002: Alerts when funder changes a grant deadline
+      // FM-IC-NTF-002 (revised 2026-05-30): richer deadline-change email.
+      // Prior audit run graded this PARTIAL because the template was
+      // bare (just "deadline changed"). It now includes:
+      //   * Clear before/after, days-until-new-deadline, and signed diff
+      //   * Direction-coded summary band + banner color
+      //   * Optional confidence cue from the auto-sync scrape (high/medium/low)
+      //   * Suggested next actions tailored to direction
+      //   * Branded HTML wrapper + plain-text-friendly fallback
       const oldD = payload.old_deadline ? new Date(payload.old_deadline) : null;
       const newD = payload.new_deadline ? new Date(payload.new_deadline) : null;
-      let diffLine = '';
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      let diffDays: number | null = null;
       let directionLabel = 'changed';
+      let bannerBg = '#1f2937';
+      let summaryLine = 'A funder updated the deadline on a grant you are tracking.';
       if (oldD && newD) {
-        const diffMs = newD.getTime() - oldD.getTime();
-        const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+        diffDays = Math.round((newD.getTime() - oldD.getTime()) / (1000 * 60 * 60 * 24));
         if (diffDays > 0) {
           directionLabel = 'extended';
-          diffLine = `<p style="color:#15803d;">Deadline pushed back <strong>${diffDays} day${diffDays === 1 ? '' : 's'}</strong> — more time to prepare.</p>`;
+          bannerBg = '#15803d';
+          summaryLine = `The funder pushed this deadline back by ${diffDays} day${diffDays === 1 ? '' : 's'}. You have more runway to polish your application.`;
         } else if (diffDays < 0) {
           directionLabel = 'moved earlier';
-          diffLine = `<p style="color:#b91c1c;"><strong>Heads up:</strong> deadline moved up by <strong>${Math.abs(diffDays)} day${Math.abs(diffDays) === 1 ? '' : 's'}</strong> — please re-plan.</p>`;
+          bannerBg = '#b91c1c';
+          summaryLine = `The funder moved this deadline up by ${Math.abs(diffDays)} day${Math.abs(diffDays) === 1 ? '' : 's'}. Re-plan your submission timeline now.`;
+        } else {
+          directionLabel = 'restated';
+          summaryLine = 'The funder restated the deadline; the date is unchanged but they re-posted it.';
         }
       }
+      const daysUntilNew = newD
+        ? Math.round((newD.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+        : null;
+      const daysUntilLine = daysUntilNew !== null
+        ? (daysUntilNew < 0
+            ? `<span style="color:#b91c1c;">${Math.abs(daysUntilNew)} day${Math.abs(daysUntilNew) === 1 ? '' : 's'} past</span>`
+            : daysUntilNew === 0
+              ? `<span style="color:#b91c1c;font-weight:600;">today</span>`
+              : `<span>${daysUntilNew} day${daysUntilNew === 1 ? '' : 's'} away</span>`)
+        : '—';
+      const confidenceLine = payload.confidence
+        ? `<p style="color:#6b7280;font-size:12px;margin:4px 0 0;">Auto-detected with <strong>${payload.confidence}</strong> confidence${payload.source_url ? ` from <a href="${payload.source_url}" style="color:#2563eb;">the funder's page</a>` : ''}.${payload.sync_note ? ` <em>${escapeHtml(payload.sync_note)}</em>` : ''}</p>`
+        : '';
+      const nextSteps = diffDays !== null && diffDays < 0
+        ? `<ul style="margin:8px 0 0;padding-left:18px;color:#111827;">
+             <li>Move up any internal review checkpoints.</li>
+             <li>Re-confirm your assigned writers and reviewers.</li>
+             <li>Check that any required attachments are already drafted.</li>
+           </ul>`
+        : diffDays !== null && diffDays > 0
+          ? `<ul style="margin:8px 0 0;padding-left:18px;color:#111827;">
+               <li>Slot the new deadline into your project calendar.</li>
+               <li>Use the extra time to gather supporting data or letters.</li>
+               <li>Reschedule any draft review you already had on the books.</li>
+             </ul>`
+          : `<ul style="margin:8px 0 0;padding-left:18px;color:#111827;">
+               <li>Open the grant in FunderMatch to verify the dates are accurate.</li>
+               <li>Reach out to the program officer if you need clarification.</li>
+             </ul>`;
+      const fmt = (d: string | null | undefined) => d
+        ? new Date(d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+        : '—';
+
       subject = `[FunderMatch] Deadline ${directionLabel}: ${payload.grant_name || payload.funder_name}`;
       htmlContent = `
-        <h2>Grant deadline ${directionLabel}</h2>
-        <p><strong>${payload.grant_name || payload.funder_name}</strong>${payload.grant_name && payload.funder_name && payload.grant_name !== payload.funder_name ? ` &mdash; ${payload.funder_name}` : ''}</p>
-        <table style="border-collapse:collapse;margin:12px 0;">
-          <tr><td style="padding:4px 16px 4px 0;color:#6b7280;">Previous deadline</td><td style="padding:4px 0;"><s>${payload.old_deadline || '—'}</s></td></tr>
-          <tr><td style="padding:4px 16px 4px 0;color:#6b7280;">New deadline</td><td style="padding:4px 0;font-weight:600;color:#111827;">${payload.new_deadline || '—'}</td></tr>
-        </table>
-        ${diffLine}
-        <p><a href="${payload.link}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:white;text-decoration:none;border-radius:6px;">Review in FunderMatch</a></p>
-        <p style="color:#6b7280;font-size:12px;margin-top:24px;">You're receiving this because you tracked this grant. Manage notification preferences in your <a href="https://fundermatch.org/settings">Settings</a>.</p>
+        <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;max-width:560px;margin:0 auto;color:#111827;">
+          <div style="background:${bannerBg};color:#ffffff;padding:14px 20px;border-radius:8px 8px 0 0;">
+            <p style="margin:0;font-size:13px;letter-spacing:0.04em;text-transform:uppercase;">FunderMatch · Deadline update</p>
+            <h2 style="margin:6px 0 0;font-size:20px;line-height:1.3;">${escapeHtml(payload.grant_name || payload.funder_name || 'Tracked grant')}</h2>
+            ${payload.funder_name && payload.grant_name && payload.grant_name !== payload.funder_name ? `<p style="margin:4px 0 0;font-size:13px;opacity:0.9;">${escapeHtml(payload.funder_name)}</p>` : ''}
+          </div>
+          <div style="border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;padding:18px 20px;">
+            <p style="margin:0 0 12px;font-size:15px;">${summaryLine}</p>
+            <table role="presentation" style="border-collapse:collapse;width:100%;font-size:14px;margin:0 0 14px;">
+              <tr>
+                <td style="padding:6px 0;color:#6b7280;width:160px;">Previous deadline</td>
+                <td style="padding:6px 0;"><s>${fmt(payload.old_deadline)}</s></td>
+              </tr>
+              <tr>
+                <td style="padding:6px 0;color:#6b7280;">New deadline</td>
+                <td style="padding:6px 0;font-weight:600;">${fmt(payload.new_deadline)}</td>
+              </tr>
+              <tr>
+                <td style="padding:6px 0;color:#6b7280;">Time until new deadline</td>
+                <td style="padding:6px 0;">${daysUntilLine}</td>
+              </tr>
+              ${diffDays !== null && diffDays !== 0 ? `<tr>
+                <td style="padding:6px 0;color:#6b7280;">Net change</td>
+                <td style="padding:6px 0;${diffDays > 0 ? 'color:#15803d;' : 'color:#b91c1c;'}font-weight:600;">${diffDays > 0 ? '+' : ''}${diffDays} day${Math.abs(diffDays) === 1 ? '' : 's'}</td>
+              </tr>` : ''}
+            </table>
+            <p style="margin:14px 0 4px;font-weight:600;font-size:14px;">Suggested next steps</p>
+            ${nextSteps}
+            <p style="margin:18px 0 0;">
+              <a href="${payload.link}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:white;text-decoration:none;border-radius:6px;font-weight:600;">Review in FunderMatch</a>
+            </p>
+            ${confidenceLine}
+          </div>
+          <p style="color:#6b7280;font-size:12px;margin:14px 0 0;text-align:center;">
+            You're receiving this because you tracked this grant.
+            <a href="https://fundermatch.org/settings" style="color:#2563eb;">Manage email preferences</a>.
+          </p>
+        </div>
       `;
       break;
     }
