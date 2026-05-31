@@ -279,6 +279,38 @@ async function sendEmail(notification: any): Promise<void> {
       `;
       break;
 
+    case 'deadline_changed': {
+      // FM-IC-NTF-002: Alerts when funder changes a grant deadline
+      const oldD = payload.old_deadline ? new Date(payload.old_deadline) : null;
+      const newD = payload.new_deadline ? new Date(payload.new_deadline) : null;
+      let diffLine = '';
+      let directionLabel = 'changed';
+      if (oldD && newD) {
+        const diffMs = newD.getTime() - oldD.getTime();
+        const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+        if (diffDays > 0) {
+          directionLabel = 'extended';
+          diffLine = `<p style="color:#15803d;">Deadline pushed back <strong>${diffDays} day${diffDays === 1 ? '' : 's'}</strong> — more time to prepare.</p>`;
+        } else if (diffDays < 0) {
+          directionLabel = 'moved earlier';
+          diffLine = `<p style="color:#b91c1c;"><strong>Heads up:</strong> deadline moved up by <strong>${Math.abs(diffDays)} day${Math.abs(diffDays) === 1 ? '' : 's'}</strong> — please re-plan.</p>`;
+        }
+      }
+      subject = `[FunderMatch] Deadline ${directionLabel}: ${payload.grant_name || payload.funder_name}`;
+      htmlContent = `
+        <h2>Grant deadline ${directionLabel}</h2>
+        <p><strong>${payload.grant_name || payload.funder_name}</strong>${payload.grant_name && payload.funder_name && payload.grant_name !== payload.funder_name ? ` &mdash; ${payload.funder_name}` : ''}</p>
+        <table style="border-collapse:collapse;margin:12px 0;">
+          <tr><td style="padding:4px 16px 4px 0;color:#6b7280;">Previous deadline</td><td style="padding:4px 0;"><s>${payload.old_deadline || '—'}</s></td></tr>
+          <tr><td style="padding:4px 16px 4px 0;color:#6b7280;">New deadline</td><td style="padding:4px 0;font-weight:600;color:#111827;">${payload.new_deadline || '—'}</td></tr>
+        </table>
+        ${diffLine}
+        <p><a href="${payload.link}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:white;text-decoration:none;border-radius:6px;">Review in FunderMatch</a></p>
+        <p style="color:#6b7280;font-size:12px;margin-top:24px;">You're receiving this because you tracked this grant. Manage notification preferences in your <a href="https://fundermatch.org/settings">Settings</a>.</p>
+      `;
+      break;
+    }
+
     default:
       subject = `[FunderMatch] Notification`;
       htmlContent = `<p>You have a new notification. <a href="https://fundermatch.org/dashboard">View Dashboard</a></p>`;

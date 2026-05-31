@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader, Download, TrendingUp, Clock, DollarSign, Target, Award, AlertTriangle } from 'lucide-react';
+import { Loader, Download, TrendingUp, Clock, DollarSign, Target, Award, AlertTriangle, Filter, ArrowUpDown, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
@@ -30,6 +30,15 @@ export default function PortfolioPage() {
   const [pipelineBreakdown, setPipelineBreakdown] = useState<{ name: string; color: string; count: number }[]>([]);
   const [grants, setGrants] = useState<PortfolioGrant[]>([]);
   const [_total, setTotal] = useState(0);
+
+  // FM-IC-DSC-006 + FM-IC-TRK-006 — cross-project filter + sort
+  const [filterProject, setFilterProject] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterDeadlineFrom, setFilterDeadlineFrom] = useState<string>('');
+  const [filterDeadlineTo, setFilterDeadlineTo] = useState<string>('');
+  const [sortKey, setSortKey] = useState<'deadline' | 'amount' | 'updated' | 'project'>('deadline');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     if (!authLoading && user) loadPortfolio();
@@ -78,6 +87,49 @@ export default function PortfolioPage() {
   }
 
   const totalCount = pipelineBreakdown.reduce((s, b) => s + b.count, 0);
+
+  // FM-IC-DSC-006 + FM-IC-TRK-006 — derived filter+sort list
+  const projectOptions = Array.from(new Set(grants.map(g => g.project_name))).sort();
+  const statusOptions = Array.from(new Set(grants.map(g => g.status_name))).sort();
+  const filteredGrants = grants
+    .filter(g => filterProject === 'all' || g.project_name === filterProject)
+    .filter(g => filterStatus === 'all' || g.status_name === filterStatus)
+    .filter(g => {
+      if (!filterDeadlineFrom && !filterDeadlineTo) return true;
+      if (!g.deadline) return false;
+      const d = new Date(g.deadline).getTime();
+      if (filterDeadlineFrom && d < new Date(filterDeadlineFrom).getTime()) return false;
+      if (filterDeadlineTo && d > new Date(filterDeadlineTo).getTime() + 86400000) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      const dir = sortDir === 'asc' ? 1 : -1;
+      const nullsLast = (av: any, bv: any) => {
+        if (av == null && bv == null) return 0;
+        if (av == null) return 1;
+        if (bv == null) return -1;
+        return 0;
+      };
+      if (sortKey === 'deadline') {
+        const nl = nullsLast(a.deadline, b.deadline); if (nl) return nl;
+        return (new Date(a.deadline!).getTime() - new Date(b.deadline!).getTime()) * dir;
+      }
+      if (sortKey === 'amount') {
+        const nl = nullsLast(a.amount, b.amount); if (nl) return nl;
+        return ((a.amount ?? 0) - (b.amount ?? 0)) * dir;
+      }
+      if (sortKey === 'updated') {
+        return (new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()) * dir;
+      }
+      // project
+      return a.project_name.localeCompare(b.project_name) * dir;
+    });
+  const hasActiveFilter = filterProject !== 'all' || filterStatus !== 'all' || !!filterDeadlineFrom || !!filterDeadlineTo;
+  const clearFilters = () => {
+    setFilterProject('all'); setFilterStatus('all');
+    setFilterDeadlineFrom(''); setFilterDeadlineTo('');
+  };
+
 
   return (
     <>
@@ -163,8 +215,110 @@ export default function PortfolioPage() {
             </div>
           )}
 
+          {/* FM-IC-DSC-006 + FM-IC-TRK-006 — Filter + sort toolbar */}
+          {grants.length > 0 && (
+            <div className="mb-4 flex flex-wrap items-center gap-3">
+              <button
+                onClick={() => setShowFilters(v => !v)}
+                className={`flex items-center gap-2 px-3 py-2 border rounded-lg text-sm transition-colors ${
+                  hasActiveFilter
+                    ? 'bg-blue-600/20 border-blue-500 text-blue-300'
+                    : 'bg-[#161b22] border-[#30363d] text-gray-300 hover:border-[#484f58]'
+                }`}
+                aria-expanded={showFilters}
+              >
+                <Filter size={14} /> Filters{hasActiveFilter ? ` (${[filterProject !== 'all', filterStatus !== 'all', !!filterDeadlineFrom || !!filterDeadlineTo].filter(Boolean).length})` : ''}
+              </button>
+              <div className="flex items-center gap-2 text-sm text-gray-400">
+                <ArrowUpDown size={14} />
+                <span>Sort:</span>
+                <select
+                  value={sortKey}
+                  onChange={(e) => setSortKey(e.target.value as any)}
+                  className="bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-gray-200"
+                  aria-label="Sort grants by"
+                >
+                  <option value="deadline">Deadline</option>
+                  <option value="amount">Amount</option>
+                  <option value="updated">Last updated</option>
+                  <option value="project">Project</option>
+                </select>
+                <button
+                  onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
+                  className="bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-gray-300 hover:text-white"
+                  aria-label={`Sort direction: ${sortDir === 'asc' ? 'ascending' : 'descending'}`}
+                >
+                  {sortDir === 'asc' ? 'Asc' : 'Desc'}
+                </button>
+              </div>
+              <div className="text-xs text-gray-500 ml-auto">
+                Showing {filteredGrants.length} of {grants.length}
+              </div>
+            </div>
+          )}
+
+          {showFilters && grants.length > 0 && (
+            <div className="mb-4 bg-[#161b22] border border-[#30363d] rounded-lg p-4 grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1">Project</label>
+                <select
+                  value={filterProject}
+                  onChange={(e) => setFilterProject(e.target.value)}
+                  className="w-full bg-[#0d1117] border border-[#30363d] rounded px-2 py-1.5 text-sm text-gray-200"
+                >
+                  <option value="all">All projects</option>
+                  {projectOptions.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1">Status</label>
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="w-full bg-[#0d1117] border border-[#30363d] rounded px-2 py-1.5 text-sm text-gray-200"
+                >
+                  <option value="all">All statuses</option>
+                  {statusOptions.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1">Deadline from</label>
+                <input
+                  type="date"
+                  value={filterDeadlineFrom}
+                  onChange={(e) => setFilterDeadlineFrom(e.target.value)}
+                  className="w-full bg-[#0d1117] border border-[#30363d] rounded px-2 py-1.5 text-sm text-gray-200"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1">Deadline to</label>
+                <input
+                  type="date"
+                  value={filterDeadlineTo}
+                  onChange={(e) => setFilterDeadlineTo(e.target.value)}
+                  className="w-full bg-[#0d1117] border border-[#30363d] rounded px-2 py-1.5 text-sm text-gray-200"
+                />
+              </div>
+              {hasActiveFilter && (
+                <div className="md:col-span-4">
+                  <button
+                    onClick={clearFilters}
+                    className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300"
+                  >
+                    <X size={12} /> Clear all filters
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Grants Table */}
-          {grants.length === 0 ? (
+          {filteredGrants.length === 0 && grants.length > 0 ? (
+            <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-8 text-center">
+              <p className="text-gray-400 mb-2">No grants match your filters.</p>
+              <button onClick={clearFilters} className="mt-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium">Clear filters</button>
+            </div>
+          ) : grants.length === 0 ? (
             <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-8 text-center">
               <p className="text-gray-400 mb-2">No grants tracked yet.</p>
               <p className="text-gray-500 text-sm">Start tracking grants from your project workspace.</p>
@@ -187,7 +341,7 @@ export default function PortfolioPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#30363d]">
-                    {grants.map(g => {
+                    {filteredGrants.map(g => {
                       const isOverdue = g.deadline && new Date(g.deadline) < new Date() && !['awarded', 'rejected'].includes(g.status_slug);
                       return (
                         <tr key={g.id} className="hover:bg-[#21262d] transition-colors cursor-pointer" onClick={() => navigate(`/projects/${g.project_id}/tracker`)}>
