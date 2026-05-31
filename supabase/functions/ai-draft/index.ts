@@ -109,18 +109,105 @@ Deno.serve(async (req: Request) => {
       referenceDocContent = docTexts.join('\n\n');
     }
 
-    // Also load general KB entries (not tied to specific grant)
-    const { data: kbEntries } = await supabase
+    // ── FM-IC-AI-002: outcome-weighted past-application context ──────
+    //
+    // Previously the prompt pulled the 3 most-recent KB entries regardless
+    // of whether the underlying proposal was funded, rejected, or
+    // abandoned. The audit (FM-IC-AI-002 PARTIAL, 2026-05-30) called out
+    // that the draft pipeline does not yet weight by win/loss outcome.
+    //
+    // We now:
+    //   1. Load up to 12 recent KB entries with their tracked_grant_id.
+    //   2. Resolve each linked tracked_grant's terminal pipeline status
+    //      (Awarded → win, Rejected → loss, other terminal → other).
+    //   3. Re-order: winning proposals first, then unknown-outcome, then
+    //      losses. Surface up to 3 winners + 1 reference loss so the model
+    //      can mimic what works while still seeing pitfalls to avoid.
+    //   4. Tag each chunk in the prompt with its outcome so the model can
+    //      apply heavier weight to winners explicitly.
+    const { data: kbEntriesRaw } = await supabase
       .from('application_knowledge_base')
-      .select('title, content')
+      .select('title, content, tracked_grant_id, created_at')
       .eq('user_id', userId)
       .neq('source_type', 'reference_doc')
       .order('created_at', { ascending: false })
-      .limit(3);
+      .limit(12);
 
-    const kbContext = (kbEntries || []).map((e: any) =>
-      `--- ${e.title} ---\n${e.content.substring(0, 1500)}`
+    type WeightedKB = {
+      title: string;
+      content: string;
+      outcome: 'won' | 'lost' | 'other' | 'unknown';
+      grantId: string | null;
+    };
+    const weighted: WeightedKB[] = [];
+    const grantIds = Array.from(
+      new Set(
+        (kbEntriesRaw || [])
+          .map((e: any) => e.tracked_grant_id)
+          .filter((v: unknown): v is string => typeof v === 'string' && v.length > 0),
+      ),
+    );
+
+    let outcomeByGrant: Record<string, 'won' | 'lost' | 'other'> = {};
+    if (grantIds.length > 0) {
+      const { data: trackedGrantRows } = await supabase
+        .from('tracked_grants')
+        .select('id, pipeline_statuses(slug, is_terminal)')
+        .in('id', grantIds)
+        .eq('user_id', userId);
+      for (const row of trackedGrantRows || []) {
+        const ps: any = (row as any).pipeline_statuses;
+        if (!ps?.is_terminal) continue;
+        const slug = (ps.slug || '').toLowerCase();
+        if (slug === 'awarded' || slug === 'won' || slug === 'funded') {
+          outcomeByGrant[(row as any).id] = 'won';
+        } else if (slug === 'rejected' || slug === 'declined' || slug === 'lost') {
+          outcomeByGrant[(row as any).id] = 'lost';
+        } else {
+          outcomeByGrant[(row as any).id] = 'other';
+        }
+      }
+    }
+
+    for (const e of kbEntriesRaw || []) {
+      const gid = (e as any).tracked_grant_id ?? null;
+      const outcome: WeightedKB['outcome'] = gid && outcomeByGrant[gid]
+        ? outcomeByGrant[gid]
+        : 'unknown';
+      weighted.push({
+        title: (e as any).title,
+        content: (e as any).content ?? '',
+        outcome,
+        grantId: gid,
+      });
+    }
+
+    const wins = weighted.filter((w) => w.outcome === 'won');
+    const unknowns = weighted.filter((w) => w.outcome === 'unknown' || w.outcome === 'other');
+    const losses = weighted.filter((w) => w.outcome === 'lost');
+
+    // Up to 3 winners + 1 unknown + 1 reference loss (clearly labeled).
+    const selected = [
+      ...wins.slice(0, 3),
+      ...unknowns.slice(0, 1),
+      ...losses.slice(0, 1),
+    ];
+
+    const outcomeLabel = (o: WeightedKB['outcome']): string => {
+      if (o === 'won') return 'PRIOR WINNING PROPOSAL — emulate tone, structure, evidence patterns';
+      if (o === 'lost') return 'PRIOR REJECTED PROPOSAL — reference for what NOT to repeat (avoid mimicking)';
+      if (o === 'other') return 'PRIOR PROPOSAL (closed, non-award outcome) — context only';
+      return 'PRIOR PROPOSAL (outcome unknown) — light context only';
+    };
+
+    const kbEntries = selected.map((s) => ({ title: s.title, content: s.content }));
+    const kbContext = selected.map((s) =>
+      `--- [${outcomeLabel(s.outcome)}] ${s.title} ---\n${(s.content || '').substring(0, 1500)}`
     ).join('\n\n');
+
+    const winSummary = wins.length > 0
+      ? `You have ${wins.length} prior WON proposal(s) in the knowledge base. Mirror their voice, framing of need, and evidence cadence.`
+      : 'No prior won proposals are available. Lean on best-practice grant writing fundamentals.';
 
     // ── Build research context ────────────────────────────────────────────
 
@@ -177,8 +264,12 @@ Generate a complete, well-structured grant proposal with these sections:
 7. Organizational Capacity
 8. Works Cited
 
+OUTCOME-WEIGHTED PRIOR APPLICATIONS (FM-IC-AI-002):
+${winSummary}
+When sections of the knowledge base below are labeled "PRIOR WINNING PROPOSAL", treat them as the strongest exemplar of voice, length, and evidence selection — reuse style cues from them. When a section is labeled "PRIOR REJECTED PROPOSAL", do NOT mimic its phrasing; use it only to avoid repeating moves that did not land.
+
 ${referenceDocContent ? `\n\nREFERENCE DOCUMENTS (study the style carefully):\n${referenceDocContent}` : ''}
-${kbContext ? `\n\nORGANIZATIONAL KNOWLEDGE BASE:\n${kbContext}` : ''}
+${kbContext ? `\n\nORGANIZATIONAL KNOWLEDGE BASE (each entry tagged with its prior outcome):\n${kbContext}` : ''}
 `;
 
     const userPrompt = prompt || `Write a comprehensive grant proposal for ${orgName} to submit to ${funderName} for: ${grantTopic}`;
