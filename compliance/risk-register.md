@@ -3,7 +3,7 @@ title: Risk Register
 tsc: CC3.1, CC3.2, CC3.3, CC3.4
 owner: Kevin Armstrong
 review-cadence: quarterly
-last-reviewed: 2026-05-21
+last-reviewed: 2026-05-31
 ---
 
 # Risk Register — fundermatch.org
@@ -24,6 +24,7 @@ This document identifies, assesses, and tracks risks to fundermatch.org per AICP
 | R-06 | Credential stuffing / brute force | Security | 3 | 3 | 9 | Supabase Auth rate limiting; OAuth social login; anonymous tokens rejected | Active |
 | R-07 | Insider threat (sole developer) | Security | 1 | 5 | 5 | Branch protection; PR-based workflow with CI; daily automated audits | Accepted |
 | R-08 | Regulatory non-compliance (privacy) | Compliance | 2 | 4 | 8 | Privacy policy published; DSAR runbook; PII inventory; cookie disclosure | Active |
+| R-09 | Active May 2026 npm/PyPI supply chain campaigns (Mini Shai-Hulud, durabletask hijack, TrapDoor, Bitwarden CLI) | Security | 4 | 4 | 16 | Cross-referenced dependency graph 2026-05-31 (no exposure); npm audit clean; lockfile pinned; axios `>=1.15.0` override; weekly supply-chain-audit workflow; see compliance/supply-chain-2026-05-31.md | Active |
 
 ## Review Process
 
@@ -34,3 +35,4 @@ Reviewed quarterly. New risks added from daily security audits, supply chain mon
 | Date | Change | Author |
 |------|--------|--------|
 | 2026-05-21 | Initial risk register | Kevin Armstrong |
+| 2026-05-31 | Added R-09 (May 2026 supply chain campaigns); confirmed no exposure to compromised packages; refreshed last-reviewed | Kevin Armstrong (pen-test) |

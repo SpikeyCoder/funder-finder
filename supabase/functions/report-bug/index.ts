@@ -1,22 +1,18 @@
 import { ipRateLimit } from "../_shared/rate_limit.ts";
-const ALLOWED_ORIGINS = new Set([
-  'https://fundermatch.org',
-  'https://www.fundermatch.org',
-  'http://localhost:5173',
-]);
+import { corsHeaders as _sharedCorsHeaders } from "../_shared/cors.ts";
+import { sanitiseError } from "../_shared/errors.ts";
 
+// FM-2026-05-31-01: replaced the inline ALLOWED_ORIGINS Set + corsHeaders
+// function with the shared `_shared/cors.ts` helper so the report-bug
+// endpoint stays in lockstep with the other public Edge Functions. The
+// previous inline allow-list was a parity-drift risk: when a new domain
+// (e.g. a marketing-page sub-origin) was added to the canonical list,
+// report-bug would silently keep rejecting it until someone noticed the
+// duplicated copy and updated it too.
 function corsHeaders(requestOrigin: string | null): Record<string, string> {
-  const origin =
-    requestOrigin && ALLOWED_ORIGINS.has(requestOrigin)
-      ? requestOrigin
-      : 'https://fundermatch.org';
-
-  return {
-    'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Headers':
-      'authorization, x-client-info, apikey, content-type',
-    Vary: 'Origin',
-  };
+  return _sharedCorsHeaders(requestOrigin, {
+    methods: "POST, OPTIONS",
+  });
 }
 
 interface TechnicalContext {
@@ -223,9 +219,8 @@ Deno.serve(async (req) => {
       headers: { ...cors, 'Content-Type': 'application/json' },
     });
   } catch (err) {
-    console.error('report-bug error:', err);
     return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
+      JSON.stringify({ error: sanitiseError(err, 'Internal server error') }),
       {
         status: 500,
         headers: { ...cors, 'Content-Type': 'application/json' },
