@@ -119,6 +119,50 @@ export default function ProjectWorkspace() {
   const [project, setProject] = useState<Project | null>(null);
   const [matches, setMatches] = useState<ProjectMatch[]>([]);
   const [trackedGrants, setTrackedGrants] = useState<TrackedGrant[]>([]);
+
+  // FM-IC-DSC-006: deadline range + sort on the per-project tracker.
+  // Audit (2026-05-30) graded DSC-006 PARTIAL because deadline range
+  // filtering was not present on the discovery / tracked-grants surface
+  // inside a project (only on the cross-project Portfolio view).
+  const [trackerDeadlineFrom, setTrackerDeadlineFrom] = useState<string>('');
+  const [trackerDeadlineTo, setTrackerDeadlineTo] = useState<string>('');
+  const [trackerStatusFilter, setTrackerStatusFilter] = useState<string>('all');
+  const [trackerSort, setTrackerSort] = useState<'deadline_asc' | 'deadline_desc' | 'amount_desc' | 'added_desc'>('deadline_asc');
+
+  // FM-IC-DSC-006: derived filtered+sorted list for the tracker tab.
+  // Computed at render time; trackedGrants is bounded by per-project size
+  // so this is cheap and avoids the staleness window of useMemo over a
+  // mutable array.
+  const filteredTrackedGrants = (() => {
+    const fromMs = trackerDeadlineFrom ? new Date(trackerDeadlineFrom).getTime() : null;
+    const toMs = trackerDeadlineTo ? new Date(trackerDeadlineTo).getTime() + 86400000 - 1 : null;
+    let arr = trackedGrants.slice();
+    if (fromMs !== null || toMs !== null) {
+      arr = arr.filter((g) => {
+        if (!g.deadline) return false;
+        const t = new Date(g.deadline).getTime();
+        if (fromMs !== null && t < fromMs) return false;
+        if (toMs !== null && t > toMs) return false;
+        return true;
+      });
+    }
+    if (trackerStatusFilter !== 'all') {
+      arr = arr.filter((g) => g.status_id === trackerStatusFilter);
+    }
+    arr.sort((a, b) => {
+      if (trackerSort === 'deadline_asc' || trackerSort === 'deadline_desc') {
+        const av = a.deadline ? new Date(a.deadline).getTime() : Number.POSITIVE_INFINITY;
+        const bv = b.deadline ? new Date(b.deadline).getTime() : Number.POSITIVE_INFINITY;
+        return trackerSort === 'deadline_asc' ? av - bv : bv - av;
+      }
+      if (trackerSort === 'amount_desc') {
+        return (b.amount || 0) - (a.amount || 0);
+      }
+      return new Date(b.added_at || 0).getTime() - new Date(a.added_at || 0).getTime();
+    });
+    return arr;
+  })();
+
   const [pipelineStatuses, setPipelineStatuses] = useState<PipelineStatus[]>([]);
   const [peers, setPeers] = useState<PeerOrg[]>([]);
   const [peersLoading, setPeersLoading] = useState(false);
@@ -1173,8 +1217,52 @@ export default function ProjectWorkspace() {
                 </span>
               </div>
 
-              {/* Pipeline status summary */}
-              {trackedGrants.length > 0 && pipelineStatuses.length > 0 && (
+              {/* FM-IC-DSC-006: deadline range + status + sort */}
+              {trackedGrants.length > 0 && (
+                <div className="flex flex-wrap items-end gap-3 mb-4 p-3 bg-[#0d1117] border border-[#30363d] rounded-lg">
+                  <div>
+                    <label htmlFor="tracker-deadline-from" className="block text-[11px] uppercase tracking-wider text-gray-500 mb-1">Deadline from</label>
+                    <input id="tracker-deadline-from" type="date" value={trackerDeadlineFrom}
+                      onChange={(e) => setTrackerDeadlineFrom(e.target.value)}
+                      className="bg-[#161b22] border border-[#30363d] rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500" />
+                  </div>
+                  <div>
+                    <label htmlFor="tracker-deadline-to" className="block text-[11px] uppercase tracking-wider text-gray-500 mb-1">Deadline to</label>
+                    <input id="tracker-deadline-to" type="date" value={trackerDeadlineTo}
+                      onChange={(e) => setTrackerDeadlineTo(e.target.value)}
+                      className="bg-[#161b22] border border-[#30363d] rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500" />
+                  </div>
+                  <div>
+                    <label htmlFor="tracker-status" className="block text-[11px] uppercase tracking-wider text-gray-500 mb-1">Status</label>
+                    <select id="tracker-status" value={trackerStatusFilter}
+                      onChange={(e) => setTrackerStatusFilter(e.target.value)}
+                      className="bg-[#161b22] border border-[#30363d] rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500">
+                      <option value="all">All statuses</option>
+                      {pipelineStatuses.map((s) => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="tracker-sort" className="block text-[11px] uppercase tracking-wider text-gray-500 mb-1">Sort</label>
+                    <select id="tracker-sort" value={trackerSort}
+                      onChange={(e) => setTrackerSort(e.target.value as any)}
+                      className="bg-[#161b22] border border-[#30363d] rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500">
+                      <option value="deadline_asc">Deadline (soonest)</option>
+                      <option value="deadline_desc">Deadline (furthest)</option>
+                      <option value="amount_desc">Amount (high to low)</option>
+                      <option value="added_desc">Recently added</option>
+                    </select>
+                  </div>
+                  {(trackerDeadlineFrom || trackerDeadlineTo || trackerStatusFilter !== 'all') && (
+                    <button type="button"
+                      onClick={() => { setTrackerDeadlineFrom(''); setTrackerDeadlineTo(''); setTrackerStatusFilter('all'); }}
+                      className="text-xs text-blue-400 hover:underline self-end pb-2">Clear</button>
+                  )}
+                </div>
+              )}
+
+{trackedGrants.length > 0 && pipelineStatuses.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-6">
                   {pipelineStatuses.map(status => {
                     const count = trackedGrants.filter(g => g.status_id === status.id).length;
@@ -1213,7 +1301,14 @@ export default function ProjectWorkspace() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[#30363d]">
-                        {trackedGrants.map(grant => {
+                        {filteredTrackedGrants.length === 0 && (
+                          <tr>
+                            <td colSpan={6} className="px-4 py-6 text-center text-sm text-gray-500">
+                              No grants match the current filters. <button type="button" onClick={() => { setTrackerDeadlineFrom(''); setTrackerDeadlineTo(''); setTrackerStatusFilter('all'); }} className="text-blue-400 hover:underline">Clear filters</button>
+                            </td>
+                          </tr>
+                        )}
+                        {filteredTrackedGrants.map(grant => {
                           const statusInfo = grant.pipeline_statuses || getStatusById(grant.status_id);
                           const isOverdue = grant.deadline && new Date(grant.deadline) < new Date() && !statusInfo?.is_terminal;
                           return (
