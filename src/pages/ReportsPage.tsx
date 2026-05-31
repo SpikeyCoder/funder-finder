@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
-import { Download, Filter, TrendingUp, DollarSign, Target, Award, Clock, BarChart3, PieChart, Plus, Check, AlertTriangle, Trash2, X } from 'lucide-react';
+import { Download, Filter, TrendingUp, DollarSign, Target, Award, Clock, BarChart3, PieChart, Check, AlertTriangle, Trash2 } from 'lucide-react';
 
 const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const REPORTS_URL = `${SUPABASE_URL}/functions/v1/reports-portfolio`;
@@ -22,20 +22,28 @@ interface PipelineItem { name: string; color: string; count: number; amount: num
 interface ProjectItem { name: string; count: number; awarded: number; pending: number; }
 interface TimelineItem { quarter: string; submitted: number; awarded: number; }
 interface ComplianceSummary { total: number; compliant: number; upcoming: number; overdue: number; }
+// FM-IC-RPT-002: shape matches the canonical compliance_requirements
+// schema (migration 20260316000001_phase5_reporting_compliance_onboarding)
+// and the corrected edge function allowlist (PR #127).
 interface ComplianceRequirement {
   id: string;
   user_id: string;
-  grant_id: string | null;
+  tracked_grant_id: string | null;
   project_id: string | null;
-  requirement_text: string;
-  category: string | null;
+  title: string;
+  type: string | null;
+  description: string | null;
   due_date: string | null;
-  status: 'pending' | 'in_progress' | 'submitted' | 'approved' | string;
-  priority: string | null;
-  notes: string | null;
+  status: 'upcoming' | 'in_progress' | 'submitted' | 'approved' | 'overdue' | string;
+  assignee_email: string | null;
+  assignee_user_id: string | null;
   completed_at: string | null;
   is_overdue?: boolean;
+  // Joined display fields the response may include
+  tracked_grants?: { funder_name?: string | null; grant_title?: string | null; project_id?: string | null } | null;
+  projects?: { name?: string | null } | null;
 }
+interface ComplianceSummaryBuckets { total: number; submitted: number; upcoming: number; overdue: number; in_progress: number; }
 interface FunderTypeItem { type: string; count: number; amount: number; }
 
 export default function ReportsPage() {
@@ -51,15 +59,13 @@ export default function ReportsPage() {
   const [byProject, setByProject] = useState<ProjectItem[]>([]);
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [compliance, setCompliance] = useState<ComplianceSummary | null>(null);
-  // FM-IC-RPT-002: full requirements workflow
+  // FM-IC-RPT-002: read-side requirements workflow.
+  // Add/edit happens in the per-grant tracker drawer (ProjectWorkspace);
+  // this page is the portfolio-wide read view + status toggles.
   const [requirements, setRequirements] = useState<ComplianceRequirement[]>([]);
+  const [reqBuckets, setReqBuckets] = useState<ComplianceSummaryBuckets | null>(null);
   const [reqLoading, setReqLoading] = useState(false);
   const [reqError, setReqError] = useState<string | null>(null);
-  const [showAddReq, setShowAddReq] = useState(false);
-  const [newReqText, setNewReqText] = useState('');
-  const [newReqCategory, setNewReqCategory] = useState<string>('report');
-  const [newReqDueDate, setNewReqDueDate] = useState('');
-  const [newReqPriority, setNewReqPriority] = useState<string>('medium');
   const [byFunderType, setByFunderType] = useState<FunderTypeItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filterPeriod, setFilterPeriod] = useState('all');
@@ -123,16 +129,36 @@ export default function ReportsPage() {
   if (loading) return null;
 
 
-  // ── FM-IC-RPT-002: Compliance requirements CRUD ─────────────────────
+  // ── FM-IC-RPT-002: Compliance requirements read view ────────────────
+  // Uses ?summary=true from PR #127 to get bucket counts + items in one
+  // call. Items still expose individual status changes; create/delete
+  // happens in the per-grant tracker because the schema requires
+  // tracked_grant_id + project_id (FK), which this page does not have.
   const loadRequirements = async () => {
     try {
       setReqLoading(true);
       setReqError(null);
       const headers = await getEdgeFunctionHeaders();
-      const res = await fetch(COMPLIANCE_URL, { headers });
+      const res = await fetch(`${COMPLIANCE_URL}?summary=true`, { headers });
       if (res.ok) {
         const data = await res.json();
-        setRequirements(Array.isArray(data) ? data : []);
+        // ?summary=true returns { items, summary }; without it the response
+        // is a bare array. Tolerate both shapes.
+        const items: ComplianceRequirement[] = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
+        setRequirements(items);
+        if (data && typeof data === 'object' && data.summary) {
+          setReqBuckets(data.summary as ComplianceSummaryBuckets);
+        } else {
+          // Compute locally for the legacy bare-array response.
+          let total = items.length, submitted = 0, upcoming = 0, overdue = 0, inProgress = 0;
+          for (const r of items) {
+            if (r.status === 'submitted' || r.status === 'approved') submitted++;
+            else if (r.is_overdue) overdue++;
+            else if (r.status === 'in_progress') inProgress++;
+            else upcoming++;
+          }
+          setReqBuckets({ total, submitted, upcoming, overdue, in_progress: inProgress });
+        }
       } else {
         setReqError('Failed to load requirements');
       }
@@ -142,30 +168,6 @@ export default function ReportsPage() {
     } finally {
       setReqLoading(false);
     }
-  };
-
-  const addRequirement = async () => {
-    if (!newReqText.trim()) return;
-    try {
-      const headers = await getEdgeFunctionHeaders();
-      const res = await fetch(COMPLIANCE_URL, {
-        method: 'POST',
-        headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          requirement_text: newReqText.trim(),
-          category: newReqCategory,
-          due_date: newReqDueDate || null,
-          priority: newReqPriority,
-          status: 'pending',
-        }),
-      });
-      if (res.ok) {
-        setNewReqText(''); setNewReqDueDate(''); setShowAddReq(false);
-        await loadRequirements();
-      } else {
-        setReqError('Could not add requirement');
-      }
-    } catch (err) { console.error(err); setReqError('Could not add requirement'); }
   };
 
   const updateRequirementStatus = async (id: string, status: string) => {
@@ -359,75 +361,47 @@ export default function ReportsPage() {
               </div>
             )}
 
-            {/* FM-IC-RPT-002: Post-award reporting requirements workflow */}
+            {/* FM-IC-RPT-002 (consolidates PR #127): requirements portfolio view */}
             <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-5">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-start justify-between mb-4 gap-4">
                 <div>
                   <h3 className="text-sm font-semibold">Reporting requirements</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">Track post-award reports, financial filings, and grantee deliverables.</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Post-award reports across all your awarded grants. Add or attach files inside each grant's tracker.
+                  </p>
                 </div>
-                <button
-                  onClick={() => setShowAddReq(v => !v)}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium"
-                >
-                  {showAddReq ? <><X size={12} /> Cancel</> : <><Plus size={12} /> Add requirement</>}
-                </button>
-              </div>
-
-              {showAddReq && (
-                <div className="mb-4 p-3 bg-[#0d1117] border border-[#30363d] rounded-lg space-y-2">
-                  <input
-                    type="text"
-                    value={newReqText}
-                    onChange={(e) => setNewReqText(e.target.value)}
-                    placeholder="e.g. Submit Q1 financial report to funder"
-                    className="w-full bg-[#161b22] border border-[#30363d] rounded px-3 py-2 text-sm text-white placeholder-gray-500"
-                  />
-                  <div className="grid grid-cols-3 gap-2">
-                    <select value={newReqCategory} onChange={(e) => setNewReqCategory(e.target.value)}
-                      className="bg-[#161b22] border border-[#30363d] rounded px-2 py-1.5 text-xs text-gray-200">
-                      <option value="report">Report</option>
-                      <option value="financial">Financial</option>
-                      <option value="narrative">Narrative</option>
-                      <option value="evaluation">Evaluation</option>
-                      <option value="other">Other</option>
-                    </select>
-                    <input type="date" value={newReqDueDate} onChange={(e) => setNewReqDueDate(e.target.value)}
-                      className="bg-[#161b22] border border-[#30363d] rounded px-2 py-1.5 text-xs text-gray-200" />
-                    <select value={newReqPriority} onChange={(e) => setNewReqPriority(e.target.value)}
-                      className="bg-[#161b22] border border-[#30363d] rounded px-2 py-1.5 text-xs text-gray-200">
-                      <option value="low">Low priority</option>
-                      <option value="medium">Medium priority</option>
-                      <option value="high">High priority</option>
-                    </select>
+                {reqBuckets && (
+                  <div className="flex flex-wrap gap-3 text-center">
+                    <div><p className="text-base font-bold">{reqBuckets.total}</p><p className="text-[10px] text-gray-400">Total</p></div>
+                    <div><p className="text-base font-bold text-green-400">{reqBuckets.submitted}</p><p className="text-[10px] text-gray-400">Submitted</p></div>
+                    <div><p className="text-base font-bold text-yellow-400">{reqBuckets.upcoming}</p><p className="text-[10px] text-gray-400">Upcoming</p></div>
+                    <div><p className="text-base font-bold text-blue-400">{reqBuckets.in_progress}</p><p className="text-[10px] text-gray-400">In progress</p></div>
+                    <div><p className="text-base font-bold text-red-400">{reqBuckets.overdue}</p><p className="text-[10px] text-gray-400">Overdue</p></div>
                   </div>
-                  <button onClick={addRequirement} disabled={!newReqText.trim()}
-                    className="px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-green-600/40 text-white rounded text-xs font-medium">
-                    Save
-                  </button>
-                </div>
-              )}
+                )}
+              </div>
 
               {reqError && <p className="text-xs text-red-400 mb-2">{reqError}</p>}
 
               {reqLoading ? (
                 <p className="text-xs text-gray-500">Loading requirements…</p>
               ) : requirements.length === 0 ? (
-                <p className="text-xs text-gray-500">No reporting requirements tracked yet. Add one above.</p>
+                <p className="text-xs text-gray-500">No reporting requirements tracked yet. Open an awarded grant in your project tracker to add one.</p>
               ) : (
                 <div className="space-y-2">
                   {requirements.map(r => {
                     const overdue = r.is_overdue;
-                    const done = ['submitted', 'approved'].includes(r.status);
+                    const done = r.status === 'submitted' || r.status === 'approved';
+                    const trackerHref = r.project_id ? `/projects/${r.project_id}/tracker` : '#';
                     return (
                       <div key={r.id} className={`flex items-center gap-3 p-3 rounded-lg border ${
                         done ? 'bg-green-600/5 border-green-700/40'
                         : overdue ? 'bg-red-600/5 border-red-700/40'
                         : 'bg-[#0d1117] border-[#30363d]'}`}>
                         <button
-                          onClick={() => updateRequirementStatus(r.id, done ? 'pending' : 'submitted')}
-                          aria-label={done ? 'Mark pending' : 'Mark submitted'}
-                          className={`w-5 h-5 rounded flex items-center justify-center border ${
+                          onClick={() => updateRequirementStatus(r.id, done ? 'in_progress' : 'submitted')}
+                          aria-label={done ? 'Reopen requirement' : 'Mark submitted'}
+                          className={`w-5 h-5 rounded flex items-center justify-center border flex-none ${
                             done ? 'bg-green-600 border-green-600 text-white' : 'border-[#484f58]'
                           }`}
                         >
@@ -435,23 +409,20 @@ export default function ReportsPage() {
                         </button>
                         <div className="flex-1 min-w-0">
                           <p className={`text-sm ${done ? 'line-through text-gray-500' : 'text-white'}`}>
-                            {r.requirement_text}
+                            {r.title}
                           </p>
-                          <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
-                            {r.category && <span className="capitalize">{r.category}</span>}
+                          <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 flex-wrap">
+                            {r.type && <span className="capitalize">{r.type.replace(/_/g, ' ')}</span>}
+                            {(r.tracked_grants?.funder_name || r.tracked_grants?.grant_title) && (
+                              <span>· {r.tracked_grants?.funder_name || ''}{r.tracked_grants?.grant_title ? ` — ${r.tracked_grants.grant_title}` : ''}</span>
+                            )}
                             {r.due_date && (
                               <span className={overdue && !done ? 'text-red-400 font-medium' : ''}>
                                 {overdue && !done && <AlertTriangle size={10} className="inline mr-0.5" />}
                                 Due {new Date(r.due_date).toLocaleDateString()}
                               </span>
                             )}
-                            {r.priority && (
-                              <span className={
-                                r.priority === 'high' ? 'text-orange-400'
-                                : r.priority === 'low' ? 'text-gray-500'
-                                : 'text-yellow-400'
-                              }>{r.priority} priority</span>
-                            )}
+                            {r.assignee_email && <span>· {r.assignee_email}</span>}
                           </div>
                         </div>
                         <select
@@ -460,11 +431,19 @@ export default function ReportsPage() {
                           className="bg-[#161b22] border border-[#30363d] rounded px-2 py-1 text-xs text-gray-200"
                           aria-label="Requirement status"
                         >
-                          <option value="pending">Pending</option>
+                          <option value="upcoming">Upcoming</option>
                           <option value="in_progress">In progress</option>
                           <option value="submitted">Submitted</option>
                           <option value="approved">Approved</option>
+                          <option value="overdue">Overdue</option>
                         </select>
+                        {r.project_id && (
+                          <a href={trackerHref}
+                            className="text-[11px] font-medium text-blue-400 hover:text-blue-300 whitespace-nowrap"
+                            aria-label="Open in project tracker">
+                            Open →
+                          </a>
+                        )}
                         <button onClick={() => deleteRequirement(r.id)}
                           aria-label="Delete requirement"
                           className="text-gray-500 hover:text-red-400">
