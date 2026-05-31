@@ -644,6 +644,9 @@ export default function ProjectWorkspace() {
       const res = await fetch(COMPLIANCE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...headers },
+        // FM-IC-RPT-002: send only canonical compliance_requirements fields.
+        // attachment_name is not in the table schema; if/when attachments
+        // are wired through storage, send a storage_path column instead.
         body: JSON.stringify({
           tracked_grant_id: selectedGrant.id,
           project_id: id,
@@ -651,7 +654,6 @@ export default function ProjectWorkspace() {
           type: newCompType,
           due_date: newCompDue || null,
           assignee_email: newCompAssignee.trim() || undefined,
-          attachment_name: compAttachment?.name || undefined,
         }),
       });
       if (res.ok) {

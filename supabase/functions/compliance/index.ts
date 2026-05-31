@@ -1,6 +1,15 @@
 import { sanitiseError } from '../_shared/errors.ts';
 // Phase 4: Compliance requirement CRUD
 // MIGRATED TO LOCAL JWT AUTH: Uses auth.ts (local JWT decode + service-role client)
+//
+// FM-IC-RPT-002 (2026-05-30): aligned column allowlist with the actual
+// public.compliance_requirements schema (title/type/description/...).
+// Previously the allowlist referenced legacy column names
+// (requirement_text/category/priority/notes) that don't exist on the
+// table, so every POST/PUT silently dropped client fields and the
+// requirement_text NOT NULL check rejected the insert. Compliance
+// tracking through the ProjectWorkspace UI was effectively broken; this
+// restores it and surfaces the canonical fields end-to-end.
 import { authFromRequest, adminClient } from "../_shared/auth.ts";
 
 import { corsHeaders as _corsHeaders } from "../_shared/cors.ts";
@@ -14,6 +23,14 @@ function json(req: Request, data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...CORS(req), 'Content-Type': 'application/json' } });
 }
 
+const ALLOWED_TYPES = new Set([
+  'narrative_report', 'financial_report', 'progress_report',
+  'site_visit', 'audit', 'final_report', 'other',
+]);
+const ALLOWED_STATUSES = new Set([
+  'upcoming', 'in_progress', 'submitted', 'approved', 'overdue',
+]);
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS(req) });
 
@@ -26,12 +43,13 @@ Deno.serve(async (req: Request) => {
     if (req.method === 'GET') {
       const grantId = url.searchParams.get('grant_id');
       const projectId = url.searchParams.get('project_id');
+      const summary = url.searchParams.get('summary') === 'true';
 
       let query = supabase.from('compliance_requirements').select('*').eq('user_id', userId);
       if (grantId) query = query.eq('tracked_grant_id', grantId);
       if (projectId) query = query.eq('project_id', projectId);
 
-      const { data, error } = await query.order('due_date', { ascending: true });
+      const { data, error } = await query.order('due_date', { ascending: true, nullsFirst: false });
       if (error) throw error;
 
       // Mark overdue items
@@ -40,6 +58,22 @@ Deno.serve(async (req: Request) => {
         ...r,
         is_overdue: r.due_date && new Date(r.due_date) < now && !['submitted', 'approved'].includes(r.status),
       }));
+
+      // FM-IC-RPT-002: portfolio-level reporting summary.
+      if (summary) {
+        const total = enriched.length;
+        let submitted = 0, upcoming = 0, overdue = 0, inProgress = 0;
+        for (const r of enriched) {
+          if (r.status === 'submitted' || r.status === 'approved') submitted++;
+          else if (r.is_overdue) overdue++;
+          else if (r.status === 'in_progress') inProgress++;
+          else upcoming++;
+        }
+        return json(req, {
+          items: enriched,
+          summary: { total, submitted, upcoming, overdue, in_progress: inProgress },
+        });
+      }
 
       return json(req, enriched);
     }
@@ -52,8 +86,20 @@ Deno.serve(async (req: Request) => {
       // org_id, etc.). user_id was correctly hardcoded but other restricted
       // fields were attacker-controllable on schema drift.
       const allowed = pickAllowedInsert(body);
-      if (!allowed.requirement_text) {
-        return json(req, { error: 'requirement_text required' }, 400);
+      if (!allowed.tracked_grant_id) {
+        return json(req, { error: 'tracked_grant_id required' }, 400);
+      }
+      if (!allowed.project_id) {
+        return json(req, { error: 'project_id required' }, 400);
+      }
+      if (!allowed.title || allowed.title.trim().length === 0) {
+        return json(req, { error: 'title required' }, 400);
+      }
+      if (allowed.type && !ALLOWED_TYPES.has(allowed.type)) {
+        return json(req, { error: 'invalid type' }, 400);
+      }
+      if (allowed.status && !ALLOWED_STATUSES.has(allowed.status)) {
+        return json(req, { error: 'invalid status' }, 400);
       }
       const { data, error } = await supabase
         .from('compliance_requirements')
@@ -70,6 +116,12 @@ Deno.serve(async (req: Request) => {
 
       // WA-2026-05-23-12: explicit column allowlist on update.
       const safeUpdates = pickAllowedUpdate(updates);
+      if (safeUpdates.type && !ALLOWED_TYPES.has(safeUpdates.type)) {
+        return json(req, { error: 'invalid type' }, 400);
+      }
+      if (safeUpdates.status && !ALLOWED_STATUSES.has(safeUpdates.status)) {
+        return json(req, { error: 'invalid status' }, 400);
+      }
       if (safeUpdates.status === 'submitted' || safeUpdates.status === 'approved') {
         safeUpdates.completed_at = new Date().toISOString();
       }
@@ -101,22 +153,28 @@ Deno.serve(async (req: Request) => {
   }
 });
 
-// WA-2026-05-23-12: column allowlists for compliance_requirements.
+// FM-IC-RPT-002 (2026-05-30): allowlist matches the canonical
+// public.compliance_requirements schema introduced in migration
+// 20260316000001_phase5_reporting_compliance_onboarding.sql.
 type ComplianceInsert = {
-  grant_id?: string | null;
-  project_id?: string | null;
-  requirement_text?: string;
-  category?: string | null;
+  tracked_grant_id?: string;
+  project_id?: string;
+  title?: string;
+  type?: string;
+  description?: string | null;
   due_date?: string | null;
   status?: string | null;
-  priority?: string | null;
-  notes?: string | null;
+  assignee_email?: string | null;
+  assignee_user_id?: string | null;
 };
-type ComplianceUpdate = ComplianceInsert & { completed_at?: string; updated_at?: string };
+type ComplianceUpdate = ComplianceInsert & {
+  completed_at?: string;
+  updated_at?: string;
+};
 
 const INSERT_KEYS: (keyof ComplianceInsert)[] = [
-  'grant_id', 'project_id', 'requirement_text', 'category',
-  'due_date', 'status', 'priority', 'notes',
+  'tracked_grant_id', 'project_id', 'title', 'type', 'description',
+  'due_date', 'status', 'assignee_email', 'assignee_user_id',
 ];
 const UPDATE_KEYS: (keyof ComplianceUpdate)[] = [
   ...INSERT_KEYS, 'completed_at', 'updated_at',
