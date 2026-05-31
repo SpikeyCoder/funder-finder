@@ -6,7 +6,7 @@ import NavBar from '../components/NavBar';
 import {
   Trash2, UserPlus, Shield, Eye, Edit3, Clock, Mail,
   ChevronDown, ChevronRight, Users, FolderOpen, AlertCircle,
-  CheckCircle, Loader, X, Search
+  CheckCircle, Loader, X, Search, Briefcase
 } from 'lucide-react';
 
 const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
@@ -28,7 +28,9 @@ interface TeamMember {
   email: string;
   display_name: string | null;
   organization_name: string | null;
-  role: 'admin' | 'editor' | 'viewer';
+  role: 'admin' | 'editor' | 'viewer' | 'partner';
+  partner_org_name?: string | null;
+  partner_type?: string | null;
   status: string;
   created_at: string;
   project_summary: {
@@ -52,6 +54,7 @@ const ROLE_CONFIG = {
   admin: { label: 'Admin', desc: 'Full access to everything', icon: Shield, color: 'text-yellow-400', bg: 'bg-yellow-400/10 border-yellow-400/20' },
   editor: { label: 'Editor', desc: 'Can modify grants, tasks, and projects', icon: Edit3, color: 'text-blue-400', bg: 'bg-blue-400/10 border-blue-400/20' },
   viewer: { label: 'Viewer', desc: 'Read-only access', icon: Eye, color: 'text-gray-400', bg: 'bg-gray-400/10 border-gray-400/20' },
+  partner: { label: 'External Partner', desc: 'Outside collaborator — scoped to assigned projects, cannot manage members', icon: Briefcase, color: 'text-purple-400', bg: 'bg-purple-400/10 border-purple-400/20' },
 } as const;
 
 function timeAgo(dateStr: string): string {
@@ -90,6 +93,8 @@ export default function TeamSettingsPage() {
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<string>('editor');
+  const [partnerOrgName, setPartnerOrgName] = useState<string>('');
+  const [partnerType, setPartnerType] = useState<string>('');
   const [inviting, setInviting] = useState(false);
 
   // Member actions
@@ -154,7 +159,7 @@ export default function TeamSettingsPage() {
       const res = await fetch(TEAM_INVITE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...headers },
-        body: JSON.stringify({ email: inviteEmail.trim().toLowerCase(), role: inviteRole }),
+        body: JSON.stringify({ email: inviteEmail.trim().toLowerCase(), role: inviteRole, ...(inviteRole === 'partner' ? { partner_org_name: partnerOrgName || null, partner_type: partnerType || null } : {}) }),
       });
       if (res.ok) {
         setInviteEmail('');
@@ -322,8 +327,42 @@ export default function TeamSettingsPage() {
                   <option value="admin">Admin — full access</option>
                   <option value="editor">Editor — can modify</option>
                   <option value="viewer">Viewer — read only</option>
+                  <option value="partner">External Partner — scoped collaborator</option>
                 </select>
               </div>
+              {inviteRole === 'partner' && (
+                <div className="sm:basis-full grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1.5">Partner organization (optional)</label>
+                    <input
+                      type="text"
+                      value={partnerOrgName}
+                      onChange={e => setPartnerOrgName(e.target.value)}
+                      placeholder="e.g. Acme Eval Partners"
+                      className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-4 py-2.5 text-white text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1.5">Partner type (optional)</label>
+                    <select
+                      value={partnerType}
+                      onChange={e => setPartnerType(e.target.value)}
+                      className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-4 py-2.5 text-white text-sm"
+                    >
+                      <option value="">Select…</option>
+                      <option value="fiscal_sponsor">Fiscal Sponsor</option>
+                      <option value="consultant">Consultant / Grant Writer</option>
+                      <option value="evaluator">Evaluator</option>
+                      <option value="board_advisor">Board / Advisor</option>
+                      <option value="program_partner">Program Partner</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <p className="sm:col-span-2 text-xs text-purple-300/80">
+                    External partners get scoped project access (view/edit). They cannot invite or manage members and cannot hold project admin permission.
+                  </p>
+                </div>
+              )}
               <div className="sm:self-end">
                 <button
                   onClick={handleInvite}
@@ -517,7 +556,7 @@ export default function TeamSettingsPage() {
                               {isEditingThisRole ? (
                                 <div className="flex items-center gap-2">
                                   <span className="text-xs text-gray-400">Change role to:</span>
-                                  {(['admin', 'editor', 'viewer'] as const).map(r => {
+                                  {(['admin', 'editor', 'viewer', 'partner'] as const).map(r => {
                                     const rc = ROLE_CONFIG[r];
                                     const Icon = rc.icon;
                                     return (
@@ -699,23 +738,25 @@ export default function TeamSettingsPage() {
                       <th scope="col" className="text-center px-3 py-3 text-xs font-semibold text-yellow-400 uppercase">Admin</th>
                       <th scope="col" className="text-center px-3 py-3 text-xs font-semibold text-blue-400 uppercase">Editor</th>
                       <th scope="col" className="text-center px-3 py-3 text-xs font-semibold text-gray-400 uppercase">Viewer</th>
+                      <th scope="col" className="text-center px-3 py-3 text-xs font-semibold text-purple-400 uppercase">Partner</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#30363d]">
                     {[
-                      { perm: 'View projects and grants', admin: true, editor: true, viewer: true },
-                      { perm: 'Add and edit grants', admin: true, editor: true, viewer: false },
-                      { perm: 'Create projects', admin: true, editor: true, viewer: false },
-                      { perm: 'Manage tasks', admin: true, editor: true, viewer: false },
-                      { perm: 'Invite team members', admin: true, editor: false, viewer: false },
-                      { perm: 'Change member roles', admin: true, editor: false, viewer: false },
-                      { perm: 'Remove members', admin: true, editor: false, viewer: false },
+                      { perm: 'View projects and grants', admin: true, editor: true, viewer: true, partner: 'scoped' as const },
+                      { perm: 'Add and edit grants', admin: true, editor: true, viewer: false, partner: 'scoped' as const },
+                      { perm: 'Create projects', admin: true, editor: true, viewer: false, partner: false },
+                      { perm: 'Manage tasks', admin: true, editor: true, viewer: false, partner: 'scoped' as const },
+                      { perm: 'Invite team members', admin: true, editor: false, viewer: false, partner: false },
+                      { perm: 'Change member roles', admin: true, editor: false, viewer: false, partner: false },
+                      { perm: 'Remove members', admin: true, editor: false, viewer: false, partner: false },
                     ].map(row => (
                       <tr key={row.perm}>
                         <td className="px-5 py-2.5 text-gray-300">{row.perm}</td>
                         <td className="text-center px-3 py-2.5">{row.admin ? <CheckCircle size={14} className="inline text-green-400" /> : <X size={14} className="inline text-gray-600" />}</td>
                         <td className="text-center px-3 py-2.5">{row.editor ? <CheckCircle size={14} className="inline text-green-400" /> : <X size={14} className="inline text-gray-600" />}</td>
                         <td className="text-center px-3 py-2.5">{row.viewer ? <CheckCircle size={14} className="inline text-green-400" /> : <X size={14} className="inline text-gray-600" />}</td>
+                        <td className="text-center px-3 py-2.5">{row.partner === true ? <CheckCircle size={14} className="inline text-green-400" /> : row.partner === 'scoped' ? <span className="text-xs text-purple-400" title="Only on assigned projects">Scoped</span> : <X size={14} className="inline text-gray-600" />}</td>
                       </tr>
                     ))}
                   </tbody>
