@@ -3,15 +3,18 @@ import { useEffect, useState, useRef } from 'react';
 import {
   ArrowLeft, BookmarkX, Download, ChevronRight, Loader2,
   LogOut, PenLine, User as UserIcon, StickyNote, ChevronDown, ChevronUp,
-  Users, Building2, FileText, X,
+  Users, Building2, FileText, X, FolderPlus, Check,
 } from 'lucide-react';
-import { SavedFunderEntry, FunderStatus, PeerEntry, GrantDraft } from '../types';
+import { SavedFunderEntry, FunderStatus, PeerEntry, GrantDraft, Funder } from '../types';
 import { formatTotalGiving, fetchPeers } from '../utils/matching';
 import { fmtDollar } from '../components/InsightCharts';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
+import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import LoginModal from '../components/LoginModal';
 import NavBar from '../components/NavBar';
+
+const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
+const TRACKED_GRANTS_URL = `${SUPABASE_URL}/functions/v1/tracked-grants`;
 
 // ── Status config ──────────────────────────────────────────────────────────────
 
@@ -53,6 +56,13 @@ export default function SavedFunders() {
 
   // Debounce timers for note persistence
   const noteTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  // Add-to-project state
+  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
+  const [projectMenuOpen, setProjectMenuOpen] = useState<string | null>(null); // funder id
+  const [addingKey, setAddingKey] = useState<string | null>(null);             // `${funderId}:${projectId}`
+  const [addedKeys, setAddedKeys] = useState<Set<string>>(new Set());          // `${funderId}:${projectId}`
+  const [addError, setAddError] = useState<Record<string, string>>({});        // by funder id
 
   // ── Load ──────────────────────────────────────────────────────────────────────
 
@@ -157,6 +167,50 @@ export default function SavedFunders() {
     if (!user) return;
     try { await unsaveFunderFromDB(funderId); } catch (e) { console.error(e); }
     setEntries(prev => prev.filter(e => e.funder.id !== funderId));
+  };
+
+  // ── Add to project (tracked_grants) ────────────────────────────────────────────
+
+  // Load the user's projects for the "Add to Project" menu.
+  useEffect(() => {
+    if (!user) { setProjects([]); return; }
+    (async () => {
+      const { data } = await supabase
+        .from('projects')
+        .select('id, name')
+        .eq('user_id', user.id)
+        .order('name');
+      setProjects(data || []);
+    })();
+  }, [user]);
+
+  const addToProject = async (f: Funder, projectId: string) => {
+    const key = `${f.id}:${projectId}`;
+    setAddingKey(key);
+    setAddError(prev => { const next = { ...prev }; delete next[f.id]; return next; });
+    try {
+      const headers = await getEdgeFunctionHeaders();
+      const res = await fetch(TRACKED_GRANTS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({
+          project_id: projectId,
+          funder_ein: f.foundation_ein || f.id,
+          funder_name: f.name,
+          source: 'saved_funder',
+          status_slug: 'researching',
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Failed to add (HTTP ${res.status})`);
+      }
+      setAddedKeys(prev => new Set(prev).add(key));
+    } catch (err: any) {
+      setAddError(prev => ({ ...prev, [f.id]: err?.message || 'Failed to add to project' }));
+    } finally {
+      setAddingKey(null);
+    }
   };
 
   // ── Export ────────────────────────────────────────────────────────────────────
@@ -474,14 +528,70 @@ export default function SavedFunders() {
                             Drafts ({draftsByFunder[f.id].length})
                           </button>
                         )}
+                        {user && (
+                          <div className="relative ml-auto">
+                            <button
+                              onClick={() => setProjectMenuOpen(projectMenuOpen === f.id ? null : f.id)}
+                              className="inline-flex items-center gap-2 border border-[#30363d] text-gray-300 rounded-xl px-4 py-2 min-h-[44px] text-sm hover:bg-[#21262d] transition-colors"
+                            >
+                              <FolderPlus size={14} />
+                              Add to Project
+                              <ChevronDown size={13} />
+                            </button>
+                            {projectMenuOpen === f.id && (
+                              <>
+                                {/* click-away backdrop */}
+                                <div className="fixed inset-0 z-40" onClick={() => setProjectMenuOpen(null)} />
+                                <div className="absolute right-0 mt-2 w-56 bg-[#161b22] border border-[#30363d] rounded-lg shadow-lg z-50 py-1 max-h-64 overflow-auto">
+                                  {projects.length === 0 ? (
+                                    <div className="px-4 py-3 text-sm text-gray-400">
+                                      No projects yet.{' '}
+                                      <button
+                                        onClick={() => navigate('/projects/new')}
+                                        className="text-blue-400 hover:text-blue-300"
+                                      >
+                                        Create one
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    projects.map(p => {
+                                      const key = `${f.id}:${p.id}`;
+                                      const added = addedKeys.has(key);
+                                      const adding = addingKey === key;
+                                      return (
+                                        <button
+                                          key={p.id}
+                                          onClick={() => addToProject(f, p.id)}
+                                          disabled={adding || added}
+                                          className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-[#0d1117] hover:text-white transition-colors flex items-center justify-between gap-2 disabled:opacity-60"
+                                        >
+                                          <span className="truncate">{p.name}</span>
+                                          {adding ? (
+                                            <Loader2 size={14} className="animate-spin flex-shrink-0" />
+                                          ) : added ? (
+                                            <Check size={14} className="text-green-400 flex-shrink-0" />
+                                          ) : null}
+                                        </button>
+                                      );
+                                    })
+                                  )}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        )}
                         <button
                           onClick={() => navigate(`/funder/${f.id}`, { state: { funder: f } })}
-                          className="inline-flex items-center gap-2 border border-[#30363d] rounded-xl px-4 py-2 min-h-[44px] text-sm hover:bg-[#21262d] transition-colors ml-auto"
+                          className={`inline-flex items-center gap-2 border border-[#30363d] rounded-xl px-4 py-2 min-h-[44px] text-sm hover:bg-[#21262d] transition-colors${user ? '' : ' ml-auto'}`}
                         >
                           View Details
                           <ChevronRight size={14} />
                         </button>
                       </div>
+
+                      {addError[f.id] && (
+                        <p className="mt-2 text-xs text-red-400">{addError[f.id]}</p>
+                      )}
                     </div>
                   );
                 })}
