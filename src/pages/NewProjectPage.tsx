@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, ChevronLeft, X } from 'lucide-react';
+import { ChevronRight, ChevronLeft, X, Sparkles } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
@@ -101,6 +101,31 @@ export default function NewProjectPage() {
       navigate('/');
     }
   }, [user, loading, navigate]);
+
+  // FM-IC-PRJ-003: hydrate the structured form from a conversational draft
+  // when the user switched mid-chat. The chat page writes a draft snapshot
+  // to sessionStorage; we consume it here and clear so reloads start fresh.
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('fundermatch.project_draft');
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      sessionStorage.removeItem('fundermatch.project_draft');
+      setForm(prev => ({
+        ...prev,
+        name: draft?.name || prev.name,
+        description: draft?.mission || prev.description,
+        search_criteria: {
+          ...prev.search_criteria,
+          locations: draft?.geographic_scope ? [String(draft.geographic_scope)] : prev.search_criteria.locations,
+          keywords: Array.isArray(draft?.tags) && draft.tags.length > 0 ? draft.tags : prev.search_criteria.keywords,
+          fields_of_work: Array.isArray(draft?.ntee_codes) && draft.ntee_codes.length > 0 ? draft.ntee_codes : prev.search_criteria.fields_of_work,
+          min_grant_size: typeof draft?.funding_target === 'number' ? draft.funding_target : prev.search_criteria.min_grant_size,
+          max_grant_size: typeof draft?.funding_target === 'number' ? draft.funding_target : prev.search_criteria.max_grant_size,
+        },
+      }));
+    } catch { /* ignore quota / privacy errors */ }
+  }, []);
 
   const handleLocationToggle = (state: string) => {
     setForm(prev => ({
@@ -294,9 +319,21 @@ export default function NewProjectPage() {
       <main id="main-content" className="min-h-screen bg-[#0d1117] pt-20 px-4 sm:px-6 lg:px-8 pb-12">
         <div className="max-w-2xl mx-auto">
           {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-white mb-2">Create a New Project</h1>
-            <p className="text-gray-400">Define your funding search criteria</p>
+          <div className="mb-8 flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <p className="text-[11px] font-semibold tracking-wider text-blue-500 mb-2">NEW PROJECT · STRUCTURED FORM</p>
+              <h1 className="text-3xl font-bold text-white mb-2">Create a new project</h1>
+              <p className="text-gray-400 text-sm">Same fields, in a single form. You can switch back to chat anytime.</p>
+            </div>
+            {/* FM-IC-PRJ-003: escape hatch into conversational setup */}
+            <button
+              type="button"
+              onClick={() => navigate('/projects/new/chat')}
+              className="inline-flex items-center gap-2 px-3 py-2 bg-[#161b22] border border-blue-500/40 text-blue-300 hover:text-blue-200 hover:border-blue-400 rounded-lg text-xs font-semibold transition-colors"
+            >
+              <Sparkles size={14} />
+              Switch to chat setup
+            </button>
           </div>
 
           {/* Progress Bar */}
