@@ -197,6 +197,18 @@ html.light-mode .demo-dark-card .text-amber-400 { color: #fbbf24; }
 html.light-mode .demo-dark-card .text-red-300   { color: #fca5a5; }
 html.light-mode .demo-dark-card .text-red-400   { color: #f87171; }
 
+/* FM-LM-005: Preserve dark surfaces inside .demo-dark-card in light mode.
+   The generic light-mode bg remaps (lines 50-68) turn dark Tailwind bg-[]
+   utilities white/light, but the DemoVideo mockup must stay dark so its
+   gray text remains legible. Scope overrides to keep original hex values. */
+html.light-mode .demo-dark-card .bg-\[\#0d1117\] { background-color: #0d1117; }
+html.light-mode .demo-dark-card .bg-\[\#161b22\] { background-color: #161b22; }
+html.light-mode .demo-dark-card .bg-\[\#21262d\] { background-color: #21262d; }
+html.light-mode .demo-dark-card .bg-\[\#111723\] { background-color: #111723; }
+html.light-mode .demo-dark-card .bg-\[\#0d1421\] { background-color: #0d1421; }
+html.light-mode .demo-dark-card .border-\[\#30363d\] { border-color: #30363d; }
+html.light-mode .demo-dark-card .border-\[\#1b2130\] { border-color: #1b2130; }
+
 /* Brand accent (#58a6ff) — only ~3.0:1 on white. Remap in light mode. */
 html.light-mode .text-\[\#58a6ff\] {
   color: #0969da;
