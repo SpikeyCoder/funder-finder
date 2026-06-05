@@ -8,18 +8,24 @@ import { sanitiseError } from '../_shared/errors.ts';
  * Uses Claude Haiku to infer the most likely official website URL
  * from the funder's name, city, and state.
  *
- * POST body: { batch_size?: number, priority?: "tracked"|"top"|"all" }
+ * If Claude can't identify the website (confidence = none/low), falls back
+ * to a Brave Search API lookup: searches for the funder, then asks Claude
+ * to pick the official site from the top search results.
+ *
+ * POST body: { batch_size?: number, priority?: "matched"|"tracked"|"top"|"all" }
  *
  * Each invocation:
  *  1. Selects up to batch_size funders WHERE website IS NULL AND name IS NOT NULL
  *  2. Asks Claude Haiku for the most likely official website
- *  3. Updates funders.website for high/medium confidence results
- *  4. Returns { processed, updated, skipped, errors }
+ *  3. If confidence is none/low, tries Brave Search + Claude fallback
+ *  4. Updates funders.website for high/medium confidence results
+ *  5. Returns { processed, updated, skipped, errors }
  */
 
 const SUPABASE_URL  = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_KEY  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY') || '';
+const BRAVE_SEARCH_API_KEY = Deno.env.get('BRAVE_SEARCH_API_KEY') || '';
 
 /* ─── Supabase REST helpers ─── */
 
@@ -59,11 +65,29 @@ async function restPatch(
   }
 }
 
+async function rpcQuery(fnName: string, params: Record<string, unknown>): Promise<unknown[]> {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fnName}`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`RPC ${fnName} [${res.status}]: ${body.slice(0, 300)}`);
+  }
+  return res.json() as Promise<unknown[]>;
+}
+
 /* ─── Claude lookup ─── */
 
 interface LookupResult {
   url: string | null;
   confidence: 'high' | 'medium' | 'low' | 'none';
+  source: 'claude' | 'brave+claude';
 }
 
 const SYSTEM_PROMPT = [
@@ -85,14 +109,33 @@ const SYSTEM_PROMPT = [
   '- Do NOT return generic search URLs or directory listings',
 ].join('\n');
 
-async function lookupWebsite(
-  name: string,
-  city: string | null,
-  state: string | null,
-): Promise<LookupResult> {
-  const locationParts = [city, state].filter(Boolean).join(', ');
-  const locationHint = locationParts ? ' (' + locationParts + ')' : '';
+const SEARCH_EVAL_SYSTEM_PROMPT = [
+  'You are a research assistant that identifies official websites for US nonprofit',
+  'foundations and grant-making organizations. You will be given a foundation name',
+  'and a list of web search results. Determine which (if any) is the official',
+  'website for the foundation.',
+  '',
+  'Return ONLY a JSON object with no markdown formatting:',
+  '{"url": "https://...", "confidence": "high"|"medium"|"low"}',
+  'or if none of the results appear to be the official website:',
+  '{"url": null, "confidence": "none"}',
+  '',
+  'Rules:',
+  '- Only pick a URL if you are reasonably confident it is the official website',
+  '- "high" = the result clearly matches (e.g., domain matches org name, description confirms it)',
+  '- "medium" = likely correct based on title/description/URL patterns',
+  '- "low" = possible but uncertain',
+  '- "none" = none of the results look like the official site',
+  '- Prefer .org domains for nonprofits when available',
+  '- Do NOT pick generic directories (guidestar, candid, charitynavigator, etc.) as the official site',
+  '- Do NOT pick social media profiles as the official site',
+  '- Do NOT pick news articles or third-party pages',
+].join('\n');
 
+async function callClaude(
+  system: string,
+  userMessage: string,
+): Promise<LookupResult> {
   const resp = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -103,11 +146,11 @@ async function lookupWebsite(
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 150,
-      system: SYSTEM_PROMPT,
+      system,
       messages: [
         {
           role: 'user',
-          content: 'What is the official website for: ' + name + locationHint,
+          content: userMessage,
         },
       ],
     }),
@@ -127,11 +170,119 @@ async function lookupWebsite(
     return {
       url: parsed.url || null,
       confidence: parsed.confidence || 'none',
+      source: 'claude',
     };
   } catch {
-    console.error('[backfill-websites] Failed to parse Claude response for "' + name + '": ' + cleaned);
-    return { url: null, confidence: 'none' };
+    return { url: null, confidence: 'none', source: 'claude' };
   }
+}
+
+/* ─── Brave Search fallback ─── */
+
+interface BraveSearchResult {
+  url: string;
+  title: string;
+  description: string;
+}
+
+async function braveSearch(query: string): Promise<BraveSearchResult[]> {
+  const url = 'https://api.search.brave.com/res/v1/web/search?q=' + encodeURIComponent(query);
+  const resp = await fetch(url, {
+    headers: {
+      Accept: 'application/json',
+      'X-Subscription-Token': BRAVE_SEARCH_API_KEY,
+    },
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    console.error('[backfill-websites] Brave Search error [' + resp.status + ']: ' + errText.slice(0, 200));
+    return [];
+  }
+
+  const data = await resp.json();
+  const results = data?.web?.results || [];
+
+  return results.slice(0, 5).map((r: Record<string, unknown>) => ({
+    url: r.url as string,
+    title: r.title as string,
+    description: (r.description || '') as string,
+  }));
+}
+
+async function lookupWebsiteWithSearchFallback(
+  name: string,
+  city: string | null,
+  state: string | null,
+): Promise<LookupResult> {
+  const locationParts = [city, state].filter(Boolean).join(', ');
+  const locationHint = locationParts ? ' (' + locationParts + ')' : '';
+
+  // Step 1: Ask Claude from training knowledge
+  const claudeResult = await callClaude(
+    SYSTEM_PROMPT,
+    'What is the official website for: ' + name + locationHint,
+  );
+
+  // If Claude is confident, return immediately
+  if (
+    claudeResult.url &&
+    (claudeResult.confidence === 'high' || claudeResult.confidence === 'medium')
+  ) {
+    return claudeResult;
+  }
+
+  // Step 2: Web search fallback (only if Brave API key is configured)
+  if (!BRAVE_SEARCH_API_KEY) {
+    console.log('[backfill-websites] No BRAVE_SEARCH_API_KEY set, skipping search fallback for "' + name + '"');
+    return claudeResult;
+  }
+
+  console.log('[backfill-websites] Claude returned ' + claudeResult.confidence + ' for "' + name + '", trying Brave Search fallback');
+
+  // Try two search queries for better coverage
+  const searchQuery = '"' + name + '"' + (locationParts ? ' ' + locationParts : '') + ' foundation official website';
+  const searchResults = await braveSearch(searchQuery);
+
+  if (searchResults.length === 0) {
+    // Try a simpler query if the quoted search returned nothing
+    const fallbackQuery = name + ' nonprofit website' + (state ? ' ' + state : '');
+    const fallbackResults = await braveSearch(fallbackQuery);
+    if (fallbackResults.length === 0) {
+      console.log('[backfill-websites] No Brave Search results for "' + name + '"');
+      return claudeResult;
+    }
+    searchResults.push(...fallbackResults);
+  }
+
+  // Format search results for Claude
+  const formattedResults = searchResults
+    .map(
+      (r, i) =>
+        (i + 1) + '. URL: ' + r.url + '\n   Title: ' + r.title + '\n   Description: ' + r.description,
+    )
+    .join('\n\n');
+
+  const evalPrompt =
+    'I am looking for the official website of the nonprofit foundation: ' +
+    name +
+    locationHint +
+    '\n\nHere are the top search results:\n\n' +
+    formattedResults +
+    '\n\nWhich of these URLs (if any) is the official website for this foundation?';
+
+  // Rate-limit delay before second Claude call
+  await sleep(200);
+
+  const searchResult = await callClaude(SEARCH_EVAL_SYSTEM_PROMPT, evalPrompt);
+  searchResult.source = 'brave+claude';
+
+  console.log(
+    '[backfill-websites] Search fallback for "' + name + '": ' +
+    (searchResult.url ?? 'null') + ' (' + searchResult.confidence + ')',
+  );
+
+  return searchResult;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -145,6 +296,11 @@ function buildQuery(priority: string, batchSize: number): string {
   const base = 'website=is.null&name=not.is.null&select=ein,name,city,state';
 
   switch (priority) {
+    case 'matched':
+      // "matched" priority is handled separately via fetchMatchedFunders()
+      // This fallback should not be reached, but return a safe default
+      return base + '&limit=' + batchSize;
+
     case 'tracked':
       // Funders that appear in tracked_grants first, then by total_giving.
       // A REST-only join is impractical, so we use total_giving DESC as a
@@ -158,6 +314,55 @@ function buildQuery(priority: string, batchSize: number): string {
     default:
       return base + '&limit=' + batchSize;
   }
+}
+
+/**
+ * Fetch funders that appear in project_matches or tracked_grants but
+ * have no website yet. These are the funders users actually see, so
+ * backfilling them first has the highest impact.
+ */
+async function fetchMatchedFunders(batchSize: number): Promise<Funder[]> {
+  // Get distinct funder EINs from project_matches that don't have websites
+  const matchedEins = (await restQuery(
+    'project_matches',
+    'select=funder_ein&limit=500',
+  )) as Array<{ funder_ein: string }>;
+
+  const trackedEins = (await restQuery(
+    'tracked_grants',
+    'select=funder_ein&limit=500',
+  )) as Array<{ funder_ein: string }>;
+
+  // Combine and deduplicate EINs
+  const allEins = new Set<string>();
+  for (const row of matchedEins) {
+    if (row.funder_ein) allEins.add(row.funder_ein);
+  }
+  for (const row of trackedEins) {
+    if (row.funder_ein) allEins.add(row.funder_ein);
+  }
+
+  if (allEins.size === 0) {
+    return [];
+  }
+
+  // Fetch funders by these EINs that still need websites
+  // Process in chunks to avoid URL length limits
+  const einArray = Array.from(allEins);
+  const chunkSize = 50;
+  const funders: Funder[] = [];
+
+  for (let i = 0; i < einArray.length && funders.length < batchSize; i += chunkSize) {
+    const chunk = einArray.slice(i, i + chunkSize);
+    const einFilter = 'ein=in.(' + chunk.map(e => encodeURIComponent(e)).join(',') + ')';
+    const rows = (await restQuery(
+      'funders',
+      einFilter + '&website=is.null&name=not.is.null&select=ein,name,city,state&limit=' + (batchSize - funders.length),
+    )) as Funder[];
+    funders.push(...rows);
+  }
+
+  return funders.slice(0, batchSize);
 }
 
 /* ─── Main handler ─── */
@@ -196,15 +401,28 @@ Deno.serve(async (req) => {
         ? Math.min(Math.floor(rawBatchSize), 50)
         : 20;
 
-    const priority = ['tracked', 'top', 'all'].includes(body?.priority)
+    const priority = ['matched', 'tracked', 'top', 'all'].includes(body?.priority)
       ? body.priority
-      : 'tracked';
+      : 'matched';
 
     // Fetch funders needing websites
-    const funders = (await restQuery(
-      'funders',
-      buildQuery(priority, batchSize),
-    )) as Funder[];
+    let funders: Funder[];
+    if (priority === 'matched') {
+      funders = await fetchMatchedFunders(batchSize);
+      // If no matched funders need websites, fall back to tracked ordering
+      if (funders.length === 0) {
+        console.log('[backfill-websites] No matched funders need websites, falling back to tracked priority');
+        funders = (await restQuery(
+          'funders',
+          buildQuery('tracked', batchSize),
+        )) as Funder[];
+      }
+    } else {
+      funders = (await restQuery(
+        'funders',
+        buildQuery(priority, batchSize),
+      )) as Funder[];
+    }
 
     if (funders.length === 0) {
       return new Response(
@@ -231,14 +449,16 @@ Deno.serve(async (req) => {
       name: string;
       url: string | null;
       confidence: string;
+      source: string;
     }> = [];
 
     for (const funder of funders) {
       try {
-        const lookup = await lookupWebsite(funder.name, funder.city, funder.state);
+        const lookup = await lookupWebsiteWithSearchFallback(funder.name, funder.city, funder.state);
 
         console.log(
-          '[backfill-websites] ' + funder.name + ' -> ' + (lookup.url ?? 'null') + ' (' + lookup.confidence + ')',
+          '[backfill-websites] ' + funder.name + ' -> ' + (lookup.url ?? 'null') +
+          ' (' + lookup.confidence + ', ' + lookup.source + ')',
         );
 
         results.push({
@@ -246,6 +466,7 @@ Deno.serve(async (req) => {
           name: funder.name,
           url: lookup.url,
           confidence: lookup.confidence,
+          source: lookup.source,
         });
 
         if (
@@ -266,7 +487,7 @@ Deno.serve(async (req) => {
         console.error('[backfill-websites] Error processing ' + funder.name + ':', e);
       }
 
-      // Rate-limit delay between Anthropic calls
+      // Rate-limit delay between lookups
       await sleep(200);
     }
 
@@ -276,8 +497,12 @@ Deno.serve(async (req) => {
       skipped,
       errors,
       priority,
+      brave_search_enabled: !!BRAVE_SEARCH_API_KEY,
       results,
-      message: 'Processed ' + funders.length + ' funders: ' + updated + ' updated, ' + skipped + ' skipped (low/none confidence), ' + errors + ' errors.',
+      message:
+        'Processed ' + funders.length + ' funders: ' + updated + ' updated, ' +
+        skipped + ' skipped (low/none confidence), ' + errors + ' errors.' +
+        (BRAVE_SEARCH_API_KEY ? ' Brave Search fallback enabled.' : ' Brave Search fallback disabled (no API key).'),
     };
 
     console.log('[backfill-websites] Done: ' + summary.message);
