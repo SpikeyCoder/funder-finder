@@ -1,8 +1,10 @@
 // Phase 5C: Application knowledge base management
-import { createUserScopedClient } from "../_shared/user-client.ts";
+// Auth: local JWT decode via authFromRequest + adminClient (service-role for
+// user-filtered queries). Replaces the createUserScopedClient flow that was
+// unreliable in the Edge runtime.
+import { authFromRequest, adminClient, statusForAuthError } from "../_shared/auth.ts";
 import { corsHeaders as _corsHeaders } from "../_shared/cors.ts";
 import { sanitiseError } from "../_shared/errors.ts";
-import { statusForAuthError } from "../_shared/auth.ts";
 
 const CORS_OPTS = { methods: "GET, POST, PUT, DELETE, OPTIONS" } as const;
 function CORS(req: Request | null = null): Record<string, string> {
@@ -17,12 +19,13 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS(req) });
 
   try {
-    const { supabase, user } = await createUserScopedClient(req);
+    const { userId } = await authFromRequest(req);
+    const supabase = adminClient();
     const url = new URL(req.url);
 
     if (req.method === 'GET') {
       const projectId = url.searchParams.get('project_id');
-      let query = supabase.from('application_knowledge_base').select('*').eq('user_id', user.id);
+      let query = supabase.from('application_knowledge_base').select('*').eq('user_id', userId);
       if (projectId) query = query.eq('project_id', projectId);
 
       const { data, error } = await query.order('created_at', { ascending: false });
@@ -39,7 +42,7 @@ Deno.serve(async (req: Request) => {
       const { data, error } = await supabase
         .from('application_knowledge_base')
         .insert({
-          user_id: user.id,
+          user_id: userId,
           project_id: project_id || null,
           title,
           content,
@@ -56,7 +59,7 @@ Deno.serve(async (req: Request) => {
 
       // Generate embeddings in background
       if (data?.id) {
-        generateEmbedding(req, data.id, content, user.id, supabase).catch(err => {
+        generateEmbedding(req, data.id, content, userId, supabase).catch(err => {
           console.error('Embedding generation error:', err);
         });
       }
@@ -67,7 +70,7 @@ Deno.serve(async (req: Request) => {
     if (req.method === 'DELETE') {
       const id = url.searchParams.get('id');
       if (!id) return json(req, { error: 'id required' }, 400);
-      await supabase.from('application_knowledge_base').delete().eq('id', id).eq('user_id', user.id);
+      await supabase.from('application_knowledge_base').delete().eq('id', id).eq('user_id', userId);
       return json(req, { success: true });
     }
 
@@ -85,7 +88,7 @@ Deno.serve(async (req: Request) => {
   }
 });
 
-async function generateEmbedding(req: Request,
+async function generateEmbedding(_req: Request,
   kbId: string,
   content: string,
   userId: string,
