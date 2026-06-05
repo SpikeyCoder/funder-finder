@@ -9,7 +9,7 @@ import { sanitiseError } from '../_shared/errors.ts';
  * from the funder's name, city, and state.
  *
  * If Claude can't identify the website (confidence = none/low), falls back
- * to a Brave Search API lookup: searches for the funder, then asks Claude
+ * to a DuckDuckGo Lite search: searches for the funder, then asks Claude
  * to pick the official site from the top search results.
  *
  * POST body: { batch_size?: number, priority?: "matched"|"tracked"|"top"|"all" }
@@ -17,7 +17,7 @@ import { sanitiseError } from '../_shared/errors.ts';
  * Each invocation:
  *  1. Selects up to batch_size funders WHERE website IS NULL AND name IS NOT NULL
  *  2. Asks Claude Haiku for the most likely official website
- *  3. If confidence is none/low, tries Brave Search + Claude fallback
+ *  3. If confidence is none/low, tries DuckDuckGo Lite + Claude fallback
  *  4. Updates funders.website for high/medium confidence results
  *  5. Returns { processed, updated, skipped, errors }
  */
@@ -25,7 +25,6 @@ import { sanitiseError } from '../_shared/errors.ts';
 const SUPABASE_URL  = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_KEY  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY') || '';
-const BRAVE_SEARCH_API_KEY = Deno.env.get('BRAVE_SEARCH_API_KEY') || '';
 
 /* ─── Supabase REST helpers ─── */
 
@@ -87,7 +86,7 @@ async function rpcQuery(fnName: string, params: Record<string, unknown>): Promis
 interface LookupResult {
   url: string | null;
   confidence: 'high' | 'medium' | 'low' | 'none';
-  source: 'claude' | 'brave+claude';
+  source: 'claude' | 'ddg+claude';
 }
 
 const SYSTEM_PROMPT = [
@@ -177,37 +176,46 @@ async function callClaude(
   }
 }
 
-/* ─── Brave Search fallback ─── */
+/* ─── DuckDuckGo Lite search fallback ─── */
 
-interface BraveSearchResult {
+interface SearchResult {
   url: string;
   title: string;
-  description: string;
 }
 
-async function braveSearch(query: string): Promise<BraveSearchResult[]> {
-  const url = 'https://api.search.brave.com/res/v1/web/search?q=' + encodeURIComponent(query);
+async function duckduckgoSearch(query: string): Promise<SearchResult[]> {
+  const url = `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`;
   const resp = await fetch(url, {
     headers: {
-      Accept: 'application/json',
-      'X-Subscription-Token': BRAVE_SEARCH_API_KEY,
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
     },
   });
 
   if (!resp.ok) {
-    const errText = await resp.text();
-    console.error('[backfill-websites] Brave Search error [' + resp.status + ']: ' + errText.slice(0, 200));
+    console.error('[backfill-websites] DuckDuckGo Lite error [' + resp.status + ']');
     return [];
   }
 
-  const data = await resp.json();
-  const results = data?.web?.results || [];
+  const html = await resp.text();
 
-  return results.slice(0, 5).map((r: Record<string, unknown>) => ({
-    url: r.url as string,
-    title: r.title as string,
-    description: (r.description || '') as string,
-  }));
+  // Extract uddg URLs and titles from nofollow links
+  const regex = /<a[^>]*rel="nofollow"[^>]*href="[^"]*uddg=([^&"]+)[^"]*"[^>]*>(.*?)<\/a>/gs;
+  const results: SearchResult[] = [];
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(html)) !== null && results.length < 5) {
+    try {
+      const decodedUrl = decodeURIComponent(match[1]);
+      const title = match[2].replace(/<[^>]+>/g, '').trim();
+      if (decodedUrl && title) {
+        results.push({ url: decodedUrl, title });
+      }
+    } catch {
+      // Skip malformed entries
+    }
+  }
+
+  return results;
 }
 
 async function lookupWebsiteWithSearchFallback(
@@ -232,24 +240,19 @@ async function lookupWebsiteWithSearchFallback(
     return claudeResult;
   }
 
-  // Step 2: Web search fallback (only if Brave API key is configured)
-  if (!BRAVE_SEARCH_API_KEY) {
-    console.log('[backfill-websites] No BRAVE_SEARCH_API_KEY set, skipping search fallback for "' + name + '"');
-    return claudeResult;
-  }
-
-  console.log('[backfill-websites] Claude returned ' + claudeResult.confidence + ' for "' + name + '", trying Brave Search fallback');
+  // Step 2: DuckDuckGo Lite search fallback (always available, no API key needed)
+  console.log('[backfill-websites] Claude returned ' + claudeResult.confidence + ' for "' + name + '", trying DuckDuckGo Lite fallback');
 
   // Try two search queries for better coverage
   const searchQuery = '"' + name + '"' + (locationParts ? ' ' + locationParts : '') + ' foundation official website';
-  const searchResults = await braveSearch(searchQuery);
+  const searchResults = await duckduckgoSearch(searchQuery);
 
   if (searchResults.length === 0) {
     // Try a simpler query if the quoted search returned nothing
     const fallbackQuery = name + ' nonprofit website' + (state ? ' ' + state : '');
-    const fallbackResults = await braveSearch(fallbackQuery);
+    const fallbackResults = await duckduckgoSearch(fallbackQuery);
     if (fallbackResults.length === 0) {
-      console.log('[backfill-websites] No Brave Search results for "' + name + '"');
+      console.log('[backfill-websites] No DuckDuckGo results for "' + name + '"');
       return claudeResult;
     }
     searchResults.push(...fallbackResults);
@@ -259,7 +262,7 @@ async function lookupWebsiteWithSearchFallback(
   const formattedResults = searchResults
     .map(
       (r, i) =>
-        (i + 1) + '. URL: ' + r.url + '\n   Title: ' + r.title + '\n   Description: ' + r.description,
+        (i + 1) + '. URL: ' + r.url + '\n   Title: ' + r.title,
     )
     .join('\n\n');
 
@@ -275,7 +278,7 @@ async function lookupWebsiteWithSearchFallback(
   await sleep(200);
 
   const searchResult = await callClaude(SEARCH_EVAL_SYSTEM_PROMPT, evalPrompt);
-  searchResult.source = 'brave+claude';
+  searchResult.source = 'ddg+claude';
 
   console.log(
     '[backfill-websites] Search fallback for "' + name + '": ' +
@@ -497,12 +500,12 @@ Deno.serve(async (req) => {
       skipped,
       errors,
       priority,
-      brave_search_enabled: !!BRAVE_SEARCH_API_KEY,
+      web_search_enabled: true,
       results,
       message:
         'Processed ' + funders.length + ' funders: ' + updated + ' updated, ' +
         skipped + ' skipped (low/none confidence), ' + errors + ' errors.' +
-        (BRAVE_SEARCH_API_KEY ? ' Brave Search fallback enabled.' : ' Brave Search fallback disabled (no API key).'),
+        ' DuckDuckGo Lite search fallback enabled.',
     };
 
     console.log('[backfill-websites] Done: ' + summary.message);
