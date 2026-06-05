@@ -7,6 +7,8 @@
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') || '';
 
+import { safeFetch, SSRFBlockedError } from '../_shared/safe_fetch.ts';
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -66,12 +68,23 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'Invalid URL' }, 400);
   }
 
-  // Fetch the grant page
+  // Fetch the grant page via SSRF-aware wrapper.
+  //
+  // FM-2026-06-05-01: `safeFetch` enforces:
+  //   - http(s) scheme only,
+  //   - resolved IP is not in any private / loopback / link-local /
+  //     reserved / cloud-metadata range (covers AWS / GCP / Azure IMDS),
+  //   - redirects are re-validated per hop (defeats DNS rebinding /
+  //     redirect pivot to internal endpoints).
+  // SSRF rejections are returned to the caller as 400 so a misconfigured
+  // grant URL surfaces visibly instead of silently failing as 'no
+  // deadline found' — the latter would let an attacker side-channel the
+  // SSRF guard by inferring 'no fetch happened' vs 'fetch happened'.
   let pageText = '';
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10_000);
-    const resp = await fetch(parsedUrl.toString(), {
+    const resp = await safeFetch(parsedUrl.toString(), {
       signal: controller.signal,
       headers: {
         'User-Agent': 'Mozilla/5.0 FunderMatch-Bot/1.0',
@@ -84,7 +97,11 @@ Deno.serve(async (req: Request) => {
       pageText = htmlToText(raw).slice(0, 6000); // limit to ~6k chars for context
     }
   } catch (err) {
-    // If fetch fails, still try Claude with just the URL context
+    if (err instanceof SSRFBlockedError) {
+      console.warn(`fetch-grant-deadline SSRF blocked: ${err.message}`);
+      return json({ error: 'URL refers to a private, reserved, or cloud-metadata address.' }, 400);
+    }
+    // Any other transport failure — fall through to Claude with no body.
     pageText = '';
   }
 
