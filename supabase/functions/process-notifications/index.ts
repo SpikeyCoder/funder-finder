@@ -58,6 +58,10 @@ Deno.serve(async (req: Request) => {
       // Schedule task reminders
       const taskScheduled = await scheduleTaskReminders(supabase);
       results.task_reminders_scheduled = taskScheduled;
+
+      // FM-IC-NTF-001: Queue "new matching funder" alerts
+      const matchScheduled = await scheduleNewMatchNotifications(supabase);
+      results.new_match_notifications_scheduled = matchScheduled;
     }
 
     if (action === 'process' || action === 'all') {
@@ -137,6 +141,111 @@ async function scheduleDeadlineReminders(supabase: any): Promise<number> {
         },
         scheduled_for: new Date().toISOString(),
       });
+      scheduled++;
+    }
+  }
+
+  return scheduled;
+}
+
+// FM-IC-NTF-001: Email when new matching funders are found.
+//
+// Instrumentl emails saved-search subscribers when fresh opportunities match.
+// FunderMatch already computes per-project matches into `project_matches` and
+// exposes a "New match alerts" toggle (notification_preferences.realtime_matches),
+// but nothing ever delivered the email. This scheduler closes that gap:
+//   * Only users with realtime_matches AND email enabled are considered.
+//   * Only high-scoring matches (>= NEW_MATCH_MIN_SCORE) are alert-worthy.
+//   * A per-(project, funder) ledger (project_match_notifications) guarantees a
+//     funder is only alerted once, even though project_matches is wiped and
+//     re-inserted on every recompute.
+//   * One concise digest email is queued per project, summarising up to a few
+//     top new funders plus an overflow count.
+const NEW_MATCH_MIN_SCORE = 70;
+const NEW_MATCH_MAX_LISTED = 5;
+
+async function scheduleNewMatchNotifications(supabase: any): Promise<number> {
+  const { data: prefs } = await supabase
+    .from('notification_preferences')
+    .select('user_id, realtime_matches')
+    .eq('email_enabled', true)
+    .eq('realtime_matches', true);
+
+  if (!prefs || prefs.length === 0) return 0;
+
+  let scheduled = 0;
+
+  for (const pref of prefs) {
+    const { data: userData } = await supabase.auth.admin.getUserById(pref.user_id);
+    if (!userData?.user?.email) continue;
+    const email = userData.user.email;
+
+    // Projects owned by this user.
+    const { data: projects } = await supabase
+      .from('projects')
+      .select('id, name')
+      .eq('user_id', pref.user_id);
+
+    if (!projects || projects.length === 0) continue;
+
+    for (const project of projects) {
+      // Candidate high-scoring matches for this project.
+      const { data: matches } = await supabase
+        .from('project_matches')
+        .select('funder_ein, funder_name, match_score')
+        .eq('project_id', project.id)
+        .gte('match_score', NEW_MATCH_MIN_SCORE)
+        .order('match_score', { ascending: false });
+
+      if (!matches || matches.length === 0) continue;
+
+      // Which of these funders has the user already been alerted about?
+      const eins = matches
+        .map((m: any) => m.funder_ein)
+        .filter((e: any) => !!e);
+      if (eins.length === 0) continue;
+
+      const { data: alreadyNotified } = await supabase
+        .from('project_match_notifications')
+        .select('funder_ein')
+        .eq('project_id', project.id)
+        .in('funder_ein', eins);
+
+      const seen = new Set((alreadyNotified || []).map((r: any) => r.funder_ein));
+      const fresh = matches.filter((m: any) => m.funder_ein && !seen.has(m.funder_ein));
+      if (fresh.length === 0) continue;
+
+      const listed = fresh.slice(0, NEW_MATCH_MAX_LISTED).map((m: any) => ({
+        funder_ein: m.funder_ein,
+        funder_name: m.funder_name || m.funder_ein,
+        match_score: m.match_score,
+      }));
+
+      // Queue one digest notification for this project.
+      await supabase.from('notification_queue').insert({
+        user_id: pref.user_id,
+        email,
+        type: 'new_match',
+        payload: {
+          project_id: project.id,
+          project_name: project.name,
+          new_count: fresh.length,
+          top_matches: listed,
+          link: `https://fundermatch.org/projects/${project.id}`,
+        },
+        scheduled_for: new Date().toISOString(),
+      });
+
+      // Stamp the ledger so we never re-alert these funders.
+      const ledgerRows = fresh.map((m: any) => ({
+        project_id: project.id,
+        funder_ein: m.funder_ein,
+        match_score: m.match_score ?? null,
+      }));
+      await supabase
+        .from('project_match_notifications')
+        .upsert(ledgerRows, { onConflict: 'project_id,funder_ein', ignoreDuplicates: true });
+
       scheduled++;
     }
   }
@@ -391,6 +500,49 @@ async function sendEmail(notification: any): Promise<void> {
           </div>
           <p style="color:#6b7280;font-size:12px;margin:14px 0 0;text-align:center;">
             You're receiving this because you tracked this grant.
+            <a href="https://fundermatch.org/settings" style="color:#2563eb;">Manage email preferences</a>.
+          </p>
+        </div>
+      `;
+      break;
+    }
+
+    case 'new_match': {
+      // FM-IC-NTF-001: digest of newly-discovered matching funders.
+      const count = Number(payload.new_count) || (payload.top_matches?.length ?? 0);
+      const topMatches: Array<{ funder_name?: string; match_score?: number }> =
+        Array.isArray(payload.top_matches) ? payload.top_matches : [];
+      const projectName = payload.project_name || 'your project';
+      const overflow = count - topMatches.length;
+      const rows = topMatches.map((m) => {
+        const score = Number(m.match_score);
+        const scoreBadge = Number.isFinite(score)
+          ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600;${score >= 85 ? 'background:#dcfce7;color:#15803d;' : 'background:#dbeafe;color:#1d4ed8;'}">${Math.round(score)}% match</span>`
+          : '';
+        return `<tr>
+            <td style="padding:8px 0;border-bottom:1px solid #f1f5f9;">${escapeHtml(m.funder_name || 'Funder')}</td>
+            <td style="padding:8px 0;border-bottom:1px solid #f1f5f9;text-align:right;">${scoreBadge}</td>
+          </tr>`;
+      }).join('');
+
+      subject = `[FunderMatch] ${count} new funder match${count === 1 ? '' : 'es'} for ${projectName}`;
+      htmlContent = `
+        <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;max-width:560px;margin:0 auto;color:#111827;">
+          <div style="background:#1d4ed8;color:#ffffff;padding:14px 20px;border-radius:8px 8px 0 0;">
+            <p style="margin:0;font-size:13px;letter-spacing:0.04em;text-transform:uppercase;">FunderMatch · New matches</p>
+            <h2 style="margin:6px 0 0;font-size:20px;line-height:1.3;">${count} new funder match${count === 1 ? '' : 'es'}</h2>
+            <p style="margin:4px 0 0;font-size:13px;opacity:0.9;">Project: ${escapeHtml(projectName)}</p>
+          </div>
+          <div style="border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;padding:18px 20px;">
+            <p style="margin:0 0 12px;font-size:15px;">We found new high-scoring funders that fit this project.</p>
+            <table role="presentation" style="border-collapse:collapse;width:100%;font-size:14px;">${rows}</table>
+            ${overflow > 0 ? `<p style="margin:12px 0 0;color:#6b7280;font-size:13px;">+ ${overflow} more new match${overflow === 1 ? '' : 'es'} in your project.</p>` : ''}
+            <p style="margin:18px 0 0;">
+              <a href="${payload.link}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:white;text-decoration:none;border-radius:6px;font-weight:600;">View matches in FunderMatch</a>
+            </p>
+          </div>
+          <p style="color:#6b7280;font-size:12px;margin:14px 0 0;text-align:center;">
+            You're receiving this because new match alerts are on.
             <a href="https://fundermatch.org/settings" style="color:#2563eb;">Manage email preferences</a>.
           </p>
         </div>
