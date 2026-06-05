@@ -22,6 +22,61 @@ function errorResponse(req: Request, message: string, status = 400, extra: Recor
   return jsonResponse(req, { error: message, ...extra }, status);
 }
 
+/**
+ * Fire-and-forget: look up the funder's grant page URL and call
+ * fetch-grant-deadline to auto-populate the deadline on a newly
+ * tracked grant. Does NOT block the HTTP response.
+ */
+function fireAndForgetDeadlineFetch(
+  supabase: ReturnType<typeof adminClient>,
+  insertedGrant: { id: string; funder_ein?: string | null; funder_name?: string; grant_url?: string | null },
+) {
+  (async () => {
+    try {
+      // Look up the funder's grant page URL
+      const { data: funder } = await supabase
+        .from('funders')
+        .select('apply_url, discovered_apply_url, programs_url, website')
+        .eq('ein', insertedGrant.funder_ein)
+        .single();
+
+      const scrapeUrl = funder?.apply_url || funder?.discovered_apply_url || funder?.programs_url || funder?.website;
+      if (!scrapeUrl) return;
+
+      // Call fetch-grant-deadline
+      const resp = await fetch(
+        `${Deno.env.get('SUPABASE_URL')}/functions/v1/fetch-grant-deadline`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+          },
+          body: JSON.stringify({ url: scrapeUrl, funder_name: insertedGrant.funder_name }),
+        }
+      );
+
+      if (resp.ok) {
+        const result = await resp.json();
+        if (result.deadline) {
+          await supabase
+            .from('tracked_grants')
+            .update({
+              deadline: result.deadline,
+              grant_url: insertedGrant.grant_url || scrapeUrl,
+              deadline_source: 'auto-scraped',
+              deadline_confidence: result.confidence || 'medium',
+              deadline_last_checked: new Date().toISOString(),
+            })
+            .eq('id', insertedGrant.id);
+        }
+      }
+    } catch (err) {
+      console.error('[tracked-grants] auto-deadline-fetch failed:', err);
+    }
+  })();
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: CORS_HEADERS(req) });
@@ -195,6 +250,14 @@ Deno.serve(async (req: Request) => {
             errors.push({ row: i + 1, error: err.message });
           }
         }
+
+        // Fire-and-forget: auto-fetch deadlines for all successfully imported grants
+        for (const grant of imported) {
+          if (grant.funder_ein && !grant.deadline) {
+            fireAndForgetDeadlineFetch(supabase, grant);
+          }
+        }
+
         return jsonResponse(req, { imported: imported.length, errors, total: body.rows.length });
       }
 
@@ -234,6 +297,12 @@ Deno.serve(async (req: Request) => {
         is_external: is_external || false,
       }).select('*, pipeline_statuses(name, slug, color, is_terminal)').single();
       if (error) return errorResponse(req, error.message, 500, { stage, details: error });
+
+      // Fire-and-forget: auto-fetch deadline from funder's website
+      if (grant && funder_ein && !deadline) {
+        fireAndForgetDeadlineFetch(supabase, grant as any);
+      }
+
       return jsonResponse(req, grant, 201);
     }
 
