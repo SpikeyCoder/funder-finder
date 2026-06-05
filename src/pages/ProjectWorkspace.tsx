@@ -258,6 +258,8 @@ export default function ProjectWorkspace() {
 
   // Calendar state
   const [calendarDate, setCalendarDate] = useState(new Date());
+  // FM-IC-DLN-002: month or week deadline grid (Instrumentl offers both).
+  const [calendarView, setCalendarView] = useState<'month' | 'week'>('month');
 
   const activeTab = useMemo<TabType>(() => {
     const path = location.pathname;
@@ -1434,12 +1436,36 @@ export default function ProjectWorkspace() {
           {/* CALENDAR TAB */}
           {activeTab === 'calendar' && (
             <div>
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
                 <h2 className="text-lg font-semibold text-white">
-                  {calendarDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                  {calendarView === 'month'
+                    ? calendarDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+                    : (() => {
+                        const start = new Date(calendarDate);
+                        start.setDate(start.getDate() - start.getDay());
+                        const end = new Date(start);
+                        end.setDate(start.getDate() + 6);
+                        const sameMonth = start.getMonth() === end.getMonth();
+                        const startStr = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                        const endStr = end.toLocaleDateString('en-US', sameMonth ? { day: 'numeric', year: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' });
+                        return `${startStr} – ${endStr}`;
+                      })()}
                 </h2>
-                <div className="flex gap-2">
-                  <button onClick={() => setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1))}
+                <div className="flex items-center gap-2">
+                  {/* Month / Week view toggle */}
+                  <div className="flex rounded-lg border border-[#30363d] overflow-hidden mr-1" role="group" aria-label="Calendar view">
+                    {(['month', 'week'] as const).map(v => (
+                      <button key={v} onClick={() => setCalendarView(v)}
+                        aria-pressed={calendarView === v}
+                        className={`px-3 py-2 text-sm capitalize transition-colors ${calendarView === v ? 'bg-blue-600/20 text-blue-400' : 'text-gray-400 hover:text-white'}`}>
+                        {v}
+                      </button>
+                    ))}
+                  </div>
+                  <button onClick={() => setCalendarDate(calendarView === 'month'
+                      ? new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1, 1)
+                      : new Date(calendarDate.getFullYear(), calendarDate.getMonth(), calendarDate.getDate() - 7))}
+                    aria-label={calendarView === 'month' ? 'Previous month' : 'Previous week'}
                     className="px-4 py-2 bg-[#161b22] border border-[#30363d] hover:border-[#484f58] text-gray-300 rounded-lg text-sm transition-colors">
                     Previous
                   </button>
@@ -1447,7 +1473,10 @@ export default function ProjectWorkspace() {
                     className="px-4 py-2 bg-[#161b22] border border-[#30363d] hover:border-[#484f58] text-gray-300 rounded-lg text-sm transition-colors">
                     Today
                   </button>
-                  <button onClick={() => setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1))}
+                  <button onClick={() => setCalendarDate(calendarView === 'month'
+                      ? new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 1)
+                      : new Date(calendarDate.getFullYear(), calendarDate.getMonth(), calendarDate.getDate() + 7))}
+                    aria-label={calendarView === 'month' ? 'Next month' : 'Next week'}
                     className="px-4 py-2 bg-[#161b22] border border-[#30363d] hover:border-[#484f58] text-gray-300 rounded-lg text-sm transition-colors">
                     Next
                   </button>
@@ -1466,7 +1495,8 @@ export default function ProjectWorkspace() {
                 </div>
               ) : (
                 <div className="space-y-6">
-                  {/* Calendar Grid */}
+                  {/* Calendar Grid — month view */}
+                  {calendarView === 'month' && (
                   <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-6">
                     <div className="grid grid-cols-7 gap-1 mb-4">
                       {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
@@ -1549,6 +1579,57 @@ export default function ProjectWorkspace() {
                       })()}
                     </div>
                   </div>
+                  )}
+
+                  {/* Calendar Grid — week view (FM-IC-DLN-002) */}
+                  {calendarView === 'week' && (
+                  <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-6">
+                    {(() => {
+                      const start = new Date(calendarDate);
+                      start.setHours(0, 0, 0, 0);
+                      start.setDate(start.getDate() - start.getDay());
+                      const todayStr = new Date().toISOString().split('T')[0];
+                      const days = Array.from({ length: 7 }, (_, i) => {
+                        const d = new Date(start);
+                        d.setDate(start.getDate() + i);
+                        return d;
+                      });
+                      return (
+                        <div className="grid grid-cols-1 sm:grid-cols-7 gap-2">
+                          {days.map((day, idx) => {
+                            const dateStr = day.toISOString().split('T')[0];
+                            const isToday = dateStr === todayStr;
+                            const grantsForDay = trackedGrants.filter(g => {
+                              if (!g.deadline) return false;
+                              return new Date(g.deadline).toISOString().split('T')[0] === dateStr;
+                            });
+                            return (
+                              <div key={idx}
+                                className={`min-h-40 p-2 border rounded-lg text-xs bg-[#0d1117] ${isToday ? 'border-blue-500' : 'border-[#30363d]'}`}>
+                                <div className={`flex items-center justify-between mb-2 font-semibold ${isToday ? 'text-blue-400' : 'text-white'}`}>
+                                  <span>{day.toLocaleDateString('en-US', { weekday: 'short' })}</span>
+                                  <span>{day.getDate()}</span>
+                                </div>
+                                <div className="space-y-1">
+                                  {grantsForDay.length === 0 ? (
+                                    <span className="text-gray-600">—</span>
+                                  ) : grantsForDay.map(grant => (
+                                    <button key={grant.id}
+                                      onClick={() => { setSelectedGrant(grant); openDrawer(); }}
+                                      className="block w-full text-left px-1.5 py-1 bg-blue-900/40 text-blue-200 rounded hover:bg-blue-900/60 transition-colors border border-blue-800/50">
+                                      <span className="inline-block w-1.5 h-1.5 bg-blue-400 rounded-full mr-1"></span>
+                                      <span className="truncate">{grant.funder_name || 'Grant'}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                  )}
 
                   {/* Legend and Subscribe Button */}
                   <div className="flex items-center justify-between">
