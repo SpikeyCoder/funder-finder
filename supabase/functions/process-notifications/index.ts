@@ -7,7 +7,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const SENDGRID_API_KEY = Deno.env.get('SENDGRID_API_KEY') || '';
+const MAILGUN_API_KEY = Deno.env.get('MAILGUN_API_KEY') || '';
+const MAILGUN_DOMAIN = Deno.env.get('MAILGUN_DOMAIN') || 'mg.kevinarmstrong.io';
 
 import { corsHeaders as _corsHeaders } from "../_shared/cors.ts";
 
@@ -246,7 +247,7 @@ async function processQueue(supabase: any): Promise<number> {
 }
 
 async function sendEmail(notification: any): Promise<void> {
-  if (!SENDGRID_API_KEY) {
+  if (!MAILGUN_API_KEY) {
     // Log instead of sending if no API key configured
     console.log(`[EMAIL] To: ${notification.email}, Type: ${notification.type}, Payload:`, notification.payload);
     return;
@@ -402,22 +403,26 @@ async function sendEmail(notification: any): Promise<void> {
       htmlContent = `<p>You have a new notification. <a href="https://fundermatch.org/dashboard">View Dashboard</a></p>`;
   }
 
-  const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${SENDGRID_API_KEY}`,
+  // Mailgun API — multipart form data
+  const formData = new FormData();
+  formData.append('from', 'FunderMatch <notifications@' + MAILGUN_DOMAIN + '>');
+  formData.append('to', email);
+  formData.append('subject', subject);
+  formData.append('html', htmlContent);
+
+  const response = await fetch(
+    `https://api.mailgun.net/v3/${MAILGUN_DOMAIN}/messages`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Basic ' + btoa('api:' + MAILGUN_API_KEY),
+      },
+      body: formData,
     },
-    body: JSON.stringify({
-      personalizations: [{ to: [{ email }] }],
-      from: { email: 'notifications@fundermatch.org', name: 'FunderMatch' },
-      subject,
-      content: [{ type: 'text/html', value: htmlContent }],
-    }),
-  });
+  );
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`SendGrid error: ${response.status} ${text}`);
+    throw new Error(`Mailgun error: ${response.status} ${text}`);
   }
 }
