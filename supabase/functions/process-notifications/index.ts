@@ -8,7 +8,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const MAILGUN_API_KEY = Deno.env.get('MAILGUN_API_KEY') || '';
-const MAILGUN_DOMAIN = Deno.env.get('MAILGUN_DOMAIN') || 'mg.kevinarmstrong.io';
+const MAILGUN_DOMAIN = Deno.env.get('MAILGUN_DOMAIN') || 'mg.fundermatch.org';
 
 import { corsHeaders as _corsHeaders } from "../_shared/cors.ts";
 
