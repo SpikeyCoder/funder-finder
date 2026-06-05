@@ -89,8 +89,10 @@ export default function MyTasksPage() {
               }`}
             >
               <button onClick={() => toggleTask(task.id, task.status)}
+                aria-label={task.status === 'done' ? `Mark task "${task.title}" as not done` : `Mark task "${task.title}" as done`}
+                aria-pressed={task.status === 'done'}
                 className={`mt-0.5 flex-shrink-0 ${task.status === 'done' ? 'text-green-400' : 'text-gray-500 hover:text-gray-300'}`}>
-                <CheckCircle size={18} />
+                <CheckCircle size={18} aria-hidden="true" />
               </button>
               <div className="flex-1 min-w-0">
                 <p className={`text-sm font-medium ${task.status === 'done' ? 'line-through text-gray-500' : 'text-white'}`}>{task.title}</p>

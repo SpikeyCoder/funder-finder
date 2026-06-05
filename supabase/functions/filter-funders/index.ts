@@ -58,7 +58,7 @@ Deno.serve(async (req: Request) => {
     const {
       states = [],
       ntee_codes = [],
-      funding_types: _funding_types = [],
+      funding_types = [],
       funder_types = [],
       grant_size_min,
       grant_size_max,
@@ -74,6 +74,9 @@ Deno.serve(async (req: Request) => {
       p_grant_size_min: grant_size_min ?? null,
       p_grant_size_max: grant_size_max ?? null,
       p_locations_served_csv: toCsv(locations_served),
+      // FM-IC-DSC-004: pass the use-of-funds facet through to the RPC so the
+      // FilterPanel "Funding Type" selection actually filters results.
+      p_funding_types_csv: toCsv(funding_types),
       p_sort_by: sort_by ?? 'total_giving',
       p_sort_order: sort_order ?? 'desc',
       p_page: page ?? 1,
