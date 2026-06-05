@@ -1,8 +1,7 @@
 // Phase 5D: Guided onboarding flow management
-import { createUserScopedClient } from "../_shared/user-client.ts";
+import { authFromRequest, adminClient, statusForAuthError } from "../_shared/auth.ts";
 import { corsHeaders as _corsHeaders } from "../_shared/cors.ts";
 import { sanitiseError } from "../_shared/errors.ts";
-import { statusForAuthError } from "../_shared/auth.ts";
 
 const CORS_OPTS = { methods: "GET, POST, PUT, OPTIONS" } as const;
 function CORS(req: Request | null = null): Record<string, string> {
@@ -17,20 +16,21 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS(req) });
 
   try {
-    const { supabase, user } = await createUserScopedClient(req);
+    const { userId } = await authFromRequest(req);
+    const supabase = adminClient();
 
     if (req.method === 'GET') {
       const { data: progress } = await supabase
         .from('onboarding_progress')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .single();
 
       if (!progress) {
         // New user — create onboarding record
         const { data: newProgress } = await supabase
           .from('onboarding_progress')
-          .insert({ user_id: user.id, current_step: 1 })
+          .insert({ user_id: userId, current_step: 1 })
           .select()
           .single();
         return json(req, newProgress);
@@ -59,7 +59,7 @@ Deno.serve(async (req: Request) => {
       const { data, error } = await supabase
         .from('onboarding_progress')
         .update(updateData)
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .select()
         .single();
 
@@ -73,7 +73,7 @@ Deno.serve(async (req: Request) => {
       if (action === 'skip') {
         const { data } = await supabase
           .from('onboarding_progress')
-          .upsert({ user_id: user.id, skipped: true, completed_at: new Date().toISOString() })
+          .upsert({ user_id: userId, skipped: true, completed_at: new Date().toISOString() })
           .select()
           .single();
         return json(req, data);
@@ -105,7 +105,7 @@ Deno.serve(async (req: Request) => {
             .map((v) => v.trim())
             .slice(0, 12);
         }
-        allowed.id = user.id;
+        allowed.id = userId;
         allowed.updated_at = new Date().toISOString();
 
         const { error: upErr } = await supabase
@@ -117,7 +117,7 @@ Deno.serve(async (req: Request) => {
         await supabase
           .from('onboarding_progress')
           .upsert({
-            user_id: user.id,
+            user_id: userId,
             profile_complete: true,
             updated_at: new Date().toISOString(),
           }, { onConflict: 'user_id' });

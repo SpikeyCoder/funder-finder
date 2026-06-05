@@ -1,8 +1,11 @@
 // Phase 3D: Calendar feed (.ics) generation
 // Public endpoint authenticated by token in URL, authenticated endpoints use JWT
+// Auth: local JWT decode via authFromRequest + adminClient (service-role for
+// user-filtered queries). Replaces the createUserScopedClient flow that was
+// unreliable in the Edge runtime.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-import { createUserScopedClient } from "../_shared/user-client.ts";
+import { authFromRequest, adminClient, statusForAuthError } from "../_shared/auth.ts";
 import { corsHeaders as _corsHeaders } from "../_shared/cors.ts";
 import { ipRateLimit } from "../_shared/rate_limit.ts";
 
@@ -181,16 +184,17 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  // Authenticated endpoints for managing feeds - use user-scoped client
+  // Authenticated endpoints for managing feeds
   try {
-    const { supabase, user } = await createUserScopedClient(req);
+    const { userId } = await authFromRequest(req);
+    const supabase = adminClient();
 
     if (req.method === 'GET') {
       // List user's feeds
       const { data: feeds, error } = await supabase
         .from('calendar_feeds')
         .select('*, projects(name)')
-        .eq('user_id', user.id);
+        .eq('user_id', userId);
 
       if (error) return errorResponse(req, error.message, 500);
       return jsonResponse(req, feeds || []);
@@ -205,7 +209,7 @@ Deno.serve(async (req: Request) => {
       const token = crypto.randomUUID() + '-' + crypto.randomUUID();
 
       const { data: feed, error } = await supabase.from('calendar_feeds').insert({
-        user_id: user.id,
+        user_id: userId,
         project_id: projectId,
         token,
         include_tasks: includeTasks,
@@ -225,7 +229,7 @@ Deno.serve(async (req: Request) => {
         .from('calendar_feeds')
         .delete()
         .eq('id', feedId)
-        .eq('user_id', user.id);
+        .eq('user_id', userId);
 
       if (error) return errorResponse(req, error.message, 500);
       return jsonResponse(req, { success: true });
@@ -233,6 +237,7 @@ Deno.serve(async (req: Request) => {
 
     return errorResponse(req, 'Method not allowed', 405);
   } catch (err: any) {
-    return errorResponse(req, err.message || 'Unauthorized', 401);
+    const msg = err instanceof Error ? err.message : String(err);
+    return errorResponse(req, msg, statusForAuthError(msg));
   }
 });

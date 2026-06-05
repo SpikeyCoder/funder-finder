@@ -1,6 +1,9 @@
 import { sanitiseError } from '../_shared/errors.ts';
 // Phase 5A: Generate PDF report from portfolio data
-import { createUserScopedClient } from "../_shared/user-client.ts";
+// Auth: local JWT decode via authFromRequest + adminClient (service-role for
+// user-filtered queries). Replaces the createUserScopedClient flow that was
+// unreliable in the Edge runtime.
+import { authFromRequest, adminClient, statusForAuthError } from "../_shared/auth.ts";
 import { corsHeaders as _corsHeaders } from "../_shared/cors.ts";
 
 const CORS_OPTS = { methods: "POST, OPTIONS" } as const;
@@ -17,7 +20,8 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { supabase, user } = await createUserScopedClient(req);
+    const { userId } = await authFromRequest(req);
+    const supabase = adminClient();
 
     const { format = 'csv' } = await req.json().catch(() => ({}));
 
@@ -25,7 +29,7 @@ Deno.serve(async (req: Request) => {
     const { data: grants } = await supabase
       .from('tracked_grants')
       .select('*, pipeline_statuses(name), projects(name)')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
     if (format === 'csv') {
@@ -48,8 +52,15 @@ Deno.serve(async (req: Request) => {
       headers: { ...CORS(req), 'Content-Type': 'application/json' },
     });
   } catch (err: any) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const status = statusForAuthError(msg);
+    if (status === 401 || status === 403) {
+      return new Response(JSON.stringify({ error: msg }), {
+        status, headers: { ...CORS(req), 'Content-Type': 'application/json' },
+      });
+    }
     return new Response(JSON.stringify({ error: sanitiseError(err, 'Internal server error') }), {
-      status: 401, headers: { ...CORS(req), 'Content-Type': 'application/json' },
+      status: 500, headers: { ...CORS(req), 'Content-Type': 'application/json' },
     });
   }
 });
