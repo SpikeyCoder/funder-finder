@@ -228,7 +228,8 @@ export default function ApplicationsPage() {
                       </div>
                     </div>
                     <button onClick={e => { e.stopPropagation(); handleDelete(entry.id); }}
-                      className="text-gray-600 hover:text-red-400 flex-shrink-0"><Trash2 size={14} /></button>
+                      aria-label={`Delete prior application "${entry.title}"`}
+                      className="text-gray-600 hover:text-red-400 flex-shrink-0"><Trash2 size={14} aria-hidden="true" /></button>
                   </div>
                 </button>
               ))}
