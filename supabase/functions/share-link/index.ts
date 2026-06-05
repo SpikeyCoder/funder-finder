@@ -1,7 +1,10 @@
 import { sanitiseError } from '../_shared/errors.ts';
 // Phase 4B: Shareable link management
+// Auth: local JWT decode via authFromRequest + adminClient (service-role for
+// user-filtered queries). Replaces the createUserScopedClient flow that was
+// unreliable in the Edge runtime.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-import { createUserScopedClient } from "../_shared/user-client.ts";
+import { authFromRequest, adminClient, statusForAuthError } from "../_shared/auth.ts";
 import { ipRateLimit } from "../_shared/rate_limit.ts";
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
@@ -77,20 +80,21 @@ Deno.serve(async (req: Request) => {
   }
 
   // Authenticated endpoints
-  let auth;
+  let userId: string;
   try {
-    auth = await createUserScopedClient(req);
+    const auth = await authFromRequest(req);
+    userId = auth.userId;
   } catch {
     return json(req, { error: 'Unauthorized' }, 401);
   }
-  const { supabase, user } = auth;
+  const supabase = adminClient();
 
   try {
     if (req.method === 'GET') {
       const { data: links } = await supabase
         .from('shareable_links')
         .select('*, projects(name)')
-        .eq('created_by', user.id)
+        .eq('created_by', userId)
         .order('created_at', { ascending: false });
       return json(req, links || []);
     }
@@ -103,7 +107,7 @@ Deno.serve(async (req: Request) => {
         .from('projects')
         .select('id')
         .eq('id', project_id)
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .single();
       if (!project) return json(req, { error: 'Project not found' }, 404);
 
@@ -111,7 +115,7 @@ Deno.serve(async (req: Request) => {
 
       const { data: link, error } = await supabase
         .from('shareable_links')
-        .insert({ project_id, created_by: user.id, scope, expires_at })
+        .insert({ project_id, created_by: userId, scope, expires_at })
         .select()
         .single();
 
@@ -122,7 +126,7 @@ Deno.serve(async (req: Request) => {
     if (req.method === 'DELETE') {
       const linkId = url.searchParams.get('id');
       if (!linkId) return json(req, { error: 'id required' }, 400);
-      await supabase.from('shareable_links').update({ is_active: false }).eq('id', linkId).eq('created_by', user.id);
+      await supabase.from('shareable_links').update({ is_active: false }).eq('id', linkId).eq('created_by', userId);
       return json(req, { success: true });
     }
 

@@ -1,6 +1,6 @@
 import { sanitiseError } from '../_shared/errors.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-import { createUserScopedClient } from '../_shared/user-client.ts';
+import { authFromRequest, adminClient, statusForAuthError } from '../_shared/auth.ts';
 import { corsHeaders as _corsHeaders } from '../_shared/cors.ts';
 
 const corsHeaders_OPTS = { methods: 'POST, OPTIONS' } as const;
@@ -22,11 +22,11 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    // User-scoped client is needed only for peer filtering by project.
-    let userScopedClient = null;
+    // Auth is optional for public browse queries; peer filtering requires it.
+    let authenticatedUserId: string | null = null;
     try {
-      const result = await createUserScopedClient(req);
-      userScopedClient = result.supabase;
+      const { userId } = await authFromRequest(req);
+      authenticatedUserId = userId;
     } catch {
       // Auth is optional for public browse queries.
     }
@@ -38,8 +38,8 @@ Deno.serve(async (req: Request) => {
     // the public PostgREST surface. The matview holds only 990-derived
     // public funder data, so reading it from the function with elevated
     // privileges is fine — auth-gated paths below (peer filtering, etc.)
-    // still use the user-scoped client so per-user authorization is
-    // unchanged.
+    // still use the service-role client filtered by user_id from the JWT
+    // so per-user authorization is unchanged.
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -98,7 +98,7 @@ Deno.serve(async (req: Request) => {
         : 0;
 
     if (project_id && gives_to_peers) {
-      if (!userScopedClient) {
+      if (!authenticatedUserId) {
         return new Response(
           JSON.stringify({ error: 'Authentication required for peer filtering' }),
           {
@@ -108,7 +108,9 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      const { data: peerMatches } = await userScopedClient
+      // Use adminClient filtered by user_id for peer matching
+      const userClient = adminClient();
+      const { data: peerMatches } = await userClient
         .from('project_matches')
         .select('funder_ein')
         .eq('project_id', project_id)

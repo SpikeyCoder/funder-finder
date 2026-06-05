@@ -1,8 +1,9 @@
 import { sanitiseError } from '../_shared/errors.ts';
 // Phase 4: Advanced portfolio reporting with breakdowns and charts data
-// MIGRATED TO USER-SCOPED AUTH: Uses authenticated user context instead of SERVICE_ROLE_KEY
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-import { createUserScopedClient } from "../_shared/user-client.ts";
+// Auth: local JWT decode via authFromRequest + adminClient (service-role for
+// user-filtered queries). Replaces the createUserScopedClient flow that was
+// unreliable in the Edge runtime.
+import { authFromRequest, adminClient, statusForAuthError } from "../_shared/auth.ts";
 
 import { corsHeaders as _corsHeaders } from "../_shared/cors.ts";
 
@@ -20,14 +21,14 @@ Deno.serve(async (req: Request) => {
   if (req.method !== 'GET') return json(req, { error: 'Method not allowed' }, 405);
 
   try {
-    // Phase 4: Use user-scoped client with JWT validation
-    const { supabase, user } = await createUserScopedClient(req);
+    const { userId } = await authFromRequest(req);
+    const supabase = adminClient();
 
     // Get all tracked grants with statuses
     const { data: grants } = await supabase
       .from('tracked_grants')
       .select('*, pipeline_statuses(name, color, is_terminal, sort_order), projects(name)')
-      .eq('user_id', user.id);
+      .eq('user_id', userId);
 
     if (!grants) return json(req, { kpis: {}, pipeline: [], byProject: [], timeline: [] });
 
@@ -86,7 +87,7 @@ Deno.serve(async (req: Request) => {
     const { data: compliance } = await supabase
       .from('compliance_requirements')
       .select('status, due_date')
-      .eq('user_id', user.id);
+      .eq('user_id', userId);
 
     const now = new Date();
     const complianceSummary = {
@@ -111,8 +112,11 @@ Deno.serve(async (req: Request) => {
       compliance: complianceSummary,
     });
   } catch (err: any) {
-    const status = err.message?.includes('Unauthorized') || err.message?.includes('JWT') ? 401 : 500;
-    if (status === 401) return json(req, { error: err.message }, status);
+    const msg = err instanceof Error ? err.message : String(err);
+    const status = statusForAuthError(msg);
+    if (status === 401 || status === 403) {
+      return json(req, { error: msg }, status);
+    }
     return json(req, { error: sanitiseError(err, 'Internal server error') }, status);
   }
 });
