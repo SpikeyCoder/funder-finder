@@ -85,32 +85,38 @@ const SYSTEM_PROMPT = [
   '- Do NOT return generic search URLs or directory listings',
 ].join('\n');
 
-async function lookupWebsite(
-  name: string,
-  city: string | null,
-  state: string | null,
-): Promise<LookupResult> {
-  const locationParts = [city, state].filter(Boolean).join(', ');
-  const locationHint = locationParts ? ' (' + locationParts + ')' : '';
+interface ExtendedLookupResult extends LookupResult {
+  source: 'claude' | 'web-search';
+}
+
+async function callClaude(
+  system: string,
+  userMessage: string,
+  useWebSearch = false,
+): Promise<{ url: string | null; confidence: string }> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'x-api-key': ANTHROPIC_KEY,
+    'anthropic-version': '2023-06-01',
+  };
+  if (useWebSearch) {
+    headers['anthropic-beta'] = 'web-search-2025-03-05';
+  }
+
+  const body: Record<string, unknown> = {
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 300,
+    system,
+    messages: [{ role: 'user', content: userMessage }],
+  };
+  if (useWebSearch) {
+    body.tools = [{ type: 'web_search', name: 'web_search', max_uses: 3 }];
+  }
 
   const resp = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_KEY,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 150,
-      system: SYSTEM_PROMPT,
-      messages: [
-        {
-          role: 'user',
-          content: 'What is the official website for: ' + name + locationHint,
-        },
-      ],
-    }),
+    headers,
+    body: JSON.stringify(body),
   });
 
   if (!resp.ok) {
@@ -119,19 +125,77 @@ async function lookupWebsite(
   }
 
   const data = await resp.json();
-  const text = data.content?.[0]?.text?.trim() || '';
+  // Extract the last text block (web search returns multiple content blocks)
+  const textBlocks = (data.content || []).filter((b: any) => b.type === 'text');
+  const text = textBlocks.length > 0 ? textBlocks[textBlocks.length - 1].text.trim() : '';
   const cleaned = text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
 
   try {
     const parsed = JSON.parse(cleaned);
-    return {
-      url: parsed.url || null,
-      confidence: parsed.confidence || 'none',
-    };
+    return { url: parsed.url || null, confidence: parsed.confidence || 'none' };
   } catch {
-    console.error('[backfill-websites] Failed to parse Claude response for "' + name + '": ' + cleaned);
+    console.error('[backfill-websites] Failed to parse Claude response: ' + cleaned.slice(0, 200));
     return { url: null, confidence: 'none' };
   }
+}
+
+const WEB_SEARCH_PROMPT = [
+  'You are finding the official website for a US nonprofit foundation.',
+  'Search the web for this organization and identify its official website URL.',
+  'Return ONLY a JSON object with no markdown formatting:',
+  '{"url": "https://...", "confidence": "high"|"medium"|"low"}',
+  'or {"url": null, "confidence": "none"} if you cannot find it.',
+  '',
+  'Rules:',
+  '- Return the foundation\'s OWN website, not a profile on another site',
+  '- SKIP directory listings (guidestar.org, candid.org, charitynavigator.org, nonprofitexplorer)',
+  '- SKIP social media profiles (facebook, linkedin, twitter/x)',
+  '- SKIP Wikipedia, news articles, and press releases',
+  '- Prefer .org domains for nonprofits',
+  '- "high" = the search confirms this is the official website',
+  '- "medium" = likely correct based on search results',
+].join('\n');
+
+async function lookupWebsite(
+  name: string,
+  city: string | null,
+  state: string | null,
+): Promise<ExtendedLookupResult> {
+  const locationParts = [city, state].filter(Boolean).join(', ');
+  const locationHint = locationParts ? ' (' + locationParts + ')' : '';
+
+  // Step 1: Try Claude from training knowledge (fast, cheap)
+  const step1 = await callClaude(
+    SYSTEM_PROMPT,
+    'What is the official website for: ' + name + locationHint,
+    false,
+  );
+
+  if (step1.url && (step1.confidence === 'high' || step1.confidence === 'medium')) {
+    return { url: step1.url, confidence: step1.confidence as LookupResult['confidence'], source: 'claude' };
+  }
+
+  // Step 2: Claude with web search (more thorough, slightly slower)
+  console.log('[backfill-websites] Claude training returned ' + step1.confidence + ' for "' + name + '", trying web search');
+  try {
+    const step2 = await callClaude(
+      WEB_SEARCH_PROMPT,
+      'Find the official website for this nonprofit foundation: ' + name + locationHint,
+      true,
+    );
+
+    if (step2.url) {
+      return {
+        url: step2.url,
+        confidence: step2.confidence as LookupResult['confidence'],
+        source: 'web-search',
+      };
+    }
+  } catch (err) {
+    console.error('[backfill-websites] Web search fallback error for "' + name + '":', err);
+  }
+
+  return { url: null, confidence: 'none', source: 'claude' };
 }
 
 function sleep(ms: number): Promise<void> {
