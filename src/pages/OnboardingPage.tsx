@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getEdgeFunctionHeaders } from '../lib/supabase';
+import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import { ArrowRight, ArrowLeft, User, FolderPlus, Search, Bookmark, Sparkles } from 'lucide-react';
 import NavBar from '../components/NavBar';
 
@@ -44,6 +44,14 @@ export default function OnboardingPage() {
   const [fieldsOfWork, setFieldsOfWork] = useState<string[]>([]);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Step 3: project creation state
+  const [projectName, setProjectName] = useState('');
+  const [projectDescription, setProjectDescription] = useState('');
+  const [targetFunding, setTargetFunding] = useState('');
+  const [focusArea, setFocusArea] = useState('');
+  const [projectError, setProjectError] = useState<string | null>(null);
+  const [isCreatingProject, setIsCreatingProject] = useState(false);
 
   const FIELDS_OF_WORK_OPTIONS: string[] = [
     'Arts & Culture',
@@ -135,6 +143,68 @@ export default function OnboardingPage() {
     }
   };
 
+  /**
+   * Create a project row in public.projects from the Step 3 form, then
+   * record the project ID on onboarding_progress.first_project_id so the
+   * rest of the onboarding flow (and the dashboard) can reference it.
+   */
+  const createProject = async (): Promise<boolean> => {
+    setProjectError(null);
+    setIsCreatingProject(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const activeUser = sessionData.session?.user;
+      if (!activeUser) {
+        setProjectError('Your session has expired. Please sign in again.');
+        return false;
+      }
+
+      // Parse targetFunding into an integer (strip non-numeric chars)
+      const parsedBudget = targetFunding
+        ? parseInt(targetFunding.replace(/[^0-9]/g, ''), 10) || null
+        : null;
+
+      const { data, error: insertError } = await supabase
+        .from('projects')
+        .insert({
+          user_id: activeUser.id,
+          name: projectName.trim(),
+          description: projectDescription.trim() || null,
+          fields_of_work: focusArea ? [focusArea] : null,
+          budget_min: parsedBudget,
+          budget_max: parsedBudget,
+          is_default: true,
+        })
+        .select('id')
+        .single();
+
+      if (insertError) throw insertError;
+
+      // Record the project on onboarding_progress so the dashboard knows
+      // the user created their first project during onboarding.
+      try {
+        const headers = await getEdgeFunctionHeaders();
+        await fetch(ONBOARDING_URL, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', ...headers },
+          body: JSON.stringify({ first_project_id: data.id }),
+        });
+      } catch (progressErr) {
+        // Non-blocking — the project was already created successfully.
+        console.warn('Could not update onboarding progress with project ID:', progressErr);
+      }
+
+      return true;
+    } catch (err: any) {
+      console.error('Error creating project:', err);
+      const msg = err?.message || 'Could not create project';
+      setProjectError(msg);
+      return false;
+    } finally {
+      setIsCreatingProject(false);
+    }
+  };
+
   const saveProgress = async (step: number, completed: number[]) => {
     try {
       const headers = await getEdgeFunctionHeaders();
@@ -160,6 +230,16 @@ export default function OnboardingPage() {
         const ok = await saveProfile();
         if (!ok) return; // surface the error to the user and stay on step
       }
+    }
+
+    // Step 3: create the project before advancing
+    if (currentStep === 3) {
+      if (!projectName.trim()) {
+        setProjectError('Project name is required.');
+        return;
+      }
+      const ok = await createProject();
+      if (!ok) return; // stay on step so the user can see the error
     }
 
     const newCompleted = [...completedSteps, currentStep].filter((v, i, a) => a.indexOf(v) === i);
@@ -321,7 +401,7 @@ export default function OnboardingPage() {
                 <p role="alert" className="text-xs text-red-400">{saveError}</p>
               )}
               {isSaving && (
-                <p className="text-xs text-gray-500">Saving your profile…</p>
+                <p className="text-xs text-gray-500">Saving your profile...</p>
               )}
               <p className="text-xs text-gray-500">This info helps us match you with relevant funders. You can update it later in Settings.</p>
             </div>
@@ -331,29 +411,48 @@ export default function OnboardingPage() {
             <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-5 mb-6 text-left space-y-4">
               <p className="text-sm font-semibold text-white">Create Your First Project</p>
               <input type="text" placeholder="Project name (e.g., Youth STEM Education Program)"
+                aria-label="Project name"
+                value={projectName}
+                onChange={(e) => { setProjectName(e.target.value); setProjectError(null); }}
                 className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
               <textarea placeholder="Brief project description — what does it do and who does it serve?"
+                aria-label="Project description"
                 rows={3}
+                value={projectDescription}
+                onChange={(e) => setProjectDescription(e.target.value)}
                 className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500 resize-none" />
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-gray-500 mb-1 block">Target funding</label>
                   <input type="text" placeholder="$50,000"
+                    aria-label="Target funding"
+                    value={targetFunding}
+                    onChange={(e) => setTargetFunding(e.target.value)}
                     className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
                 </div>
                 <div>
                   <label className="text-xs text-gray-500 mb-1 block">Focus area</label>
-                  <select className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm">
+                  <select
+                    aria-label="Focus area"
+                    value={focusArea}
+                    onChange={(e) => setFocusArea(e.target.value)}
+                    className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm">
                     <option value="">Select...</option>
-                    <option>Education</option>
-                    <option>Health</option>
-                    <option>Environment</option>
-                    <option>Arts & Culture</option>
-                    <option>Community Development</option>
-                    <option>Human Services</option>
+                    <option value="Education">Education</option>
+                    <option value="Health">Health</option>
+                    <option value="Environment">Environment</option>
+                    <option value="Arts & Culture">Arts & Culture</option>
+                    <option value="Community Development">Community Development</option>
+                    <option value="Human Services">Human Services</option>
                   </select>
                 </div>
               </div>
+              {projectError && (
+                <p role="alert" className="text-xs text-red-400">{projectError}</p>
+              )}
+              {isCreatingProject && (
+                <p className="text-xs text-gray-500">Creating your project...</p>
+              )}
               <p className="text-xs text-gray-500">We'll use this to find funders that match your project's mission.</p>
             </div>
           )}
@@ -405,8 +504,9 @@ export default function OnboardingPage() {
               <ArrowLeft size={16} /> Back
             </button>
             <button onClick={handleNext}
-              className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium transition-colors">
-              {currentStep >= 5 ? 'Finish Setup' : 'Continue'} <ArrowRight size={16} />
+              disabled={isCreatingProject || isSaving}
+              className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+              {isCreatingProject ? 'Creating...' : currentStep >= 5 ? 'Finish Setup' : 'Continue'} <ArrowRight size={16} />
             </button>
           </div>
         </div>
