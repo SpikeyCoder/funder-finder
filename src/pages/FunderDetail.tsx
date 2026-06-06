@@ -1,9 +1,9 @@
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Bookmark, BookmarkCheck, Copy, Globe, MapPin, User, Mail, TrendingUp, ChevronDown, ChevronUp, BarChart3, Users, Map, Loader2, FileText, Info } from 'lucide-react';
+import { ArrowLeft, Bookmark, BookmarkCheck, Copy, Globe, MapPin, User, Mail, TrendingUp, ChevronDown, ChevronUp, BarChart3, Users, Map, Loader2, FileText, Info, Sparkles } from 'lucide-react';
 import GlossaryTooltip from '../components/GlossaryTooltip';
-import { Funder, FunderInsights, PeerEntry } from '../types';
-import { formatGrantRange, formatTotalGiving, fetchFunderInsights, fetchPeers, fetchFunderByEin } from '../utils/matching';
+import { Funder, FunderInsights, PeerEntry, KeyRecipient } from '../types';
+import { formatGrantRange, formatTotalGiving, fetchFunderInsights, fetchPeers, fetchFunderByEin, suggestPeers } from '../utils/matching';
 import { useAuth } from '../contexts/AuthContext';
 import LoginModal from '../components/LoginModal';
 import { GivingTrendsChart, GeoBarChart, GeoHeatMap, StatCard, InsightsSkeleton, fmtDollar } from '../components/InsightCharts';
@@ -29,6 +29,15 @@ function classifyTrend(yearTrend: { year: number; totalAmount: number }[]): { la
 function formatGrantAmount(amount: number | null | undefined): string {
   if (!amount || !Number.isFinite(amount)) return 'Amount not disclosed';
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(amount);
+}
+
+/** FM-IC-FND-002: normalize an org name for fuzzy cross-dataset matching */
+function normalizeOrgName(name: string | null | undefined): string {
+  if (!name) return '';
+  return name
+    .toLowerCase()
+    .replace(/\b(the|inc|incorporated|foundation|fund|trust|corporation|corp|llc|co|company|of|and|for)\b/g, '')
+    .replace(/[^a-z0-9]/g, '');
 }
 
 export default function FunderDetail() {
@@ -64,10 +73,14 @@ export default function FunderDetail() {
   const [peers, setPeers] = useState<PeerEntry[]>([]);
   const [peersLoading, setPeersLoading] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
-    trends: true, grantees: true, geo: false, recipients: false, purposes: false, peers: false,
+    trends: true, grantees: true, geo: false, recipients: false, purposes: false, peers: false, peerOrgs: true,
   });
 
   const [showAllRecipients, setShowAllRecipients] = useState(false);
+
+  // FM-IC-FND-002: peer organizations (similar to the user's mission) this funder has funded
+  const [peerFundedOrgs, setPeerFundedOrgs] = useState<KeyRecipient[]>([]);
+  const [peerFundedLoading, setPeerFundedLoading] = useState(false);
 
   const toggleSection = (key: string) =>
     setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }));
@@ -126,6 +139,27 @@ export default function FunderDetail() {
       .finally(() => { if (!cancelled) setPeersLoading(false); });
     return () => { cancelled = true; };
   }, [funder?.id]);
+
+  // FM-IC-FND-002: cross-reference the user's mission peers with this funder's
+  // 990 grantees to surface "peer organizations this funder has funded".
+  // Requires mission context (present when the user arrived from AI matching).
+  useEffect(() => {
+    const recipients = insights?.keyRecipients ?? [];
+    if (!mission || recipients.length === 0) { setPeerFundedOrgs([]); return; }
+    let cancelled = false;
+    setPeerFundedLoading(true);
+    suggestPeers(mission, funder?.state || undefined)
+      .then(res => {
+        if (cancelled) return;
+        const peerKeys = new Set((res.peers || []).map(normalizeOrgName).filter(Boolean));
+        if (peerKeys.size === 0) { setPeerFundedOrgs([]); return; }
+        const matched = recipients.filter(r => peerKeys.has(normalizeOrgName(r.granteeName)));
+        setPeerFundedOrgs(matched);
+      })
+      .catch(() => { if (!cancelled) setPeerFundedOrgs([]); })
+      .finally(() => { if (!cancelled) setPeerFundedLoading(false); });
+    return () => { cancelled = true; };
+  }, [mission, insights, funder?.state]);
 
   if (funderLoading) return (
     <>
@@ -573,6 +607,99 @@ export default function FunderDetail() {
                   <hr className="border-[#30363d] mb-6" />
                 </>
               )}
+            </>
+          )}
+
+          {/* FM-IC-FND-001: graceful state when 990 intelligence is sparse or unavailable */}
+          {!insightsLoading && !insightsError && (!insights || insights.grantHistory.yearTrend.length === 0) && (
+            <>
+              <div className="mb-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <Info size={16} className="text-blue-400" />
+                  <h2 className="text-lg font-semibold">990 Intelligence</h2>
+                  <GlossaryTooltip term="990" />
+                </div>
+                <div className="bg-[#0d1117] border border-[#30363d] rounded-xl px-5 py-4">
+                  <p className="text-sm text-gray-300 mb-3">
+                    Detailed IRS 990 grant history isn't available for this funder yet. This is common for smaller or newer foundations, donor-advised funds, and corporate giving programs that publish limited public filings.
+                  </p>
+                  <ul className="list-disc ml-5 text-xs text-gray-400 space-y-1 mb-3">
+                    <li>Use the contact details below to reach out directly.</li>
+                    <li>Check the funder's website for current giving guidelines.</li>
+                    <li>See &ldquo;Similar Funders&rdquo; below for comparable foundations with richer data.</li>
+                  </ul>
+                  {insights?.dataQuality && insights.dataQuality.totalRecords > 0 && (
+                    <p className="text-xs text-gray-500">
+                      {insights.dataQuality.totalRecords.toLocaleString()} partial record{insights.dataQuality.totalRecords === 1 ? '' : 's'} on file
+                      {typeof insights.dataQuality.completenessScore === 'number' && insights.dataQuality.completenessScore > 0
+                        ? ` (data completeness ${Math.round(insights.dataQuality.completenessScore <= 1 ? insights.dataQuality.completenessScore * 100 : insights.dataQuality.completenessScore)}%).`
+                        : '.'}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <hr className="border-[#30363d] mb-6" />
+            </>
+          )}
+
+          {/* FM-IC-FND-002: Peer organizations (like the user's) this funder has funded */}
+          {(peerFundedLoading || peerFundedOrgs.length > 0) && (
+            <>
+              <div className="mb-6">
+                <button
+                  onClick={() => toggleSection('peerOrgs')}
+                  aria-expanded={expandedSections.peerOrgs}
+                  className="flex items-center justify-between w-full mb-3 group"
+                >
+                  <div className="flex items-center gap-2">
+                    <Sparkles size={16} className="text-emerald-400" />
+                    <h2 className="text-lg font-semibold">Peer Organizations Funded</h2>
+                    {peerFundedOrgs.length > 0 && <span className="text-xs text-gray-500">({peerFundedOrgs.length})</span>}
+                  </div>
+                  {expandedSections.peerOrgs ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+                </button>
+                {expandedSections.peerOrgs && (
+                  peerFundedLoading ? (
+                    <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-12 bg-[#21262d] rounded-xl animate-pulse" />)}</div>
+                  ) : (
+                    <>
+                      <p className="text-sm text-gray-400 mb-3">
+                        {peerFundedOrgs.length} organization{peerFundedOrgs.length === 1 ? '' : 's'} similar to your mission {peerFundedOrgs.length === 1 ? 'has' : 'have'} received grants from this funder &mdash; a strong signal it supports work like yours.
+                      </p>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-gray-400 text-xs border-b border-[#30363d]">
+                              <th className="text-left py-2 pr-3">Organization</th>
+                              <th className="text-right py-2 px-2">Total Received</th>
+                              <th className="text-right py-2 px-2">Grants</th>
+                              <th className="text-right py-2 pl-2">Last</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {peerFundedOrgs.map((r, i) => (
+                              <tr
+                                key={`${r.granteeEin || i}-peer`}
+                                className="border-b border-[#30363d]/50 hover:bg-[#21262d]/30 cursor-pointer"
+                                onClick={() => r.granteeEin && navigate(`/recipient/${r.granteeEin}`)}
+                              >
+                                <td className="py-2 pr-3 max-w-[200px] truncate">
+                                  <span className={r.granteeEin ? 'text-blue-400 hover:underline' : 'text-gray-200'}>{r.granteeName}</span>
+                                </td>
+                                <td className="py-2 px-2 text-right text-gray-300 whitespace-nowrap">{fmtDollar(r.totalAmount)}</td>
+                                <td className="py-2 px-2 text-right text-gray-400">{r.grantCount}</td>
+                                <td className="py-2 pl-2 text-right text-gray-400">{r.lastYear}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        <p className="text-xs text-gray-500 mt-2">Peers identified from your mission via FunderMatch, cross-referenced against this funder's IRS 990 grantees.</p>
+                      </div>
+                    </>
+                  )
+                )}
+              </div>
+              <hr className="border-[#30363d] mb-6" />
             </>
           )}
 
