@@ -100,7 +100,6 @@ async function callClaude(
     'anthropic-version': '2023-06-01',
   };
   if (useWebSearch) {
-    headers['anthropic-beta'] = 'web-search-2025-03-05';
   }
 
   const body: Record<string, unknown> = {
@@ -110,7 +109,7 @@ async function callClaude(
     messages: [{ role: 'user', content: userMessage }],
   };
   if (useWebSearch) {
-    body.tools = [{ type: 'web_search', name: 'web_search', max_uses: 3 }];
+    body.tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }];
   }
 
   const resp = await fetch('https://api.anthropic.com/v1/messages', {
@@ -192,10 +191,11 @@ async function lookupWebsite(
       };
     }
   } catch (err) {
-    console.error('[backfill-websites] Web search fallback error for "' + name + '":', err);
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('[backfill-websites] Web search error for "' + name + '":', errMsg);
   }
 
-  return { url: null, confidence: 'none', source: 'claude' };
+  return { url: null, confidence: 'none', source: 'web-search-failed' };
 }
 
 function sleep(ms: number): Promise<void> {
