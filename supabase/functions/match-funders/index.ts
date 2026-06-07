@@ -2573,11 +2573,11 @@ Deno.serve(async (req) => {
   // and ProPublica IRS-990 lookups. Each call is expensive in both
   // latency and external-API credits, so an unbounded caller could
   // burn Anthropic/OpenAI credit budgets (Denial-of-Wallet, CWE-770).
-  // 10/min is comfortably above the SPA pattern (one /results render
+  // 30/min gives headroom for mission-tweaking and CSV import flows (one /results render
   // == one call) with headroom for a forceRefresh retry.
   const limited = await ipRateLimit(req, {
     namespace: 'match-funders',
-    limit: 10,
+    limit: 30,
     windowMs: 60_000,
     extraHeaders: headers,
   });
