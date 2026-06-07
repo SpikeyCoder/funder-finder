@@ -8,6 +8,7 @@
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') || '';
 
 import { safeFetch, SSRFBlockedError } from '../_shared/safe_fetch.ts';
+import { ipRateLimit } from '../_shared/rate_limit.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -40,6 +41,23 @@ function htmlToText(html: string): string {
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+
+  // FM-2026-06-07-01: per-IP rate limit for LLM-backed endpoint.
+  // This endpoint fans out to (a) safeFetch against a user-supplied
+  // grant URL and (b) Claude Haiku. The SSRF guard in safe_fetch.ts
+  // already prevents internal targets; this rate limit caps the
+  // cost of high-volume legitimate-looking calls (Denial-of-Wallet,
+  // CWE-770). 10/min is comfortably above the check-deadlines cron
+  // pattern (the cron passes a service-role token; the limiter
+  // never sees cron traffic because the cron runs inside the same
+  // Edge isolate without an IP header).
+  const limited = await ipRateLimit(req, {
+    namespace: 'fetch-grant-deadline',
+    limit: 10,
+    windowMs: 60_000,
+    extraHeaders: CORS,
+  });
+  if (!limited.allow) return limited.response!;
 
   if (!ANTHROPIC_API_KEY) {
     return json({ error: 'ANTHROPIC_API_KEY not configured' }, 500);
