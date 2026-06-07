@@ -391,11 +391,43 @@ html.light-mode [class*="bg-[#388bfd]"][class*="text-white"] {
 }
 
 /* 3. Hover / selected highlight contrast ---------------------- */
-/*    Avoid white-on-white when a `text-white` element gets a light hover bg. */
+/*    Dark-mode hover backgrounds (#161b22, #21262d, #0d1117, #30363d) become
+      unreadable in light mode. Override them all to a light gray with dark text. */
+html.light-mode [class*="hover:bg-[#161b22"]:hover,
+html.light-mode [class*="hover:bg-[#21262d"]:hover,
+html.light-mode [class*="hover:bg-[#0d1117"]:hover,
+html.light-mode [class*="hover:bg-[#30363d"]:hover,
+html.light-mode [class*="hover:bg-[#1a202e"]:hover {
+  background-color: #f1f5f9 !important; /* slate-100 */
+}
+
+html.light-mode [class*="hover:bg-[#161b22"]:hover,
+html.light-mode [class*="hover:bg-[#21262d"]:hover,
+html.light-mode [class*="hover:bg-[#0d1117"]:hover,
+html.light-mode [class*="hover:bg-[#30363d"]:hover,
+html.light-mode [class*="hover:bg-[#1a202e"]:hover,
 html.light-mode [class*="hover:bg-[#"]:hover [class*="text-white"],
+html.light-mode [class*="hover:bg-[#"]:hover [class*="text-gray-3"],
+html.light-mode [class*="hover:bg-[#"]:hover [class*="text-gray-4"],
 html.light-mode [class*="hover:bg-gray-1"]:hover,
 html.light-mode [class*="hover:bg-gray-2"]:hover {
+  color: #0f172a !important; /* slate-900 */
+}
+
+/* Ensure child elements inside hovered rows also get dark text */
+html.light-mode [class*="hover:bg-[#161b22"]:hover *,
+html.light-mode [class*="hover:bg-[#21262d"]:hover *,
+html.light-mode [class*="hover:bg-[#0d1117"]:hover *,
+html.light-mode [class*="hover:bg-[#30363d"]:hover * {
   color: #0f172a !important;
+}
+
+/* Preserve colored badges/pills inside hovered rows */
+html.light-mode [class*="hover:bg-"]:hover [class*="bg-green-"],
+html.light-mode [class*="hover:bg-"]:hover [class*="bg-blue-"],
+html.light-mode [class*="hover:bg-"]:hover [class*="bg-emerald-"],
+html.light-mode [class*="hover:bg-"]:hover [class*="rounded-full"][class*="text-"] {
+  color: revert !important;
 }
 
 /* Selected row / highlighted item */
