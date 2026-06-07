@@ -193,9 +193,10 @@ async function lookupWebsite(
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     console.error('[backfill-websites] Web search error for "' + name + '":', errMsg);
+    return { url: null, confidence: 'none', source: ('ws-err: ' + errMsg.slice(0, 80)) as any };
   }
 
-  return { url: null, confidence: 'none', source: 'web-search-failed' };
+  return { url: null, confidence: 'none', source: 'web-search-no-result' };
 }
 
 function sleep(ms: number): Promise<void> {
@@ -206,7 +207,7 @@ function sleep(ms: number): Promise<void> {
 
 function buildQuery(priority: string, batchSize: number): string {
   // Base filters: website is null, name is not null
-  const base = 'website=is.null&name=not.is.null&select=ein,name,city,state';
+  const base = 'website=is.null&name=not.is.null&website_last_checked=is.null&select=foundation_ein,name,city,state';
 
   switch (priority) {
     case 'tracked':
@@ -227,7 +228,7 @@ function buildQuery(priority: string, batchSize: number): string {
 /* ─── Main handler ─── */
 
 interface Funder {
-  ein: string;
+  foundation_ein: string;
   name: string;
   city: string | null;
   state: string | null;
@@ -291,7 +292,7 @@ Deno.serve(async (req) => {
     let skipped = 0;
     let errors  = 0;
     const results: Array<{
-      ein: string;
+      foundation_ein: string;
       name: string;
       url: string | null;
       confidence: string;
@@ -306,7 +307,7 @@ Deno.serve(async (req) => {
         );
 
         results.push({
-          ein: funder.ein,
+          foundation_ein: funder.foundation_ein,
           name: funder.name,
           url: lookup.url,
           confidence: lookup.confidence,
@@ -318,16 +319,18 @@ Deno.serve(async (req) => {
         ) {
           await restPatch(
             'funders',
-            'ein=eq.' + encodeURIComponent(funder.ein),
+            'foundation_ein=eq.' + encodeURIComponent(funder.foundation_ein),
             { website: lookup.url },
           );
           updated++;
         } else {
           skipped++;
+          try { await restPatch('funders', 'foundation_ein=eq.' + encodeURIComponent(funder.foundation_ein), { website_last_checked: new Date().toISOString() }); } catch {}
         }
       } catch (e) {
         errors++;
         console.error('[backfill-websites] Error processing ' + funder.name + ':', e);
+        try { await restPatch('funders', 'foundation_ein=eq.' + encodeURIComponent(funder.foundation_ein), { website_last_checked: new Date().toISOString() }); } catch {}
       }
 
       // Rate-limit delay between Anthropic calls
