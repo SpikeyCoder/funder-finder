@@ -5,10 +5,13 @@ import GlossaryTooltip from '../components/GlossaryTooltip';
 import { Funder, FunderInsights, PeerEntry, KeyRecipient } from '../types';
 import { formatGrantRange, formatTotalGiving, fetchFunderInsights, fetchPeers, fetchFunderByEin, suggestPeers } from '../utils/matching';
 import { useAuth } from '../contexts/AuthContext';
+import { getEdgeFunctionHeaders } from '../lib/supabase';
 import LoginModal from '../components/LoginModal';
 import { GivingTrendsChart, GeoBarChart, GeoHeatMap, StatCard, InsightsSkeleton, fmtDollar } from '../components/InsightCharts';
 import Footer from '../components/Footer';
 import NavBar from '../components/NavBar';
+
+const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 
 /** Classify giving trend as increasing / stable / decreasing (FEAT-006) */
 function classifyTrend(yearTrend: { year: number; totalAmount: number }[]): { label: string; color: string } | null {
@@ -127,6 +130,34 @@ export default function FunderDetail() {
       .finally(() => { if (!cancelled) setInsightsLoading(false); });
     return () => { cancelled = true; };
   }, [funder?.id]);
+
+  // On-demand website lookup: if funder has no website, trigger the lookup edge function
+  useEffect(() => {
+    if (!funder) return;
+    if (funder.website) return; // already has a website
+    const ein = funder.foundation_ein;
+    if (!ein) return; // no EIN to look up
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const headers = await getEdgeFunctionHeaders();
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/lookup-funder-website`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ funder_ein: ein }),
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && data.url) {
+          setFunder(prev => prev ? { ...prev, website: data.url } : prev);
+        }
+      } catch {
+        // Non-critical — silently ignore errors
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [funder?.id, funder?.website, funder?.foundation_ein]);
 
   // Fetch similar funders (peers)
   useEffect(() => {
@@ -386,7 +417,7 @@ export default function FunderDetail() {
             </>
           )}
 
-          {/* ── 990 Intelligence Sections ── */}
+          {/* -- 990 Intelligence Sections -- */}
           {insightsLoading && <InsightsSkeleton />}
           {insightsError && (
             <div className="mb-6 text-sm text-gray-500 italic">
@@ -762,7 +793,7 @@ export default function FunderDetail() {
             </>
           )}
 
-          {/* Recommended Next Step — LinkedIn warm intro */}
+          {/* Recommended Next Step -- LinkedIn warm intro */}
           <>
             <div className="mb-6">
               <h2 className="text-lg font-semibold mb-3">Recommended Next Step</h2>
@@ -871,7 +902,7 @@ export default function FunderDetail() {
         </div>
       </main>
 
-      {/* Login modal — shown when user explicitly clicks login */}
+      {/* Login modal -- shown when user explicitly clicks login */}
       {showLoginModal && (
         <LoginModal
           pendingFunder={funder}

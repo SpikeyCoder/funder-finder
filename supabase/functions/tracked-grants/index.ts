@@ -77,6 +77,40 @@ function fireAndForgetDeadlineFetch(
   })();
 }
 
+/**
+ * Fire-and-forget: trigger on-demand website lookup for a funder by EIN.
+ * Calls the lookup-funder-website edge function internally.
+ * Non-blocking — errors are logged but never surface to the caller.
+ */
+function fireAndForgetWebsiteLookup(funderEin: string): void {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (!supabaseUrl || !serviceKey) return;
+
+  const url = `${supabaseUrl}/functions/v1/lookup-funder-website`;
+  fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+    },
+    body: JSON.stringify({ funder_ein: funderEin }),
+  })
+    .then((res) => {
+      if (!res.ok) {
+        res.text().then((t) =>
+          console.error('[tracked-grants] website lookup non-fatal error:', res.status, t.slice(0, 200)),
+        );
+      } else {
+        console.log('[tracked-grants] website lookup triggered for EIN:', funderEin);
+      }
+    })
+    .catch((err) => {
+      console.error('[tracked-grants] website lookup fire-and-forget error:', err);
+    });
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: CORS_HEADERS(req) });
@@ -258,6 +292,15 @@ Deno.serve(async (req: Request) => {
           }
         }
 
+        // Fire-and-forget: trigger website lookups for imported funders
+        const einsForWebsiteLookup = new Set<string>();
+        for (const grant of imported) {
+          if (grant.funder_ein) einsForWebsiteLookup.add(grant.funder_ein);
+        }
+        for (const ein of einsForWebsiteLookup) {
+          fireAndForgetWebsiteLookup(ein);
+        }
+
         return jsonResponse(req, { imported: imported.length, errors, total: body.rows.length });
       }
 
@@ -301,6 +344,11 @@ Deno.serve(async (req: Request) => {
       // Fire-and-forget: auto-fetch deadline from funder's website
       if (grant && funder_ein && !deadline) {
         fireAndForgetDeadlineFetch(supabase, grant as any);
+      }
+
+      // Fire-and-forget: trigger website lookup for the newly tracked funder
+      if (funder_ein) {
+        fireAndForgetWebsiteLookup(funder_ein);
       }
 
       return jsonResponse(req, grant, 201);
