@@ -2,6 +2,7 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useState, useRef, useEffect } from 'react';
 import { Menu, X, ChevronDown } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import NotificationBell from './NotificationBell';
 export default function NavBar() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -49,6 +50,7 @@ export default function NavBar() {
                 <Link to="/dashboard" className={linkClass('/dashboard')}>Dashboard</Link>
                 <Link to="/portfolio" className={linkClass('/portfolio')}>Portfolio</Link>
                 <Link to="/tasks" className={linkClass('/tasks')}>Tasks</Link>
+                <NotificationBell />
                 <div ref={accountRef} className="relative ml-2">
                   <button onClick={() => setAccountOpen(!accountOpen)} aria-expanded={accountOpen} aria-haspopup="true" className="flex items-center gap-1.5 px-4 py-2 min-h-[44px] text-sm font-medium text-gray-400 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors">
                     <span className="max-w-[140px] truncate">{user.email?.split('@')[0]}</span>
@@ -69,9 +71,12 @@ export default function NavBar() {
               <Link to="/login" className="px-4 py-2 min-h-[44px] flex items-center text-sm font-medium text-gray-400 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors">Sign In</Link>
             ))}
           </div>
-          <button onClick={() => setMobileOpen(!mobileOpen)} className="md:hidden text-gray-400 hover:text-white p-2 -mr-2 transition-colors" aria-label="Toggle menu" aria-expanded={mobileOpen}>
-            {mobileOpen ? <X size={22} /> : <Menu size={22} />}
-          </button>
+          <div className="md:hidden flex items-center gap-1">
+            {!loading && user && <NotificationBell />}
+            <button onClick={() => setMobileOpen(!mobileOpen)} className="text-gray-400 hover:text-white p-2 -mr-2 transition-colors" aria-label="Toggle menu" aria-expanded={mobileOpen}>
+              {mobileOpen ? <X size={22} /> : <Menu size={22} />}
+            </button>
+          </div>
         </div>
         {mobileOpen && (
           <div className="md:hidden border-t border-[#1b2130] bg-[#0d1117] px-6 pb-4 pt-2 space-y-1">
