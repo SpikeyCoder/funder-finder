@@ -155,14 +155,16 @@ async function lookupWebsite(
   name: string,
   city: string | null,
   state: string | null,
+  ein: string | null = null,
 ): Promise<LookupResult> {
   const locationParts = [city, state].filter(Boolean).join(', ');
   const locationHint = locationParts ? ' (' + locationParts + ')' : '';
+  const einHint = ein ? ' (EIN: ' + formatEin(ein) + ')' : '';
 
   // Step 1: Try Claude from training knowledge (fast, cheap)
   const step1 = await callClaude(
     SYSTEM_PROMPT,
-    'What is the official website for: ' + name + locationHint,
+    'What is the official website for: ' + name + locationHint + einHint,
     false,
   );
 
@@ -175,7 +177,7 @@ async function lookupWebsite(
   try {
     const step2 = await callClaude(
       WEB_SEARCH_PROMPT,
-      'Find the official website for this nonprofit foundation: ' + name + locationHint,
+      'Find the official website for this nonprofit foundation: ' + name + locationHint + einHint,
       true,
     );
 
@@ -266,7 +268,7 @@ Deno.serve(async (req) => {
 
     // Run the two-step Claude lookup
     console.log('[lookup-funder-website] Looking up website for:', funder.name, `(EIN: ${funderEin})`);
-    const result = await lookupWebsite(funder.name, funder.city, funder.state);
+    const result = await lookupWebsite(funder.name, funder.city, funder.state, ein);
 
     // Write results back to the funders table
     const now = new Date().toISOString();
