@@ -197,6 +197,18 @@ html.light-mode .demo-dark-card .text-amber-400 { color: #fbbf24; }
 html.light-mode .demo-dark-card .text-red-300   { color: #fca5a5; }
 html.light-mode .demo-dark-card .text-red-400   { color: #f87171; }
 
+/* FM-LM (2026-06-06 daily audit): the demo browser-window mockup uses
+   text-white (e.g. the inline H2 "Find Funders Aligned to Your Mission"
+   inside the gradient bg-gradient-to-b from-[#020916] ...). The generic
+   light-mode .text-white remap turns that text to #1f2328, producing
+   dark-on-dark text on the mockup's hardcoded dark gradient. Restore
+   white text inside .demo-dark-card so the mockup stays readable in
+   light mode. Targets the H2 contrast fail (1.20:1 -> 21:1 on dark
+   gradient). */
+html.light-mode .demo-dark-card .text-white {
+  color: #ffffff;
+}
+
 /* FM-LM-005: Preserve dark surfaces inside .demo-dark-card in light mode.
    The generic light-mode bg remaps (lines 50-68) turn dark Tailwind bg-[]
    utilities white/light, but the DemoVideo mockup must stay dark so its
