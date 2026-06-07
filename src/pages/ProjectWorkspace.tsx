@@ -194,6 +194,7 @@ export default function ProjectWorkspace() {
   const [csvMapping, setCsvMapping] = useState<Record<string, string>>({});
   const [csvStep, setCsvStep] = useState(1);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const statusUpdateInFlight = useRef(false);
 
   // Task creation
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -274,7 +275,7 @@ export default function ProjectWorkspace() {
 
   useEffect(() => {
     if (!loading && user && id) loadProjectData();
-  }, [id, user, loading]);
+  }, [id, user?.id, loading]);
 
   const populateEditFields = (p: Project) => {
     setEditName(p.name);
@@ -336,7 +337,7 @@ export default function ProjectWorkspace() {
       const grantsRes = await fetch(`${TRACKED_GRANTS_URL}?project_id=${id}`, { headers });
       if (grantsRes.ok) {
         const data = await grantsRes.json();
-        setTrackedGrants(data.grants || []);
+        if (!statusUpdateInFlight.current) setTrackedGrants(data.grants || []);
       }
     } catch (err) {
       console.error('Error loading tracker:', err);
@@ -510,9 +511,14 @@ export default function ProjectWorkspace() {
 
   // Update grant status
   const handleUpdateGrantStatus = async (grantId: string, statusId: string) => {
-    const previous = trackedGrants;
+    // Capture the previous status_id for this grant so we can revert on failure
+    // without relying on a stale snapshot of the entire array.
+    const previousStatusId = trackedGrants.find(g => g.id === grantId)?.status_id;
+    const previousPipelineStatuses = trackedGrants.find(g => g.id === grantId)?.pipeline_statuses;
     // Optimistic update
-    setTrackedGrants(prev => prev.map(g => g.id === grantId ? { ...g, status_id: statusId, pipeline_statuses: pipelineStatuses.find(s => s.id === statusId) ? { name: pipelineStatuses.find(s => s.id === statusId)!.name, slug: pipelineStatuses.find(s => s.id === statusId)!.slug, color: pipelineStatuses.find(s => s.id === statusId)!.color, is_terminal: pipelineStatuses.find(s => s.id === statusId)!.is_terminal } : g.pipeline_statuses } : g));
+    const newPipelineStatus = pipelineStatuses.find(s => s.id === statusId);
+    setTrackedGrants(prev => prev.map(g => g.id === grantId ? { ...g, status_id: statusId, pipeline_statuses: newPipelineStatus ? { name: newPipelineStatus.name, slug: newPipelineStatus.slug, color: newPipelineStatus.color, is_terminal: newPipelineStatus.is_terminal } : g.pipeline_statuses } : g));
+    statusUpdateInFlight.current = true;
     try {
       const headers = await getEdgeFunctionHeaders();
       const res = await fetch(TRACKED_GRANTS_URL, {
@@ -523,13 +529,15 @@ export default function ProjectWorkspace() {
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
         setError(errBody.error || `Failed to update status (HTTP ${res.status})`);
-        // Revert optimistic update
-        setTrackedGrants(previous);
+        // Revert optimistic update using functional updater to avoid stale closure
+        setTrackedGrants(prev => prev.map(g => g.id === grantId ? { ...g, status_id: previousStatusId ?? g.status_id, pipeline_statuses: previousPipelineStatuses ?? g.pipeline_statuses } : g));
       }
     } catch (err) {
       console.error('Error updating grant status:', err);
       setError(err instanceof Error ? err.message : 'Failed to update grant status');
-      setTrackedGrants(previous);
+      setTrackedGrants(prev => prev.map(g => g.id === grantId ? { ...g, status_id: previousStatusId ?? g.status_id, pipeline_statuses: previousPipelineStatuses ?? g.pipeline_statuses } : g));
+    } finally {
+      statusUpdateInFlight.current = false;
     }
   };
 
