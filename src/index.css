@@ -286,6 +286,72 @@ html.light-mode .bg-blue-900\/40.text-blue-400 {
   color: #60a5fa; /* blue-400 — restore original on dark badge */
 }
 
+
+/* 4. Static dark backgrounds ---------------------------------- */
+/*    Page backgrounds, cards, panels, table headers, inputs, and other
+      non-hover elements that use hardcoded dark-mode hex colors.
+      Remap to light equivalents so text remains readable. */
+
+/* Page-level backgrounds */
+html.light-mode .bg-\[\#0d1117\] {
+  background-color: #ffffff !important;
+}
+
+/* Card / panel / table-header backgrounds */
+html.light-mode .bg-\[\#161b22\] {
+  background-color: #f6f8fa !important;
+}
+
+/* Secondary surface / input backgrounds */
+html.light-mode .bg-\[\#21262d\] {
+  background-color: #f1f5f9 !important;
+}
+
+/* Tertiary surface / borders-as-bg */
+html.light-mode .bg-\[\#30363d\] {
+  background-color: #e2e8f0 !important;
+}
+
+/* Ensure borders also lighten */
+html.light-mode .border-\[\#30363d\] {
+  border-color: #d1d5db !important;
+}
+
+html.light-mode .border-\[\#30363d\]\/50 {
+  border-color: rgba(209, 213, 219, 0.5) !important;
+}
+
+/* Text inside remapped dark cards should be dark */
+html.light-mode .bg-\[\#161b22\] .text-white,
+html.light-mode .bg-\[\#161b22\] .text-gray-100,
+html.light-mode .bg-\[\#161b22\] .text-gray-200 {
+  color: #1f2937 !important;
+}
+
+html.light-mode .bg-\[\#161b22\] .text-gray-300,
+html.light-mode .bg-\[\#161b22\] .text-gray-400 {
+  color: #4b5563 !important;
+}
+
+html.light-mode .bg-\[\#161b22\] .text-gray-500 {
+  color: #6b7280 !important;
+}
+
+/* Input fields inside light cards */
+html.light-mode .bg-\[\#0d1117\].border-\[\#30363d\],
+html.light-mode input.bg-\[\#0d1117\],
+html.light-mode textarea.bg-\[\#0d1117\],
+html.light-mode select.bg-\[\#0d1117\] {
+  background-color: #ffffff !important;
+  color: #1f2937 !important;
+  border-color: #d1d5db !important;
+}
+
+/* Placeholder text in inputs */
+html.light-mode .placeholder-gray-500::placeholder {
+  color: #9ca3af !important;
+}
+
 @keyframes pageFadeIn {
   from {
     opacity: 0;
@@ -391,11 +457,43 @@ html.light-mode [class*="bg-[#388bfd]"][class*="text-white"] {
 }
 
 /* 3. Hover / selected highlight contrast ---------------------- */
-/*    Avoid white-on-white when a `text-white` element gets a light hover bg. */
+/*    Dark-mode hover backgrounds (#161b22, #21262d, #0d1117, #30363d) become
+      unreadable in light mode. Override them all to a light gray with dark text. */
+html.light-mode [class*="hover:bg-[#161b22"]:hover,
+html.light-mode [class*="hover:bg-[#21262d"]:hover,
+html.light-mode [class*="hover:bg-[#0d1117"]:hover,
+html.light-mode [class*="hover:bg-[#30363d"]:hover,
+html.light-mode [class*="hover:bg-[#1a202e"]:hover {
+  background-color: #f1f5f9 !important; /* slate-100 */
+}
+
+html.light-mode [class*="hover:bg-[#161b22"]:hover,
+html.light-mode [class*="hover:bg-[#21262d"]:hover,
+html.light-mode [class*="hover:bg-[#0d1117"]:hover,
+html.light-mode [class*="hover:bg-[#30363d"]:hover,
+html.light-mode [class*="hover:bg-[#1a202e"]:hover,
 html.light-mode [class*="hover:bg-[#"]:hover [class*="text-white"],
+html.light-mode [class*="hover:bg-[#"]:hover [class*="text-gray-3"],
+html.light-mode [class*="hover:bg-[#"]:hover [class*="text-gray-4"],
 html.light-mode [class*="hover:bg-gray-1"]:hover,
 html.light-mode [class*="hover:bg-gray-2"]:hover {
+  color: #0f172a !important; /* slate-900 */
+}
+
+/* Ensure child elements inside hovered rows also get dark text */
+html.light-mode [class*="hover:bg-[#161b22"]:hover *,
+html.light-mode [class*="hover:bg-[#21262d"]:hover *,
+html.light-mode [class*="hover:bg-[#0d1117"]:hover *,
+html.light-mode [class*="hover:bg-[#30363d"]:hover * {
   color: #0f172a !important;
+}
+
+/* Preserve colored badges/pills inside hovered rows */
+html.light-mode [class*="hover:bg-"]:hover [class*="bg-green-"],
+html.light-mode [class*="hover:bg-"]:hover [class*="bg-blue-"],
+html.light-mode [class*="hover:bg-"]:hover [class*="bg-emerald-"],
+html.light-mode [class*="hover:bg-"]:hover [class*="rounded-full"][class*="text-"] {
+  color: revert !important;
 }
 
 /* Selected row / highlighted item */
