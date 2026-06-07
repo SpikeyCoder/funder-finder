@@ -20,6 +20,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { ipRateLimit } from '../_shared/rate_limit.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -316,6 +317,18 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers });
   }
+
+  // FM-2026-06-07-01: per-IP rate limit for LLM-backed endpoint.
+  // Bounds Anthropic credit burn (Denial-of-Wallet / CWE-770) by a
+  // misbehaving or malicious authenticated client. 20/min is well
+  // above any plausible SPA usage (one call per "Find peers" tap).
+  const limited = await ipRateLimit(req, {
+    namespace: 'suggest-peers',
+    limit: 20,
+    windowMs: 60_000,
+    extraHeaders: headers,
+  });
+  if (!limited.allow) return limited.response!;
 
   try {
     const startTime = Date.now();

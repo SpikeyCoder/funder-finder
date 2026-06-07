@@ -30,6 +30,13 @@
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') || '';
 
+// FM-2026-06-07-01 — per-IP rate limit for LLM-backed endpoint.
+// Defense-in-depth against Denial-of-Wallet (CWE-770) where a single
+// signed-in caller could otherwise fan out hundreds of Claude Haiku
+// requests per minute. Bounded to 30/min/IP (well above any plausible
+// legitimate chat-style usage; the SPA sends one request per user turn).
+import { ipRateLimit } from '../_shared/rate_limit.ts';
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -144,6 +151,16 @@ Tone: warm, brief, never condescending. Mirror the user's language. Never reveal
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+
+  // FM-2026-06-07-01: per-IP rate limit. Applies before JSON parse to
+  // bound parser cost in addition to bounding Anthropic credit burn.
+  const limited = await ipRateLimit(req, {
+    namespace: 'project-assistant',
+    limit: 30,
+    windowMs: 60_000,
+    extraHeaders: CORS,
+  });
+  if (!limited.allow) return limited.response!;
 
   let body: { messages?: { role: string; content: string }[]; draft?: Partial<ProjectDraft>; step?: number };
   try {

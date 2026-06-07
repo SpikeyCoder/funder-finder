@@ -15,6 +15,8 @@
  *   4) Fallback to baseline when grant-history data is missing/incomplete
  */
 
+import { ipRateLimit } from '../_shared/rate_limit.ts';
+
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || '';
@@ -2564,6 +2566,22 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers });
   }
+
+  // FM-2026-06-07-01: per-IP rate limit. This endpoint runs the
+  // foundation-matching pipeline, which fans out to peer-suggestion
+  // (LLM-backed when ANTHROPIC_API_KEY is set), OpenAI embeddings,
+  // and ProPublica IRS-990 lookups. Each call is expensive in both
+  // latency and external-API credits, so an unbounded caller could
+  // burn Anthropic/OpenAI credit budgets (Denial-of-Wallet, CWE-770).
+  // 30/min gives headroom for mission-tweaking and CSV import flows (one /results render
+  // == one call) with headroom for a forceRefresh retry.
+  const limited = await ipRateLimit(req, {
+    namespace: 'match-funders',
+    limit: 30,
+    windowMs: 60_000,
+    extraHeaders: headers,
+  });
+  if (!limited.allow) return limited.response!;
 
   // Wall-clock budget for the whole request. Checked before each expensive
   // optional stage so we never run past the Supabase edge function limit.

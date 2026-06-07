@@ -1,5 +1,6 @@
 import { corsHeaders, preflightResponse } from '../_shared/cors.ts';
 import { sanitiseError } from '../_shared/errors.ts';
+import { ipRateLimit } from '../_shared/rate_limit.ts';
 
 /**
  * backfill-funder-websites — Supabase Edge Function
@@ -237,6 +238,23 @@ Deno.serve(async (req) => {
   const headers = corsHeaders(req.headers.get('origin'));
 
   if (req.method === 'OPTIONS') return preflightResponse(req);
+
+  // FM-2026-06-07-01: per-IP rate limit. This admin/cron endpoint
+  // fans out batch_size (up to 50) Claude Haiku calls per request.
+  // Even though batch_size is server-clamped, a single unbounded
+  // caller could trivially run thousands of LLM lookups in a minute
+  // (Denial-of-Wallet, CWE-770). 5/min is well above the legitimate
+  // operator-driven cadence (a few runs per hour is the design point)
+  // and zero impact on the cron pattern, which runs inside the same
+  // isolate without an IP header (limiter fails open on no IP).
+  const limited = await ipRateLimit(req, {
+    namespace: 'backfill-funder-websites',
+    limit: 5,
+    windowMs: 60_000,
+    extraHeaders: headers,
+  });
+  if (!limited.allow) return limited.response!;
+
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
       status: 405,
