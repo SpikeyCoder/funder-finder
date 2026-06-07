@@ -87,7 +87,7 @@ const FALLBACK = [
   },
   {
     reply: 'Last few details — when does the program run, and when do you need the funding by?',
-    chips: ['Sept 2026 → Feb 2027', 'Rolling / ongoing', 'I have a specific deadline'],
+    chips: [(() => { const d = new Date(); const s = d.toLocaleString('en-US', { month: 'short', year: 'numeric' }); d.setMonth(d.getMonth() + 6); const e = d.toLocaleString('en-US', { month: 'short', year: 'numeric' }); return s + ' → ' + e; })(), 'Rolling / ongoing', 'I have a specific deadline'],
   },
   {
     reply: 'All set. Review the draft on the left — tap any field to edit it in chat, or hit Create when you’re ready.',
@@ -144,6 +144,8 @@ Output ONLY a single JSON object. No prose, no markdown fences. Schema:
   "next_step": 0|1|2|3|4,
   "ready_to_create": boolean
 }
+
+Today's date is ${new Date().toISOString().split('T')[0]}. When suggesting timelines, always use dates in the future relative to today. Never suggest dates that have already passed.
 
 Tone: warm, brief, never condescending. Mirror the user's language. Never reveal that you are following a step list.`;
 }
