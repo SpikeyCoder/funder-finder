@@ -567,3 +567,47 @@ html.light-mode .oauth-provider-btn {
 html.light-mode .text-green-400 {
   color: #166534; /* ~6:1 on white */
 }
+
+/* ============================================================
+   FM-LM (2026-06-07 daily-usability-audit): force-apply OAuth
+   button and form-control border overrides so they win against
+   Tailwind utility class layering.
+   ============================================================
+   The earlier `html.light-mode .oauth-provider-btn` and
+   `html.light-mode <element>.border-[#30363d]` overrides matched
+   at specificity (0,2,1) tied with the generic Tailwind utility,
+   but in the deployed CSS bundle the utility appears AFTER the
+   override (or inside @layer utilities) and won the cascade.
+   Live audit on 2026-06-07 confirmed OAuth provider buttons and
+   input fields rendered with border-color #d1d5db (~1.48:1 on
+   white) instead of the intended #57606a / #8c959f (~3.6:1).
+   Adding !important guarantees the WCAG 1.4.11 minimum is met.
+*/
+html.light-mode .oauth-provider-btn { border-color: #57606a !important; }
+html.light-mode input.border-\[\#30363d\],
+html.light-mode select.border-\[\#30363d\],
+html.light-mode textarea.border-\[\#30363d\] {
+  border-color: #8c959f !important; /* ~3.2:1 on white */
+}
+
+/* FM-LM (2026-06-07): make the Skip-to-main-content link reliably
+   visible-on-focus and large enough to satisfy WCAG 2.5.5 minimum
+   touch-target size (44x44 CSS pixels). Previously the focus-only
+   styling left it at ~1x1 reported size when not focused, which is
+   correct visually but reads as a touch-target failure in audits.
+   The :focus rule already places it at the top-left; ensure the
+   visible state is comfortably sized. */
+html .sr-only.focus\:not-sr-only:focus { min-width: 44px; min-height: 44px; }
+
+/* FM-LM (2026-06-07): increase minimum touch-target height for small
+   action buttons inside saved-funder and project cards (Save, Saved,
+   Write Grant, Notes, Remove) which audit measured at 26-27px tall.
+   WCAG 2.5.5 (AAA) recommends 44x44; AA "Target Size (Minimum)" is
+   24x24, so they pass AA — but bumping to 32 with extra padding lifts
+   real-world tap reliability without enlarging the layout. */
+.saved-funder-action,
+button[data-action="save"],
+button[data-action="saved"],
+button[data-action="write-grant"],
+button[data-action="notes"],
+button[data-action="remove"] { min-height: 32px; }
