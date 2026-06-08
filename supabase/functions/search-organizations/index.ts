@@ -3,34 +3,23 @@
  *
  * Thin wrapper around the `search_organizations` PostgreSQL RPC function.
  * Accepts { query, limit? } and returns matching funders/recipients.
+ *
+ * FM-2026-06-08-01 (pen-test): migrated from a per-function ALLOWED_ORIGINS
+ * + inline corsHeaders() implementation to the shared
+ * `_shared/cors.ts` helper so the CORS allowlist has a single source of
+ * truth alongside the other 32 edge functions. Closes finding
+ * FM-2026-06-06-03 from the 2026-06-06 scheduled pen-test.
  */
+
+import { corsHeaders, preflightResponse } from "../_shared/cors.ts";
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 
-const ALLOWED_ORIGINS = new Set([
-  'https://fundermatch.org',
-  'https://www.fundermatch.org',
-  'http://localhost:5173',
-]);
-
-function corsHeaders(requestOrigin: string | null): Record<string, string> {
-  const origin =
-    requestOrigin && ALLOWED_ORIGINS.has(requestOrigin)
-      ? requestOrigin
-      : 'https://fundermatch.org';
-  return {
-    'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Headers':
-      'authorization, x-client-info, apikey, content-type',
-    Vary: 'Origin',
-  };
-}
-
 Deno.serve(async (req) => {
   const headers = corsHeaders(req.headers.get('origin'));
 
-  if (req.method === 'OPTIONS') return new Response('ok', { headers });
+  if (req.method === 'OPTIONS') return preflightResponse(req);
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
       status: 405,
