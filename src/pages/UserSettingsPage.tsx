@@ -3,7 +3,7 @@ import { Save, AlertCircle, CheckCircle, Loader, Building2, Bell, Calendar, Copy
 import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import NavBar from '../components/NavBar';
-import type { NotificationPreferences, CalendarFeed } from '../types';
+import type { NotificationPreferences, TeamNotificationPreferences, CalendarFeed } from '../types';
 
 const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const CALENDAR_FEED_URL = `${SUPABASE_URL}/functions/v1/calendar-feed`;
@@ -111,6 +111,14 @@ function UserSettingsContent() {
   const [digestDay, setDigestDay] = useState(1);
   const [realtimeMatches, setRealtimeMatches] = useState(true);
   const [emailEnabled, setEmailEnabled] = useState(true);
+  // FM-IC-NTF-002: team/activity notification toggles (persisted as jsonb)
+  const [teamNotifications, setTeamNotifications] = useState<TeamNotificationPreferences>({
+    task_assigned: true,
+    status_changed: true,
+    compliance_deadline: true,
+    team_member_joined: true,
+    deadline_changed: true,
+  });
 
   // Calendar feeds state
   const [calendarFeeds, setCalendarFeeds] = useState<CalendarFeed[]>([]);
@@ -199,6 +207,9 @@ function UserSettingsContent() {
           setDigestDay(data.digest_day ?? 1);
           setRealtimeMatches(data.realtime_matches ?? true);
           setEmailEnabled(data.email_enabled ?? true);
+          if (data.team_notifications && typeof data.team_notifications === 'object') {
+            setTeamNotifications(prev => ({ ...prev, ...data.team_notifications }));
+          }
         }
       } catch (err) {
         console.error('Error loading notification preferences:', err);
@@ -347,6 +358,7 @@ function UserSettingsContent() {
             digest_day: digestDay,
             realtime_matches: realtimeMatches,
             email_enabled: emailEnabled,
+            team_notifications: teamNotifications,
           },
           { onConflict: 'user_id' }
         );
@@ -851,15 +863,17 @@ function UserSettingsContent() {
                     <h2 className="text-lg font-semibold text-white mb-1">Team notifications</h2>
                     <p className="text-sm text-gray-400 mb-4">Stay informed about team activity and collaboration events</p>
                     <div className="space-y-3">
-                      {[
+                      {([
                         { id: 'task_assigned', label: 'Task assigned to me', desc: 'When someone assigns a task to you' },
                         { id: 'status_changed', label: 'Grant status changed', desc: 'When a tracked grant changes pipeline status' },
                         { id: 'compliance_deadline', label: 'Compliance deadline approaching', desc: 'Reminders for upcoming compliance requirements' },
                         { id: 'team_member_joined', label: 'Team member joined', desc: 'When a new member accepts an invitation' },
                         { id: 'deadline_changed', label: 'Funder deadline changed', desc: 'When a tracked funder changes a grant deadline' },
-                      ].map(item => (
+                      ] as { id: keyof TeamNotificationPreferences; label: string; desc: string }[]).map(item => (
                         <label key={item.id} className="flex items-start gap-3 cursor-pointer py-1">
-                          <input type="checkbox" defaultChecked
+                          <input type="checkbox"
+                            checked={teamNotifications[item.id]}
+                            onChange={() => setTeamNotifications(prev => ({ ...prev, [item.id]: !prev[item.id] }))}
                             className="w-4 h-4 rounded bg-[#0d1117] border border-[#30363d] text-blue-600 cursor-pointer mt-0.5" />
                           <div>
                             <span className="text-sm text-gray-300">{item.label}</span>
