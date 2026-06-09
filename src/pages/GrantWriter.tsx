@@ -1003,9 +1003,25 @@ export default function GrantWriter() {
               </div>
             )}
 
+            {/*
+              FM-2026-06-09-01 (pen-test): `renderMarkdown` already returns a
+              string that passed through DOMPurify with an explicit
+              ALLOWED_TAGS / ALLOWED_ATTR allowlist (see the helper above).
+              The second pass here is defence-in-depth and uses the SAME
+              explicit allowlist instead of relying on DOMPurify's default
+              profile, so the renderer's safety posture is auditable from a
+              single spot and a future maintainer cannot silently widen the
+              allowed surface by editing only the helper.
+            */}
             <div
               className="bg-[#161b22] border border-[#30363d] rounded-2xl p-6"
-              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(renderMarkdown(output)) }}
+              dangerouslySetInnerHTML={{
+                __html: DOMPurify.sanitize(renderMarkdown(output), {
+                  ALLOWED_TAGS: ['h2', 'h3', 'p', 'span', 'div', 'strong', 'em', 'hr', 'br'],
+                  ALLOWED_ATTR: ['class'],
+                  USE_PROFILES: { html: true },
+                }),
+              }}
             />
 
             {/* Scroll anchor + inline streaming indicator */}
