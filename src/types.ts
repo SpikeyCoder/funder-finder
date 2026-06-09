@@ -303,6 +303,14 @@ export interface CalendarFeed {
   projects?: { name: string };
 }
 
+export interface TeamNotificationPreferences {
+  task_assigned: boolean;
+  status_changed: boolean;
+  compliance_deadline: boolean;
+  team_member_joined: boolean;
+  deadline_changed: boolean;
+}
+
 export interface NotificationPreferences {
   id: string;
   user_id: string;
@@ -312,6 +320,7 @@ export interface NotificationPreferences {
   digest_day: number;
   realtime_matches: boolean;
   email_enabled: boolean;
+  team_notifications?: TeamNotificationPreferences | null;
 }
 
 // ── Phase 4: Team Collaboration types ────────────────────────────────────────

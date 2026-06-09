@@ -5,7 +5,7 @@ import GlossaryTooltip from '../components/GlossaryTooltip';
 import { Funder, FunderInsights, PeerEntry, KeyRecipient } from '../types';
 import { formatGrantRange, formatTotalGiving, fetchFunderInsights, fetchPeers, fetchFunderByEin, suggestPeers } from '../utils/matching';
 import { useAuth } from '../contexts/AuthContext';
-import { getEdgeFunctionHeaders } from '../lib/supabase';
+import { getEdgeFunctionHeaders, supabase } from '../lib/supabase';
 import LoginModal from '../components/LoginModal';
 import { GivingTrendsChart, GeoBarChart, GeoHeatMap, StatCard, InsightsSkeleton, fmtDollar } from '../components/InsightCharts';
 import Footer from '../components/Footer';
@@ -84,6 +84,10 @@ export default function FunderDetail() {
   // FM-IC-FND-002: peer organizations (similar to the user's mission) this funder has funded
   const [peerFundedOrgs, setPeerFundedOrgs] = useState<KeyRecipient[]>([]);
   const [peerFundedLoading, setPeerFundedLoading] = useState(false);
+  // FM-IC-FND-002: fallback mission/state from the user's most recent project,
+  // used when the page is opened directly (no mission passed via nav state) so
+  // the "Peer Organizations Funded" signal still renders for logged-in users.
+  const [autoMission, setAutoMission] = useState<{ mission: string; state?: string } | null>(null);
 
   const toggleSection = (key: string) =>
     setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }));
@@ -171,15 +175,47 @@ export default function FunderDetail() {
     return () => { cancelled = true; };
   }, [funder?.id]);
 
+  // FM-IC-FND-002: when no mission is passed via nav state (e.g. the user opened
+  // this funder profile directly or from /browse), fall back to the mission and
+  // location of their most recently updated project so the peer-funding signal
+  // still surfaces for logged-in users.
+  useEffect(() => {
+    if (mission || !user) { setAutoMission(null); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from('projects')
+          .select('description, name, location_scope')
+          .eq('user_id', user.id)
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (cancelled || !data) return;
+        const m = ((data.description as string | null) || (data.name as string | null) || '').trim();
+        const scope = data.location_scope as { state?: string }[] | null;
+        const st = Array.isArray(scope) && scope[0]?.state ? scope[0].state : undefined;
+        if (m) setAutoMission({ mission: m, state: st });
+      } catch {
+        /* silent — peer-funding signal is best-effort */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [mission, user]);
+
+  // Effective mission/state: explicit nav-state mission wins, otherwise the
+  // user's active project (autoMission).
+  const effectiveMission = mission || autoMission?.mission || '';
+  const effectiveState = autoMission?.state || funder?.state || undefined;
+
   // FM-IC-FND-002: cross-reference the user's mission peers with this funder's
   // 990 grantees to surface "peer organizations this funder has funded".
-  // Requires mission context (present when the user arrived from AI matching).
   useEffect(() => {
     const recipients = insights?.keyRecipients ?? [];
-    if (!mission || recipients.length === 0) { setPeerFundedOrgs([]); return; }
+    if (!effectiveMission || recipients.length === 0) { setPeerFundedOrgs([]); return; }
     let cancelled = false;
     setPeerFundedLoading(true);
-    suggestPeers(mission, funder?.state || undefined)
+    suggestPeers(effectiveMission, effectiveState)
       .then(res => {
         if (cancelled) return;
         const peerKeys = new Set((res.peers || []).map(normalizeOrgName).filter(Boolean));
@@ -190,7 +226,7 @@ export default function FunderDetail() {
       .catch(() => { if (!cancelled) setPeerFundedOrgs([]); })
       .finally(() => { if (!cancelled) setPeerFundedLoading(false); });
     return () => { cancelled = true; };
-  }, [mission, insights, funder?.state]);
+  }, [effectiveMission, effectiveState, insights]);
 
   if (funderLoading) return (
     <>
