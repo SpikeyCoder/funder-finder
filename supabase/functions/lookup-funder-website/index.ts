@@ -1,5 +1,7 @@
 import { corsHeaders, preflightResponse } from '../_shared/cors.ts';
 import { sanitiseError } from '../_shared/errors.ts';
+import { authFromRequest } from '../_shared/auth.ts';
+import { ipRateLimit } from '../_shared/rate_limit.ts';
 
 /**
  * lookup-funder-website — On-demand website lookup for a single funder.
@@ -12,8 +14,9 @@ import { sanitiseError } from '../_shared/errors.ts';
  * Response:  { "url": "https://...", "confidence": "high", "source": "claude" }
  *         or { "url": null, "confidence": "none" }
  *
- * verify_jwt = false — this function handles its own lightweight auth check
- * (accepts both user JWTs and service-role calls).
+ * verify_jwt = true (Supabase gateway), plus authFromRequest() defence-in-depth
+ * decodes the JWT locally and rejects anonymous tokens.
+ * Per-IP rate limit added 2026-06-10 (FM-2026-06-10-02).
  */
 
 const SUPABASE_URL  = Deno.env.get('SUPABASE_URL')!;
@@ -217,6 +220,29 @@ Deno.serve(async (req) => {
     });
   }
 
+  // ── Auth (FM-2026-06-10-02) ───────────────────────────────────────────────
+  // Reject anonymous callers; accept user JWTs and service-role tokens.
+  // authFromRequest() rejects is_anonymous=true and tokens without `sub`.
+  try {
+    await authFromRequest(req);
+  } catch (e: any) {
+    return new Response(
+      JSON.stringify({ error: 'Unauthorized' }),
+      { status: 401, headers: { ...headers, 'Content-Type': 'application/json' } },
+    );
+  }
+
+  // ── Rate limit (FM-2026-06-10-02) ─────────────────────────────────────────
+  // Authenticated denial-of-wallet protection: every request fans out to
+  // Anthropic Claude + web-search beta, which is metered. Per-IP limit
+  // mirrors the 10/min ceiling used by grant-writer and ai-draft.
+  const limited = await ipRateLimit(req, {
+    namespace: 'lookup-funder-website',
+    limit: 10,
+    extraHeaders: headers,
+  });
+  if (!limited.allow && limited.response) return limited.response;
+
   if (!ANTHROPIC_KEY) {
     return new Response(
       JSON.stringify({ error: 'ANTHROPIC_API_KEY not configured' }),
@@ -268,7 +294,7 @@ Deno.serve(async (req) => {
 
     // Run the two-step Claude lookup
     console.log('[lookup-funder-website] Looking up website for:', funder.name, `(EIN: ${funderEin})`);
-    const result = await lookupWebsite(funder.name, funder.city, funder.state, ein);
+    const result = await lookupWebsite(funder.name, funder.city, funder.state, funderEin);
 
     // Write results back to the funders table
     const now = new Date().toISOString();
