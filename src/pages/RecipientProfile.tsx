@@ -9,6 +9,7 @@ import { useAuth } from '../contexts/AuthContext';
 import LoginModal from '../components/LoginModal';
 import NavBar from '../components/NavBar';
 import Toast from '../components/Toast';
+import PeerComparison from '../components/PeerComparison';
 
 export default function RecipientProfile() {
   const { id } = useParams<{ id: string }>();
@@ -27,6 +28,8 @@ export default function RecipientProfile() {
   const [filterUniversities, setFilterUniversities] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
+  // FM-IC-PEER-001: peer currently open in the head-to-head comparison modal.
+  const [comparePeer, setComparePeer] = useState<PeerEntry | null>(null);
 
   // Sync saved funder IDs — from DB for authenticated users only.
   // Anonymous users see no saved state — saving requires sign-in.
@@ -485,7 +488,8 @@ export default function RecipientProfile() {
                         <th className="text-left py-2 pr-3">Organization</th>
                         <th className="text-right py-2 px-2">State</th>
                         <th className="text-right py-2 px-2">Total Funding</th>
-                        <th className="text-right py-2 pl-2">Similarity</th>
+                        <th className="text-right py-2 px-2">Similarity</th>
+                        <th className="text-right py-2 pl-2"><span className="sr-only">Compare</span></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -500,10 +504,20 @@ export default function RecipientProfile() {
                           <td className="py-2 px-2 text-right text-gray-300 whitespace-nowrap">
                             {p.totalFunding ? fmtDollar(p.totalFunding) : '—'}
                           </td>
-                          <td className="py-2 pl-2 text-right">
+                          <td className="py-2 px-2 text-right">
                             <span className={`text-xs font-medium ${p.score >= 0.3 ? 'text-green-400' : p.score >= 0.15 ? 'text-yellow-400' : 'text-gray-400'}`}>
                               {Math.round(p.score * 100)}%
                             </span>
+                          </td>
+                          <td className="py-2 pl-2 text-right whitespace-nowrap">
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setComparePeer(p); }}
+                              aria-label={`Compare ${p.name} with this organization`}
+                              className="text-xs font-medium px-2.5 py-1 rounded-lg border border-[#30363d] text-cyan-300 hover:bg-cyan-900/20 hover:border-cyan-700/50 transition-colors"
+                            >
+                              Compare
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -549,6 +563,15 @@ export default function RecipientProfile() {
             onClick: () => { setToastMsg(null); navigate('/saved'); },
           }}
           onClose={() => setToastMsg(null)}
+        />
+      )}
+
+      {/* FM-IC-PEER-001: head-to-head comparison modal */}
+      {comparePeer && profile && (
+        <PeerComparison
+          source={profile}
+          peer={comparePeer}
+          onClose={() => setComparePeer(null)}
         />
       )}
     </div>
