@@ -102,6 +102,7 @@ Deno.serve(async (req) => {
 
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders(origin) });
+  }
 
   // Per-IP rate limit (FM-2026-06-10-03): authenticated denial-of-wallet
   // protection for the grant-writer endpoint.
@@ -110,7 +111,7 @@ Deno.serve(async (req) => {
     limit: 10,
   });
   if (!_ipLimit.allow && _ipLimit.response) return _ipLimit.response;
-  }
+
 
   try {
     // Verify user is authenticated
