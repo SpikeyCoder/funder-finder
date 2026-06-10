@@ -3,6 +3,7 @@
 // user-filtered queries). Replaces the createUserScopedClient flow that was
 // unreliable in the Edge runtime.
 import { authFromRequest, adminClient, statusForAuthError } from "../_shared/auth.ts";
+import { ipRateLimit } from "../_shared/rate_limit.ts";
 import { corsHeaders as _corsHeaders } from "../_shared/cors.ts";
 import { sanitiseError } from "../_shared/errors.ts";
 
@@ -17,6 +18,14 @@ function json(req: Request, data: unknown, status = 200) {
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS(req) });
+
+  // Per-IP rate limit (FM-2026-06-10-03): authenticated denial-of-wallet
+  // protection for the knowledge-base endpoint.
+  const _ipLimit = await ipRateLimit(req, {
+    namespace: 'knowledge-base',
+    limit: 30,
+  });
+  if (!_ipLimit.allow && _ipLimit.response) return _ipLimit.response;
 
   try {
     const { userId } = await authFromRequest(req);

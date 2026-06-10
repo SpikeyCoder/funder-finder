@@ -20,6 +20,7 @@ import { analyzeStyle, type StyleGuide } from './style-analysis.ts';
 import { performResearch, type ResearchData } from './research.ts';
 import { buildPrompt } from './prompt-builder.ts';
 import { authFromRequest, adminClient } from "../_shared/auth.ts";
+import { ipRateLimit } from "../_shared/rate_limit.ts";
 
 // ── Config ──────────────────────────────────────────────────────────────────
 
@@ -101,6 +102,14 @@ Deno.serve(async (req) => {
 
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders(origin) });
+
+  // Per-IP rate limit (FM-2026-06-10-03): authenticated denial-of-wallet
+  // protection for the grant-writer endpoint.
+  const _ipLimit = await ipRateLimit(req, {
+    namespace: 'grant-writer',
+    limit: 10,
+  });
+  if (!_ipLimit.allow && _ipLimit.response) return _ipLimit.response;
   }
 
   try {

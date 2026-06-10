@@ -1,4 +1,5 @@
 import { sanitiseError } from '../_shared/errors.ts';
+import { ipRateLimit } from "../_shared/rate_limit.ts";
 // Phase 4: AI-assisted grant proposal draft generation
 // MIGRATED TO LOCAL JWT AUTH: Uses auth.ts (local JWT decode + service-role client)
 // Enhanced: reference doc style matching, deep research, MLA citations
@@ -35,6 +36,14 @@ async function extractFileText(supabase: any, storagePath: string): Promise<stri
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS(req) });
+
+  // Per-IP rate limit (FM-2026-06-10-03): authenticated denial-of-wallet
+  // protection for the ai-draft endpoint.
+  const _ipLimit = await ipRateLimit(req, {
+    namespace: 'ai-draft',
+    limit: 10,
+  });
+  if (!_ipLimit.allow && _ipLimit.response) return _ipLimit.response;
   if (req.method !== 'POST') return json(req, { error: 'Method not allowed' }, 405);
 
   try {
