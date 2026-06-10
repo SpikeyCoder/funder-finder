@@ -97,6 +97,7 @@ Deno.serve(async (req) => {
 
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers });
+  }
 
   // Per-IP rate limit (FM-2026-06-10-03): authenticated denial-of-wallet
   // protection for the get-funder-990-insights endpoint.
@@ -105,7 +106,7 @@ Deno.serve(async (req) => {
     limit: 30,
   });
   if (!_ipLimit.allow && _ipLimit.response) return _ipLimit.response;
-  }
+
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
       status: 405,
