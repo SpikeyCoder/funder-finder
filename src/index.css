@@ -611,3 +611,59 @@ button[data-action="saved"],
 button[data-action="write-grant"],
 button[data-action="notes"],
 button[data-action="remove"] { min-height: 32px; }
+
+/* ============================================================
+   FM-LM (2026-06-09 daily-usability-audit): force-apply gray-text
+   light-mode overrides for utility classes that were being beaten
+   by Tailwind's text-gray-400 / text-gray-500 / text-white utilities
+   due to @layer ordering in the deployed bundle.
+   ============================================================
+   Live audit on 2026-06-09 confirmed nav links and footer links
+   styled with .text-gray-400 rendered at #9CA3AF (~2.4-2.5:1 on
+   white) instead of the intended #59636e (~6.5:1). Same root
+   cause as the OAuth-button and form-control border fixes from
+   2026-06-07 — the override matches with higher specificity but
+   the utility wins the cascade due to layer ordering in the
+   built CSS bundle. Bumping to !important guarantees WCAG AA. */
+html.light-mode .text-gray-400 { color: #59636e !important; }
+html.light-mode .text-gray-300 { color: #424a53 !important; }
+html.light-mode .text-gray-500 { color: #59636e !important; }
+html.light-mode .text-gray-600 { color: #57606a !important; }
+html.light-mode .text-gray-200,
+html.light-mode .text-gray-100 { color: #1f2328 !important; }
+html.light-mode .text-white   { color: #1f2328 !important; }
+html.light-mode .text-blue-400,
+html.light-mode .text-blue-300,
+html.light-mode .text-blue-200,
+html.light-mode .text-blue-100 { color: #1d4ed8 !important; }
+html.light-mode .text-green-400,
+html.light-mode .text-green-300 { color: #15803d !important; }
+html.light-mode .text-purple-400,
+html.light-mode .text-purple-300 { color: #7e22ce !important; }
+html.light-mode .text-yellow-400,
+html.light-mode .text-yellow-300 { color: #a16207 !important; }
+html.light-mode .text-amber-400,
+html.light-mode .text-amber-300 { color: #b45309 !important; }
+html.light-mode .text-red-400,
+html.light-mode .text-red-300 { color: #b91c1c !important; }
+html.light-mode .text-orange-400,
+html.light-mode .text-orange-300 { color: #c2410c !important; }
+
+/* Re-assert the demo-dark-card preservation overrides at !important
+   so the global !important overrides above don't break the demo
+   mockup which intentionally renders against a dark inline surface. */
+html.light-mode .demo-dark-card .text-gray-200 { color: #e5e7eb !important; }
+html.light-mode .demo-dark-card .text-gray-300 { color: #d1d5db !important; }
+html.light-mode .demo-dark-card .text-gray-400 { color: #9ca3af !important; }
+html.light-mode .demo-dark-card .text-gray-500 { color: #6b7280 !important; }
+html.light-mode .demo-dark-card .text-white    { color: #ffffff !important; }
+html.light-mode .demo-dark-card .text-blue-300 { color: #93c5fd !important; }
+html.light-mode .demo-dark-card .text-blue-400 { color: #60a5fa !important; }
+html.light-mode .demo-dark-card .text-green-300 { color: #86efac !important; }
+html.light-mode .demo-dark-card .text-green-400 { color: #4ade80 !important; }
+html.light-mode .demo-dark-card .text-purple-300 { color: #d8b4fe !important; }
+html.light-mode .demo-dark-card .text-purple-400 { color: #c084fc !important; }
+html.light-mode .demo-dark-card .text-amber-300 { color: #fcd34d !important; }
+html.light-mode .demo-dark-card .text-amber-400 { color: #fbbf24 !important; }
+html.light-mode .demo-dark-card .text-red-300 { color: #fca5a5 !important; }
+html.light-mode .demo-dark-card .text-red-400 { color: #f87171 !important; }
