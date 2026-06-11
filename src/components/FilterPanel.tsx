@@ -4,6 +4,7 @@ import { Filter, X, ChevronDown, ChevronUp, Search } from 'lucide-react';
 
 export interface FilterState {
   states: string[];
+  counties: string[]; // FM-IC-DSC-002: sub-state localities (county/city names)
   ntee_codes: string[];
   funding_types: string[];
   funder_types: string[];
@@ -16,6 +17,7 @@ export interface FilterState {
 
 export const EMPTY_FILTERS: FilterState = {
   states: [],
+  counties: [],
   ntee_codes: [],
   funding_types: [],
   funder_types: [],
@@ -154,6 +156,8 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
   });
 
   const [stateSearchTerm, setStateSearchTerm] = useState('');
+  // FM-IC-DSC-002: free-text entry buffer for adding a county/city locality.
+  const [countyInput, setCountyInput] = useState('');
   const [intlSearchTerm, setIntlSearchTerm] = useState('');
   // Mobile bottom sheet open state (lifted so the sheet can be triggered from
   // either the top mobile filter bar or the floating button).
@@ -178,6 +182,29 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
       states: checked
         ? [...filters.states, state]
         : filters.states.filter((s) => s !== state),
+    });
+  };
+
+  // FM-IC-DSC-002: add/remove a county or city locality. Stored verbatim as
+  // the user types it; the backend upper-cases + matches against funder grant
+  // geography (exact token or substring), so "King County", "Seattle", and
+  // "Seattle, WA" all work.
+  const handleAddCounty = () => {
+    const value = countyInput.trim();
+    if (!value) return;
+    const exists = filters.counties.some(
+      (c) => c.toLowerCase() === value.toLowerCase()
+    );
+    if (!exists) {
+      onChange({ ...filters, counties: [...filters.counties, value] });
+    }
+    setCountyInput('');
+  };
+
+  const handleRemoveCounty = (county: string) => {
+    onChange({
+      ...filters,
+      counties: filters.counties.filter((c) => c !== county),
     });
   };
 
@@ -238,10 +265,12 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
     onChange(EMPTY_FILTERS);
     setStateSearchTerm('');
     setIntlSearchTerm('');
+    setCountyInput('');
   };
 
   const activeFilterCount = [
     ...filters.states,
+    ...filters.counties,
     ...filters.ntee_codes,
     ...filters.funding_types,
     ...filters.funder_types,
@@ -257,6 +286,20 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
           {state}
           <button
             onClick={() => handleStateChange(state, false)}
+            className="hover:text-white"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      );
+    });
+
+    filters.counties.forEach((county) => {
+      chips.push(
+        <div key={`county-${county}`} className="inline-flex items-center gap-2 bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-sm text-gray-300">
+          {county}
+          <button
+            onClick={() => handleRemoveCounty(county)}
             className="hover:text-white"
           >
             <X size={14} />
@@ -394,7 +437,11 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
       <div className="flex-1 overflow-y-auto">
         {/* Location */}
         <Accordion
-          title={`Location ${filters.states.length > 0 ? `(${filters.states.length})` : ''}`}
+          title={`Location ${
+            filters.states.length + filters.counties.length > 0
+              ? `(${filters.states.length + filters.counties.length})`
+              : ''
+          }`}
           isOpen={expandedSections.location}
           onToggle={() => toggleSection('location')}
         >
@@ -420,6 +467,60 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
                 <span className="text-sm text-gray-300">{state}</span>
               </label>
             ))}
+          </div>
+
+          {/* FM-IC-DSC-002: County / City locality filter. Narrows results to
+              funders that have given grants in the entered county or city. */}
+          <div className="mt-4 pt-3 border-t border-[#30363d]">
+            <label className="block text-xs text-gray-400 mb-2">
+              County / City
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="e.g. King County or Seattle"
+                aria-label="Add county or city"
+                value={countyInput}
+                onChange={(e) => setCountyInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddCounty();
+                  }
+                }}
+                className="flex-1 px-3 py-2 bg-[#0d1117] border border-[#30363d] rounded text-white placeholder-gray-500 focus:outline-none focus:border-[#58a6ff] text-sm"
+              />
+              <button
+                type="button"
+                onClick={handleAddCounty}
+                disabled={!countyInput.trim()}
+                className="px-3 py-2 bg-[#58a6ff] text-white rounded text-sm font-medium hover:bg-[#1f6feb] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Add
+              </button>
+            </div>
+            {filters.counties.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {filters.counties.map((county) => (
+                  <div
+                    key={county}
+                    className="inline-flex items-center gap-1.5 bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-xs text-gray-300"
+                  >
+                    {county}
+                    <button
+                      onClick={() => handleRemoveCounty(county)}
+                      aria-label={`Remove ${county}`}
+                      className="hover:text-white"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="text-xs text-gray-500 mt-2">
+              Finds funders that have made grants in this county or city.
+            </p>
           </div>
         </Accordion>
 

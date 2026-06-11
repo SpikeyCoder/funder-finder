@@ -64,6 +64,9 @@ Deno.serve(async (req: Request) => {
       grant_size_max,
       gives_to_peers = false,
       locations_served = [],
+      // FM-IC-DSC-002: sub-state locality (county/city) tokens to narrow
+      // discovery to funders that have actually given in that locality.
+      counties = [],
     } = filters;
 
     const { data, error } = await supabase.rpc('filter_funders_grant_level', {
@@ -77,6 +80,8 @@ Deno.serve(async (req: Request) => {
       // FM-IC-DSC-004: pass the use-of-funds facet through to the RPC so the
       // FilterPanel "Funding Type" selection actually filters results.
       p_funding_types_csv: toCsv(funding_types),
+      // FM-IC-DSC-002: pass county/city locality tokens through to the RPC.
+      p_localities_csv: toCsv(counties),
       p_sort_by: sort_by ?? 'total_giving',
       p_sort_order: sort_order ?? 'desc',
       p_page: page ?? 1,
