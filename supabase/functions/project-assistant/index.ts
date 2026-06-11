@@ -36,17 +36,22 @@ const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') || '';
 // requests per minute. Bounded to 30/min/IP (well above any plausible
 // legitimate chat-style usage; the SPA sends one request per user turn).
 import { ipRateLimit } from '../_shared/rate_limit.ts';
+// FM-2026-06-11-01 — auth + CORS-origin lock.
+// Replaces the previous `Access-Control-Allow-Origin: *` + no-auth
+// configuration so this endpoint matches the LLM-endpoint hardening
+// pattern documented in compliance/llm-endpoint-rate-limit-phase2-2026-06-10.md.
+import { authFromRequest, statusForAuthError } from '../_shared/auth.ts';
+import { corsHeaders as _corsHeaders } from '../_shared/cors.ts';
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+const CORS_OPTS = { methods: 'POST, OPTIONS' } as const;
+function CORS(req: Request | null = null): Record<string, string> {
+  return _corsHeaders(req?.headers.get('origin') ?? null, CORS_OPTS);
+}
 
-function json(data: unknown, status = 200) {
+function json(req: Request, data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { ...CORS, 'Content-Type': 'application/json' },
+    headers: { ...CORS(req), 'Content-Type': 'application/json' },
   });
 }
 
@@ -151,8 +156,8 @@ Tone: warm, brief, never condescending. Mirror the user's language. Never reveal
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
-  if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS(req) });
+  if (req.method !== 'POST') return json(req, { error: 'Method not allowed' }, 405);
 
   // FM-2026-06-07-01: per-IP rate limit. Applies before JSON parse to
   // bound parser cost in addition to bounding Anthropic credit burn.
@@ -160,15 +165,29 @@ Deno.serve(async (req: Request) => {
     namespace: 'project-assistant',
     limit: 30,
     windowMs: 60_000,
-    extraHeaders: CORS,
+    extraHeaders: CORS(req),
   });
   if (!limited.allow) return limited.response!;
+
+  // FM-2026-06-11-01: require an authenticated, non-anonymous JWT.
+  // Without this, anyone on the internet could POST to project-assistant
+  // and fan out Claude Haiku calls at line-speed (Denial-of-Wallet,
+  // CWE-770 / OWASP API4:2023). Also rejects anonymous Supabase tokens
+  // so a `supabase.auth.signInAnonymously()` session cannot bypass the
+  // gate. The rate limit above remains the defense-in-depth bound for
+  // authenticated abuse from a single IP.
+  try {
+    await authFromRequest(req);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return json(req, { error: msg }, statusForAuthError(msg));
+  }
 
   let body: { messages?: { role: string; content: string }[]; draft?: Partial<ProjectDraft>; step?: number };
   try {
     body = await req.json();
   } catch {
-    return json({ error: 'Invalid JSON body' }, 400);
+    return json(req, { error: 'Invalid JSON body' }, 400);
   }
 
   const messages = Array.isArray(body.messages) ? body.messages.slice(-12) : [];
@@ -177,7 +196,7 @@ Deno.serve(async (req: Request) => {
 
   // Without an API key (or no user input yet at step 0), use the canned script.
   if (!ANTHROPIC_API_KEY || messages.length === 0) {
-    return json(fallback(step, draft));
+    return json(req, fallback(step, draft));
   }
 
   // Build the user turn payload — give the model both the conversation and
@@ -205,7 +224,7 @@ Deno.serve(async (req: Request) => {
 
     if (!claudeResp.ok) {
       console.error('[project-assistant] Anthropic non-OK', claudeResp.status);
-      return json(fallback(step, draft));
+      return json(req, fallback(step, draft));
     }
 
     const data = await claudeResp.json();
@@ -217,7 +236,7 @@ Deno.serve(async (req: Request) => {
       parsed = JSON.parse(cleaned);
     } catch {
       console.error('[project-assistant] could not parse model JSON');
-      return json(fallback(step, draft));
+      return json(req, fallback(step, draft));
     }
 
     // Light defensive normalisation
@@ -240,9 +259,9 @@ Deno.serve(async (req: Request) => {
       delete parsed.draft_updates.tags;
     }
 
-    return json(parsed);
+    return json(req, parsed);
   } catch (err) {
     console.error('[project-assistant] fetch/parse error:', err);
-    return json(fallback(step, draft));
+    return json(req, fallback(step, draft));
   }
 });
