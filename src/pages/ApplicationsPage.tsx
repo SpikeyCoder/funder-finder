@@ -187,7 +187,7 @@ export default function ApplicationsPage() {
           <div className="mb-6 p-4 bg-[#161b22] border border-[#30363d] rounded-lg">
             <h3 className="text-sm font-semibold mb-3">Add Application Content</h3>
             <input type="text" value={newTitle} onChange={e => setNewTitle(e.target.value)}
-              placeholder="Title (e.g., 'Ford Foundation 2025 LOI')"
+              placeholder="Title (e.g., 'Ford Foundation 2027 LOI')"
               className="w-full mb-3 bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
             <textarea value={newContent} onChange={e => setNewContent(e.target.value)}
               placeholder="Paste your application text, proposal sections, or notes here..."
