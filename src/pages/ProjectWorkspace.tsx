@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
 import { friendlyError } from '../lib/friendlyErrors';
-import type { PipelineStatus, TrackedGrant, GrantTask, ComplianceRequirement } from '../types';
+import type { PipelineStatus, TrackedGrant, GrantTask, ComplianceRequirement, ComplianceDeliverable, ComplianceAttachment } from '../types';
 
 const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const MATCH_FUNDERS_URL = `${SUPABASE_URL}/functions/v1/match-funders`;
@@ -209,6 +209,8 @@ export default function ProjectWorkspace() {
   const [newCompDue, setNewCompDue] = useState('');
   const [newCompAssignee, setNewCompAssignee] = useState('');
   const [compAttachment, setCompAttachment] = useState<File | null>(null);
+  // FM-IC-RPT-002: per-requirement new-deliverable input text
+  const [newDeliverableText, setNewDeliverableText] = useState<Record<string, string>>({});
 
   // Share link
   const [shareUrl, setShareUrl] = useState<string | null>(null);
@@ -735,7 +737,10 @@ export default function ProjectWorkspace() {
           type: newCompType,
           due_date: newCompDue || null,
           assignee_email: newCompAssignee.trim() || undefined,
-          attachment_name: compAttachment?.name || undefined,
+          deliverables: [],
+          attachments: compAttachment
+            ? [{ name: compAttachment.name, url: null, uploaded_at: new Date().toISOString() }]
+            : [],
         }),
       });
       if (res.ok) {
@@ -760,6 +765,38 @@ export default function ProjectWorkspace() {
       });
       setComplianceItems(prev => prev.map(c => c.id === compId ? { ...c, status: status as any } : c));
     } catch (err) { console.error('Error updating compliance:', err); }
+  };
+
+  // FM-IC-RPT-002: persist a deliverables-checklist change for a requirement
+  const persistDeliverables = async (compId: string, deliverables: ComplianceDeliverable[]) => {
+    try {
+      const headers = await getEdgeFunctionHeaders();
+      await fetch(COMPLIANCE_URL, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ id: compId, deliverables }),
+      });
+    } catch (err) { console.error('Error saving deliverables:', err); }
+  };
+
+  const handleAddDeliverable = async (comp: ComplianceRequirement) => {
+    const text = (newDeliverableText[comp.id] || '').trim();
+    if (!text) return;
+    const next: ComplianceDeliverable[] = [
+      ...(comp.deliverables || []),
+      { id: (crypto.randomUUID?.() ?? String(Date.now())), text, done: false },
+    ];
+    setComplianceItems(prev => prev.map(c => c.id === comp.id ? { ...c, deliverables: next } : c));
+    setNewDeliverableText(prev => ({ ...prev, [comp.id]: '' }));
+    await persistDeliverables(comp.id, next);
+  };
+
+  const handleToggleDeliverable = async (comp: ComplianceRequirement, deliverableId: string) => {
+    const next: ComplianceDeliverable[] = (comp.deliverables || []).map(d =>
+      d.id === deliverableId ? { ...d, done: !d.done } : d
+    );
+    setComplianceItems(prev => prev.map(c => c.id === comp.id ? { ...c, deliverables: next } : c));
+    await persistDeliverables(comp.id, next);
   };
 
   // Share link
@@ -2126,30 +2163,72 @@ export default function ProjectWorkspace() {
                     Reporting and deliverables required after the grant is awarded.
                   </p>
                   {complianceItems.map(item => (
-                    <div key={item.id} className={`flex items-center justify-between p-2.5 rounded-lg text-sm ${
+                    <div key={item.id} className={`p-2.5 rounded-lg text-sm space-y-2 ${
                       item.is_overdue ? 'bg-red-900/10 border border-red-900/30' : 'bg-[#0d1117]'
                     }`}>
-                      <div className="min-w-0 flex-1">
-                        <p className={`text-white text-sm ${item.status === 'submitted' || item.status === 'approved' ? 'line-through text-gray-500' : ''}`}>
-                          {item.title}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {item.type.replace(/_/g, ' ')}
-                          {item.due_date && ` · Due ${new Date(item.due_date).toLocaleDateString()}`}
-                        </p>
+                      <div className="flex items-center justify-between">
+                        <div className="min-w-0 flex-1">
+                          <p className={`text-white text-sm ${item.status === 'submitted' || item.status === 'approved' ? 'line-through text-gray-500' : ''}`}>
+                            {item.title}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {item.type.replace(/_/g, ' ')}
+                            {item.due_date && ` · Due ${new Date(item.due_date).toLocaleDateString()}`}
+                          </p>
+                        </div>
+                        <select value={item.status} onChange={e => handleUpdateComplianceStatus(item.id, e.target.value)}
+                          className={`text-xs rounded px-2 py-1 border-0 ml-2 flex-shrink-0 ${
+                            item.status === 'approved' ? 'bg-green-900/30 text-green-400' :
+                            item.status === 'submitted' ? 'bg-blue-900/30 text-blue-400' :
+                            item.is_overdue ? 'bg-red-900/30 text-red-400' :
+                            'bg-[#161b22] text-gray-400'
+                          }`}>
+                          <option value="upcoming">Upcoming</option>
+                          <option value="in_progress">In Progress</option>
+                          <option value="submitted">Submitted</option>
+                          <option value="approved">Approved</option>
+                        </select>
                       </div>
-                      <select value={item.status} onChange={e => handleUpdateComplianceStatus(item.id, e.target.value)}
-                        className={`text-xs rounded px-2 py-1 border-0 ml-2 flex-shrink-0 ${
-                          item.status === 'approved' ? 'bg-green-900/30 text-green-400' :
-                          item.status === 'submitted' ? 'bg-blue-900/30 text-blue-400' :
-                          item.is_overdue ? 'bg-red-900/30 text-red-400' :
-                          'bg-[#161b22] text-gray-400'
-                        }`}>
-                        <option value="upcoming">Upcoming</option>
-                        <option value="in_progress">In Progress</option>
-                        <option value="submitted">Submitted</option>
-                        <option value="approved">Approved</option>
-                      </select>
+
+                      {/* FM-IC-RPT-002: deliverables checklist */}
+                      <div className="pl-0.5 space-y-1">
+                        {(item.deliverables || []).map(d => (
+                          <label key={d.id} className="flex items-center gap-2 text-xs cursor-pointer">
+                            <input type="checkbox" checked={d.done}
+                              onChange={() => handleToggleDeliverable(item, d.id)}
+                              className="accent-blue-600 w-3 h-3" />
+                            <span className={d.done ? 'line-through text-gray-500' : 'text-gray-300'}>{d.text}</span>
+                          </label>
+                        ))}
+                        <div className="flex items-center gap-1.5">
+                          <input type="text" value={newDeliverableText[item.id] || ''}
+                            onChange={e => setNewDeliverableText(prev => ({ ...prev, [item.id]: e.target.value }))}
+                            onKeyDown={e => { if (e.key === 'Enter') handleAddDeliverable(item); }}
+                            placeholder="Add deliverable..."
+                            className="flex-1 bg-transparent border-b border-[#30363d] px-1 py-0.5 text-xs text-gray-300 placeholder-gray-600 focus:outline-none focus:border-blue-500" />
+                          <button onClick={() => handleAddDeliverable(item)}
+                            disabled={!(newDeliverableText[item.id] || '').trim()}
+                            className="text-gray-500 hover:text-blue-400 disabled:opacity-40"><Plus size={12} /></button>
+                        </div>
+                      </div>
+
+                      {/* FM-IC-RPT-002: attachments */}
+                      {(item.attachments || []).length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 pt-0.5">
+                          {(item.attachments || []).map((a: ComplianceAttachment, ai: number) => (
+                            a.url ? (
+                              <a key={ai} href={a.url} target="_blank" rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#161b22] rounded text-xs text-blue-400 hover:underline">
+                                <Paperclip size={10} /> {a.name}
+                              </a>
+                            ) : (
+                              <span key={ai} className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#161b22] rounded text-xs text-gray-400">
+                                <Paperclip size={10} /> {a.name}
+                              </span>
+                            )
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))}
                   {complianceItems.length === 0 && !showComplianceForm && (
