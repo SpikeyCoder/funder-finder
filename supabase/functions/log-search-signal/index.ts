@@ -1,3 +1,4 @@
+import { corsHeaders } from '../_shared/cors.ts';
 /**
  * log-search-signal - Supabase Edge Function
  *
@@ -7,12 +8,6 @@
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-
-const ALLOWED_ORIGINS = new Set([
-  'https://fundermatch.org',
-  'https://www.fundermatch.org',
-  'http://localhost:5173',
-]);
 
 const VALID_EVENT_TYPES = new Set([
   'search_results_loaded',
@@ -30,17 +25,6 @@ const VALID_BUDGET_BANDS = new Set([
   'over_5m',
   'prefer_not_to_say',
 ]);
-
-function corsHeaders(requestOrigin: string | null): Record<string, string> {
-  const origin = requestOrigin && ALLOWED_ORIGINS.has(requestOrigin)
-    ? requestOrigin
-    : 'https://fundermatch.org';
-  return {
-    'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-    Vary: 'Origin',
-  };
-}
 
 async function sbFetch(path: string, options: RequestInit = {}) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -113,7 +97,6 @@ async function sha256Hex(input: string): Promise<string> {
   const arr = Array.from(new Uint8Array(digest));
   return arr.map((b) => b.toString(16).padStart(2, '0')).join('');
 }
-
 
 // Per-IP token bucket — best-effort, in-memory, scoped to a single function
 // instance. Bounds anonymous writes if LOG_SEARCH_SIGNAL_ALLOW_ANON=1.
