@@ -1,3 +1,4 @@
+import { corsHeaders } from '../_shared/cors.ts';
 import { sanitiseError } from '../_shared/errors.ts';
 import { ipRateLimit } from "../_shared/rate_limit.ts";
 /**
@@ -19,28 +20,9 @@ import { ipRateLimit } from "../_shared/rate_limit.ts";
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-const ALLOWED_ORIGINS = new Set([
-  'https://fundermatch.org',
-  'https://www.fundermatch.org',
-  'http://localhost:5173',
-]);
-
 const MAX_PEERS = 10;
 const RECENT_YEARS = 5;
 const MIN_SHARED = 2;
-
-function corsHeaders(requestOrigin: string | null): Record<string, string> {
-  const origin =
-    requestOrigin && ALLOWED_ORIGINS.has(requestOrigin)
-      ? requestOrigin
-      : 'https://fundermatch.org';
-  return {
-    'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Headers':
-      'authorization, x-client-info, apikey, content-type',
-    Vary: 'Origin',
-  };
-}
 
 async function restQuery(table: string, params: string): Promise<unknown[]> {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${params}`, {

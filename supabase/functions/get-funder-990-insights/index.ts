@@ -1,3 +1,4 @@
+import { corsHeaders } from '../_shared/cors.ts';
 import { sanitiseError } from '../_shared/errors.ts';
 import { ipRateLimit } from "../_shared/rate_limit.ts";
 /**
@@ -17,29 +18,10 @@ import { ipRateLimit } from "../_shared/rate_limit.ts";
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-const ALLOWED_ORIGINS = new Set([
-  'https://fundermatch.org',
-  'https://www.fundermatch.org',
-  'http://localhost:5173',
-]);
-
 const MIN_YEAR = new Date().getUTCFullYear() - 10; // 10 years of trend data
 const RECENT_WINDOW = 5; // 5-year window for grantee analysis
 const TOP_RECIPIENTS_LIMIT = 20;
 const TOP_GEO_LIMIT = 15;
-
-function corsHeaders(requestOrigin: string | null): Record<string, string> {
-  const origin =
-    requestOrigin && ALLOWED_ORIGINS.has(requestOrigin)
-      ? requestOrigin
-      : 'https://fundermatch.org';
-  return {
-    'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Headers':
-      'authorization, x-client-info, apikey, content-type',
-    Vary: 'Origin',
-  };
-}
 
 async function rpcFetch(
   functionName: string,
