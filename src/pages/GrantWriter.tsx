@@ -797,7 +797,7 @@ export default function GrantWriter() {
                     <input
                       type="text"
                       className={inputClass}
-                      placeholder="e.g. 12-month program, July 2025 – June 2026"
+                      placeholder="e.g. 12-month program, July 2026 – June 2027"
                       value={orgDetails.timeline}
                       onChange={(e) => updateOrg('timeline', e.target.value)}
                     />
