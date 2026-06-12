@@ -348,6 +348,19 @@ export interface ShareableLink {
 
 // ── Phase 5: Reporting & Compliance types ────────────────────────────────────
 
+// FM-IC-RPT-002: post-award deliverables checklist + persisted attachments
+export interface ComplianceDeliverable {
+  id: string;
+  text: string;
+  done: boolean;
+}
+
+export interface ComplianceAttachment {
+  name: string;
+  url?: string | null;
+  uploaded_at?: string;
+}
+
 export interface ComplianceRequirement {
   id: string;
   tracked_grant_id: string;
@@ -358,6 +371,8 @@ export interface ComplianceRequirement {
   due_date: string | null;
   status: 'upcoming' | 'in_progress' | 'submitted' | 'approved' | 'overdue';
   assignee_email: string | null;
+  deliverables?: ComplianceDeliverable[];
+  attachments?: ComplianceAttachment[];
   is_overdue?: boolean;
   completed_at: string | null;
   created_at: string;
