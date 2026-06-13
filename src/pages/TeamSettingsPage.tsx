@@ -729,8 +729,8 @@ export default function TeamSettingsPage() {
               <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">
                 Role Permissions
               </h2>
-              <div className="bg-[#161b22] border border-[#30363d] rounded-lg overflow-hidden">
-                <table className="w-full text-sm">
+              <div className="bg-[#161b22] border border-[#30363d] rounded-lg overflow-x-auto">
+                <table className="w-full min-w-[520px] text-sm">
                   <caption className="sr-only">Role permissions comparison</caption>
                   <thead>
                     <tr className="border-b border-[#30363d]">
@@ -752,7 +752,7 @@ export default function TeamSettingsPage() {
                       { perm: 'Remove members', admin: true, editor: false, viewer: false, partner: false },
                     ].map(row => (
                       <tr key={row.perm}>
-                        <td className="px-5 py-2.5 text-gray-300">{row.perm}</td>
+                        <td className="px-5 py-2.5 text-gray-300 whitespace-nowrap">{row.perm}</td>
                         <td className="text-center px-3 py-2.5">{row.admin ? <CheckCircle size={14} className="inline text-green-400" /> : <X size={14} className="inline text-gray-600" />}</td>
                         <td className="text-center px-3 py-2.5">{row.editor ? <CheckCircle size={14} className="inline text-green-400" /> : <X size={14} className="inline text-gray-600" />}</td>
                         <td className="text-center px-3 py-2.5">{row.viewer ? <CheckCircle size={14} className="inline text-green-400" /> : <X size={14} className="inline text-gray-600" />}</td>

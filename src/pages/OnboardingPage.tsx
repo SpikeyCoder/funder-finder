@@ -279,6 +279,24 @@ export default function OnboardingPage() {
     }
   };
 
+  // Build the org profile from form state so the advisor has current context.
+  // NOTE: useMemo MUST be called before any conditional return (Rules of Hooks).
+  // Previously this was called after the loading early-return, which triggered
+  // React error #310 ("Rendered more hooks than during the previous render")
+  // when a freshly-signed-up user first reached this page, because on the first
+  // render isLoading was true (returning early) and on the second render the
+  // hook count changed. See FunderMatch bug: "Issue when first creating an
+  // account and going to the Dashboard page".
+  const advisorProfile: OrgProfile = useMemo(() => ({
+    organization_name: orgName || undefined,
+    mission_statement: missionStatement || undefined,
+    city: city || undefined,
+    state: stateAbbr || undefined,
+    county: county || undefined,
+    org_type: orgType || undefined,
+    fields_of_work: fieldsOfWork.length > 0 ? fieldsOfWork : undefined,
+  }), [orgName, missionStatement, city, stateAbbr, county, orgType, fieldsOfWork]);
+
   if (loading || isLoading) return (
     <>
       <NavBar />
@@ -293,17 +311,6 @@ export default function OnboardingPage() {
   // Map the 1-based onboarding step to the 0-based advisor step.
   // Steps 1-2 map to advisor steps 0-1; steps 3-5 map to 2-3.
   const advisorStep = Math.min(currentStep - 1, 3) as 0 | 1 | 2 | 3;
-
-  // Build the org profile from form state so the advisor has current context.
-  const advisorProfile: OrgProfile = useMemo(() => ({
-    organization_name: orgName || undefined,
-    mission_statement: missionStatement || undefined,
-    city: city || undefined,
-    state: stateAbbr || undefined,
-    county: county || undefined,
-    org_type: orgType || undefined,
-    fields_of_work: fieldsOfWork.length > 0 ? fieldsOfWork : undefined,
-  }), [orgName, missionStatement, city, stateAbbr, county, orgType, fieldsOfWork]);
 
   const handleAdvisorCreateProject = () => {
     // Jump to step 3 (First Project) if not already there
