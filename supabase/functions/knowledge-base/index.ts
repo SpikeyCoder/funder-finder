@@ -44,7 +44,14 @@ Deno.serve(async (req: Request) => {
 
     if (req.method === 'POST') {
       const body = await req.json();
-      const { title, content, project_id, source_type = 'manual', file_name, file_type, sections } = body;
+      const { title, content, project_id, source_type = 'manual', file_name, file_type, sections, outcome, use_for_learning } = body;
+
+      // FM-IC-AI-002: outcome drives which past applications the grant-writer
+      // learns from. Reject unknown values rather than silently storing them.
+      const ALLOWED_OUTCOMES = ['awarded', 'submitted', 'rejected', 'draft', 'unknown'];
+      if (outcome !== undefined && !ALLOWED_OUTCOMES.includes(outcome)) {
+        return json(req, { error: 'invalid outcome' }, 400);
+      }
 
       if (!title || !content) return json(req, { error: 'title and content required' }, 400);
 
@@ -59,6 +66,8 @@ Deno.serve(async (req: Request) => {
           file_name,
           file_type,
           sections: sections || [],
+          outcome: outcome ?? 'unknown',
+          use_for_learning: use_for_learning !== false,
           embedding_status: 'pending',
         })
         .select()
@@ -74,6 +83,37 @@ Deno.serve(async (req: Request) => {
       }
 
       return json(req, data, 201);
+    }
+
+    if (req.method === 'PUT') {
+      // FM-IC-AI-002: update an entry's learning metadata (outcome, opt-in)
+      // and/or its title/content. Scoped to the caller's own rows.
+      const body = await req.json();
+      const id = body.id || url.searchParams.get('id');
+      if (!id) return json(req, { error: 'id required' }, 400);
+
+      const ALLOWED_OUTCOMES = ['awarded', 'submitted', 'rejected', 'draft', 'unknown'];
+      const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (body.outcome !== undefined) {
+        if (!ALLOWED_OUTCOMES.includes(body.outcome)) {
+          return json(req, { error: 'invalid outcome' }, 400);
+        }
+        updates.outcome = body.outcome;
+      }
+      if (body.use_for_learning !== undefined) updates.use_for_learning = !!body.use_for_learning;
+      if (typeof body.title === 'string' && body.title.trim()) updates.title = body.title.trim();
+      if (typeof body.content === 'string' && body.content.trim()) updates.content = body.content;
+
+      const { data, error } = await supabase
+        .from('application_knowledge_base')
+        .update(updates)
+        .eq('id', id)
+        .eq('user_id', userId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return json(req, data);
     }
 
     if (req.method === 'DELETE') {

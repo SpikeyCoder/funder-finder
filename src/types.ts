@@ -386,6 +386,9 @@ export interface KnowledgeBaseEntry {
   file_name: string | null;
   sections: any[];
   created_at: string;
+  // FM-IC-AI-002: learning-loop metadata.
+  outcome?: 'awarded' | 'submitted' | 'rejected' | 'draft' | 'unknown';
+  use_for_learning?: boolean;
 }
 
 export interface OnboardingProgress {
