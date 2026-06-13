@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import { ArrowRight, ArrowLeft, User, FolderPlus, Search, Bookmark, Sparkles } from 'lucide-react';
 import NavBar from '../components/NavBar';
+import OnboardingAdvisor from '../components/OnboardingAdvisor';
+import type { OrgProfile } from '../lib/onboardingAdvisor';
 
 const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const ONBOARDING_URL = `${SUPABASE_URL}/functions/v1/onboarding`;
@@ -288,6 +290,28 @@ export default function OnboardingPage() {
 
   const step = STEPS[currentStep - 1];
 
+  // Map the 1-based onboarding step to the 0-based advisor step.
+  // Steps 1-2 map to advisor steps 0-1; steps 3-5 map to 2-3.
+  const advisorStep = Math.min(currentStep - 1, 3) as 0 | 1 | 2 | 3;
+
+  // Build the org profile from form state so the advisor has current context.
+  const advisorProfile: OrgProfile = useMemo(() => ({
+    organization_name: orgName || undefined,
+    mission_statement: missionStatement || undefined,
+    city: city || undefined,
+    state: stateAbbr || undefined,
+    county: county || undefined,
+    org_type: orgType || undefined,
+    fields_of_work: fieldsOfWork.length > 0 ? fieldsOfWork : undefined,
+  }), [orgName, missionStatement, city, stateAbbr, county, orgType, fieldsOfWork]);
+
+  const handleAdvisorCreateProject = () => {
+    // Jump to step 3 (First Project) if not already there
+    if (currentStep < 3) {
+      setCurrentStep(3);
+    }
+  };
+
   return (
     <>
       <NavBar />
@@ -512,6 +536,13 @@ export default function OnboardingPage() {
         </div>
       </div>
     </div>
+
+      {/* AI Grant Strategy Advisor — collapsible chat panel */}
+      <OnboardingAdvisor
+        step={advisorStep}
+        profile={advisorProfile}
+        onCreateProject={handleAdvisorCreateProject}
+      />
     </>
   );
 }
