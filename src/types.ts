@@ -224,6 +224,8 @@ export interface TrackedGrant {
   awarded_date: string | null;
   added_at: string;
   updated_at: string;
+  // FM-IC-CFG-001: user-defined custom fields (string -> string).
+  custom_fields?: Record<string, string>;
   // Joined relations
   pipeline_statuses?: {
     name: string;

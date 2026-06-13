@@ -111,6 +111,23 @@ function fireAndForgetWebsiteLookup(funderEin: string): void {
     });
 }
 
+// FM-IC-CFG-001: validate user-defined custom fields. Returns a clean
+// string->string map, or null if the shape is invalid (caller -> 400).
+function sanitizeCustomFields(input: unknown): Record<string, string> | null {
+  if (input === null || input === undefined) return {};
+  if (typeof input !== 'object' || Array.isArray(input)) return null;
+  const entries = Object.entries(input as Record<string, unknown>);
+  if (entries.length > 30) return null;
+  const out: Record<string, string> = {};
+  for (const [k, v] of entries) {
+    if (typeof k !== 'string' || k.trim().length === 0 || k.length > 60) return null;
+    const val = v === null || v === undefined ? '' : String(v);
+    if (val.length > 500) return null;
+    out[k] = val;
+  }
+  return out;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: CORS_HEADERS(req) });
@@ -338,6 +355,7 @@ Deno.serve(async (req: Request) => {
         notes: notes || null,
         source: source || (is_external ? 'manual' : 'search'),
         is_external: is_external || false,
+        custom_fields: sanitizeCustomFields(body.custom_fields) ?? {},
       }).select('*, pipeline_statuses(name, slug, color, is_terminal)').single();
       if (error) return errorResponse(req, error.message, 500, { stage, details: error });
 
@@ -368,6 +386,11 @@ Deno.serve(async (req: Request) => {
       if (body.notes !== undefined) updates.notes = body.notes;
       if (body.awarded_amount !== undefined) updates.awarded_amount = body.awarded_amount ? parseFloat(body.awarded_amount) : null;
       if (body.awarded_date !== undefined) updates.awarded_date = body.awarded_date || null;
+      if (body.custom_fields !== undefined) {
+        const cf = sanitizeCustomFields(body.custom_fields);
+        if (cf === null) return errorResponse(req, 'invalid custom_fields');
+        updates.custom_fields = cf;
+      }
       if (body.status_id) {
         updates.status_id = body.status_id;
       } else if (body.status_slug) {

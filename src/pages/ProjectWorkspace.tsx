@@ -187,6 +187,9 @@ export default function ProjectWorkspace() {
   const [addGrantOpen, setAddGrantOpen] = useState(false);
   const [addGrantError, setAddGrantError] = useState<string | null>(null);
   const [newGrant, setNewGrant] = useState({ funder_name: '', grant_title: '', amount: '', deadline: '', grant_url: '', notes: '', status_slug: 'researching' });
+  // FM-IC-CFG-001: inputs for adding a new custom field to the selected grant.
+  const [newCfKey, setNewCfKey] = useState('');
+  const [newCfValue, setNewCfValue] = useState('');
 
   // CSV import modal
   const [csvImportOpen, setCsvImportOpen] = useState(false);
@@ -544,6 +547,32 @@ export default function ProjectWorkspace() {
   };
 
   // Update grant fields
+  // FM-IC-CFG-001: add / edit / remove user-defined custom fields. Persisted
+  // as a single custom_fields object via the existing tracked-grants PUT.
+  const persistCustomFields = (grantId: string, fields: Record<string, string>) => {
+    setSelectedGrant(prev => prev && prev.id === grantId ? { ...prev, custom_fields: fields } : prev);
+    setTrackedGrants(prev => prev.map(g => g.id === grantId ? { ...g, custom_fields: fields } : g));
+    handleUpdateGrant(grantId, { custom_fields: fields } as Partial<TrackedGrant>);
+  };
+
+  const handleAddCustomField = () => {
+    if (!selectedGrant) return;
+    const key = newCfKey.trim();
+    if (!key) return;
+    const current = selectedGrant.custom_fields || {};
+    if (Object.prototype.hasOwnProperty.call(current, key)) return; // no duplicate keys
+    persistCustomFields(selectedGrant.id, { ...current, [key]: newCfValue.trim() });
+    setNewCfKey('');
+    setNewCfValue('');
+  };
+
+  const handleRemoveCustomField = (key: string) => {
+    if (!selectedGrant) return;
+    const next = { ...(selectedGrant.custom_fields || {}) };
+    delete next[key];
+    persistCustomFields(selectedGrant.id, next);
+  };
+
   const handleUpdateGrant = async (grantId: string, updates: Partial<TrackedGrant>) => {
     try {
       const headers = await getEdgeFunctionHeaders();
@@ -2078,6 +2107,56 @@ export default function ProjectWorkspace() {
                       className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500 resize-none"
                       placeholder="Add notes about this grant..."
                     />
+                  </div>
+
+                  {/* FM-IC-CFG-001: user-defined custom fields */}
+                  <div>
+                    <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Custom Fields</p>
+                    <div className="space-y-2">
+                      {Object.entries(selectedGrant.custom_fields || {}).map(([key, value]) => (
+                        <div key={key} className="flex items-center gap-2">
+                          <span className="text-xs text-gray-400 w-28 truncate flex-shrink-0" title={key}>{key}</span>
+                          <input
+                            type="text"
+                            value={value}
+                            onChange={e => setSelectedGrant(prev => prev ? { ...prev, custom_fields: { ...(prev.custom_fields || {}), [key]: e.target.value } } : prev)}
+                            onBlur={() => selectedGrant && persistCustomFields(selectedGrant.id, selectedGrant.custom_fields || {})}
+                            className="flex-1 bg-[#0d1117] border border-[#30363d] rounded-lg px-2 py-1 text-white text-sm focus:outline-none focus:border-blue-500"
+                          />
+                          <button
+                            onClick={() => handleRemoveCustomField(key)}
+                            aria-label={`Remove custom field ${key}`}
+                            className="text-gray-600 hover:text-red-400 flex-shrink-0">
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ))}
+                      <div className="flex items-center gap-2 pt-1">
+                        <input
+                          type="text"
+                          value={newCfKey}
+                          onChange={e => setNewCfKey(e.target.value)}
+                          placeholder="Field name"
+                          aria-label="New custom field name"
+                          className="w-28 flex-shrink-0 bg-[#0d1117] border border-[#30363d] rounded-lg px-2 py-1 text-white text-sm focus:outline-none focus:border-blue-500"
+                        />
+                        <input
+                          type="text"
+                          value={newCfValue}
+                          onChange={e => setNewCfValue(e.target.value)}
+                          placeholder="Value"
+                          aria-label="New custom field value"
+                          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddCustomField(); } }}
+                          className="flex-1 bg-[#0d1117] border border-[#30363d] rounded-lg px-2 py-1 text-white text-sm focus:outline-none focus:border-blue-500"
+                        />
+                        <button
+                          onClick={handleAddCustomField}
+                          disabled={!newCfKey.trim()}
+                          className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm transition-colors flex-shrink-0">
+                          Add
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
                 </div>
