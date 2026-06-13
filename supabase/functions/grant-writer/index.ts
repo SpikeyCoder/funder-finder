@@ -257,33 +257,95 @@ Deno.serve(async (req) => {
         const send = (data: string) => controller.enqueue(enc.encode(data));
 
         try {
-          // ── Phase 1: Extract text from uploaded grants (if any) ────────
+          // ── Phase 1: Build a corpus of the org's writing to learn from ─
+          //
+          // FM-IC-AI-002: we learn both from documents uploaded in this
+          // session AND from the org's past applications in the knowledge
+          // base, prioritising ones the user marked as `awarded`. This makes
+          // every draft "resurface and learn from past successful
+          // applications" even when nothing is uploaded this session.
           let styleGuide: StyleGuide | null = null;
+          const MAX_CORPUS_DOCS = 4;
+          const grantTexts: string[] = [];
+          let uploadedUsed = 0;
 
-          if (validatedFilePaths.length > 0) {
-            send(ssePhase('analyzing'));
+          send(ssePhase('analyzing'));
 
-            const grantTexts: string[] = [];
+          // 1a. Transient session uploads (ownership verified above).
+          for (const path of validatedFilePaths.slice(0, 3)) {
+            const file = await downloadFile(supabase, path);
+            if (file) {
+              try {
+                const text = await extractText(file.bytes, file.mimeType);
+                if (text.length > 100) {
+                  grantTexts.push(text);
+                  uploadedUsed++;
+                }
+              } catch (err) {
+                console.error(`Text extraction failed for ${path}:`, err);
+              }
+            }
+          }
 
-            for (const path of validatedFilePaths.slice(0, 3)) {
-              // Ownership was authoritatively verified above before this
-              // service-role download is allowed to run.
-              const file = await downloadFile(supabase, path);
-              if (file) {
-                try {
-                  const text = await extractText(file.bytes, file.mimeType);
-                  if (text.length > 100) grantTexts.push(text);
-                } catch (err) {
-                  console.error(`Text extraction failed for ${path}:`, err);
+          // 1b. Resurface the org's past applications from the knowledge base.
+          //     Awarded entries first, then the most recent of anything else
+          //     the user has opted into learning from.
+          let learnedAwarded = 0;
+          let learnedTotal = 0;
+          try {
+            const remaining = Math.max(0, MAX_CORPUS_DOCS - grantTexts.length);
+            if (remaining > 0) {
+              const { data: awardedRows } = await supabase
+                .from('application_knowledge_base')
+                .select('content, title, outcome')
+                .eq('user_id', userId)
+                .eq('use_for_learning', true)
+                .eq('outcome', 'awarded')
+                .order('created_at', { ascending: false })
+                .limit(remaining);
+
+              let picked = (awardedRows ?? []) as Array<{ content: unknown }>;
+              learnedAwarded = picked.length;
+
+              if (picked.length < remaining) {
+                const { data: otherRows } = await supabase
+                  .from('application_knowledge_base')
+                  .select('content, title, outcome')
+                  .eq('user_id', userId)
+                  .eq('use_for_learning', true)
+                  .neq('outcome', 'awarded')
+                  .order('created_at', { ascending: false })
+                  .limit(remaining - picked.length);
+                picked = picked.concat((otherRows ?? []) as Array<{ content: unknown }>);
+              }
+
+              for (const row of picked) {
+                if (typeof row.content === 'string' && row.content.length > 100) {
+                  grantTexts.push(row.content);
+                  learnedTotal++;
                 }
               }
             }
+          } catch (err) {
+            // The learning corpus is a best-effort enhancement — never fail
+            // the whole draft if the knowledge-base lookup has a problem.
+            console.error('Knowledge-base learning lookup failed:', err);
+          }
 
-            if (grantTexts.length > 0) {
-              styleGuide = await analyzeStyle(grantTexts, ANTHROPIC_API_KEY);
-              if (styleGuide) {
-                send(sseEvent({ styleAnalysis: true, sections: styleGuide.sectionOrder.length }));
-              }
+          // Tell the client what the draft is learning from so the UI can show
+          // an honest "learning from N of your past applications" indicator.
+          send(sseEvent({
+            learnedFrom: {
+              uploads: uploadedUsed,
+              pastApplications: learnedTotal,
+              awarded: learnedAwarded,
+            },
+          }));
+
+          if (grantTexts.length > 0) {
+            styleGuide = await analyzeStyle(grantTexts, ANTHROPIC_API_KEY);
+            if (styleGuide) {
+              send(sseEvent({ styleAnalysis: true, sections: styleGuide.sectionOrder.length }));
             }
           }
 
