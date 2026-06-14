@@ -383,7 +383,7 @@ export default function MigrationImportPage() {
                 step === s ? 'bg-blue-600 border-blue-500 text-white' :
                 (['upload', 'preview', 'options', 'importing', 'done'].indexOf(step) > i)
                   ? 'bg-green-900/40 border-green-700 text-green-400'
-                  : 'bg-gray-800 border-gray-600 text-gray-500'
+                  : 'bg-gray-800 border-gray-600 text-gray-400'
               }`}>
                 {(['upload', 'preview', 'options', 'importing', 'done'].indexOf(step) > i) ? (
                   <CheckCircle2 size={16} />
@@ -394,7 +394,7 @@ export default function MigrationImportPage() {
               {i < 4 && <div className="w-8 h-px bg-gray-700" />}
             </div>
           ))}
-          <span className="text-xs text-gray-500 ml-2">
+          <span className="text-xs text-gray-400 ml-2">
             {step === 'upload' && 'Upload file'}
             {step === 'preview' && 'Preview data'}
             {step === 'options' && 'Import options'}
@@ -445,9 +445,9 @@ export default function MigrationImportPage() {
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-3">
-                  <Upload size={32} className="text-gray-500" />
+                  <Upload size={32} className="text-gray-400" />
                   <p className="text-gray-300">Drop a CSV or Excel file here, or click to browse</p>
-                  <p className="text-xs text-gray-500">Supports .csv, .tsv, .xlsx, .xls</p>
+                  <p className="text-xs text-gray-400">Supports .csv, .tsv, .xlsx, .xls</p>
                 </div>
               )}
             </div>
@@ -532,7 +532,7 @@ export default function MigrationImportPage() {
                     <tbody>
                       {parseResult.records.slice(0, 50).map((rec, i) => (
                         <tr key={i} className="border-t border-[#21262d] hover:bg-white/[0.02]">
-                          <td className="px-3 py-2 text-gray-500">{i + 1}</td>
+                          <td className="px-3 py-2 text-gray-400">{i + 1}</td>
                           <td className="px-3 py-2 text-gray-200 max-w-[200px] truncate">{rec.funderName}</td>
                           <td className="px-3 py-2 text-gray-400 font-mono">{rec.ein || '—'}</td>
                           <td className="px-3 py-2 text-gray-300 max-w-[180px] truncate">{rec.grantTitle || '—'}</td>
@@ -546,7 +546,7 @@ export default function MigrationImportPage() {
                     </tbody>
                   </table>
                   {parseResult.records.length > 50 && (
-                    <p className="text-xs text-gray-500 p-3 border-t border-[#21262d]">
+                    <p className="text-xs text-gray-400 p-3 border-t border-[#21262d]">
                       Showing 50 of {parseResult.records.length} records
                     </p>
                   )}

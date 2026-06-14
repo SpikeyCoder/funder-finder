@@ -308,7 +308,7 @@ export default function BugReportButton() {
                   disabled={isSubmitting}
                   className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg p-3 text-sm text-white placeholder-gray-500 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-60"
                 />
-                <p className="text-xs text-gray-500 mt-1 text-right">
+                <p className="text-xs text-gray-400 mt-1 text-right">
                   {description.length}/1000
                 </p>
 
@@ -336,7 +336,7 @@ export default function BugReportButton() {
                     <span>
                       <Camera size={14} className="inline mr-1 opacity-60" />
                       Include a screenshot
-                      <span className="block text-xs text-gray-500">
+                      <span className="block text-xs text-gray-400">
                         Captures the visible page content
                       </span>
                     </span>

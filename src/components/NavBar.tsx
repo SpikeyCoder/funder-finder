@@ -58,7 +58,7 @@ export default function NavBar() {
                   </button>
                   {accountOpen && (
                     <div className="absolute right-0 top-full mt-1 w-56 bg-[#161b22] border border-[#30363d] rounded-lg shadow-xl py-1 z-50" role="menu">
-                      <div className="px-4 py-2.5 border-b border-[#30363d]"><p className="text-xs text-gray-500 truncate">{user.email}</p></div>
+                      <div className="px-4 py-2.5 border-b border-[#30363d]"><p className="text-xs text-gray-400 truncate">{user.email}</p></div>
                       <button role="menuitem" onClick={() => { navigate('/import'); setAccountOpen(false); }} className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/[0.06] transition-colors">Import Data</button>
                       <button role="menuitem" onClick={() => { navigate('/settings/team'); setAccountOpen(false); }} className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/[0.06] transition-colors">Team</button>
                       <button role="menuitem" onClick={() => { navigate('/settings'); setAccountOpen(false); }} className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/[0.06] transition-colors">Settings</button>
@@ -96,7 +96,7 @@ export default function NavBar() {
                   <Link to="/settings/team" onClick={() => setMobileOpen(false)} className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${isActive('/settings/team') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'}`}>Team</Link>
                   <Link to="/settings" onClick={() => setMobileOpen(false)} className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${isActive('/settings') && !isActive('/settings/team') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'}`}>Settings</Link>
                   <div className="flex items-center justify-between px-3 py-2">
-                    <span className="text-xs text-gray-500 truncate">{user.email}</span>
+                    <span className="text-xs text-gray-400 truncate">{user.email}</span>
                     <button onClick={() => { signOut(); setMobileOpen(false); }} className="text-sm font-medium text-gray-300 hover:text-white transition-colors">Sign Out</button>
                   </div>
                 </div>

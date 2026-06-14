@@ -88,7 +88,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
   return (
     <div className="relative w-full">
       <div className="relative">
-        <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
+        <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
         <input
           ref={inputRef}
           type="text"
@@ -102,7 +102,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
           className="w-full bg-[#0d1117] border border-[#30363d] rounded-xl pl-11 pr-10 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-blue-600 transition-colors"
         />
         {loading && (
-          <Loader2 size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 animate-spin" />
+          <Loader2 size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 animate-spin" />
         )}
       </div>
 

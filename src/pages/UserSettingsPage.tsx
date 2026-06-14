@@ -548,7 +548,7 @@ function UserSettingsContent() {
                       disabled
                       className="w-full px-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-gray-400 cursor-not-allowed"
                     />
-                    <p className="text-xs text-gray-500 mt-1">Contact support to change email</p>
+                    <p className="text-xs text-gray-400 mt-1">Contact support to change email</p>
                   </div>
 
                   {/* Password */}
@@ -686,7 +686,7 @@ function UserSettingsContent() {
                     onChange={(e) => setFieldsOfWork(e.target.value)}
                     placeholder="Workforce Development, Youth Mentoring, Food Security"
                     className={inputClass} />
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-gray-400 mt-1">
                     Comma-separated plain-language program areas. Complements NTEE codes for finer-grained funder matching.
                   </p>
                 </div>
@@ -877,7 +877,7 @@ function UserSettingsContent() {
                             className="w-4 h-4 rounded bg-[#0d1117] border border-[#30363d] text-blue-600 cursor-pointer mt-0.5" />
                           <div>
                             <span className="text-sm text-gray-300">{item.label}</span>
-                            <p className="text-xs text-gray-500">{item.desc}</p>
+                            <p className="text-xs text-gray-400">{item.desc}</p>
                           </div>
                         </label>
                       ))}
@@ -955,7 +955,7 @@ function UserSettingsContent() {
                                 {(feed as any).projects?.name || 'All Projects'}
                                 {feed.include_tasks ? ' + Tasks' : ''}
                               </p>
-                              <p className="text-xs text-gray-500 truncate mt-0.5">{feed.feed_url}</p>
+                              <p className="text-xs text-gray-400 truncate mt-0.5">{feed.feed_url}</p>
                             </div>
                             <div className="flex items-center gap-2 flex-shrink-0">
                               <button onClick={() => copyFeedUrl(feed)}
@@ -979,9 +979,9 @@ function UserSettingsContent() {
 
                   {calendarFeeds.length === 0 && (
                     <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-8 text-center">
-                      <Calendar size={32} className="mx-auto text-gray-500 mb-3" />
+                      <Calendar size={32} className="mx-auto text-gray-400 mb-3" />
                       <p className="text-gray-400 mb-1">No calendar feeds yet</p>
-                      <p className="text-gray-500 text-sm">Create a feed above to get started</p>
+                      <p className="text-gray-400 text-sm">Create a feed above to get started</p>
                     </div>
                   )}
 

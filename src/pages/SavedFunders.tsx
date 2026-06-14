@@ -637,7 +637,7 @@ export default function SavedFunders() {
                           <div className="flex items-center gap-2">
                             <Building2 size={13} className="text-blue-400 shrink-0" />
                             <span className="text-gray-200 truncate max-w-[220px]">{p.name}</span>
-                            {p.state && <span className="text-gray-500 text-xs shrink-0">{p.state}</span>}
+                            {p.state && <span className="text-gray-400 text-xs shrink-0">{p.state}</span>}
                           </div>
                         </td>
                         <td className="py-3 px-2 text-right text-gray-300 whitespace-nowrap">
@@ -648,7 +648,7 @@ export default function SavedFunders() {
                             {Math.round(p.score * 100)}%
                           </span>
                         </td>
-                        <td className="py-3 px-3 text-gray-500 text-xs truncate max-w-[160px] hidden sm:table-cell">
+                        <td className="py-3 px-3 text-gray-400 text-xs truncate max-w-[160px] hidden sm:table-cell">
                           {p.recommendedBy}
                         </td>
                       </tr>
@@ -703,7 +703,7 @@ export default function SavedFunders() {
               </pre>
             </div>
             <div className="px-6 py-3 border-t border-[#30363d] flex items-center justify-between">
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-gray-400">
                 Saved {new Date(viewingDraft.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
               </p>
               <button

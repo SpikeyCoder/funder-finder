@@ -89,7 +89,7 @@ export default class ErrorBoundary extends Component<Props, State> {
                 <summary className="cursor-pointer text-sm text-gray-400 font-medium">
                   Error details
                 </summary>
-                <pre className="mt-3 text-xs text-gray-500 overflow-auto max-h-32">
+                <pre className="mt-3 text-xs text-gray-400 overflow-auto max-h-32">
                   {this.state.error.toString()}
                 </pre>
               </details>

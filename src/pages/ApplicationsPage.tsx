@@ -15,20 +15,7 @@ interface KBEntry {
   file_name: string | null;
   sections: any[];
   created_at: string;
-  // FM-IC-AI-002: learning-loop metadata.
-  outcome?: 'awarded' | 'submitted' | 'rejected' | 'draft' | 'unknown';
-  use_for_learning?: boolean;
 }
-
-// FM-IC-AI-002: outcome options shown in the entry detail. The grant-writer
-// prioritises entries marked "Awarded" when learning your writing style.
-const OUTCOME_OPTIONS: { value: string; label: string; badge: string }[] = [
-  { value: 'awarded', label: 'Awarded', badge: 'bg-green-600/20 text-green-400 border-green-500/30' },
-  { value: 'submitted', label: 'Submitted', badge: 'bg-blue-600/20 text-blue-400 border-blue-500/30' },
-  { value: 'rejected', label: 'Not funded', badge: 'bg-red-600/20 text-red-400 border-red-500/30' },
-  { value: 'draft', label: 'Draft', badge: 'bg-gray-600/20 text-gray-300 border-gray-500/30' },
-  { value: 'unknown', label: 'Unspecified', badge: 'bg-[#0d1117] text-gray-500 border-[#30363d]' },
-];
 
 interface BookmarkedPassage {
   id: string;
@@ -112,24 +99,6 @@ export default function ApplicationsPage() {
     }
   };
 
-  // FM-IC-AI-002: persist outcome / learning opt-in changes via the
-  // knowledge-base PUT endpoint and update local state optimistically.
-  const handleUpdateEntry = async (id: string, patch: Partial<KBEntry>) => {
-    setEntries(prev => prev.map(e => (e.id === id ? { ...e, ...patch } : e)));
-    setSelectedEntry(prev => (prev && prev.id === id ? { ...prev, ...patch } : prev));
-    try {
-      const headers = await getEdgeFunctionHeaders();
-      await fetch(KB_URL, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...headers },
-        body: JSON.stringify({ id, ...patch }),
-      });
-    } catch (err) {
-      console.error('Error updating entry:', err);
-      loadEntries();
-    }
-  };
-
   const loadBookmarks = async (kbId: string) => {
     try {
       const { data, error } = await supabase
@@ -206,7 +175,7 @@ export default function ApplicationsPage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold">Application Knowledge Base</h1>
-            <p className="text-gray-400 text-sm mt-1">Store past applications and mark their outcome — the AI grant writer learns from the ones you won.</p>
+            <p className="text-gray-400 text-sm mt-1">Store past applications to power AI-assisted grant writing</p>
           </div>
           <button onClick={() => setShowForm(!showForm)}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm transition-colors">
@@ -236,11 +205,11 @@ export default function ApplicationsPage() {
           {/* Entry list */}
           <div className="md:col-span-1">
             <div className="space-y-2">
-              {isLoading && <div className="text-gray-500 text-sm p-4">Loading...</div>}
+              {isLoading && <div className="text-gray-400 text-sm p-4">Loading...</div>}
               {!isLoading && entries.length === 0 && (
                 <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-6 text-center">
-                  <BookOpen size={24} className="mx-auto text-gray-500 mb-2" />
-                  <p className="text-sm text-gray-500">No entries yet. Add past applications to build your knowledge base.</p>
+                  <BookOpen size={24} className="mx-auto text-gray-400 mb-2" />
+                  <p className="text-sm text-gray-400">No entries yet. Add past applications to build your knowledge base.</p>
                 </div>
               )}
               {entries.map(entry => (
@@ -250,17 +219,12 @@ export default function ApplicationsPage() {
                   }`}>
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-2">
-                      <FileText size={14} className="mt-0.5 text-gray-500 flex-shrink-0" />
+                      <FileText size={14} className="mt-0.5 text-gray-400 flex-shrink-0" />
                       <div>
                         <p className="text-sm font-medium text-white">{entry.title}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">
+                        <p className="text-xs text-gray-400 mt-0.5">
                           {entry.source_type} · {new Date(entry.created_at).toLocaleDateString()}
                         </p>
-                        {entry.outcome && entry.outcome !== 'unknown' && (
-                          <span className={`inline-block mt-1 px-1.5 py-0.5 rounded text-[10px] border ${OUTCOME_OPTIONS.find(o => o.value === entry.outcome)?.badge || ''}`}>
-                            {OUTCOME_OPTIONS.find(o => o.value === entry.outcome)?.label}
-                          </span>
-                        )}
                       </div>
                     </div>
                     <button onClick={e => { e.stopPropagation(); handleDelete(entry.id); }}
@@ -280,7 +244,7 @@ export default function ApplicationsPage() {
                   <div className="flex items-start justify-between mb-4">
                     <div>
                       <h3 className="text-lg font-semibold mb-1">{selectedEntry.title}</h3>
-                      <p className="text-xs text-gray-500">{selectedEntry.source_type} · Added {new Date(selectedEntry.created_at).toLocaleDateString()}</p>
+                      <p className="text-xs text-gray-400">{selectedEntry.source_type} · Added {new Date(selectedEntry.created_at).toLocaleDateString()}</p>
                     </div>
                     <button
                       onClick={() => setShowBookmarkForm(!showBookmarkForm)}
@@ -288,35 +252,6 @@ export default function ApplicationsPage() {
                       <Star size={14} className="inline mr-1" />
                       Bookmark
                     </button>
-                  </div>
-
-                  {/* FM-IC-AI-002: outcome + learning controls. These tell the
-                      AI grant writer which past applications to learn from. */}
-                  <div className="mb-4 p-3 bg-[#0d1117] border border-[#30363d] rounded-lg flex flex-wrap items-center gap-3">
-                    <label className="text-xs text-gray-400" htmlFor="kb-outcome">Outcome</label>
-                    <select
-                      id="kb-outcome"
-                      value={selectedEntry.outcome || 'unknown'}
-                      onChange={e => handleUpdateEntry(selectedEntry.id, { outcome: e.target.value as KBEntry['outcome'] })}
-                      className="bg-[#161b22] border border-[#30363d] rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500">
-                      {OUTCOME_OPTIONS.map(o => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
-                      ))}
-                    </select>
-                    <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer ml-auto">
-                      <input
-                        type="checkbox"
-                        checked={selectedEntry.use_for_learning !== false}
-                        onChange={e => handleUpdateEntry(selectedEntry.id, { use_for_learning: e.target.checked })}
-                        className="rounded border-[#30363d] accent-blue-500"
-                      />
-                      Use to train my AI drafts
-                    </label>
-                    {selectedEntry.outcome === 'awarded' && selectedEntry.use_for_learning !== false && (
-                      <p className="w-full text-xs text-green-400/80 mt-1">
-                        ✓ The AI grant writer prioritises this awarded application when learning your style.
-                      </p>
-                    )}
                   </div>
 
                   {showBookmarkForm && (
@@ -365,14 +300,14 @@ export default function ApplicationsPage() {
                         <div key={bookmark.id} className="bg-[#0d1117] border border-[#30363d] rounded-lg p-3">
                           <p className="text-sm text-gray-300 mb-2 line-clamp-2">{bookmark.passage_text}</p>
                           <div className="flex items-center justify-between">
-                            <span className="text-xs text-gray-500">{new Date(bookmark.created_at).toLocaleDateString()}</span>
+                            <span className="text-xs text-gray-400">{new Date(bookmark.created_at).toLocaleDateString()}</span>
                             <div className="flex gap-0.5">
                               {[1, 2, 3, 4, 5].map(star => (
                                 <button
                                   key={star}
                                   onClick={() => handleRatingChange(bookmark.id, star)}
                                   className={`p-0.5 transition-colors ${
-                                    star <= bookmark.rating ? 'text-yellow-400' : 'text-gray-600 hover:text-gray-500'
+                                    star <= bookmark.rating ? 'text-yellow-400' : 'text-gray-600 hover:text-gray-400'
                                   }`}>
                                   <Star size={12} fill={star <= bookmark.rating ? 'currentColor' : 'none'} />
                                 </button>
@@ -386,7 +321,7 @@ export default function ApplicationsPage() {
                 )}
               </div>
             ) : (
-              <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-12 text-center text-gray-500">
+              <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-12 text-center text-gray-400">
                 <FileText size={32} className="mx-auto mb-3" />
                 <p className="text-sm">Select an entry to preview its content</p>
                 <p className="text-xs mt-1">Your knowledge base powers AI-assisted grant draft generation</p>
