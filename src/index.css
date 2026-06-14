@@ -682,3 +682,27 @@ html.light-mode .demo-dark-card .text-amber-300 { color: #fcd34d !important; }
 html.light-mode .demo-dark-card .text-amber-400 { color: #fbbf24 !important; }
 html.light-mode .demo-dark-card .text-red-300 { color: #fca5a5 !important; }
 html.light-mode .demo-dark-card .text-red-400 { color: #f87171 !important; }
+
+/* Accessibility — WCAG 2.1 AA umbrella card #147
+   prefers-reduced-motion: disable non-essential transitions/animations
+   for users who request reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* High-contrast focus indicator on interactive elements that have
+   removed the default outline. (Fallback in case focus-visible above
+   is overridden by component utilities.) */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:not([tabindex="-1"]):focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
