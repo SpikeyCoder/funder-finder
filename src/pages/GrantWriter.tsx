@@ -182,6 +182,13 @@ export default function GrantWriter() {
     sourcesFound: number;
     fallback: boolean;
   } | null>(null);
+  // FM-IC-AI-002: what the current draft is learning from (session uploads +
+  // resurfaced past applications from the knowledge base).
+  const [learnedFrom, setLearnedFrom] = useState<{
+    uploads: number;
+    pastApplications: number;
+    awarded: number;
+  } | null>(null);
 
   const outputEndRef = useRef<HTMLDivElement>(null);
 
@@ -295,6 +302,7 @@ export default function GrantWriter() {
     setPhase('analyzing');
     setError(null);
     setResearchStats(null);
+    setLearnedFrom(null);
 
     try {
       const headers = await getEdgeFunctionHeaders();
@@ -356,6 +364,15 @@ export default function GrantWriter() {
                 statsFound: parsed.statsFound || 0,
                 sourcesFound: parsed.sourcesFound || 0,
                 fallback: parsed.fallback || false,
+              });
+            }
+
+            // FM-IC-AI-002: learning-corpus metadata
+            if (parsed.learnedFrom) {
+              setLearnedFrom({
+                uploads: parsed.learnedFrom.uploads || 0,
+                pastApplications: parsed.learnedFrom.pastApplications || 0,
+                awarded: parsed.learnedFrom.awarded || 0,
               });
             }
 
@@ -860,8 +877,8 @@ export default function GrantWriter() {
               Preparing your grant draft…
             </h3>
 
-            {/* Phase: Analyzing past grants */}
-            {uploadedFiles.length > 0 && (
+            {/* Phase: Analyzing past grants + resurfaced applications */}
+            {(uploadedFiles.length > 0 || (learnedFrom && learnedFrom.pastApplications > 0)) && (
               <div className="flex items-center gap-3">
                 {phase === 'analyzing' ? (
                   <Loader2 size={16} className="animate-spin text-blue-400" />
@@ -875,8 +892,9 @@ export default function GrantWriter() {
                       : 'text-gray-400'
                   }`}
                 >
-                  Analyzing {uploadedFiles.length} past grant
-                  {uploadedFiles.length !== 1 ? 's' : ''} for writing style…
+                  {learnedFrom && learnedFrom.pastApplications > 0
+                    ? `Learning from ${learnedFrom.pastApplications} of your past application${learnedFrom.pastApplications !== 1 ? 's' : ''}${learnedFrom.awarded > 0 ? ` (${learnedFrom.awarded} awarded)` : ''}${learnedFrom.uploads > 0 ? ` and ${learnedFrom.uploads} uploaded file${learnedFrom.uploads !== 1 ? 's' : ''}` : ''}…`
+                    : `Analyzing ${uploadedFiles.length} past grant${uploadedFiles.length !== 1 ? 's' : ''} for writing style…`}
                 </span>
               </div>
             )}
