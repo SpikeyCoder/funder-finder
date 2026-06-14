@@ -28,9 +28,9 @@ export default function Landing() {
         </p>
         <button
           onClick={() => navigate('/mission')}
-          className="mt-8 inline-flex items-center gap-3 bg-white text-gray-900 rounded-2xl px-10 py-4 text-lg font-semibold hover:bg-gray-100 transition shadow-lg"
+          className="mt-8 inline-flex items-center gap-3 bg-white text-gray-900 rounded-2xl px-10 py-4 text-lg font-semibold hover:bg-gray-100 transition shadow-lg focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0d1117]"
         >
-          <Search size={22} />
+          <Search size={22} aria-hidden="true" />
           Get Started
         </button>
       </div>
@@ -38,15 +38,15 @@ export default function Landing() {
       {/* Trust Signals */}
       <div className="flex flex-wrap items-center justify-center gap-6 px-6 pb-8 text-sm text-gray-400">
         <span className="flex items-center gap-1.5">
-          <Shield size={13} />
+          <Shield size={13} aria-hidden="true" />
           Powered by IRS 990 public filings
         </span>
         <span className="flex items-center gap-1.5">
-          <CheckCircle size={13} />
+          <CheckCircle size={13} aria-hidden="true" />
           Free to use — no credit card required
         </span>
         <span className="flex items-center gap-1.5">
-          <CheckCircle size={13} />
+          <CheckCircle size={13} aria-hidden="true" />
           Your data is never shared or sold
         </span>
       </div>
@@ -125,7 +125,7 @@ export default function Landing() {
               'No account required to start searching',
             ].map(item => (
               <div key={item} className="flex items-start gap-3">
-                <span className="text-green-400 mt-0.5 font-bold text-lg">✓</span>
+                <CheckCircle size={18} className="text-green-400 mt-0.5 shrink-0" aria-hidden="true" />
                 <span className="text-gray-200">{item}</span>
               </div>
             ))}
@@ -141,9 +141,9 @@ export default function Landing() {
         </p>
         <button
           onClick={() => navigate('/mission')}
-          className="inline-flex items-center gap-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl px-10 py-4 text-lg font-semibold transition"
+          className="inline-flex items-center gap-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl px-10 py-4 text-lg font-semibold transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0d1117]"
         >
-          <Search size={22} />
+          <Search size={22} aria-hidden="true" />
           Find Funders Now
         </button>
       </div>
