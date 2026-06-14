@@ -18,7 +18,7 @@ export default function Landing() {
 
       <main id="main-content">
       {/* Hero */}
-      <div className="flex flex-col items-center justify-center text-center px-6 pt-24 pb-12">
+      <div className="flex flex-col items-center justify-center text-center px-6 pt-16 sm:pt-24 pb-10 sm:pb-12">
         <h1 className="text-5xl md:text-7xl font-bold leading-tight tracking-tight max-w-4xl">
           Find Funders Aligned to Your Mission
         </h1>
@@ -52,7 +52,7 @@ export default function Landing() {
       </div>
 
       {/* Demo Video */}
-      <div className="w-[64%] max-w-[360rem] mx-auto">
+      <div className="w-full px-4 sm:px-6 lg:w-[64%] lg:px-0 max-w-[360rem] mx-auto">
         <p className="text-center text-sm text-gray-500 uppercase tracking-widest mb-4">See It in Action</p>
         <DemoVideo />
       </div>
