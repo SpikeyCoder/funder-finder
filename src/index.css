@@ -22,6 +22,21 @@ body {
   margin: 0;
 }
 
+/* Mobile-first responsive guards (FM-105)
+   Prevents accidental horizontal overflow caused by absolute-positioned children
+   or wide fixed elements on small viewports. */
+html, body {
+  overflow-x: hidden;
+}
+
+@media (max-width: 480px) {
+  /* Ensure tables and code blocks become scrollable rather than push the viewport */
+  table, pre {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+}
+
 /* Improved contrast for placeholder text (WCAG 1.4.3) */
 ::placeholder {
   color: #8b949e;
