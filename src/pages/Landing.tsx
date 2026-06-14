@@ -22,17 +22,20 @@ export default function Landing() {
         <h1 className="text-5xl md:text-7xl font-bold leading-tight tracking-tight max-w-4xl">
           Find Funders Aligned to Your Mission
         </h1>
-        <p className="mt-6 text-lg md:text-xl text-gray-400 max-w-2xl">
-          Connect with foundations, DAFs, and corporate giving programs that match your
-          nonprofit's mission in seconds.
+        <p className="mt-6 text-lg md:text-xl text-gray-300 max-w-2xl">
+          AI funder matching in seconds. Foundations, DAFs, and corporate giving programs
+          aligned to your mission &mdash; no account required.
         </p>
         <button
           onClick={() => navigate('/mission')}
           className="mt-8 inline-flex items-center gap-3 bg-white text-gray-900 rounded-2xl px-10 py-4 text-lg font-semibold hover:bg-gray-100 transition shadow-lg focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0d1117]"
         >
           <Search size={22} aria-hidden="true" />
-          Get Started
+          Find Funders Free
         </button>
+        <p className="mt-3 text-sm text-gray-400">
+          Results in 30 seconds &middot; No credit card &middot; No email needed to start
+        </p>
       </div>
 
       {/* Trust Signals */}
@@ -153,3 +156,4 @@ export default function Landing() {
     </div>
   );
 }
+
