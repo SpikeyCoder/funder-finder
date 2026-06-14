@@ -249,7 +249,7 @@ export default function PeerComparison({ source, peer, onClose }: PeerComparison
                           {row.left}
                         </span>
                       </td>
-                      <td className="py-3 px-1 text-center text-[11px] uppercase tracking-wide text-gray-500 whitespace-nowrap align-top">
+                      <td className="py-3 px-1 text-center text-[11px] uppercase tracking-wide text-gray-400 whitespace-nowrap align-top">
                         {row.label}
                       </td>
                       <td
@@ -274,7 +274,7 @@ export default function PeerComparison({ source, peer, onClose }: PeerComparison
         </div>
 
         <div className="px-5 py-3 border-t border-[#30363d] bg-[#0d1117]">
-          <p className="text-[11px] text-gray-500">
+          <p className="text-[11px] text-gray-400">
             Funding figures are derived from IRS 990 filings and grant records. A
             <Trophy size={10} className="inline mx-1 text-green-400" />
             marks the higher value; it reflects scale, not quality of work.

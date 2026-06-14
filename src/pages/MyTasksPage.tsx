@@ -168,7 +168,7 @@ export default function MyTasksPage() {
         <div className="flex items-center gap-2 mb-3">
           {icon}
           <h2 className={`text-sm font-semibold ${color}`}>{title}</h2>
-          <span className="text-xs text-gray-500 bg-[#0d1117] px-2 py-0.5 rounded-full">{items.length}</span>
+          <span className="text-xs text-gray-400 bg-[#0d1117] px-2 py-0.5 rounded-full">{items.length}</span>
         </div>
         <div className="space-y-2">
           {items.map(task => (
@@ -180,14 +180,14 @@ export default function MyTasksPage() {
               <button onClick={() => toggleTask(task.id, task.status)}
                 aria-label={task.status === 'done' ? `Mark task "${task.title}" as not done` : `Mark task "${task.title}" as done`}
                 aria-pressed={task.status === 'done'}
-                className={`mt-0.5 flex-shrink-0 ${task.status === 'done' ? 'text-green-400' : 'text-gray-500 hover:text-gray-300'}`}>
+                className={`mt-0.5 flex-shrink-0 ${task.status === 'done' ? 'text-green-400' : 'text-gray-400 hover:text-gray-300'}`}>
                 <CheckCircle size={18} aria-hidden="true" />
               </button>
               <div className="flex-1 min-w-0">
-                <p className={`text-sm font-medium ${task.status === 'done' ? 'line-through text-gray-500' : 'text-white'}`}>{task.title}</p>
+                <p className={`text-sm font-medium ${task.status === 'done' ? 'line-through text-gray-400' : 'text-white'}`}>{task.title}</p>
                 <div className="flex flex-wrap items-center gap-3 mt-1">
                   {task.tracked_grants && (
-                    <span className="text-xs text-gray-500">{task.tracked_grants.funder_name}{task.tracked_grants.grant_title ? ` — ${task.tracked_grants.grant_title}` : ''}</span>
+                    <span className="text-xs text-gray-400">{task.tracked_grants.funder_name}{task.tracked_grants.grant_title ? ` — ${task.tracked_grants.grant_title}` : ''}</span>
                   )}
                   {task.projects && (
                     <span className="text-xs text-blue-400 cursor-pointer hover:text-blue-300" onClick={() => navigate(`/projects/${task.project_id}/tracker`)}>
@@ -198,7 +198,7 @@ export default function MyTasksPage() {
                     <span className="text-xs text-purple-400">@ {task.assignee_email}</span>
                   )}
                   {task.due_date && (
-                    <span className={`text-xs flex items-center gap-1 ${task.is_overdue ? 'text-red-400' : 'text-gray-500'}`}>
+                    <span className={`text-xs flex items-center gap-1 ${task.is_overdue ? 'text-red-400' : 'text-gray-400'}`}>
                       <Clock size={10} />
                       {new Date(task.due_date).toLocaleDateString()}
                     </span>
@@ -231,7 +231,7 @@ export default function MyTasksPage() {
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-base font-semibold text-white">Create a task</h2>
                 <button onClick={() => { setShowComposer(false); resetForm(); }} aria-label="Close task composer"
-                  className="text-gray-500 hover:text-gray-300"><X size={18} /></button>
+                  className="text-gray-400 hover:text-gray-300"><X size={18} /></button>
               </div>
               {composerLoading ? (
                 <div className="flex items-center justify-center py-8"><Loader className="animate-spin text-gray-400" size={20} /></div>
@@ -287,9 +287,9 @@ export default function MyTasksPage() {
 
           {allEmpty ? (
             <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-8 text-center">
-              <CheckCircle size={32} className="mx-auto text-gray-500 mb-3" />
+              <CheckCircle size={32} className="mx-auto text-gray-400 mb-3" />
               <p className="text-gray-400 mb-2">No tasks yet.</p>
-              <p className="text-gray-500 text-sm">Create a task with the “New Task” button above, or add tasks to tracked grants from a project tracker.</p>
+              <p className="text-gray-400 text-sm">Create a task with the “New Task” button above, or add tasks to tracked grants from a project tracker.</p>
             </div>
           ) : (
             <>
@@ -297,7 +297,7 @@ export default function MyTasksPage() {
               {renderSection('Due Today', tasks.today, <Clock size={14} className="text-yellow-400" />, 'text-yellow-400')}
               {renderSection('Due This Week', tasks.this_week, <Clock size={14} className="text-blue-400" />, 'text-blue-400')}
               {renderSection('Due Later', tasks.later, <Clock size={14} className="text-gray-400" />, 'text-gray-400')}
-              {renderSection('No Due Date', tasks.no_date, <Clock size={14} className="text-gray-500" />, 'text-gray-500')}
+              {renderSection('No Due Date', tasks.no_date, <Clock size={14} className="text-gray-400" />, 'text-gray-400')}
               {renderSection('Completed', tasks.completed, <CheckCircle size={14} className="text-green-400" />, 'text-green-400')}
             </>
           )}

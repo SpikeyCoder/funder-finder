@@ -518,7 +518,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
                 ))}
               </div>
             )}
-            <p className="text-xs text-gray-500 mt-2">
+            <p className="text-xs text-gray-400 mt-2">
               Finds funders that have made grants in this county or city.
             </p>
           </div>
@@ -530,7 +530,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
           isOpen={expandedSections.internationalLocation}
           onToggle={() => toggleSection('internationalLocation')}
         >
-          <p className="text-xs text-gray-500 mb-2">Filter funders by the countries or regions they serve.</p>
+          <p className="text-xs text-gray-400 mb-2">Filter funders by the countries or regions they serve.</p>
           <div className="mb-3">
             <input
               type="text"
@@ -544,7 +544,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
           <div className="space-y-3 max-h-56 overflow-y-auto">
             {filteredIntlItems.map((group) => (
               <div key={group.group}>
-                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">{group.group}</p>
+                <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">{group.group}</p>
                 <div className="space-y-1.5">
                   {group.items.map((item) => (
                     <label key={item} className="flex items-center gap-2 cursor-pointer hover:text-gray-200">

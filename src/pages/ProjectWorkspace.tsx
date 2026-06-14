@@ -1190,12 +1190,12 @@ export default function ProjectWorkspace() {
                 <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-8 text-center">
                   <Loader className="animate-spin text-blue-400 mx-auto mb-3" size={24} />
                   <p className="text-gray-400 mb-2">Computing matches...</p>
-                  <p className="text-gray-500 text-sm">This may take a moment as we analyze funder compatibility.</p>
+                  <p className="text-gray-400 text-sm">This may take a moment as we analyze funder compatibility.</p>
                 </div>
               ) : matches.length === 0 ? (
                 <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-8 text-center">
                   <p className="text-gray-400 mb-2">No matches computed yet.</p>
-                  <p className="text-gray-500 text-sm">Click "Compute Matches" above or update your project criteria in Settings.</p>
+                  <p className="text-gray-400 text-sm">Click "Compute Matches" above or update your project criteria in Settings.</p>
                 </div>
               ) : (
                 <div className="bg-[#161b22] border border-[#30363d] rounded-lg overflow-hidden">
@@ -1257,7 +1257,7 @@ export default function ProjectWorkspace() {
                   className="flex items-center gap-2 px-3 py-2 bg-[#161b22] border border-[#30363d] hover:border-[#484f58] text-gray-300 rounded-lg text-sm transition-colors">
                   <ExternalLink size={14} /> Share
                 </button>
-                <span className="text-sm text-gray-500 ml-auto">
+                <span className="text-sm text-gray-400 ml-auto">
                   {trackedGrants.length} grant{trackedGrants.length !== 1 ? 's' : ''} tracked
                 </span>
               </div>
@@ -1266,19 +1266,19 @@ export default function ProjectWorkspace() {
               {trackedGrants.length > 0 && (
                 <div className="flex flex-wrap items-end gap-3 mb-4 p-3 bg-[#0d1117] border border-[#30363d] rounded-lg">
                   <div>
-                    <label htmlFor="tracker-deadline-from" className="block text-[11px] uppercase tracking-wider text-gray-500 mb-1">Deadline from</label>
+                    <label htmlFor="tracker-deadline-from" className="block text-[11px] uppercase tracking-wider text-gray-400 mb-1">Deadline from</label>
                     <input id="tracker-deadline-from" type="date" value={trackerDeadlineFrom}
                       onChange={(e) => setTrackerDeadlineFrom(e.target.value)}
                       className="bg-[#161b22] border border-[#30363d] rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500" />
                   </div>
                   <div>
-                    <label htmlFor="tracker-deadline-to" className="block text-[11px] uppercase tracking-wider text-gray-500 mb-1">Deadline to</label>
+                    <label htmlFor="tracker-deadline-to" className="block text-[11px] uppercase tracking-wider text-gray-400 mb-1">Deadline to</label>
                     <input id="tracker-deadline-to" type="date" value={trackerDeadlineTo}
                       onChange={(e) => setTrackerDeadlineTo(e.target.value)}
                       className="bg-[#161b22] border border-[#30363d] rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500" />
                   </div>
                   <div>
-                    <label htmlFor="tracker-status" className="block text-[11px] uppercase tracking-wider text-gray-500 mb-1">Status</label>
+                    <label htmlFor="tracker-status" className="block text-[11px] uppercase tracking-wider text-gray-400 mb-1">Status</label>
                     <select id="tracker-status" value={trackerStatusFilter}
                       onChange={(e) => setTrackerStatusFilter(e.target.value)}
                       className="bg-[#161b22] border border-[#30363d] rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500">
@@ -1289,7 +1289,7 @@ export default function ProjectWorkspace() {
                     </select>
                   </div>
                   <div>
-                    <label htmlFor="tracker-sort" className="block text-[11px] uppercase tracking-wider text-gray-500 mb-1">Sort</label>
+                    <label htmlFor="tracker-sort" className="block text-[11px] uppercase tracking-wider text-gray-400 mb-1">Sort</label>
                     <select id="tracker-sort" value={trackerSort}
                       onChange={(e) => setTrackerSort(e.target.value as any)}
                       className="bg-[#161b22] border border-[#30363d] rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500">
@@ -1316,7 +1316,7 @@ export default function ProjectWorkspace() {
                       <div key={status.id} className="flex items-center gap-2 px-3 py-1.5 bg-[#161b22] border border-[#30363d] rounded-full">
                         <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: status.color }} />
                         <span className="text-sm text-gray-300">{status.name}</span>
-                        <span className="text-xs text-gray-500">{count}</span>
+                        <span className="text-xs text-gray-400">{count}</span>
                       </div>
                     );
                   })}
@@ -1328,7 +1328,7 @@ export default function ProjectWorkspace() {
               ) : trackedGrants.length === 0 ? (
                 <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-8 text-center">
                   <p className="text-gray-400 mb-2">No grants tracked yet.</p>
-                  <p className="text-gray-500 text-sm">Save funders from Matches, add grants manually, or import from CSV.</p>
+                  <p className="text-gray-400 text-sm">Save funders from Matches, add grants manually, or import from CSV.</p>
                 </div>
               ) : (
                 <div className="bg-[#161b22] border border-[#30363d] rounded-lg overflow-hidden">
@@ -1348,7 +1348,7 @@ export default function ProjectWorkspace() {
                       <tbody className="divide-y divide-[#30363d]">
                         {filteredTrackedGrants.length === 0 && (
                           <tr>
-                            <td colSpan={6} className="px-4 py-6 text-center text-sm text-gray-500">
+                            <td colSpan={6} className="px-4 py-6 text-center text-sm text-gray-400">
                               No grants match the current filters. <button type="button" onClick={() => { setTrackerDeadlineFrom(''); setTrackerDeadlineTo(''); setTrackerStatusFilter('all'); }} className="text-blue-400 hover:underline">Clear filters</button>
                             </td>
                           </tr>
@@ -1360,7 +1360,7 @@ export default function ProjectWorkspace() {
                             <tr key={grant.id} className="hover:bg-[#21262d] transition-colors cursor-pointer" onClick={() => openGrantDetail(grant)}>
                               <td className="px-4 py-3">
                                 <div className="text-blue-400 hover:text-blue-300 text-sm font-medium">{grant.funder_name}</div>
-                                {grant.grant_title && <div className="text-xs text-gray-500 mt-0.5">{grant.grant_title}</div>}
+                                {grant.grant_title && <div className="text-xs text-gray-400 mt-0.5">{grant.grant_title}</div>}
                               </td>
                               <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                                 <div className="inline-flex items-center gap-2 bg-[#0d1117] border border-[#30363d] rounded px-2 py-1">
@@ -1390,21 +1390,21 @@ export default function ProjectWorkspace() {
                                   </span>
                                 ) : <span className="text-gray-600 text-sm">—</span>}
                               </td>
-                              <td className="px-4 py-3 text-gray-500 text-xs uppercase">{grant.source}</td>
+                              <td className="px-4 py-3 text-gray-400 text-xs uppercase">{grant.source}</td>
                               <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
                                 <div className="flex items-center justify-end gap-1">
-                                  <button onClick={() => handleGenerateDraft(grant)} className="p-1.5 text-gray-500 hover:text-purple-400 transition-colors" title="Generate AI Draft">
+                                  <button onClick={() => handleGenerateDraft(grant)} className="p-1.5 text-gray-400 hover:text-purple-400 transition-colors" title="Generate AI Draft">
                                     <Sparkles size={14} />
                                   </button>
-                                  <button onClick={() => openGrantDetail(grant)} className="p-1.5 text-gray-500 hover:text-green-400 transition-colors" title="Tasks & Details">
+                                  <button onClick={() => openGrantDetail(grant)} className="p-1.5 text-gray-400 hover:text-green-400 transition-colors" title="Tasks & Details">
                                     <ClipboardList size={14} />
                                   </button>
                                   {grant.funder_ein && (
-                                    <button onClick={() => navigate(`/funder/${grant.funder_ein}`)} className="p-1.5 text-gray-500 hover:text-blue-400 transition-colors" title="View funder">
+                                    <button onClick={() => navigate(`/funder/${grant.funder_ein}`)} className="p-1.5 text-gray-400 hover:text-blue-400 transition-colors" title="View funder">
                                       <ExternalLink size={14} />
                                     </button>
                                   )}
-                                  <button onClick={() => handleDeleteGrant(grant.id)} className="p-1.5 text-gray-500 hover:text-red-400 transition-colors" title="Remove">
+                                  <button onClick={() => handleDeleteGrant(grant.id)} className="p-1.5 text-gray-400 hover:text-red-400 transition-colors" title="Remove">
                                     <Trash2 size={14} />
                                   </button>
                                 </div>
@@ -1437,13 +1437,13 @@ export default function ProjectWorkspace() {
                 <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-8 text-center">
                   <Loader className="animate-spin text-blue-400 mx-auto mb-3" size={24} />
                   <p className="text-gray-400 mb-2">Finding peer organizations...</p>
-                  <p className="text-gray-500 text-sm">Analyzing grant records to find nonprofits with similar missions.</p>
+                  <p className="text-gray-400 text-sm">Analyzing grant records to find nonprofits with similar missions.</p>
                 </div>
               ) : peers.length === 0 ? (
                 <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-8 text-center">
-                  <Users size={32} className="mx-auto text-gray-500 mb-3" />
+                  <Users size={32} className="mx-auto text-gray-400 mb-3" />
                   <p className="text-gray-400 mb-2">No peer organizations found.</p>
-                  <p className="text-gray-500 text-sm">Try updating your project description and location in Settings, then click "Refresh Peers".</p>
+                  <p className="text-gray-400 text-sm">Try updating your project description and location in Settings, then click "Refresh Peers".</p>
                 </div>
               ) : (
                 <div className="bg-[#161b22] border border-[#30363d] rounded-lg overflow-hidden">
@@ -1501,9 +1501,9 @@ export default function ProjectWorkspace() {
 
               {trackedGrants.length === 0 ? (
                 <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-8 text-center">
-                  <Calendar size={32} className="mx-auto text-gray-500 mb-3" />
+                  <Calendar size={32} className="mx-auto text-gray-400 mb-3" />
                   <p className="text-gray-400 mb-2">No tracked grants yet.</p>
-                  <p className="text-gray-500 text-sm mb-4">Add grants to the tracker tab to see deadlines on the calendar.</p>
+                  <p className="text-gray-400 text-sm mb-4">Add grants to the tracker tab to see deadlines on the calendar.</p>
                   <button onClick={() => handleTabChange('tracker')}
                     className="inline-block px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
                     Go to Tracker
@@ -1515,7 +1515,7 @@ export default function ProjectWorkspace() {
                   <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-6">
                     <div className="grid grid-cols-7 gap-1 mb-4">
                       {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                        <div key={day} className="text-center text-xs font-semibold text-gray-500 py-2">
+                        <div key={day} className="text-center text-xs font-semibold text-gray-400 py-2">
                           {day}
                         </div>
                       ))}
@@ -1678,13 +1678,13 @@ export default function ProjectWorkspace() {
                 <h2 className="text-lg font-semibold text-white mb-4">Grant Size Range</h2>
                 <div className="flex gap-4 items-center">
                   <div className="flex-1">
-                    <label className="block text-xs text-gray-500 mb-1">Minimum</label>
+                    <label className="block text-xs text-gray-400 mb-1">Minimum</label>
                     <input type="number" value={editBudgetMin} onChange={e => setEditBudgetMin(e.target.value)} placeholder="e.g. 10000"
                       className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
                   </div>
-                  <span className="text-gray-500 pt-4">to</span>
+                  <span className="text-gray-400 pt-4">to</span>
                   <div className="flex-1">
-                    <label className="block text-xs text-gray-500 mb-1">Maximum</label>
+                    <label className="block text-xs text-gray-400 mb-1">Maximum</label>
                     <input type="number" value={editBudgetMax} onChange={e => setEditBudgetMax(e.target.value)} placeholder="e.g. 500000"
                       className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
                   </div>
@@ -1707,7 +1707,7 @@ export default function ProjectWorkspace() {
                           ></div>
                           <div className="flex flex-col">
                             <span className="text-sm font-medium text-white">{status.name}</span>
-                            <span className="text-xs text-gray-500">
+                            <span className="text-xs text-gray-400">
                               {status.is_default ? 'Default' : 'Custom'}{status.is_terminal ? ' • Terminal' : ''}
                             </span>
                           </div>
@@ -1725,7 +1725,7 @@ export default function ProjectWorkspace() {
                       </div>
                     ))
                   ) : (
-                    <div className="text-gray-500 text-sm">No pipeline statuses available</div>
+                    <div className="text-gray-400 text-sm">No pipeline statuses available</div>
                   )}
                 </div>
 
@@ -1898,7 +1898,7 @@ export default function ProjectWorkspace() {
                 <p className="text-sm text-gray-400">Upload a CSV file with your grant tracking data. We'll help you map columns.</p>
                 <button onClick={downloadCsvTemplate} className="text-sm text-blue-400 hover:text-blue-300 underline">Download CSV Template</button>
                 <div className="border-2 border-dashed border-[#30363d] rounded-lg p-8 text-center">
-                  <Upload size={32} className="mx-auto text-gray-500 mb-3" />
+                  <Upload size={32} className="mx-auto text-gray-400 mb-3" />
                   <p className="text-gray-400 mb-3">Drag and drop your CSV file, or click to browse</p>
                   <input ref={fileInputRef} type="file" accept=".csv" onChange={handleCsvFile} className="hidden" />
                   <button onClick={() => fileInputRef.current?.click()}
@@ -1915,7 +1915,7 @@ export default function ProjectWorkspace() {
                 <div className="grid grid-cols-2 gap-3">
                   {['funder_name', 'grant_title', 'amount', 'deadline', 'status', 'notes', 'url'].map(field => (
                     <div key={field}>
-                      <label className="block text-xs text-gray-500 mb-1 capitalize">{field.replace('_', ' ')}</label>
+                      <label className="block text-xs text-gray-400 mb-1 capitalize">{field.replace('_', ' ')}</label>
                       <select value={csvMapping[field] || ''} onChange={e => setCsvMapping(p => ({ ...p, [field]: e.target.value }))}
                         className="w-full bg-[#0d1117] border border-[#30363d] rounded px-2 py-1.5 text-white text-sm">
                         <option value="">— Skip —</option>
@@ -2021,11 +2021,11 @@ export default function ProjectWorkspace() {
                 <div className="px-5 py-4 space-y-4">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Amount</p>
+                      <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-0.5">Amount</p>
                       <p className="text-sm text-white font-medium">{fmtCurrency(selectedGrant.amount)}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Deadline</p>
+                      <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-0.5">Deadline</p>
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm text-white">
                           {selectedGrant.deadline ? new Date(selectedGrant.deadline).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—'}
@@ -2051,17 +2051,17 @@ export default function ProjectWorkspace() {
                       )}
                     </div>
                     <div>
-                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Project</p>
+                      <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-0.5">Project</p>
                       <p className="text-sm text-white truncate">{project?.name || '—'}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Source</p>
+                      <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-0.5">Source</p>
                       <p className="text-sm text-gray-300 capitalize">{selectedGrant.source || 'manual'}</p>
                     </div>
                   </div>
                   {selectedGrant.grant_url && (
                     <div>
-                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Grant URL</p>
+                      <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-0.5">Grant URL</p>
                       <a href={selectedGrant.grant_url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 text-sm truncate block flex items-center gap-1">
                         {selectedGrant.grant_url.replace(/^https?:\/\//, '').split('/')[0]}
                         <ExternalLink size={11} />
@@ -2069,7 +2069,7 @@ export default function ProjectWorkspace() {
                     </div>
                   )}
                   <div>
-                    <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Notes</p>
+                    <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Notes</p>
                     <textarea
                       value={selectedGrant.notes || ''}
                       onChange={e => setSelectedGrant(prev => prev ? { ...prev, notes: e.target.value } : prev)}
@@ -2099,23 +2099,23 @@ export default function ProjectWorkspace() {
               <div className={`grid transition-all duration-300 ease-in-out border-b border-[#30363d] ${drawerSection === 'tasks' ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
                 <div className="overflow-hidden">
                 <div className="px-5 py-4 space-y-3">
-                  {grantTasks.length === 0 && <p className="text-xs text-gray-500">No tasks yet. Add one below.</p>}
+                  {grantTasks.length === 0 && <p className="text-xs text-gray-400">No tasks yet. Add one below.</p>}
                   {grantTasks.map(task => (
                     <div key={task.id} className={`flex items-start gap-2.5 p-2.5 rounded-lg ${task.is_overdue ? 'bg-red-900/10 border border-red-900/30' : 'bg-[#0d1117]'}`}>
                       <button onClick={() => handleToggleTask(task.id, task.status)}
-                        className={`mt-0.5 flex-shrink-0 ${task.status === 'done' ? 'text-green-400' : 'text-gray-500 hover:text-gray-300'}`}>
+                        className={`mt-0.5 flex-shrink-0 ${task.status === 'done' ? 'text-green-400' : 'text-gray-400 hover:text-gray-300'}`}>
                         <CheckCircle size={15} />
                       </button>
                       <div className="flex-1 min-w-0">
-                        <p className={`text-sm ${task.status === 'done' ? 'line-through text-gray-500' : 'text-white'}`}>{task.title}</p>
+                        <p className={`text-sm ${task.status === 'done' ? 'line-through text-gray-400' : 'text-white'}`}>{task.title}</p>
                         <div className="flex gap-3 mt-0.5">
                           {task.due_date && (
-                            <p className={`text-xs ${task.is_overdue ? 'text-red-400' : 'text-gray-500'}`}>
+                            <p className={`text-xs ${task.is_overdue ? 'text-red-400' : 'text-gray-400'}`}>
                               <Clock size={10} className="inline mr-0.5" />
                               {new Date(task.due_date).toLocaleDateString()}
                             </p>
                           )}
-                          {task.assignee_email && <p className="text-xs text-gray-500 truncate">{task.assignee_email}</p>}
+                          {task.assignee_email && <p className="text-xs text-gray-400 truncate">{task.assignee_email}</p>}
                         </div>
                       </div>
                     </div>
@@ -2159,7 +2159,7 @@ export default function ProjectWorkspace() {
               <div className={`grid transition-all duration-300 ease-in-out border-b border-[#30363d] ${drawerSection === 'compliance' ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
                 <div className="overflow-hidden">
                 <div className="px-5 py-4 space-y-3">
-                  <p className="text-xs text-gray-500 -mt-1">
+                  <p className="text-xs text-gray-400 -mt-1">
                     Reporting and deliverables required after the grant is awarded.
                   </p>
                   {complianceItems.map(item => (
@@ -2168,10 +2168,10 @@ export default function ProjectWorkspace() {
                     }`}>
                       <div className="flex items-center justify-between">
                         <div className="min-w-0 flex-1">
-                          <p className={`text-white text-sm ${item.status === 'submitted' || item.status === 'approved' ? 'line-through text-gray-500' : ''}`}>
+                          <p className={`text-white text-sm ${item.status === 'submitted' || item.status === 'approved' ? 'line-through text-gray-400' : ''}`}>
                             {item.title}
                           </p>
-                          <p className="text-xs text-gray-500">
+                          <p className="text-xs text-gray-400">
                             {item.type.replace(/_/g, ' ')}
                             {item.due_date && ` · Due ${new Date(item.due_date).toLocaleDateString()}`}
                           </p>
@@ -2197,7 +2197,7 @@ export default function ProjectWorkspace() {
                             <input type="checkbox" checked={d.done}
                               onChange={() => handleToggleDeliverable(item, d.id)}
                               className="accent-blue-600 w-3 h-3" />
-                            <span className={d.done ? 'line-through text-gray-500' : 'text-gray-300'}>{d.text}</span>
+                            <span className={d.done ? 'line-through text-gray-400' : 'text-gray-300'}>{d.text}</span>
                           </label>
                         ))}
                         <div className="flex items-center gap-1.5">
@@ -2208,7 +2208,7 @@ export default function ProjectWorkspace() {
                             className="flex-1 bg-transparent border-b border-[#30363d] px-1 py-0.5 text-xs text-gray-300 placeholder-gray-600 focus:outline-none focus:border-blue-500" />
                           <button onClick={() => handleAddDeliverable(item)}
                             disabled={!(newDeliverableText[item.id] || '').trim()}
-                            className="text-gray-500 hover:text-blue-400 disabled:opacity-40"><Plus size={12} /></button>
+                            className="text-gray-400 hover:text-blue-400 disabled:opacity-40"><Plus size={12} /></button>
                         </div>
                       </div>
 
@@ -2232,7 +2232,7 @@ export default function ProjectWorkspace() {
                     </div>
                   ))}
                   {complianceItems.length === 0 && !showComplianceForm && (
-                    <p className="text-xs text-gray-500">No requirements added yet.</p>
+                    <p className="text-xs text-gray-400">No requirements added yet.</p>
                   )}
                   {/* Add requirement form */}
                   {showComplianceForm ? (
@@ -2266,8 +2266,8 @@ export default function ProjectWorkspace() {
                           <input type="file" className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
                             onChange={e => setCompAttachment(e.target.files?.[0] || null)} />
                         </label>
-                        {compAttachment && <button onClick={() => setCompAttachment(null)} className="text-xs text-gray-500 hover:text-red-400">remove</button>}
-                        <button onClick={() => setShowComplianceForm(false)} className="ml-auto text-xs text-gray-500 hover:text-white">Cancel</button>
+                        {compAttachment && <button onClick={() => setCompAttachment(null)} className="text-xs text-gray-400 hover:text-red-400">remove</button>}
+                        <button onClick={() => setShowComplianceForm(false)} className="ml-auto text-xs text-gray-400 hover:text-white">Cancel</button>
                       </div>
                     </div>
                   ) : (
@@ -2296,7 +2296,7 @@ export default function ProjectWorkspace() {
               <div className={`grid transition-all duration-300 ease-in-out border-b border-[#30363d] ${drawerSection === 'refdocs' ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
                 <div className="overflow-hidden">
                 <div className="px-5 py-4 space-y-3">
-                  <p className="text-xs text-gray-500 -mt-1">
+                  <p className="text-xs text-gray-400 -mt-1">
                     Upload past proposals and writing samples. The AI will study your style, tone, and structure to generate a proposal that sounds like your organization.
                   </p>
                   {refDocs.map(doc => (
@@ -2304,14 +2304,14 @@ export default function ProjectWorkspace() {
                       <Paperclip size={14} className="text-purple-400 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-white truncate">{doc.title}</p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-gray-400">
                           {doc.file_name || 'text entry'}
                           <span className="mx-1">·</span>
                           {new Date(doc.created_at).toLocaleDateString()}
                         </p>
                       </div>
                       <button onClick={() => handleDeleteRefDoc(doc.id, doc.storage_path)}
-                        className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 transition-all p-1">
+                        className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-400 transition-all p-1">
                         <Trash2 size={13} />
                       </button>
                     </div>
@@ -2319,7 +2319,7 @@ export default function ProjectWorkspace() {
                   {refDocs.length === 0 && (
                     <div className="text-center py-3">
                       <Upload size={20} className="mx-auto text-gray-600 mb-1.5" />
-                      <p className="text-xs text-gray-500">No reference documents yet</p>
+                      <p className="text-xs text-gray-400">No reference documents yet</p>
                     </div>
                   )}
                   <button onClick={() => refFileInput.current?.click()} disabled={refUploading}
@@ -2349,7 +2349,7 @@ export default function ProjectWorkspace() {
                 <div className="overflow-hidden">
                 <div className="px-5 py-4 space-y-3">
                   {!aiDraft && !aiDraftLoading && (
-                    <p className="text-xs text-gray-500 -mt-1">
+                    <p className="text-xs text-gray-400 -mt-1">
                       The AI will use your uploaded reference documents to match your writing style, research the grant topic with current data, and include MLA citations throughout.
                     </p>
                   )}
@@ -2367,7 +2367,7 @@ export default function ProjectWorkspace() {
                   {aiDraft && (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <p className="text-xs text-gray-500">Generated proposal</p>
+                        <p className="text-xs text-gray-400">Generated proposal</p>
                         <div className="flex items-center gap-2">
                           <button onClick={() => setAiDraftEditable(!aiDraftEditable)}
                             className="text-xs text-blue-400 hover:text-blue-300">

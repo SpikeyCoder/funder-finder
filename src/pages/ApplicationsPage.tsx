@@ -236,11 +236,11 @@ export default function ApplicationsPage() {
           {/* Entry list */}
           <div className="md:col-span-1">
             <div className="space-y-2">
-              {isLoading && <div className="text-gray-500 text-sm p-4">Loading...</div>}
+              {isLoading && <div className="text-gray-400 text-sm p-4">Loading...</div>}
               {!isLoading && entries.length === 0 && (
                 <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-6 text-center">
-                  <BookOpen size={24} className="mx-auto text-gray-500 mb-2" />
-                  <p className="text-sm text-gray-500">No entries yet. Add past applications to build your knowledge base.</p>
+                  <BookOpen size={24} className="mx-auto text-gray-400 mb-2" />
+                  <p className="text-sm text-gray-400">No entries yet. Add past applications to build your knowledge base.</p>
                 </div>
               )}
               {entries.map(entry => (
@@ -250,10 +250,10 @@ export default function ApplicationsPage() {
                   }`}>
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-2">
-                      <FileText size={14} className="mt-0.5 text-gray-500 flex-shrink-0" />
+                      <FileText size={14} className="mt-0.5 text-gray-400 flex-shrink-0" />
                       <div>
                         <p className="text-sm font-medium text-white">{entry.title}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">
+                        <p className="text-xs text-gray-400 mt-0.5">
                           {entry.source_type} · {new Date(entry.created_at).toLocaleDateString()}
                         </p>
                         {entry.outcome && entry.outcome !== 'unknown' && (
@@ -280,7 +280,7 @@ export default function ApplicationsPage() {
                   <div className="flex items-start justify-between mb-4">
                     <div>
                       <h3 className="text-lg font-semibold mb-1">{selectedEntry.title}</h3>
-                      <p className="text-xs text-gray-500">{selectedEntry.source_type} · Added {new Date(selectedEntry.created_at).toLocaleDateString()}</p>
+                      <p className="text-xs text-gray-400">{selectedEntry.source_type} · Added {new Date(selectedEntry.created_at).toLocaleDateString()}</p>
                     </div>
                     <button
                       onClick={() => setShowBookmarkForm(!showBookmarkForm)}
@@ -365,14 +365,14 @@ export default function ApplicationsPage() {
                         <div key={bookmark.id} className="bg-[#0d1117] border border-[#30363d] rounded-lg p-3">
                           <p className="text-sm text-gray-300 mb-2 line-clamp-2">{bookmark.passage_text}</p>
                           <div className="flex items-center justify-between">
-                            <span className="text-xs text-gray-500">{new Date(bookmark.created_at).toLocaleDateString()}</span>
+                            <span className="text-xs text-gray-400">{new Date(bookmark.created_at).toLocaleDateString()}</span>
                             <div className="flex gap-0.5">
                               {[1, 2, 3, 4, 5].map(star => (
                                 <button
                                   key={star}
                                   onClick={() => handleRatingChange(bookmark.id, star)}
                                   className={`p-0.5 transition-colors ${
-                                    star <= bookmark.rating ? 'text-yellow-400' : 'text-gray-600 hover:text-gray-500'
+                                    star <= bookmark.rating ? 'text-yellow-400' : 'text-gray-600 hover:text-gray-400'
                                   }`}>
                                   <Star size={12} fill={star <= bookmark.rating ? 'currentColor' : 'none'} />
                                 </button>
@@ -386,7 +386,7 @@ export default function ApplicationsPage() {
                 )}
               </div>
             ) : (
-              <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-12 text-center text-gray-500">
+              <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-12 text-center text-gray-400">
                 <FileText size={32} className="mx-auto mb-3" />
                 <p className="text-sm">Select an entry to preview its content</p>
                 <p className="text-xs mt-1">Your knowledge base powers AI-assisted grant draft generation</p>

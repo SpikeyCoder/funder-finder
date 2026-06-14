@@ -137,7 +137,7 @@ export default function ReportsPage() {
         </div>
 
         {isLoading ? (
-          <div className="text-center py-12 text-gray-500">Loading report data...</div>
+          <div className="text-center py-12 text-gray-400">Loading report data...</div>
         ) : (
           <>
             {/* KPI Cards */}
@@ -177,7 +177,7 @@ export default function ReportsPage() {
                       </div>
                     </div>
                   ))}
-                  {pipeline.length === 0 && <p className="text-gray-500 text-sm">No data yet</p>}
+                  {pipeline.length === 0 && <p className="text-gray-400 text-sm">No data yet</p>}
                 </div>
               </div>
 
@@ -197,7 +197,7 @@ export default function ReportsPage() {
                       </div>
                     </div>
                   ))}
-                  {byProject.length === 0 && <p className="text-gray-500 text-sm">No data yet</p>}
+                  {byProject.length === 0 && <p className="text-gray-400 text-sm">No data yet</p>}
                 </div>
               </div>
             </div>
@@ -221,7 +221,7 @@ export default function ReportsPage() {
                   })}
                 </div>
               ) : (
-                <p className="text-gray-500 text-sm">No timeline data yet</p>
+                <p className="text-gray-400 text-sm">No timeline data yet</p>
               )}
               <div className="flex gap-4 mt-3 text-xs text-gray-400">
                 <span className="flex items-center gap-1"><span className="w-2 h-2 bg-blue-500 rounded" /> Submitted</span>
@@ -245,7 +245,7 @@ export default function ReportsPage() {
                       }} />
                     </div>
                   </div>
-                )) : <p className="text-gray-500 text-sm">No funder type data available</p>}
+                )) : <p className="text-gray-400 text-sm">No funder type data available</p>}
               </div>
             </div>
 

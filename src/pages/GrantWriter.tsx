@@ -622,7 +622,7 @@ export default function GrantWriter() {
                         </>
                       )}
                     </p>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-xs text-gray-400 mt-1">
                       PDF, DOCX, or TXT — max 10 MB each
                     </p>
                   </div>
@@ -660,7 +660,7 @@ export default function GrantWriter() {
                               <p className="text-sm text-gray-200 truncate">
                                 {f.name}
                               </p>
-                              <p className="text-xs text-gray-500">
+                              <p className="text-xs text-gray-400">
                                 {FILE_TYPE_LABELS[f.type] || 'File'} ·{' '}
                                 {formatSize(f.size)}
                               </p>
@@ -671,7 +671,7 @@ export default function GrantWriter() {
                               e.stopPropagation();
                               removeFile(f.path);
                             }}
-                            className="text-gray-500 hover:text-red-400 transition-colors shrink-0 ml-2"
+                            className="text-gray-400 hover:text-red-400 transition-colors shrink-0 ml-2"
                           >
                             <Trash2 size={14} />
                           </button>
@@ -1006,7 +1006,7 @@ export default function GrantWriter() {
 
             {/* Login prompt for saving */}
             {!user && phase === 'done' && (
-              <p className="mb-3 text-xs text-gray-500">
+              <p className="mb-3 text-xs text-gray-400">
                 Sign in to save this draft for future retrieval.
               </p>
             )}

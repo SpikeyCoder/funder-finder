@@ -431,21 +431,21 @@ const BrowsePage: React.FC = () => {
                     </button>
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       <div className="min-w-0">
-                        <span className="text-gray-500">State:</span>{' '}
+                        <span className="text-gray-400">State:</span>{' '}
                         <span className="text-gray-300 truncate">{funder.state || '-'}</span>
                       </div>
                       <div className="min-w-0">
-                        <span className="text-gray-500">Type:</span>{' '}
+                        <span className="text-gray-400">Type:</span>{' '}
                         <span className="text-gray-300 truncate">{funder.entity_type || '-'}</span>
                       </div>
                       <div className="min-w-0">
-                        <span className="text-gray-500">Avg Grant:</span>{' '}
+                        <span className="text-gray-400">Avg Grant:</span>{' '}
                         <span className="text-gray-300">
                           {funder.avg_grant_size ? `$${(funder.avg_grant_size / 1000).toFixed(0)}K` : '-'}
                         </span>
                       </div>
                       <div className="min-w-0">
-                        <span className="text-gray-500">Total Giving:</span>{' '}
+                        <span className="text-gray-400">Total Giving:</span>{' '}
                         <span className="text-gray-300">
                           {funder.total_giving ? `$${(funder.total_giving / 1000000).toFixed(1)}M` : '-'}
                         </span>
