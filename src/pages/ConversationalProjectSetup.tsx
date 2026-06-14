@@ -137,11 +137,11 @@ function SideField({ label, value, filled, confidence }: { label: string; value:
   return (
     <div className="mb-4">
       <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">{label}</p>
-      <div className={`bg-[#0d1117] border rounded-lg px-3 py-2 text-sm ${filled ? 'border-blue-500 text-white' : 'border-[#30363d] text-gray-500'}`}>
+      <div className={`bg-[#0d1117] border rounded-lg px-3 py-2 text-sm ${filled ? 'border-blue-500 text-white' : 'border-[#30363d] text-gray-400'}`}>
         {value || '—'}
       </div>
       {filled && confidence && (
-        <p className={`text-[10px] mt-1 ${confidence === 'high' ? 'text-green-400' : confidence === 'medium' ? 'text-yellow-400' : 'text-gray-500'}`}>
+        <p className={`text-[10px] mt-1 ${confidence === 'high' ? 'text-green-400' : confidence === 'medium' ? 'text-yellow-400' : 'text-gray-400'}`}>
           AI confidence: {confidence}
         </p>
       )}
@@ -450,7 +450,7 @@ export default function ConversationalProjectSetup() {
                     value={composerValue}
                     onChange={e => setComposerValue(e.target.value)}
                     placeholder={copy.placeholder}
-                    className="flex-1 bg-transparent text-sm text-white placeholder:text-gray-500 focus:outline-none"
+                    className="flex-1 bg-transparent text-sm text-white placeholder:text-gray-400 focus:outline-none"
                     disabled={waitingForReply}
                     aria-label="Message to project setup assistant"
                   />
@@ -531,7 +531,7 @@ function ReviewView({ draft, confidence, onEdit, onBack, onCreate, creating }: {
         <p className="text-sm font-semibold text-white">What the AI heard</p>
         <p className="text-[11px] text-gray-400 mb-3">Tap any field on the left to edit it in chat.</p>
         <div className="space-y-2">
-          {notes.length === 0 && <p className="text-xs text-gray-500">No inferences yet.</p>}
+          {notes.length === 0 && <p className="text-xs text-gray-400">No inferences yet.</p>}
           {notes.map(n => (
             <div key={n.lbl} className="bg-[#0d1117] border border-[#30363d] rounded-lg p-3">
               <div className="flex items-center gap-2">

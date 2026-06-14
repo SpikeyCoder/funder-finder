@@ -182,13 +182,6 @@ export default function GrantWriter() {
     sourcesFound: number;
     fallback: boolean;
   } | null>(null);
-  // FM-IC-AI-002: what the current draft is learning from (session uploads +
-  // resurfaced past applications from the knowledge base).
-  const [learnedFrom, setLearnedFrom] = useState<{
-    uploads: number;
-    pastApplications: number;
-    awarded: number;
-  } | null>(null);
 
   const outputEndRef = useRef<HTMLDivElement>(null);
 
@@ -302,7 +295,6 @@ export default function GrantWriter() {
     setPhase('analyzing');
     setError(null);
     setResearchStats(null);
-    setLearnedFrom(null);
 
     try {
       const headers = await getEdgeFunctionHeaders();
@@ -364,15 +356,6 @@ export default function GrantWriter() {
                 statsFound: parsed.statsFound || 0,
                 sourcesFound: parsed.sourcesFound || 0,
                 fallback: parsed.fallback || false,
-              });
-            }
-
-            // FM-IC-AI-002: learning-corpus metadata
-            if (parsed.learnedFrom) {
-              setLearnedFrom({
-                uploads: parsed.learnedFrom.uploads || 0,
-                pastApplications: parsed.learnedFrom.pastApplications || 0,
-                awarded: parsed.learnedFrom.awarded || 0,
               });
             }
 
@@ -622,7 +605,7 @@ export default function GrantWriter() {
                         </>
                       )}
                     </p>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-xs text-gray-400 mt-1">
                       PDF, DOCX, or TXT — max 10 MB each
                     </p>
                   </div>
@@ -660,7 +643,7 @@ export default function GrantWriter() {
                               <p className="text-sm text-gray-200 truncate">
                                 {f.name}
                               </p>
-                              <p className="text-xs text-gray-500">
+                              <p className="text-xs text-gray-400">
                                 {FILE_TYPE_LABELS[f.type] || 'File'} ·{' '}
                                 {formatSize(f.size)}
                               </p>
@@ -671,7 +654,7 @@ export default function GrantWriter() {
                               e.stopPropagation();
                               removeFile(f.path);
                             }}
-                            className="text-gray-500 hover:text-red-400 transition-colors shrink-0 ml-2"
+                            className="text-gray-400 hover:text-red-400 transition-colors shrink-0 ml-2"
                           >
                             <Trash2 size={14} />
                           </button>
@@ -877,8 +860,8 @@ export default function GrantWriter() {
               Preparing your grant draft…
             </h3>
 
-            {/* Phase: Analyzing past grants + resurfaced applications */}
-            {(uploadedFiles.length > 0 || (learnedFrom && learnedFrom.pastApplications > 0)) && (
+            {/* Phase: Analyzing past grants */}
+            {uploadedFiles.length > 0 && (
               <div className="flex items-center gap-3">
                 {phase === 'analyzing' ? (
                   <Loader2 size={16} className="animate-spin text-blue-400" />
@@ -892,9 +875,8 @@ export default function GrantWriter() {
                       : 'text-gray-400'
                   }`}
                 >
-                  {learnedFrom && learnedFrom.pastApplications > 0
-                    ? `Learning from ${learnedFrom.pastApplications} of your past application${learnedFrom.pastApplications !== 1 ? 's' : ''}${learnedFrom.awarded > 0 ? ` (${learnedFrom.awarded} awarded)` : ''}${learnedFrom.uploads > 0 ? ` and ${learnedFrom.uploads} uploaded file${learnedFrom.uploads !== 1 ? 's' : ''}` : ''}…`
-                    : `Analyzing ${uploadedFiles.length} past grant${uploadedFiles.length !== 1 ? 's' : ''} for writing style…`}
+                  Analyzing {uploadedFiles.length} past grant
+                  {uploadedFiles.length !== 1 ? 's' : ''} for writing style…
                 </span>
               </div>
             )}
@@ -1006,7 +988,7 @@ export default function GrantWriter() {
 
             {/* Login prompt for saving */}
             {!user && phase === 'done' && (
-              <p className="mb-3 text-xs text-gray-500">
+              <p className="mb-3 text-xs text-gray-400">
                 Sign in to save this draft for future retrieval.
               </p>
             )}

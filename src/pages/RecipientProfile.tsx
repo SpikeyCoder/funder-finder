@@ -278,7 +278,7 @@ export default function RecipientProfile() {
             <div className="bg-[#0d1117] border border-[#30363d] rounded-xl p-4">
               <p className="text-xs text-gray-400 mb-1">Active Years</p>
               <div className="flex items-center gap-1.5">
-                <Calendar size={14} className="text-gray-500" />
+                <Calendar size={14} className="text-gray-400" />
                 <p className="text-lg font-bold text-white">
                   {profile.fundingSummary.firstGrantYear || '?'} – {profile.fundingSummary.lastGrantYear || '?'}
                 </p>
@@ -296,7 +296,7 @@ export default function RecipientProfile() {
                 </p>
               </div>
               <div>
-                <p className="text-xs text-gray-500">{budgetLabel}</p>
+                <p className="text-xs text-gray-400">{budgetLabel}</p>
                 <p className="text-lg font-bold text-purple-400">{fmtDollar(budgetAmount)}</p>
               </div>
             </div>
@@ -315,7 +315,7 @@ export default function RecipientProfile() {
               <div className="bg-[#0d1117] border border-[#30363d] rounded-xl p-4 mb-2">
                 <GeoBarChart data={funderStateGeo} />
               </div>
-              <p className="text-xs text-gray-500 mb-6">Based on top funders by grant volume</p>
+              <p className="text-xs text-gray-400 mb-6">Based on top funders by grant volume</p>
               <hr className="border-[#30363d] mb-6" />
             </>
           )}
@@ -330,7 +330,7 @@ export default function RecipientProfile() {
             <>
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-lg font-semibold">Top Funders</h2>
-                <span className="text-xs text-gray-500">Click bookmark to add to your prospects</span>
+                <span className="text-xs text-gray-400">Click bookmark to add to your prospects</span>
               </div>
               {dafCount > 0 && (
                 <button
@@ -381,7 +381,7 @@ export default function RecipientProfile() {
                             {savedIds.has(f.funderId) ? (
                               <BookmarkCheck size={14} className="text-blue-400" />
                             ) : (
-                              <Bookmark size={14} className="text-gray-500 hover:text-gray-300" />
+                              <Bookmark size={14} className="text-gray-400 hover:text-gray-300" />
                             )}
                           </button>
                         </td>
@@ -523,7 +523,7 @@ export default function RecipientProfile() {
                       ))}
                     </tbody>
                   </table>
-                  <p className="text-xs text-gray-500 mt-2">Based on NTEE classification, geography, and funding patterns</p>
+                  <p className="text-xs text-gray-400 mt-2">Based on NTEE classification, geography, and funding patterns</p>
                 </div>
               )}
             </>

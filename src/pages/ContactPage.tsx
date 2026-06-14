@@ -137,7 +137,7 @@ export default function ContactPage() {
           </form>
         )}
 
-        <p className="mt-8 text-sm text-gray-500">
+        <p className="mt-8 text-sm text-gray-400">
           You can also email us directly at{' '}
           <a href="mailto:support@fundermatch.org" className="text-blue-400 hover:text-blue-300 underline">
             support@fundermatch.org

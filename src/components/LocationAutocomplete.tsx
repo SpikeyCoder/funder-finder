@@ -308,7 +308,7 @@ export default function LocationAutocomplete({ value, onChange, hasError, placeh
         />
         {loading && (
           <div className="absolute right-3 top-1/2 -translate-y-1/2">
-            <Loader2 size={16} className="animate-spin text-gray-500" />
+            <Loader2 size={16} className="animate-spin text-gray-400" />
           </div>
         )}
       </div>

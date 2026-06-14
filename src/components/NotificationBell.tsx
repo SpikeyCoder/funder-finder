@@ -208,11 +208,11 @@ export default function NotificationBell() {
           </div>
           <div className="max-h-96 overflow-y-auto">
             {loading && rows.length === 0 ? (
-              <div className="flex items-center justify-center py-8 text-gray-500">
+              <div className="flex items-center justify-center py-8 text-gray-400">
                 <Loader2 size={18} className="animate-spin" />
               </div>
             ) : rows.length === 0 ? (
-              <p className="px-4 py-8 text-sm text-gray-500 text-center">You're all caught up.</p>
+              <p className="px-4 py-8 text-sm text-gray-400 text-center">You're all caught up.</p>
             ) : (
               rows.map((n) => {
                 const detail = notifDetail(n);
@@ -231,7 +231,7 @@ export default function NotificationBell() {
                       )}
                       <div className={n.read_at ? 'flex-1' : 'flex-1 -ml-0'}>
                         <p className="text-sm text-gray-200 leading-snug">{notifTitle(n)}</p>
-                        {detail && <p className="text-xs text-gray-500 mt-0.5">{detail}</p>}
+                        {detail && <p className="text-xs text-gray-400 mt-0.5">{detail}</p>}
                         <p className="text-[11px] text-gray-600 mt-0.5">{relativeTime(n.created_at)}</p>
                       </div>
                     </div>

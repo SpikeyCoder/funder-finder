@@ -169,7 +169,7 @@ export default function PortfolioPage() {
                 <div className="flex items-center gap-2 text-gray-400 mb-2">
                   <Award size={14} /> <span className="text-xs">Win Rate</span>
                 </div>
-                <p className={`text-2xl font-bold ${metrics.win_rate !== null ? (metrics.win_rate >= 50 ? 'text-green-400' : metrics.win_rate >= 25 ? 'text-yellow-400' : 'text-red-400') : 'text-gray-500'}`}>
+                <p className={`text-2xl font-bold ${metrics.win_rate !== null ? (metrics.win_rate >= 50 ? 'text-green-400' : metrics.win_rate >= 25 ? 'text-yellow-400' : 'text-red-400') : 'text-gray-400'}`}>
                   {metrics.win_rate !== null ? `${metrics.win_rate}%` : '—'}
                 </p>
               </div>
@@ -183,7 +183,7 @@ export default function PortfolioPage() {
                 <div className="flex items-center gap-2 text-gray-400 mb-2">
                   <Clock size={14} /> <span className="text-xs">Upcoming</span>
                 </div>
-                <p className={`text-2xl font-bold ${metrics.upcoming_deadlines > 0 ? 'text-yellow-400' : 'text-gray-500'}`}>
+                <p className={`text-2xl font-bold ${metrics.upcoming_deadlines > 0 ? 'text-yellow-400' : 'text-gray-400'}`}>
                   {metrics.upcoming_deadlines}
                 </p>
               </div>
@@ -251,7 +251,7 @@ export default function PortfolioPage() {
                   {sortDir === 'asc' ? 'Asc' : 'Desc'}
                 </button>
               </div>
-              <div className="text-xs text-gray-500 ml-auto">
+              <div className="text-xs text-gray-400 ml-auto">
                 Showing {filteredGrants.length} of {grants.length}
               </div>
             </div>
@@ -321,7 +321,7 @@ export default function PortfolioPage() {
           ) : grants.length === 0 ? (
             <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-8 text-center">
               <p className="text-gray-400 mb-2">No grants tracked yet.</p>
-              <p className="text-gray-500 text-sm">Start tracking grants from your project workspace.</p>
+              <p className="text-gray-400 text-sm">Start tracking grants from your project workspace.</p>
               <button onClick={() => navigate('/dashboard')}
                 className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
                 Go to Dashboard
@@ -348,7 +348,7 @@ export default function PortfolioPage() {
                           <td className="px-4 py-3 text-gray-400 text-sm">{g.project_name}</td>
                           <td className="px-4 py-3">
                             <div className="text-white text-sm font-medium">{g.funder_name}</div>
-                            {g.grant_title && <div className="text-xs text-gray-500">{g.grant_title}</div>}
+                            {g.grant_title && <div className="text-xs text-gray-400">{g.grant_title}</div>}
                           </td>
                           <td className="px-4 py-3">
                             <span className="text-xs font-medium px-2 py-1 rounded-full" style={{ color: g.status_color, backgroundColor: `${g.status_color}20` }}>

@@ -40,7 +40,7 @@ export default function Toast({ message, action, duration = 5000, onClose }: Toa
         type="button"
         aria-label="Dismiss notification"
         onClick={() => { setVisible(false); setTimeout(onClose, 300); }}
-        className="text-gray-500 hover:text-gray-300 ml-1"
+        className="text-gray-400 hover:text-gray-300 ml-1"
       >
         <X size={14} aria-hidden="true" />
       </button>

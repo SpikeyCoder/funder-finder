@@ -78,7 +78,7 @@ export default function SharedViewPage() {
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div>
             <h1 className="text-lg font-bold text-blue-400">FunderMatch</h1>
-            <p className="text-xs text-gray-500">Shared View (Read Only)</p>
+            <p className="text-xs text-gray-400">Shared View (Read Only)</p>
           </div>
         </div>
       </header>
@@ -87,7 +87,7 @@ export default function SharedViewPage() {
         <div className="mb-6">
           <h2 className="text-xl font-bold">{data?.project?.name || 'Shared Project'}</h2>
           {data?.project?.description && <p className="text-gray-400 text-sm mt-1">{data.project.description}</p>}
-          <p className="text-xs text-gray-500 mt-2">{grants.length} grants tracked</p>
+          <p className="text-xs text-gray-400 mt-2">{grants.length} grants tracked</p>
         </div>
 
         <div className="bg-[#161b22] border border-[#30363d] rounded-lg overflow-hidden">
@@ -105,7 +105,7 @@ export default function SharedViewPage() {
                 <tr key={grant.id}>
                   <td className="p-3">
                     <p className="font-medium text-white">{grant.funder_name}</p>
-                    {grant.grant_title && <p className="text-xs text-gray-500">{grant.grant_title}</p>}
+                    {grant.grant_title && <p className="text-xs text-gray-400">{grant.grant_title}</p>}
                   </td>
                   <td className="p-3">
                     <span className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-full"
@@ -123,7 +123,7 @@ export default function SharedViewPage() {
                 </tr>
               ))}
               {grants.length === 0 && (
-                <tr><td colSpan={4} className="p-6 text-center text-gray-500">No grants to display</td></tr>
+                <tr><td colSpan={4} className="p-6 text-center text-gray-400">No grants to display</td></tr>
               )}
             </tbody>
           </table>

@@ -456,7 +456,7 @@ export default function FunderDetail() {
           {/* -- 990 Intelligence Sections -- */}
           {insightsLoading && <InsightsSkeleton />}
           {insightsError && (
-            <div className="mb-6 text-sm text-gray-500 italic">
+            <div className="mb-6 text-sm text-gray-400 italic">
               990 data unavailable: {insightsError}
             </div>
           )}
@@ -509,7 +509,7 @@ export default function FunderDetail() {
                     <div className="bg-[#0d1117] border border-[#30363d] rounded-xl p-4">
                       <GivingTrendsChart data={insights.grantHistory.yearTrend} />
                     </div>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-gray-400">
                       Data through {insights.dataAsOf || 'IRS 990-PF filings, 2015–present'}
                     </p>
                   </div>
@@ -566,7 +566,7 @@ export default function FunderDetail() {
                           <GeoHeatMap data={insights.geographicFootprint} />
                         </div>
                         <div className="bg-[#0d1117] border border-[#30363d] rounded-xl p-4">
-                          <p className="text-xs text-gray-500 mb-2">Top states by grant count</p>
+                          <p className="text-xs text-gray-400 mb-2">Top states by grant count</p>
                           <GeoBarChart data={insights.geographicFootprint} />
                         </div>
                       </div>
@@ -588,7 +588,7 @@ export default function FunderDetail() {
                       <div className="flex items-center gap-2">
                         <TrendingUp size={16} className="text-yellow-400" />
                         <h2 className="text-lg font-semibold">Key Recipients</h2>
-                        <span className="text-xs text-gray-500">({insights.keyRecipients.length})</span>
+                        <span className="text-xs text-gray-400">({insights.keyRecipients.length})</span>
                       </div>
                       {expandedSections.recipients ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
                     </button>
@@ -661,13 +661,13 @@ export default function FunderDetail() {
                             <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-gray-400">
                               <span>{gp.granteeName}</span>
                               {gp.amount != null && gp.amount > 0 && (
-                                <span className="text-gray-500">{fmtDollar(gp.amount)}</span>
+                                <span className="text-gray-400">{fmtDollar(gp.amount)}</span>
                               )}
-                              <span className="text-gray-500">{gp.year}</span>
+                              <span className="text-gray-400">{gp.year}</span>
                             </div>
                           </div>
                         ))}
-                        <p className="text-xs text-gray-500 mt-1">Source: IRS 990-PF grant purpose descriptions</p>
+                        <p className="text-xs text-gray-400 mt-1">Source: IRS 990-PF grant purpose descriptions</p>
                       </div>
                     )}
                   </div>
@@ -696,7 +696,7 @@ export default function FunderDetail() {
                     <li>See &ldquo;Similar Funders&rdquo; below for comparable foundations with richer data.</li>
                   </ul>
                   {insights?.dataQuality && insights.dataQuality.totalRecords > 0 && (
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-gray-400">
                       {insights.dataQuality.totalRecords.toLocaleString()} partial record{insights.dataQuality.totalRecords === 1 ? '' : 's'} on file
                       {typeof insights.dataQuality.completenessScore === 'number' && insights.dataQuality.completenessScore > 0
                         ? ` (data completeness ${Math.round(insights.dataQuality.completenessScore <= 1 ? insights.dataQuality.completenessScore * 100 : insights.dataQuality.completenessScore)}%).`
@@ -721,7 +721,7 @@ export default function FunderDetail() {
                   <div className="flex items-center gap-2">
                     <Sparkles size={16} className="text-emerald-400" />
                     <h2 className="text-lg font-semibold">Peer Organizations Funded</h2>
-                    {peerFundedOrgs.length > 0 && <span className="text-xs text-gray-500">({peerFundedOrgs.length})</span>}
+                    {peerFundedOrgs.length > 0 && <span className="text-xs text-gray-400">({peerFundedOrgs.length})</span>}
                   </div>
                   {expandedSections.peerOrgs ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
                 </button>
@@ -760,7 +760,7 @@ export default function FunderDetail() {
                             ))}
                           </tbody>
                         </table>
-                        <p className="text-xs text-gray-500 mt-2">Peers identified from your mission via FunderMatch, cross-referenced against this funder's IRS 990 grantees.</p>
+                        <p className="text-xs text-gray-400 mt-2">Peers identified from your mission via FunderMatch, cross-referenced against this funder's IRS 990 grantees.</p>
                       </div>
                     </>
                   )
@@ -820,7 +820,7 @@ export default function FunderDetail() {
                           ))}
                         </tbody>
                       </table>
-                      <p className="text-xs text-gray-500 mt-2">Based on shared grant recipients over the last 5 years</p>
+                      <p className="text-xs text-gray-400 mt-2">Based on shared grant recipients over the last 5 years</p>
                     </div>
                   )
                 )}
@@ -844,7 +844,7 @@ export default function FunderDetail() {
                   <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4" aria-hidden="true"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
                   Find your connections at {funder.name}
                 </a>
-                <p className="text-xs text-gray-500 mt-2">Opens LinkedIn filtered to current employees who are your 1st or 2nd degree connections</p>
+                <p className="text-xs text-gray-400 mt-2">Opens LinkedIn filtered to current employees who are your 1st or 2nd degree connections</p>
               </div>
             </div>
             <hr className="border-[#30363d] mb-6" />

@@ -18,45 +18,42 @@ export default function Landing() {
 
       <main id="main-content">
       {/* Hero */}
-      <div className="flex flex-col items-center justify-center text-center px-6 pt-16 sm:pt-24 pb-10 sm:pb-12">
+      <div className="flex flex-col items-center justify-center text-center px-6 pt-24 pb-12">
         <h1 className="text-5xl md:text-7xl font-bold leading-tight tracking-tight max-w-4xl">
           Find Funders Aligned to Your Mission
         </h1>
-        <p className="mt-6 text-lg md:text-xl text-gray-300 max-w-2xl">
-          AI funder matching in seconds. Foundations, DAFs, and corporate giving programs
-          aligned to your mission &mdash; no account required.
+        <p className="mt-6 text-lg md:text-xl text-gray-400 max-w-2xl">
+          Connect with foundations, DAFs, and corporate giving programs that match your
+          nonprofit's mission in seconds.
         </p>
         <button
           onClick={() => navigate('/mission')}
-          className="mt-8 inline-flex items-center gap-3 bg-white text-gray-900 rounded-2xl px-10 py-4 text-lg font-semibold hover:bg-gray-100 transition shadow-lg focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0d1117]"
+          className="mt-8 inline-flex items-center gap-3 bg-white text-gray-900 rounded-2xl px-10 py-4 text-lg font-semibold hover:bg-gray-100 transition shadow-lg"
         >
-          <Search size={22} aria-hidden="true" />
-          Find Funders Free
+          <Search size={22} />
+          Get Started
         </button>
-        <p className="mt-3 text-sm text-gray-400">
-          Results in 30 seconds &middot; No credit card &middot; No email needed to start
-        </p>
       </div>
 
       {/* Trust Signals */}
       <div className="flex flex-wrap items-center justify-center gap-6 px-6 pb-8 text-sm text-gray-400">
         <span className="flex items-center gap-1.5">
-          <Shield size={13} aria-hidden="true" />
+          <Shield size={13} />
           Powered by IRS 990 public filings
         </span>
         <span className="flex items-center gap-1.5">
-          <CheckCircle size={13} aria-hidden="true" />
+          <CheckCircle size={13} />
           Free to use — no credit card required
         </span>
         <span className="flex items-center gap-1.5">
-          <CheckCircle size={13} aria-hidden="true" />
+          <CheckCircle size={13} />
           Your data is never shared or sold
         </span>
       </div>
 
       {/* Demo Video */}
-      <div className="w-full px-4 sm:px-6 lg:w-[64%] lg:px-0 max-w-[360rem] mx-auto">
-        <p className="text-center text-sm text-gray-500 uppercase tracking-widest mb-4">See It in Action</p>
+      <div className="w-[64%] max-w-[360rem] mx-auto">
+        <p className="text-center text-sm text-gray-400 uppercase tracking-widest mb-4">See It in Action</p>
         <DemoVideo />
       </div>
 
@@ -128,7 +125,7 @@ export default function Landing() {
               'No account required to start searching',
             ].map(item => (
               <div key={item} className="flex items-start gap-3">
-                <CheckCircle size={18} className="text-green-400 mt-0.5 shrink-0" aria-hidden="true" />
+                <span className="text-green-400 mt-0.5 font-bold text-lg">✓</span>
                 <span className="text-gray-200">{item}</span>
               </div>
             ))}
@@ -144,9 +141,9 @@ export default function Landing() {
         </p>
         <button
           onClick={() => navigate('/mission')}
-          className="inline-flex items-center gap-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl px-10 py-4 text-lg font-semibold transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0d1117]"
+          className="inline-flex items-center gap-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl px-10 py-4 text-lg font-semibold transition"
         >
-          <Search size={22} aria-hidden="true" />
+          <Search size={22} />
           Find Funders Now
         </button>
       </div>
@@ -156,4 +153,3 @@ export default function Landing() {
     </div>
   );
 }
-

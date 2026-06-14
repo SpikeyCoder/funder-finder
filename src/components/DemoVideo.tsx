@@ -380,7 +380,7 @@ export default function DemoVideo() {
                   <p className="text-xs text-gray-400 mb-1">Funder-Fit Score</p>
                   <p
                     className={`text-5xl font-bold tabular-nums ${
-                      score >= 80 ? 'text-green-400' : score >= 60 ? 'text-blue-400' : 'text-gray-500'
+                      score >= 80 ? 'text-green-400' : score >= 60 ? 'text-blue-400' : 'text-gray-400'
                     }`}
                   >
                     {score}
@@ -407,7 +407,7 @@ export default function DemoVideo() {
             <span
               key={label}
               className={`flex-1 text-center text-[11px] sm:text-xs truncate transition-colors duration-300 ${
-                step === i ? 'text-blue-400 font-semibold' : 'text-gray-500'
+                step === i ? 'text-blue-400 font-semibold' : 'text-gray-400'
               }`}
             >
               {label}

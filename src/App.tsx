@@ -151,7 +151,9 @@ function App() {
     <BrowserRouter>
       <AnalyticsTracker />
       <AuthProvider>
+        <main id="main-content">
         <AnimatedRoutes />
+        </main>
         <BugReportButton />
         <FeatureTooltips />
         <ThemeToggle />

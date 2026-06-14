@@ -445,7 +445,7 @@ export default function TeamSettingsPage() {
                           <FolderOpen size={12} className="text-blue-400" />
                           {p.name}
                           {p.grant_count > 0 && (
-                            <span className="text-gray-500 ml-1">({p.grant_count} grants)</span>
+                            <span className="text-gray-400 ml-1">({p.grant_count} grants)</span>
                           )}
                         </button>
                       ))}
@@ -463,7 +463,7 @@ export default function TeamSettingsPage() {
                 </h2>
                 {otherMembers.length > 3 && (
                   <div className="relative">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
                       type="text"
                       value={searchQuery}
@@ -479,7 +479,7 @@ export default function TeamSettingsPage() {
                 <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-10 text-center">
                   <Users size={36} className="mx-auto text-gray-600 mb-3" />
                   <p className="text-gray-400 mb-1">No team members yet</p>
-                  <p className="text-gray-500 text-sm mb-4">
+                  <p className="text-gray-400 text-sm mb-4">
                     Invite colleagues to collaborate on grant projects
                   </p>
                   <button
@@ -566,11 +566,11 @@ export default function TeamSettingsPage() {
                                         disabled={actionLoading || r === member.role}
                                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
                                           r === member.role
-                                            ? 'border-[#30363d] text-gray-500 cursor-not-allowed opacity-50'
+                                            ? 'border-[#30363d] text-gray-400 cursor-not-allowed opacity-50'
                                             : `${rc.bg} hover:opacity-80 cursor-pointer`
                                         }`}
                                       >
-                                        <Icon size={12} className={r === member.role ? 'text-gray-500' : rc.color} />
+                                        <Icon size={12} className={r === member.role ? 'text-gray-400' : rc.color} />
                                         {rc.label}
                                       </button>
                                     );
@@ -639,7 +639,7 @@ export default function TeamSettingsPage() {
                                         <p className="text-sm text-white group-hover:text-blue-300 truncate transition-colors">
                                           {project.name}
                                         </p>
-                                        <p className="text-xs text-gray-500 mt-0.5">
+                                        <p className="text-xs text-gray-400 mt-0.5">
                                           {project.grant_count} grant{project.grant_count !== 1 ? 's' : ''} tracked
                                           <span className="mx-1.5">·</span>
                                           Updated {timeAgo(project.updated_at)}
@@ -649,21 +649,21 @@ export default function TeamSettingsPage() {
                                     </button>
                                   ))}
                                   {member.project_summary.total > 5 && (
-                                    <p className="text-xs text-gray-500 text-center pt-1">
+                                    <p className="text-xs text-gray-400 text-center pt-1">
                                       + {member.project_summary.total - 5} more project{member.project_summary.total - 5 !== 1 ? 's' : ''}
                                     </p>
                                   )}
                                 </div>
                               ) : (
                                 <div className="text-center py-4">
-                                  <p className="text-sm text-gray-500">No projects yet</p>
+                                  <p className="text-sm text-gray-400">No projects yet</p>
                                   <p className="text-xs text-gray-600 mt-1">This member hasn't created any projects</p>
                                 </div>
                               )}
                             </div>
 
                             {/* Member meta */}
-                            <div className="px-5 py-3 border-t border-[#30363d] flex items-center gap-4 text-xs text-gray-500">
+                            <div className="px-5 py-3 border-t border-[#30363d] flex items-center gap-4 text-xs text-gray-400">
                               <span>Joined {formatDate(member.created_at)}</span>
                               {member.organization_name && (
                                 <span className="truncate">Org: {member.organization_name}</span>
@@ -692,11 +692,11 @@ export default function TeamSettingsPage() {
                     return (
                       <div key={inv.id} className="flex items-center gap-3 sm:gap-4 p-4 sm:p-5">
                         <div className="w-10 h-10 bg-[#30363d] rounded-full flex items-center justify-center flex-shrink-0">
-                          <Mail size={16} className="text-gray-500" />
+                          <Mail size={16} className="text-gray-400" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm text-white truncate">{inv.email}</p>
-                          <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
+                          <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
                             <Icon size={10} className={rc.color} />
                             <span>{rc.label}</span>
                             <span className="mx-0.5">·</span>
@@ -712,7 +712,7 @@ export default function TeamSettingsPage() {
                         </div>
                         <button
                           onClick={() => handleRevokeInvite(inv.id)}
-                          className="p-2 text-gray-500 hover:text-red-400 transition-colors rounded-md hover:bg-white/[0.04]"
+                          className="p-2 text-gray-400 hover:text-red-400 transition-colors rounded-md hover:bg-white/[0.04]"
                           title="Revoke invitation"
                         >
                           <Trash2 size={16} />
@@ -729,8 +729,8 @@ export default function TeamSettingsPage() {
               <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">
                 Role Permissions
               </h2>
-              <div className="bg-[#161b22] border border-[#30363d] rounded-lg overflow-x-auto">
-                <table className="w-full min-w-[520px] text-sm">
+              <div className="bg-[#161b22] border border-[#30363d] rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
                   <caption className="sr-only">Role permissions comparison</caption>
                   <thead>
                     <tr className="border-b border-[#30363d]">
@@ -752,7 +752,7 @@ export default function TeamSettingsPage() {
                       { perm: 'Remove members', admin: true, editor: false, viewer: false, partner: false },
                     ].map(row => (
                       <tr key={row.perm}>
-                        <td className="px-5 py-2.5 text-gray-300 whitespace-nowrap">{row.perm}</td>
+                        <td className="px-5 py-2.5 text-gray-300">{row.perm}</td>
                         <td className="text-center px-3 py-2.5">{row.admin ? <CheckCircle size={14} className="inline text-green-400" /> : <X size={14} className="inline text-gray-600" />}</td>
                         <td className="text-center px-3 py-2.5">{row.editor ? <CheckCircle size={14} className="inline text-green-400" /> : <X size={14} className="inline text-gray-600" />}</td>
                         <td className="text-center px-3 py-2.5">{row.viewer ? <CheckCircle size={14} className="inline text-green-400" /> : <X size={14} className="inline text-gray-600" />}</td>
