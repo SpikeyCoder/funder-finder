@@ -187,6 +187,9 @@ export default function ProjectWorkspace() {
   const [addGrantOpen, setAddGrantOpen] = useState(false);
   const [addGrantError, setAddGrantError] = useState<string | null>(null);
   const [newGrant, setNewGrant] = useState({ funder_name: '', grant_title: '', amount: '', deadline: '', grant_url: '', notes: '', status_slug: 'researching' });
+  // FM-IC-CFG-001: inputs for adding a new user-defined custom field to a grant.
+  const [newCustomKey, setNewCustomKey] = useState('');
+  const [newCustomValue, setNewCustomValue] = useState('');
 
   // CSV import modal
   const [csvImportOpen, setCsvImportOpen] = useState(false);
@@ -557,6 +560,34 @@ export default function ProjectWorkspace() {
     } catch (err) {
       console.error('Error updating grant:', err);
     }
+  };
+
+  // FM-IC-CFG-001: persist the custom_fields map for the selected grant.
+  const persistCustomFields = (fields: Record<string, string>) => {
+    if (!selectedGrant) return;
+    setSelectedGrant(prev => prev ? { ...prev, custom_fields: fields } : prev);
+    handleUpdateGrant(selectedGrant.id, { custom_fields: fields } as Partial<TrackedGrant>);
+  };
+
+  const handleAddCustomField = () => {
+    if (!selectedGrant) return;
+    const key = newCustomKey.trim();
+    if (!key) return;
+    const next = { ...(selectedGrant.custom_fields || {}), [key]: newCustomValue.trim() };
+    persistCustomFields(next);
+    setNewCustomKey('');
+    setNewCustomValue('');
+  };
+
+  const handleRemoveCustomField = (key: string) => {
+    if (!selectedGrant) return;
+    const next = { ...(selectedGrant.custom_fields || {}) };
+    delete next[key];
+    persistCustomFields(next);
+  };
+
+  const handleCustomFieldValueChange = (key: string, value: string) => {
+    setSelectedGrant(prev => prev ? { ...prev, custom_fields: { ...(prev.custom_fields || {}), [key]: value } } : prev);
   };
 
   // Auto-fill deadline from funder website
@@ -2078,6 +2109,62 @@ export default function ProjectWorkspace() {
                       className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500 resize-none"
                       placeholder="Add notes about this grant..."
                     />
+                  </div>
+
+                  {/* FM-IC-CFG-001: user-defined custom fields */}
+                  <div>
+                    <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Custom Fields</p>
+                    <div className="space-y-2">
+                      {Object.entries(selectedGrant.custom_fields || {}).map(([key, value]) => (
+                        <div key={key} className="flex items-center gap-2">
+                          <span className="text-xs text-gray-400 w-32 shrink-0 truncate" title={key}>{key}</span>
+                          <input
+                            type="text"
+                            value={value}
+                            onChange={e => handleCustomFieldValueChange(key, e.target.value)}
+                            onBlur={() => selectedGrant && persistCustomFields(selectedGrant.custom_fields || {})}
+                            className="flex-1 bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-blue-500"
+                            placeholder="Value"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveCustomField(key)}
+                            title={`Remove "${key}"`}
+                            className="text-gray-500 hover:text-red-400 transition-colors shrink-0"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ))}
+                      {Object.keys(selectedGrant.custom_fields || {}).length === 0 && (
+                        <p className="text-xs text-gray-600">No custom fields yet. Add your own labels like "Program Officer" or "Internal Priority".</p>
+                      )}
+                      <div className="flex items-center gap-2 pt-1">
+                        <input
+                          type="text"
+                          value={newCustomKey}
+                          onChange={e => setNewCustomKey(e.target.value)}
+                          className="w-32 shrink-0 bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-blue-500"
+                          placeholder="Field name"
+                        />
+                        <input
+                          type="text"
+                          value={newCustomValue}
+                          onChange={e => setNewCustomValue(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddCustomField(); } }}
+                          className="flex-1 bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-blue-500"
+                          placeholder="Value"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddCustomField}
+                          disabled={!newCustomKey.trim()}
+                          className="shrink-0 text-xs px-2 py-1 rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
                 </div>

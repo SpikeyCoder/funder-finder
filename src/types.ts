@@ -222,6 +222,8 @@ export interface TrackedGrant {
   is_external: boolean;
   awarded_amount: number | null;
   awarded_date: string | null;
+  // FM-IC-CFG-001: user-defined custom fields as a { label: value } map.
+  custom_fields?: Record<string, string> | null;
   added_at: string;
   updated_at: string;
   // Joined relations
