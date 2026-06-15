@@ -39,6 +39,7 @@ const NotFound = lazy(() => import('./pages/NotFound'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 const ContactPage = lazy(() => import('./pages/ContactPage'));
 const TermsOfService = lazy(() => import('./pages/TermsOfService'));
+const ApiDocsPage = lazy(() => import('./pages/ApiDocsPage'));
 
 const RouteFallback = () => (
   <div className="min-h-[40vh] flex items-center justify-center text-gray-400 text-sm">
@@ -105,6 +106,7 @@ function AnimatedRoutes() {
           <Route path="/browse" element={<BrowsePage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
+          <Route path="/docs/api" element={<ApiDocsPage />} />
 
           {/* Auth-gated routes */}
           <Route path="/dashboard" element={<AuthGuard><DashboardPage /></AuthGuard>} />
@@ -151,9 +153,7 @@ function App() {
     <BrowserRouter>
       <AnalyticsTracker />
       <AuthProvider>
-        <main id="main-content">
         <AnimatedRoutes />
-        </main>
         <BugReportButton />
         <FeatureTooltips />
         <ThemeToggle />

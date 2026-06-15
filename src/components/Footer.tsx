@@ -10,6 +10,12 @@ export default function Footer() {
             without enlarging the visible text. P3 fix, audit 2026-05-14. */}
         <nav aria-label="Footer navigation" className="flex flex-wrap items-center gap-2 sm:gap-4">
           <Link
+            to="/docs/api"
+            className="inline-flex items-center min-h-[44px] px-2 text-xs text-gray-400 hover:text-white transition-colors"
+          >
+            API Docs
+          </Link>
+          <Link
             to="/contact"
             className="inline-flex items-center min-h-[44px] px-2 text-xs text-gray-400 hover:text-white transition-colors"
           >

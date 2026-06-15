@@ -10,15 +10,6 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
-    <!-- Resource hints: warm critical third-party connections (FM-146)
-         to improve LCP / INP. dns-prefetch is a graceful fallback for
-         browsers that ignore preconnect for non-CORS requests. -->
-    <link rel="preconnect" href="https://tgtotjvdubhjxzybmdex.supabase.co" crossorigin />
-    <link rel="dns-prefetch" href="https://tgtotjvdubhjxzybmdex.supabase.co" />
-    <link rel="preconnect" href="https://fundermatch.goatcounter.com" />
-    <link rel="dns-prefetch" href="https://fundermatch.goatcounter.com" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <!--
       Content Security Policy (delivered via meta tag — GitHub Pages cannot set HTTP headers).
       Limitations of meta-tag CSP: frame-ancestors and report-uri are not supported here.
@@ -44,8 +35,11 @@
         fundermatch.goatcounter.com – GoatCounter beacon
 
       img-src data:        – SVG data URIs used by Lucide icons
+
+      frame-src:
+        blob:              – Swagger UI iframe on /docs/api (rendered from a blob URL)
     -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-9Jn/cnXgKbJ7J7q33fTfvOmHEa+5yzYGzkbavQwjgws=' https://gc.zgo.at; style-src 'self' 'unsafe-inline'; connect-src 'self' https://tgtotjvdubhjxzybmdex.supabase.co https://accounts.google.com https://fundermatch.goatcounter.com; img-src 'self' data: https:; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self' https://tgtotjvdubhjxzybmdex.supabase.co; object-src 'none';" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-9Jn/cnXgKbJ7J7q33fTfvOmHEa+5yzYGzkbavQwjgws=' https://gc.zgo.at; style-src 'self' 'unsafe-inline'; connect-src 'self' https://tgtotjvdubhjxzybmdex.supabase.co https://accounts.google.com https://fundermatch.goatcounter.com; img-src 'self' data: https:; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self' https://tgtotjvdubhjxzybmdex.supabase.co; frame-src blob:; object-src 'none';" />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!-- Mobile browser UI + dark-mode hint (FM usability audit 2026-05-25) -->
@@ -98,60 +92,6 @@
         "Grant application draft generation",
         "Funder pipeline tracking",
         "Contact information lookup"
-      ]
-    }
-    </script>
-
-    <!-- Structured data — Organization (FM-146) -->
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "Organization",
-      "name": "FunderMatch",
-      "url": "https://fundermatch.org",
-      "logo": "https://fundermatch.org/favicon-512.png",
-      "description": "Free AI-powered funder matching and grant writing tool for 501(c)(3) nonprofits."
-    }
-    </script>
-
-    <!-- Structured data — FAQPage (FM-146) -->
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "FAQPage",
-      "mainEntity": [
-        {
-          "@type": "Question",
-          "name": "Is FunderMatch free for nonprofits?",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "Yes. FunderMatch is free to use, no account or credit card required to start searching for funders aligned to your mission."
-          }
-        },
-        {
-          "@type": "Question",
-          "name": "What data powers FunderMatch?",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "FunderMatch indexes public IRS Form 990 filings to surface foundations, donor-advised funds (DAFs), and corporate giving programs that align with each nonprofit's mission and geography."
-          }
-        },
-        {
-          "@type": "Question",
-          "name": "Do I need to create an account to find funders?",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "No. You can describe your mission and receive ranked funder matches without creating an account. An account is only needed to save funders, track outreach, or generate grant drafts."
-          }
-        },
-        {
-          "@type": "Question",
-          "name": "Does FunderMatch generate grant application drafts?",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "Yes. The AI Grant Writer generates a tailored draft with a funder-fit score and compliance checklist based on your mission and the funder's stated priorities."
-          }
-        }
       ]
     }
     </script>
