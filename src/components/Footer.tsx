@@ -16,6 +16,12 @@ export default function Footer() {
             Contact
           </Link>
           <Link
+          <Link
+            to="/docs/api"
+            className="inline-flex items-center min-h-[44px] px-2 text-xs text-gray-400 hover:text-white transition-colors"
+          >
+            API Docs
+          </Link>
             to="/privacy"
             className="inline-flex items-center min-h-[44px] px-2 text-xs text-gray-400 hover:text-white transition-colors"
           >
@@ -32,3 +38,4 @@ export default function Footer() {
     </footer>
   );
 }
+
