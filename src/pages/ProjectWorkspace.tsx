@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
 import { friendlyError } from '../lib/friendlyErrors';
-import type { PipelineStatus, TrackedGrant, GrantTask, ComplianceRequirement, ComplianceDeliverable, ComplianceAttachment } from '../types';
+import type { PipelineStatus, TrackedGrant, CustomFieldValue, GrantTask, ComplianceRequirement, ComplianceDeliverable, ComplianceAttachment } from '../types';
 
 const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const MATCH_FUNDERS_URL = `${SUPABASE_URL}/functions/v1/match-funders`;
@@ -563,7 +563,7 @@ export default function ProjectWorkspace() {
   };
 
   // FM-IC-CFG-001: persist the custom_fields map for the selected grant.
-  const persistCustomFields = (fields: Record<string, string>) => {
+  const persistCustomFields = (fields: Record<string, CustomFieldValue>) => {
     if (!selectedGrant) return;
     setSelectedGrant(prev => prev ? { ...prev, custom_fields: fields } : prev);
     handleUpdateGrant(selectedGrant.id, { custom_fields: fields } as Partial<TrackedGrant>);
@@ -2120,7 +2120,7 @@ export default function ProjectWorkspace() {
                           <span className="text-xs text-gray-400 w-32 shrink-0 truncate" title={key}>{key}</span>
                           <input
                             type="text"
-                            value={value}
+                            value={String(value ?? "")}
                             onChange={e => handleCustomFieldValueChange(key, e.target.value)}
                             onBlur={() => selectedGrant && persistCustomFields(selectedGrant.custom_fields || {})}
                             className="flex-1 bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-blue-500"
@@ -2505,3 +2505,4 @@ export default function ProjectWorkspace() {
     </>
   );
 }
+
