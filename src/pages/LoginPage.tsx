@@ -54,7 +54,7 @@ export default function LoginPage() {
   // Redirect if already authenticated
   useEffect(() => {
     if (user) {
-      const redirectUrl = sessionStorage.getItem('authRedirect') || '/dashboard';
+      const redirectUrl = sessionStorage.getItem('authRedirect') || '/portfolio';
       sessionStorage.removeItem('authRedirect');
       navigate(redirectUrl);
     }
@@ -84,7 +84,7 @@ export default function LoginPage() {
         setLoading(false);
         return;
       }
-      const redirectUrl = sessionStorage.getItem('authRedirect') || '/dashboard';
+      const redirectUrl = sessionStorage.getItem('authRedirect') || '/portfolio';
       sessionStorage.removeItem('authRedirect');
       navigate(redirectUrl);
     } catch {
@@ -166,7 +166,7 @@ export default function LoginPage() {
                 <div>
                   <label htmlFor="email" className="block text-sm font-medium text-white mb-2">Email address</label>
                   <div className="relative">
-                    <Mail className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                    <Mail className="absolute left-3 top-3 w-5 h-5 text-gray-500" />
                     <input
                       id="email"
                       type="email"
@@ -184,7 +184,7 @@ export default function LoginPage() {
                   <div>
                     <label htmlFor="password" className="block text-sm font-medium text-white mb-2">Password</label>
                     <div className="relative">
-                      <Lock className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                      <Lock className="absolute left-3 top-3 w-5 h-5 text-gray-500" />
                       <input
                         id="password"
                         type="password"

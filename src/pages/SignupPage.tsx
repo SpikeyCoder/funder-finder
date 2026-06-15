@@ -72,7 +72,7 @@ export default function SignupPage() {
   // Redirect if already authenticated
   useEffect(() => {
     if (user) {
-      navigate('/dashboard');
+      navigate('/portfolio');
     }
   }, [user, navigate]);
 
@@ -196,7 +196,7 @@ export default function SignupPage() {
       }
 
       // Session established (email confirmation disabled): go straight in.
-      const redirectUrl = sessionStorage.getItem('authRedirect') || '/dashboard';
+      const redirectUrl = sessionStorage.getItem('authRedirect') || '/portfolio';
       sessionStorage.removeItem('authRedirect');
       navigate(redirectUrl);
     } catch (err) {
@@ -272,7 +272,7 @@ export default function SignupPage() {
                   Email address
                 </label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                  <Mail className="absolute left-3 top-3 w-5 h-5 text-gray-500" />
                   <input
                     id="email"
                     type="email"
@@ -290,7 +290,7 @@ export default function SignupPage() {
                   Password
                 </label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                  <Lock className="absolute left-3 top-3 w-5 h-5 text-gray-500" />
                   <input
                     id="password"
                     type="password"
@@ -301,7 +301,7 @@ export default function SignupPage() {
                     className="w-full pl-10 pr-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
-                <p className="text-xs text-gray-400 mt-1">At least 8 characters</p>
+                <p className="text-xs text-gray-500 mt-1">At least 8 characters</p>
               </div>
 
               <div>
@@ -309,7 +309,7 @@ export default function SignupPage() {
                   Confirm password
                 </label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                  <Lock className="absolute left-3 top-3 w-5 h-5 text-gray-500" />
                   <input
                     id="confirmPassword"
                     type="password"
@@ -332,7 +332,7 @@ export default function SignupPage() {
                   Organization name *
                 </label>
                 <div className="relative">
-                  <Building2 className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                  <Building2 className="absolute left-3 top-3 w-5 h-5 text-gray-500" />
                   <input
                     id="orgName"
                     type="text"
@@ -409,7 +409,7 @@ export default function SignupPage() {
 
               <div>
                 <label htmlFor="county" className="block text-sm font-medium text-white mb-2">
-                  County <span className="text-gray-400 font-normal">(optional)</span>
+                  County <span className="text-gray-500 font-normal">(optional)</span>
                 </label>
                 <input
                   id="county"
@@ -419,7 +419,7 @@ export default function SignupPage() {
                   placeholder="e.g. King County"
                   className="w-full px-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 />
-                <p className="text-xs text-gray-400 mt-1">
+                <p className="text-xs text-gray-500 mt-1">
                   Helps match funders that prefer local grantmaking.
                 </p>
               </div>
@@ -445,7 +445,7 @@ export default function SignupPage() {
 
               <div>
                 <label htmlFor="fields_of_work" className="block text-sm font-medium text-white mb-2">
-                  Fields of work <span className="text-gray-400 font-normal">(optional)</span>
+                  Fields of work <span className="text-gray-500 font-normal">(optional)</span>
                 </label>
                 <input
                   id="fields_of_work"
@@ -455,7 +455,7 @@ export default function SignupPage() {
                   placeholder="Workforce Development, Youth Mentoring, Food Security"
                   className="w-full px-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 />
-                <p className="text-xs text-gray-400 mt-1">
+                <p className="text-xs text-gray-500 mt-1">
                   Comma-separated plain-language program areas. Complements the NTEE codes above and improves funder matching.
                 </p>
               </div>

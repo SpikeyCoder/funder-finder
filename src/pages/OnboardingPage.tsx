@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import { ArrowRight, ArrowLeft, User, FolderPlus, Search, Bookmark, Sparkles } from 'lucide-react';
 import NavBar from '../components/NavBar';
+import OnboardingAdvisor from '../components/OnboardingAdvisor';
+import type { OrgProfile } from '../lib/onboardingAdvisor';
 
 const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const ONBOARDING_URL = `${SUPABASE_URL}/functions/v1/onboarding`;
@@ -92,7 +94,7 @@ export default function OnboardingPage() {
       if (res.ok) {
         const data = await res.json();
         if (data.completed_at || data.skipped) {
-          navigate('/dashboard');
+          navigate('/portfolio');
           return;
         }
         setCurrentStep(data.current_step || 1);
@@ -288,6 +290,28 @@ export default function OnboardingPage() {
 
   const step = STEPS[currentStep - 1];
 
+  // Map the 1-based onboarding step to the 0-based advisor step.
+  // Steps 1-2 map to advisor steps 0-1; steps 3-5 map to 2-3.
+  const advisorStep = Math.min(currentStep - 1, 3) as 0 | 1 | 2 | 3;
+
+  // Build the org profile from form state so the advisor has current context.
+  const advisorProfile: OrgProfile = useMemo(() => ({
+    organization_name: orgName || undefined,
+    mission_statement: missionStatement || undefined,
+    city: city || undefined,
+    state: stateAbbr || undefined,
+    county: county || undefined,
+    org_type: orgType || undefined,
+    fields_of_work: fieldsOfWork.length > 0 ? fieldsOfWork : undefined,
+  }), [orgName, missionStatement, city, stateAbbr, county, orgType, fieldsOfWork]);
+
+  const handleAdvisorCreateProject = () => {
+    // Jump to step 3 (First Project) if not already there
+    if (currentStep < 3) {
+      setCurrentStep(3);
+    }
+  };
+
   return (
     <>
       <NavBar />
@@ -297,7 +321,7 @@ export default function OnboardingPage() {
         <div className="max-w-2xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between mb-3">
             <h1 className="text-lg font-bold text-blue-400">FunderMatch</h1>
-            <button onClick={handleSkip} className="text-sm text-gray-400 hover:text-gray-300 transition-colors">
+            <button onClick={handleSkip} className="text-sm text-gray-500 hover:text-gray-300 transition-colors">
               Skip Onboarding
             </button>
           </div>
@@ -365,7 +389,7 @@ export default function OnboardingPage() {
                   value={stateAbbr} onChange={(e) => setStateAbbr(e.target.value.toUpperCase())}
                   className="bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
               </div>
-              <p className="text-[11px] text-gray-400 -mt-2">
+              <p className="text-[11px] text-gray-500 -mt-2">
                 County-level location helps us match you to local funders that fund specifically in your area (FM-IC-ONB-003).
               </p>
               <select aria-label="Organization type"
@@ -378,7 +402,7 @@ export default function OnboardingPage() {
                 <option value="fiscal">Fiscal Sponsorship</option>
               </select>
               <div>
-                <p className="text-xs font-medium text-gray-300 mb-2">Fields of work <span className="text-gray-400 font-normal">(plain-language, pick any that apply)</span></p>
+                <p className="text-xs font-medium text-gray-300 mb-2">Fields of work <span className="text-gray-500 font-normal">(plain-language, pick any that apply)</span></p>
                 <div className="flex flex-wrap gap-2">
                   {FIELDS_OF_WORK_OPTIONS.map((label) => {
                     const selected = fieldsOfWork.includes(label);
@@ -401,9 +425,9 @@ export default function OnboardingPage() {
                 <p role="alert" className="text-xs text-red-400">{saveError}</p>
               )}
               {isSaving && (
-                <p className="text-xs text-gray-400">Saving your profile...</p>
+                <p className="text-xs text-gray-500">Saving your profile...</p>
               )}
-              <p className="text-xs text-gray-400">This info helps us match you with relevant funders. You can update it later in Settings.</p>
+              <p className="text-xs text-gray-500">This info helps us match you with relevant funders. You can update it later in Settings.</p>
             </div>
           )}
 
@@ -423,7 +447,7 @@ export default function OnboardingPage() {
                 className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500 resize-none" />
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Target funding</label>
+                  <label className="text-xs text-gray-500 mb-1 block">Target funding</label>
                   <input type="text" placeholder="$50,000"
                     aria-label="Target funding"
                     value={targetFunding}
@@ -431,7 +455,7 @@ export default function OnboardingPage() {
                     className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Focus area</label>
+                  <label className="text-xs text-gray-500 mb-1 block">Focus area</label>
                   <select
                     aria-label="Focus area"
                     value={focusArea}
@@ -451,16 +475,16 @@ export default function OnboardingPage() {
                 <p role="alert" className="text-xs text-red-400">{projectError}</p>
               )}
               {isCreatingProject && (
-                <p className="text-xs text-gray-400">Creating your project...</p>
+                <p className="text-xs text-gray-500">Creating your project...</p>
               )}
-              <p className="text-xs text-gray-400">We'll use this to find funders that match your project's mission.</p>
+              <p className="text-xs text-gray-500">We'll use this to find funders that match your project's mission.</p>
             </div>
           )}
 
           {currentStep === 4 && (
             <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-5 mb-6 text-left space-y-4">
               <p className="text-sm font-semibold text-white">Review Your Top Matches</p>
-              <p className="text-xs text-gray-400 mb-2">Based on your project, here are example funders our AI would find for you:</p>
+              <p className="text-xs text-gray-500 mb-2">Based on your project, here are example funders our AI would find for you:</p>
               {[
                 { name: 'Community Foundation', type: 'Foundation', match: '95%', focus: 'Education & Youth' },
                 { name: 'Regional Health Trust', type: 'Trust', match: '88%', focus: 'Community Health' },
@@ -469,12 +493,12 @@ export default function OnboardingPage() {
                 <div key={funder.name} className="flex items-center justify-between p-3 bg-[#0d1117] rounded-lg">
                   <div>
                     <p className="text-sm text-white font-medium">{funder.name}</p>
-                    <p className="text-xs text-gray-400">{funder.type} · {funder.focus}</p>
+                    <p className="text-xs text-gray-500">{funder.type} · {funder.focus}</p>
                   </div>
                   <span className="text-sm font-bold text-green-400">{funder.match}</span>
                 </div>
               ))}
-              <p className="text-xs text-gray-400">After setup, you'll see real matches based on your organization's data.</p>
+              <p className="text-xs text-gray-500">After setup, you'll see real matches based on your organization's data.</p>
             </div>
           )}
 
@@ -500,7 +524,7 @@ export default function OnboardingPage() {
 
           <div className="flex items-center justify-between">
             <button onClick={handleBack} disabled={currentStep === 1}
-              className="flex items-center gap-1 text-sm text-gray-400 hover:text-white disabled:opacity-30 transition-colors">
+              className="flex items-center gap-1 text-sm text-gray-500 hover:text-white disabled:opacity-30 transition-colors">
               <ArrowLeft size={16} /> Back
             </button>
             <button onClick={handleNext}
@@ -512,6 +536,13 @@ export default function OnboardingPage() {
         </div>
       </div>
     </div>
+
+      {/* AI Grant Strategy Advisor — collapsible chat panel */}
+      <OnboardingAdvisor
+        step={advisorStep}
+        profile={advisorProfile}
+        onCreateProject={handleAdvisorCreateProject}
+      />
     </>
   );
 }
