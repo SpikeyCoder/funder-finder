@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Save, AlertCircle, CheckCircle, Loader, Building2, Bell, Calendar, Copy, Trash2, Plus, ExternalLink } from 'lucide-react';
+import { Save, AlertCircle, CheckCircle, Loader, Building2, Bell, Calendar, Copy, Trash2, Plus, ExternalLink, KeyRound } from 'lucide-react';
 import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import NavBar from '../components/NavBar';
+import ApiKeysSettings from '../components/ApiKeysSettings';
 import type { NotificationPreferences, TeamNotificationPreferences, CalendarFeed } from '../types';
 
 const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
@@ -66,7 +67,7 @@ interface UserProfile {
   updated_at: string | null;
 }
 
-type SettingsTab = 'profile' | 'notifications' | 'calendar';
+type SettingsTab = 'profile' | 'notifications' | 'calendar' | 'api';
 
 function UserSettingsContent() {
   const { user, signOut } = useAuth();
@@ -503,6 +504,7 @@ function UserSettingsContent() {
               { key: 'profile' as SettingsTab, label: 'Profile', icon: Building2 },
               { key: 'notifications' as SettingsTab, label: 'Notifications', icon: Bell },
               { key: 'calendar' as SettingsTab, label: 'Calendar', icon: Calendar },
+              { key: 'api' as SettingsTab, label: 'API', icon: KeyRound },
             ]).map(tab => (
               <button
                 key={tab.key}
@@ -1006,6 +1008,11 @@ function UserSettingsContent() {
                 </div>
               )}
             </>
+          )}
+
+          {/* ─── API Tab (FM-IC-CFG-002) ─── */}
+          {activeTab === 'api' && (
+            <ApiKeysSettings />
           )}
         </div>
       </div>
