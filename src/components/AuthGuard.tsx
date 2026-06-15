@@ -23,7 +23,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
       } else {
         // Only redirect truly new users to onboarding (not existing users)
         const onboardingComplete = localStorage.getItem('onboarding_complete');
-        if (!onboardingComplete && location.pathname === '/dashboard') {
+        if (!onboardingComplete && location.pathname === '/portfolio') {
           // Check account age - only redirect users created after onboarding was deployed
           const createdAt = new Date(user.created_at || 0);
           const onboardingDeployDate = new Date('2026-03-16T00:00:00Z');
