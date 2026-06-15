@@ -10,6 +10,7 @@ import { formatTotalGiving, fetchPeers } from '../utils/matching';
 import { fmtDollar } from '../components/InsightCharts';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
+import { friendlyError } from '../lib/friendlyErrors';
 import LoginModal from '../components/LoginModal';
 import NavBar from '../components/NavBar';
 
@@ -184,6 +185,47 @@ export default function SavedFunders() {
     })();
   }, [user]);
 
+  // Pre-populate addedKeys with existing tracked grants so the checkmark
+  // renders for funders already assigned to projects (survives logout/login).
+  useEffect(() => {
+    if (!user || entries.length === 0 || projects.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const headers = await getEdgeFunctionHeaders();
+        const res = await fetch(TRACKED_GRANTS_URL, { headers });
+        if (!res.ok) return;
+        const body = await res.json();
+        const grants: { funder_ein?: string; funder_name?: string; project_id?: string }[] = body.grants || [];
+        if (cancelled) return;
+        // Build a lookup from funder EIN/id to tracked project ids
+        const savedEins = new Map<string, string>();
+        for (const e of entries) {
+          const ein = e.funder.foundation_ein || e.funder.id;
+          savedEins.set(ein, e.funder.id);
+        }
+        const preAdded = new Set<string>();
+        for (const g of grants) {
+          if (!g.project_id || !g.funder_ein) continue;
+          const funderId = savedEins.get(g.funder_ein);
+          if (funderId) {
+            preAdded.add(`${funderId}:${g.project_id}`);
+          }
+        }
+        if (!cancelled && preAdded.size > 0) {
+          setAddedKeys(prev => {
+            const merged = new Set(prev);
+            for (const k of preAdded) merged.add(k);
+            return merged;
+          });
+        }
+      } catch {
+        // Non-fatal: checkmarks simply won't pre-populate
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user, entries, projects]);
+
   const addToProject = async (f: Funder, projectId: string) => {
     const key = `${f.id}:${projectId}`;
     setAddingKey(key);
@@ -207,7 +249,7 @@ export default function SavedFunders() {
       }
       setAddedKeys(prev => new Set(prev).add(key));
     } catch (err: any) {
-      setAddError(prev => ({ ...prev, [f.id]: err?.message || 'Failed to add to project' }));
+      setAddError(prev => ({ ...prev, [f.id]: friendlyError(err, 'Failed to add to project. Please try again.') }));
     } finally {
       setAddingKey(null);
     }
@@ -290,7 +332,7 @@ export default function SavedFunders() {
   return (
     <>
       <NavBar />
-      <div className="min-h-screen bg-[#0d1117] text-white py-8 sm:py-12 px-4 sm:px-6">
+      <div className="min-h-screen bg-[#0d1117] text-white py-12 px-6">
       <div className="max-w-3xl mx-auto">
 
         {/* Header */}
@@ -302,16 +344,16 @@ export default function SavedFunders() {
           Back
         </button>
 
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-          <div className="min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-bold">Saved Funders</h1>
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-3xl font-bold">Saved Funders</h1>
             {!loading && (
               <p className="text-gray-400 mt-1">
                 {entries.length} funder{entries.length !== 1 ? 's' : ''} saved
               </p>
             )}
           </div>
-          <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-3">
             {entries.length > 0 && (
               <button
                 onClick={exportCSV}
@@ -323,7 +365,7 @@ export default function SavedFunders() {
             )}
             {user ? (
               <div className="flex items-center gap-3">
-                <div className="hidden sm:flex items-center gap-2 text-sm text-gray-400 border border-[#30363d] rounded-xl px-3 py-2">
+                <div className="flex items-center gap-2 text-sm text-gray-400 border border-[#30363d] rounded-xl px-3 py-2">
                   <UserIcon size={14} />
                   <span className="max-w-[140px] truncate">{user.email}</span>
                 </div>
@@ -375,7 +417,7 @@ export default function SavedFunders() {
         ) : (
           <>
             {/* Pipeline summary bar */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+            <div className="grid grid-cols-4 gap-3 mb-6">
               {STATUSES.map(s => (
                 <button
                   key={s.key}
@@ -386,7 +428,7 @@ export default function SavedFunders() {
                       : 'bg-[#161b22] border-[#30363d] text-gray-400 hover:border-gray-500'
                   }`}
                 >
-                  <div className="text-xl sm:text-2xl font-bold">{countByStatus(s.key)}</div>
+                  <div className="text-2xl font-bold">{countByStatus(s.key)}</div>
                   <div className="text-xs mt-0.5">{s.label}</div>
                 </button>
               ))}
@@ -530,7 +572,7 @@ export default function SavedFunders() {
                           </button>
                         )}
                         {user && (
-                          <div className="relative sm:ml-auto">
+                          <div className="relative ml-auto">
                             <button
                               onClick={() => setProjectMenuOpen(projectMenuOpen === f.id ? null : f.id)}
                               className="inline-flex items-center gap-2 border border-[#30363d] text-gray-300 rounded-xl px-4 py-2 min-h-[44px] text-sm hover:bg-[#21262d] transition-colors"
@@ -543,7 +585,7 @@ export default function SavedFunders() {
                               <>
                                 {/* click-away backdrop */}
                                 <div className="fixed inset-0 z-40" onClick={() => setProjectMenuOpen(null)} />
-                                <div className="absolute right-0 mt-2 w-[min(14rem,calc(100vw-2rem))] bg-[#161b22] border border-[#30363d] rounded-lg shadow-lg z-50 py-1 max-h-64 overflow-auto">
+                                <div className="absolute right-0 mt-2 w-56 bg-[#161b22] border border-[#30363d] rounded-lg shadow-lg z-50 py-1 max-h-64 overflow-auto">
                                   {projects.length === 0 ? (
                                     <div className="px-4 py-3 text-sm text-gray-400">
                                       No projects yet.{' '}
@@ -583,7 +625,7 @@ export default function SavedFunders() {
                         )}
                         <button
                           onClick={() => navigate(`/funder/${f.id}`, { state: { funder: f } })}
-                          className={`inline-flex items-center gap-2 border border-[#30363d] rounded-xl px-4 py-2 min-h-[44px] text-sm hover:bg-[#21262d] transition-colors${user ? '' : ' sm:ml-auto'}`}
+                          className={`inline-flex items-center gap-2 border border-[#30363d] rounded-xl px-4 py-2 min-h-[44px] text-sm hover:bg-[#21262d] transition-colors${user ? '' : ' ml-auto'}`}
                         >
                           View Details
                           <ChevronRight size={14} />
@@ -617,8 +659,7 @@ export default function SavedFunders() {
               </div>
             ) : (
               <div className="bg-[#161b22] border border-[#30363d] rounded-2xl overflow-hidden">
-                <div className="overflow-x-auto">
-                <table className="w-full text-sm min-w-[480px]">
+                <table className="w-full text-sm">
                   <thead>
                     <tr className="text-gray-400 text-xs border-b border-[#30363d]">
                       <th className="text-left py-3 px-4">Funder</th>
@@ -638,7 +679,7 @@ export default function SavedFunders() {
                           <div className="flex items-center gap-2">
                             <Building2 size={13} className="text-blue-400 shrink-0" />
                             <span className="text-gray-200 truncate max-w-[220px]">{p.name}</span>
-                            {p.state && <span className="text-gray-400 text-xs shrink-0">{p.state}</span>}
+                            {p.state && <span className="text-gray-500 text-xs shrink-0">{p.state}</span>}
                           </div>
                         </td>
                         <td className="py-3 px-2 text-right text-gray-300 whitespace-nowrap">
@@ -649,14 +690,13 @@ export default function SavedFunders() {
                             {Math.round(p.score * 100)}%
                           </span>
                         </td>
-                        <td className="py-3 px-3 text-gray-400 text-xs truncate max-w-[160px] hidden sm:table-cell">
+                        <td className="py-3 px-3 text-gray-500 text-xs truncate max-w-[160px] hidden sm:table-cell">
                           {p.recommendedBy}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-                </div>
               </div>
             )}
           </div>
@@ -704,7 +744,7 @@ export default function SavedFunders() {
               </pre>
             </div>
             <div className="px-6 py-3 border-t border-[#30363d] flex items-center justify-between">
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-gray-500">
                 Saved {new Date(viewingDraft.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
               </p>
               <button
