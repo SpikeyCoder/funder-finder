@@ -338,6 +338,10 @@ Deno.serve(async (req: Request) => {
         notes: notes || null,
         source: source || (is_external ? 'manual' : 'search'),
         is_external: is_external || false,
+        // FM-IC-CFG-001: user-defined custom field values
+        custom_fields: (body.custom_fields && typeof body.custom_fields === 'object')
+          ? body.custom_fields
+          : {},
       }).select('*, pipeline_statuses(name, slug, color, is_terminal)').single();
       if (error) return errorResponse(req, error.message, 500, { stage, details: error });
 
@@ -368,6 +372,10 @@ Deno.serve(async (req: Request) => {
       if (body.notes !== undefined) updates.notes = body.notes;
       if (body.awarded_amount !== undefined) updates.awarded_amount = body.awarded_amount ? parseFloat(body.awarded_amount) : null;
       if (body.awarded_date !== undefined) updates.awarded_date = body.awarded_date || null;
+      // FM-IC-CFG-001: user-defined custom field values
+      if (body.custom_fields !== undefined && typeof body.custom_fields === 'object') {
+        updates.custom_fields = body.custom_fields || {};
+      }
       if (body.status_id) {
         updates.status_id = body.status_id;
       } else if (body.status_slug) {

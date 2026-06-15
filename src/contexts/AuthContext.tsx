@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase, SUPABASE_CUSTOM_DOMAIN } from '../lib/supabase';
-import { BudgetBand, Funder, FunderStatus, SavedFunderEntry } from '../types';
+import { BudgetBand, Funder, FunderStatus, SavedFunderEntry, CustomFieldValue } from '../types';
 
 // The OAuth redirect URL must match what is registered in Supabase dashboard
 // and in each OAuth provider's allowed redirect URIs.
@@ -51,7 +51,7 @@ interface AuthContextValue {
   /** Fetch saved funders with status and notes. */
   fetchSavedEntries: () => Promise<SavedFunderEntry[]>;
   /** Update status and/or notes for a saved funder. */
-  updateSavedFunder: (funderId: string, updates: { status?: FunderStatus; notes?: string }) => Promise<void>;
+  updateSavedFunder: (funderId: string, updates: { status?: FunderStatus; notes?: string; custom_fields?: Record<string, CustomFieldValue> }) => Promise<void>;
 
   /** User profile (mission, location, budget) — loaded on auth. */
   userProfile: UserProfile | null;
@@ -195,7 +195,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const fetchSavedEntries = useCallback(async (): Promise<SavedFunderEntry[]> => {
     const { data, error } = await supabase
       .from('saved_funders')
-      .select('funder_data, status, notes, saved_at')
+      .select('funder_data, status, notes, saved_at, custom_fields')
       .order('saved_at', { ascending: false });
     if (error) throw error;
     return (data ?? []).map((row: any) => ({
@@ -203,12 +203,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       status: (row.status ?? 'researching') as FunderStatus,
       notes: row.notes ?? '',
       savedAt: row.saved_at ?? '',
+      customFields: (row.custom_fields ?? {}) as Record<string, CustomFieldValue>,
     }));
   }, []);
 
   const updateSavedFunder = useCallback(async (
     funderId: string,
-    updates: { status?: FunderStatus; notes?: string }
+    updates: { status?: FunderStatus; notes?: string; custom_fields?: Record<string, CustomFieldValue> }
   ) => {
     const userId = (await supabase.auth.getUser()).data.user?.id;
     if (!userId) throw new Error('Not authenticated');
