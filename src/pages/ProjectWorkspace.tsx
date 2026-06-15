@@ -2257,6 +2257,7 @@ export default function ProjectWorkspace() {
                           className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-xs"><Plus size={13} /></button>
                       </div>
                       <input type="email" placeholder="Assignee email (optional)"
+                        aria-label="Compliance task assignee email (optional)"
                         value={newCompAssignee} onChange={e => setNewCompAssignee(e.target.value)}
                         className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-1.5 text-white text-xs focus:outline-none focus:border-blue-500" />
                       <div className="flex items-center gap-2">
