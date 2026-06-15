@@ -27,24 +27,12 @@ import { ipRateLimit } from "../_shared/rate_limit.ts";
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') || '';
 const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY') || '';
 
-const ALLOWED_ORIGINS = new Set([
-  'https://fundermatch.org',
-  'https://www.fundermatch.org',
-  'http://localhost:5173',
-]);
+// FM-2026-06-12-02: CORS allowlist now sourced from `_shared/cors.ts`.
+// See compliance/cors-consolidation-2026-06-12.md.
+import { corsHeaders as _sharedCorsHeaders } from '../_shared/cors.ts';
 
 function corsHeaders(requestOrigin: string | null): Record<string, string> {
-  const origin =
-    requestOrigin && ALLOWED_ORIGINS.has(requestOrigin)
-      ? requestOrigin
-      : 'https://fundermatch.org';
-
-  return {
-    'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Headers':
-      'authorization, x-client-info, apikey, content-type',
-    Vary: 'Origin',
-  };
+  return _sharedCorsHeaders(requestOrigin);
 }
 
 // ── Download file from Supabase Storage ─────────────────────────────────────
