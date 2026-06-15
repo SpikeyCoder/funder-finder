@@ -490,6 +490,7 @@ export default function SavedFunders() {
                         <textarea
                           className="mt-2 w-full bg-[#0d1117] border border-[#30363d] rounded-xl px-4 py-3 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-600 resize-none"
                           rows={3}
+                          aria-label={`Notes about ${f.name}`}
                           placeholder="Add notes about this funder, next steps, contacts, deadlines…"
                           value={notesDraft[f.id] ?? notes}
                           onChange={e => handleNotesChange(f.id, e.target.value)}
