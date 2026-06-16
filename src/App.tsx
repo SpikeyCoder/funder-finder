@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import AnalyticsTracker from './components/AnalyticsTracker';
 import AuthGuard from './components/AuthGuard';
 import FeatureTooltips from './components/FeatureTooltip';
+import ProductTour from './components/ProductTour';
 import BugReportButton from './components/BugReportButton';
 import ThemeToggle from './components/ThemeToggle';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -156,6 +157,7 @@ function App() {
         </main>
         <BugReportButton />
         <FeatureTooltips />
+        <ProductTour />
         <ThemeToggle />
       </AuthProvider>
     </BrowserRouter>

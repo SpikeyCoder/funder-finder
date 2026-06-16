@@ -39,17 +39,17 @@ export default function NavBar() {
         <div className="max-w-6xl mx-auto flex items-center justify-between h-16 px-6">
           <Link to="/" className="text-white font-bold text-lg tracking-tight shrink-0 hover:opacity-80 transition-opacity">FunderMatch</Link>
           <div className="hidden md:flex items-center gap-1">
-            <Link to="/mission" className={linkClass('/mission')}>Find Funders</Link>
+            <Link to="/mission" data-tour="find-funders" className={linkClass('/mission')}>Find Funders</Link>
             {!loading && user && (
               <Link to="/saved" className={linkClass('/saved')}>Saved Funders</Link>
             )}
-            <Link to="/browse" className={linkClass('/browse')}>Browse Grants</Link>
+            <Link to="/browse" data-tour="browse" className={linkClass('/browse')}>Browse Grants</Link>
             <Link to="/search" className={linkClass('/search')}>Search</Link>
             {!loading && (user ? (
               <>
-                <Link to="/portfolio" className={linkClass('/portfolio')}>Dashboard</Link>
+                <Link to="/portfolio" data-tour="dashboard" className={linkClass('/portfolio')}>Dashboard</Link>
                 <Link to="/dashboard" className={linkClass('/dashboard')}>Portfolio</Link>
-                <Link to="/tasks" className={linkClass('/tasks')}>Tasks</Link>
+                <Link to="/tasks" data-tour="tasks" className={linkClass('/tasks')}>Tasks</Link>
                 <NotificationBell />
                 <div ref={accountRef} className="relative ml-2">
                   <button onClick={() => setAccountOpen(!accountOpen)} aria-expanded={accountOpen} aria-haspopup="true" className="flex items-center gap-1.5 px-4 py-2 min-h-[44px] text-sm font-medium text-gray-400 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors">
