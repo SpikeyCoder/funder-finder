@@ -321,9 +321,17 @@ export default function OnboardingPage() {
         <div className="max-w-2xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between mb-3">
             <h1 className="text-lg font-bold text-blue-400">FunderMatch</h1>
-            <button onClick={handleSkip} className="text-sm text-gray-500 hover:text-gray-300 transition-colors">
-              Skip Onboarding
-            </button>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => window.dispatchEvent(new Event('fm:start-tour'))}
+                className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+              >
+                Take a quick tour
+              </button>
+              <button onClick={handleSkip} className="text-sm text-gray-500 hover:text-gray-300 transition-colors">
+                Skip Onboarding
+              </button>
+            </div>
           </div>
           <div className="flex gap-1">
             {STEPS.map(s => (
