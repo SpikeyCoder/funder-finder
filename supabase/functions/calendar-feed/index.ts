@@ -164,6 +164,60 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // Include post-award compliance reporting deadlines (FM-IC-RPT-002).
+    // Default ON; opt out per-feed via include_compliance. Mirrors the grant /
+    // task event emission above so reporting due dates land in the user's
+    // subscribed Google / Outlook / Apple calendar alongside grant deadlines.
+    if (feed.include_compliance !== false) {
+      let complianceQuery = serviceRoleClient
+        .from('compliance_requirements')
+        .select('*, tracked_grants(funder_name, grant_title)')
+        .eq('user_id', feed.user_id)
+        .not('due_date', 'is', null)
+        .not('status', 'in', '(submitted,approved)');
+
+      if (feed.project_id) {
+        complianceQuery = complianceQuery.eq('project_id', feed.project_id);
+      }
+
+      const { data: requirements } = await complianceQuery;
+
+      const REQ_TYPE_LABELS: Record<string, string> = {
+        narrative_report: 'Narrative report',
+        financial_report: 'Financial report',
+        progress_report: 'Progress report',
+        site_visit: 'Site visit',
+        audit: 'Audit',
+        final_report: 'Final report',
+        other: 'Report',
+      };
+
+      for (const c of requirements || []) {
+        const grantInfo = (c as any).tracked_grants;
+        const typeLabel = REQ_TYPE_LABELS[(c as any).type] || 'Report';
+        const summary = escapeIcs(`REPORT DUE: ${c.title}`);
+        const description = escapeIcs(
+          `Type: ${typeLabel}` +
+          `\nStatus: ${c.status}` +
+          (grantInfo ? `\nGrant: ${grantInfo.funder_name}${grantInfo.grant_title ? ' - ' + grantInfo.grant_title : ''}` : '') +
+          (c.assignee_email ? `\nAssigned to: ${c.assignee_email}` : '') +
+          (c.description ? `\n${c.description}` : '') +
+          `\nView: https://fundermatch.org/projects/${c.project_id}`
+        );
+
+        events.push(
+          `BEGIN:VEVENT\r\n` +
+          `UID:compliance-${c.id}@fundermatch.org\r\n` +
+          `DTSTART;VALUE=DATE:${formatDate(c.due_date)}\r\n` +
+          `SUMMARY:${summary}\r\n` +
+          `DESCRIPTION:${description}\r\n` +
+          `BEGIN:VALARM\r\nTRIGGER:-P7D\r\nACTION:DISPLAY\r\nDESCRIPTION:Report due in 7 days\r\nEND:VALARM\r\n` +
+          `BEGIN:VALARM\r\nTRIGGER:-P1D\r\nACTION:DISPLAY\r\nDESCRIPTION:Report due tomorrow\r\nEND:VALARM\r\n` +
+          `END:VEVENT`
+        );
+      }
+    }
+
     const icsContent =
       `BEGIN:VCALENDAR\r\n` +
       `VERSION:2.0\r\n` +
@@ -204,6 +258,7 @@ Deno.serve(async (req: Request) => {
       const body = await req.json();
       const projectId = body.project_id || null;
       const includeTasks = body.include_tasks !== false;
+      const includeCompliance = body.include_compliance !== false;
 
       // Generate a secure random token
       const token = crypto.randomUUID() + '-' + crypto.randomUUID();
@@ -213,6 +268,7 @@ Deno.serve(async (req: Request) => {
         project_id: projectId,
         token,
         include_tasks: includeTasks,
+        include_compliance: includeCompliance,
       }).select().single();
 
       if (error) return errorResponse(req, error.message, 500);

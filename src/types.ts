@@ -297,6 +297,7 @@ export interface CalendarFeed {
   project_id: string | null;
   token: string;
   include_tasks: boolean;
+  include_compliance: boolean;
   created_at: string;
   last_accessed: string | null;
   feed_url?: string;
