@@ -126,6 +126,7 @@ function UserSettingsContent() {
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [newFeedProjectId, setNewFeedProjectId] = useState<string>('');
   const [newFeedIncludeTasks, setNewFeedIncludeTasks] = useState(true);
+  const [newFeedIncludeCompliance, setNewFeedIncludeCompliance] = useState(true);
   const [copiedFeedId, setCopiedFeedId] = useState<string | null>(null);
 
   // Load profile
@@ -401,6 +402,7 @@ function UserSettingsContent() {
         body: JSON.stringify({
           project_id: newFeedProjectId || null,
           include_tasks: newFeedIncludeTasks,
+          include_compliance: newFeedIncludeCompliance,
         }),
       });
       if (res.ok) {
@@ -412,6 +414,7 @@ function UserSettingsContent() {
         }, ...prev]);
         setNewFeedProjectId('');
         setNewFeedIncludeTasks(true);
+        setNewFeedIncludeCompliance(true);
       }
     } catch (err) {
       console.error('Error creating feed:', err);
@@ -932,6 +935,13 @@ function UserSettingsContent() {
                           onChange={(e) => setNewFeedIncludeTasks(e.target.checked)}
                           className="w-4 h-4 rounded bg-[#0d1117] border border-[#30363d] text-blue-600 cursor-pointer" />
                         <span className="text-sm text-gray-300">Include task due dates</span>
+                      </label>
+
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <input type="checkbox" checked={newFeedIncludeCompliance}
+                          onChange={(e) => setNewFeedIncludeCompliance(e.target.checked)}
+                          className="w-4 h-4 rounded bg-[#0d1117] border border-[#30363d] text-blue-600 cursor-pointer" />
+                        <span className="text-sm text-gray-300">Include post-award report deadlines</span>
                       </label>
 
                       <button onClick={handleCreateFeed}
