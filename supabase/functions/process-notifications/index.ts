@@ -34,6 +34,48 @@ function escapeHtml(input: unknown): string {
     .replace(/'/g, '&#39;');
 }
 
+
+// FM-2026-06-17-04: defense-in-depth cron-only auth gate. This endpoint is
+// designed to be invoked by pg_cron / the Supabase scheduler -- it uses
+// the service-role key internally and has no per-user authorization.
+// The Supabase gateway already requires a valid project apikey, but
+// that key is also embedded in the public SPA bundle, so without an
+// additional shared secret any authenticated session could trigger the
+// job. When CRON_SECRET is configured we require the caller to present
+// it via either `X-Cron-Secret: <value>` or
+// `Authorization: Bearer cron:<value>`. When CRON_SECRET is unset
+// (e.g. local dev) we fall through unchanged so behaviour is
+// backward-compatible.
+function _cronSecretAllowed(request: Request): boolean {
+  const expected = Deno.env.get('CRON_SECRET') || '';
+  if (!expected) return true; // not configured -> no enforcement
+  const header = request.headers.get('x-cron-secret') || '';
+  if (header && _ctEq(header, expected)) return true;
+  const auth = request.headers.get('authorization') || '';
+  if (auth.startsWith('Bearer cron:')) {
+    const presented = auth.slice('Bearer cron:'.length).trim();
+    if (presented && _ctEq(presented, expected)) return true;
+  }
+  return false;
+}
+
+function _ctEq(a: string, b: string): boolean {
+  // Length-independent comparison so the gate does not leak the
+  // configured secret length via timing.
+  if (a.length !== b.length) {
+    // Constant-time over the longer string to keep work uniform.
+    let acc = 1;
+    const n = Math.max(a.length, b.length);
+    for (let i = 0; i < n; i++) {
+      acc &= (a.charCodeAt(i % Math.max(a.length, 1)) ^ b.charCodeAt(i % Math.max(b.length, 1))) === 0 ? 1 : 0;
+    }
+    return false;
+  }
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: CORS_HEADERS(req) });
@@ -42,6 +84,15 @@ Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') {
     return jsonResponse(req, { error: 'Method not allowed' }, 405);
   }
+
+// FM-2026-06-17-04: enforce CRON_SECRET if configured.
+if (!_cronSecretAllowed(req)) {
+  return new Response(JSON.stringify({ error: 'forbidden' }), {
+    status: 403,
+    headers: { ...CORS_HEADERS(req), 'Content-Type': 'application/json' },
+  });
+}
+
 
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);

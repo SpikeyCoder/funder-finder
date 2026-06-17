@@ -1,5 +1,6 @@
 import { corsHeaders } from '../_shared/cors.ts';
 import { sanitiseError } from '../_shared/errors.ts';
+import { ipRateLimit } from "../_shared/rate_limit.ts";
 /**
  * get-recipient-profile — Supabase Edge Function
  *
@@ -8,6 +9,14 @@ import { sanitiseError } from '../_shared/errors.ts';
  *
  * Input:  { recipientId?: string, ein?: string }
  * Output: RecipientProfile (see src/types.ts)
+ *
+ * FM-2026-06-17-02 (pen-test): added a per-IP rate limit. The endpoint
+ * fetches each grantee's latest 990 financials from the ProPublica
+ * Nonprofit Explorer API on every uncached miss, so without an IP cap
+ * a single attacker can both burn ProPublica's per-IP request budget
+ * (which then 429s our shared egress IP for legitimate users) and
+ * spin our own DB. Threshold (30/min) matches `match-funders` and is
+ * far above any plausible legitimate UX (one profile per click).
  */
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -133,6 +142,17 @@ Deno.serve(async (req) => {
       headers: { ...headers, 'Content-Type': 'application/json' },
     });
   }
+
+  // FM-2026-06-17-02: per-IP rate limit (defense-in-depth) -- protects
+  // both the DB query path and the third-party ProPublica 990 API call
+  // that this endpoint fans out to.
+  const limited = await ipRateLimit(req, {
+    namespace: 'get-recipient-profile',
+    limit: 30,
+    windowMs: 60_000,
+    extraHeaders: headers,
+  });
+  if (!limited.allow && limited.response) return limited.response;
 
   try {
     const body = await req.json();
