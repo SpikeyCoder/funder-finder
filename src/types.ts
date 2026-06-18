@@ -6,6 +6,26 @@ export interface SavedFunderEntry {
   status: FunderStatus;
   notes: string;
   savedAt: string;
+  // FM-IC-CFG-001: user-defined custom field values, keyed by definition field_key
+  customFields?: Record<string, CustomFieldValue>;
+}
+
+// FM-IC-CFG-001: user-defined custom data fields for funders & opportunities
+export type CustomFieldType = 'text' | 'number' | 'date' | 'select' | 'checkbox' | 'url';
+export type CustomFieldValue = string | number | boolean | null;
+export type CustomFieldEntity = 'funder' | 'grant';
+
+export interface CustomFieldDefinition {
+  id: string;
+  user_id: string;
+  entity: CustomFieldEntity;
+  field_key: string;
+  label: string;
+  field_type: CustomFieldType;
+  options: string[];
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface SimilarPastGrantee {
@@ -218,6 +238,8 @@ export interface TrackedGrant {
   deadline: string | null;
   grant_url: string | null;
   notes: string | null;
+  // FM-IC-CFG-001: user-defined custom field values, keyed by definition field_key
+  custom_fields?: Record<string, CustomFieldValue>;
   source: string;
   is_external: boolean;
   awarded_amount: number | null;
