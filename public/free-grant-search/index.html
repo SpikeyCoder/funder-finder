@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Free Grant Search for Nonprofits — No Account Required | FunderMatch</title>
+  <meta name="description" content="Search 460,000+ foundations and 7.5M grant records for free. No account required. FunderMatch offers AI-powered grant search without the $500–$2,000/year fees charged by paid databases.">
+  <link rel="canonical" href="https://fundermatch.org/free-grant-search">
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Free Grant Search for Nonprofits — No Account Required | FunderMatch">
+  <meta property="og:description" content="Search 460,000+ foundations and 7.5M grant records for free. No account required. AI-powered mission matching without the fees of paid grant databases.">
+  <meta property="og:url" content="https://fundermatch.org/free-grant-search">
+  <meta property="og:image" content="https://fundermatch.org/og-image.png">
+  <meta property="og:site_name" content="FunderMatch">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Free Grant Search for Nonprofits — No Account Required | FunderMatch">
+  <meta name="twitter:description" content="Search 460,000+ foundations and 7.5M grant records for free. No account required. AI-powered mission matching without the fees of paid grant databases.">
+  <meta name="twitter:image" content="https://fundermatch.org/og-image.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+      line-height: 1.7;
+      font-size: 17px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a {
+      color: #58a6ff;
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    h1, h2, h3 {
+      color: #ffffff;
+      line-height: 1.3;
+    }
+
+    /* ── NavBar ── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: #0d1117;
+      border-bottom: 1px solid #1b2130;
+    }
+
+    .nav-inner {
+      max-width: 1152px;
+      margin: 0 auto;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+    }
+
+    .nav-logo {
+      font-size: 20px;
+      font-weight: 700;
+      color: #ffffff;
+      text-decoration: none;
+    }
+
+    .nav-logo:hover {
+      text-decoration: none;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 28px;
+      list-style: none;
+    }
+
+    .nav-links a {
+      color: #9ca3af;
+      font-size: 15px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+
+    .nav-links a:hover {
+      color: #ffffff;
+      text-decoration: none;
+    }
+
+    /* ── Hero ── */
+    .hero {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 80px 24px 48px;
+      text-align: center;
+    }
+
+    .hero h1 {
+      font-size: 42px;
+      font-weight: 700;
+      margin-bottom: 24px;
+      letter-spacing: -0.02em;
+    }
+
+    .hero p {
+      font-size: 19px;
+      color: #9ca3af;
+      max-width: 640px;
+      margin: 0 auto;
+    }
+
+    /* ── Content ── */
+    .content {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 32px 24px;
+    }
+
+    .content h2 {
+      font-size: 28px;
+      font-weight: 700;
+      margin: 48px 0 16px;
+    }
+
+    .content p {
+      margin-bottom: 16px;
+    }
+
+    .content ul {
+      margin: 0 0 16px 24px;
+    }
+
+    .content li {
+      margin-bottom: 8px;
+    }
+
+    .content ol {
+      margin: 0 0 16px 24px;
+    }
+
+    .content ol li {
+      margin-bottom: 10px;
+    }
+
+    /* ── CTA ── */
+    .cta {
+      max-width: 800px;
+      margin: 48px auto;
+      padding: 48px;
+      background: #161b22;
+      border-radius: 12px;
+      text-align: center;
+    }
+
+    .cta h2 {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .cta p {
+      color: #9ca3af;
+      font-size: 18px;
+      margin-bottom: 28px;
+    }
+
+    .cta-button {
+      display: inline-block;
+      background: #58a6ff;
+      color: #000000;
+      padding: 16px 32px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 17px;
+      text-decoration: none;
+      transition: opacity 0.15s;
+    }
+
+    .cta-button:hover {
+      opacity: 0.9;
+      text-decoration: none;
+    }
+
+    /* ── FAQ ── */
+    .faq {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 32px 24px 48px;
+    }
+
+    .faq h2 {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 24px;
+    }
+
+    .faq-item {
+      background: #161b22;
+      border: 1px solid #1b2130;
+      border-radius: 10px;
+      padding: 24px 28px;
+      margin-bottom: 16px;
+    }
+
+    .faq-item h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+
+    .faq-item p {
+      color: #9ca3af;
+      font-size: 16px;
+      line-height: 1.65;
+    }
+
+    /* ── Footer ── */
+    footer {
+      border-top: 1px solid #1b2130;
+    }
+
+    .footer-inner {
+      max-width: 1152px;
+      margin: 0 auto;
+      padding: 32px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .footer-copy {
+      color: #9ca3af;
+      font-size: 14px;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 24px;
+      list-style: none;
+    }
+
+    .footer-links a {
+      color: #9ca3af;
+      font-size: 14px;
+      text-decoration: none;
+    }
+
+    .footer-links a:hover {
+      color: #ffffff;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 640px) {
+      .hero h1 {
+        font-size: 30px;
+      }
+
+      .hero p {
+        font-size: 17px;
+      }
+
+      .nav-links {
+        gap: 16px;
+      }
+
+      .nav-links a {
+        font-size: 14px;
+      }
+
+      .cta {
+        margin: 32px 24px;
+        padding: 32px 24px;
+      }
+
+      .content h2 {
+        font-size: 24px;
+      }
+
+      .footer-inner {
+        flex-direction: column;
+        text-align: center;
+      }
+    }
+  </style>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "Is FunderMatch really free?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes, core grant search is free with no account required. You can search foundations, view giving histories, and get AI-powered matches at no cost."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How does FunderMatch compare to paid grant databases?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "FunderMatch focuses on AI-powered mission matching using public IRS data. Paid databases like Instrumentl or Foundation Directory Online may offer additional features like deadline tracking or application management, but charge $500–$2,000/year for access."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Do I need to create an account?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No account is required to search. Creating a free account lets you save searches and build funder lists, but the core search works without any signup."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Where does the grant data come from?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "FunderMatch indexes publicly available IRS Form 990-PF filings, which private foundations are required to file annually. This includes 1.1M filings covering 460,000+ foundations and 7.5M individual grant records."
+        }
+      }
+    ]
+  }
+  </script>
+</head>
+<body>
+
+  <!-- NavBar -->
+  <nav>
+    <div class="nav-inner">
+      <a href="/" class="nav-logo">FunderMatch</a>
+      <ul class="nav-links">
+        <li><a href="/mission">Find Funders</a></li>
+        <li><a href="/browse">Browse Grants</a></li>
+        <li><a href="/search">Search</a></li>
+        <li><a href="/login">Log In</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <h1>Free Grant Search for Nonprofits</h1>
+    <p>Most grant databases charge $500 to $2,000 per year for access. FunderMatch lets you search 460,000+ foundations and 7.5M grant records for free, with no account required.</p>
+  </section>
+
+  <!-- Content -->
+  <main class="content">
+    <h2>Why Most Grant Databases Are Expensive</h2>
+    <p>The traditional grant research landscape is dominated by paid platforms. Foundation Directory Online (now part of Candid) charges hundreds per year for individual access and significantly more for organizational licenses. Instrumentl starts at around $179 per month for a single seat. GrantStation charges annual subscription fees for access to its database. These costs add up quickly for smaller organizations.</p>
+    <p>The pricing reflects a real cost: aggregating data from IRS 990 filings, cleaning it into searchable records, and layering on foundation website information is genuinely labor-intensive work. But the result is an information asymmetry where well-funded nonprofits with development staff and research budgets get better access to funding data, while smaller organizations and grassroots groups are left searching manually or relying on word of mouth. For a <a href="/grants-for-nonprofits">nonprofit searching for grants</a>, the cost of finding grants shouldn't be a barrier to receiving them.</p>
+
+    <h2>What FunderMatch Offers for Free</h2>
+    <p>FunderMatch provides free access to core grant research tools that would otherwise require a paid subscription elsewhere. The free tier includes:</p>
+    <ul>
+      <li>Full search across 460,000+ private foundations indexed from IRS records</li>
+      <li>AI-powered mission matching that ranks foundations by relevance to your work</li>
+      <li>Foundation giving histories drawn from 7.5M individual grant records</li>
+      <li>Geographic and programmatic filtering to narrow results by location and focus area</li>
+      <li>Foundation profiles with contact information, assets, and annual giving totals</li>
+    </ul>
+    <p>No account creation is required to start searching. You can describe your mission and get matched results immediately. Whether you run a <a href="/grants-for-501c3">501(c)(3) looking for grants</a> or are exploring <a href="/foundation-grants">foundation grant opportunities</a>, FunderMatch gives you a starting point at no cost. Creating a free account unlocks additional features like saved searches, funder lists, and personalized recommendations, but the core search experience is fully available without signing up.</p>
+
+    <h2>How to Start Your Free Grant Search</h2>
+    <p>Getting started takes less than a minute. There are no forms to fill out and no account to create before you see results.</p>
+    <ol>
+      <li><strong>Go to the <a href="/mission">Find Funders</a> page.</strong> This is the main entry point for mission-based grant search.</li>
+      <li><strong>Describe your nonprofit's mission in plain language.</strong> Write a sentence or two about what your organization does, who you serve, and where you operate. The AI matching works best with specific, concrete descriptions.</li>
+      <li><strong>Review matched foundations ranked by relevance.</strong> FunderMatch scores each foundation based on how closely its past giving aligns with your stated mission.</li>
+      <li><strong>Explore foundation profiles and giving histories.</strong> Click into any foundation to see what they've funded, how much they give, and who their typical grantees are.</li>
+      <li><strong>Save promising leads.</strong> Create a free account when you're ready to save your shortlist and come back to it later.</li>
+    </ol>
+    <p>The entire search process is designed around simplicity. There are no complex query builders or taxonomy codes to learn. Just describe your work and let the matching algorithm find foundations whose giving patterns align with your mission.</p>
+  </main>
+
+  <!-- CTA -->
+  <section class="cta">
+    <h2>Try It Now — No Account Needed</h2>
+    <p>Search foundations matched to your mission in under 60 seconds. Completely free.</p>
+    <a href="/mission" class="cta-button">Start Free Search</a>
+  </section>
+
+  <!-- FAQ -->
+  <section class="faq">
+    <h2>Frequently Asked Questions</h2>
+
+    <div class="faq-item">
+      <h3>Is FunderMatch really free?</h3>
+      <p>Yes, core grant search is free with no account required. You can search foundations, view giving histories, and get AI-powered matches at no cost. Premium features like advanced analytics and team collaboration may be offered in the future, but the core search will remain free.</p>
+    </div>
+
+    <div class="faq-item">
+      <h3>How does FunderMatch compare to paid grant databases?</h3>
+      <p>FunderMatch focuses on AI-powered mission matching using public IRS data. Paid databases like Instrumentl or Foundation Directory Online may offer additional features like deadline tracking or application management, but charge $500–$2,000/year for access. FunderMatch gives you the foundation research starting point for free.</p>
+    </div>
+
+    <div class="faq-item">
+      <h3>Do I need to create an account?</h3>
+      <p>No account is required to search. Creating a free account lets you save searches and build funder lists, but the core search works without any signup. You can start getting matched results immediately.</p>
+    </div>
+
+    <div class="faq-item">
+      <h3>Where does the grant data come from?</h3>
+      <p>FunderMatch indexes publicly available IRS Form 990-PF filings, which private foundations are required to file annually. This includes 1.1M filings covering 460,000+ foundations and 7.5M individual grant records. The data is updated regularly as new filings become available.</p>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">&copy; 2025 Armstrong HoldCo LLC</span>
+      <ul class="footer-links">
+        <li><a href="/contact">Contact</a></li>
+        <li><a href="/privacy">Privacy</a></li>
+        <li><a href="/terms">Terms</a></li>
+        <li><a href="/docs/api">API</a></li>
+      </ul>
+    </div>
+  </footer>
+
+  <script data-goatcounter="https://fundermatch.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
+</body>
+</html>

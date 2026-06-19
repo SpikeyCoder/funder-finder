@@ -68,4 +68,34 @@
     <priority>0.3</priority>
   </url>
 
+  <url>
+    <loc>https://fundermatch.org/grants-for-nonprofits</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://fundermatch.org/nonprofit-funding-opportunities</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://fundermatch.org/grants-for-501c3</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://fundermatch.org/foundation-grants</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://fundermatch.org/free-grant-search</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
 </urlset>

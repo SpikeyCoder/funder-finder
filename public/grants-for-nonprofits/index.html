@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Grants for Nonprofits — Search 460,000+ Foundations Free | FunderMatch</title>
+  <meta name="description" content="Search grants for nonprofits across 460,000+ foundations and 7.5M grant records. AI-powered matching finds funders aligned to your mission. Free, no account required.">
+  <link rel="canonical" href="https://fundermatch.org/grants-for-nonprofits">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Grants for Nonprofits — Search 460,000+ Foundations Free | FunderMatch">
+  <meta property="og:description" content="Search grants for nonprofits across 460,000+ foundations and 7.5M grant records. AI-powered matching finds funders aligned to your mission. Free, no account required.">
+  <meta property="og:url" content="https://fundermatch.org/grants-for-nonprofits">
+  <meta property="og:image" content="/og-image.png">
+  <meta property="og:site_name" content="FunderMatch">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Grants for Nonprofits — Search 460,000+ Foundations Free | FunderMatch">
+  <meta name="twitter:description" content="Search grants for nonprofits across 460,000+ foundations and 7.5M grant records. AI-powered matching finds funders aligned to your mission. Free, no account required.">
+  <meta name="twitter:image" content="/og-image.png">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+      line-height: 1.7;
+      font-size: 16px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a {
+      color: #58a6ff;
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    /* ── NavBar ── */
+    .navbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: #0d1117;
+      border-bottom: 1px solid #1b2130;
+    }
+
+    .navbar-inner {
+      max-width: 1152px;
+      margin: 0 auto;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+    }
+
+    .navbar-logo {
+      font-size: 20px;
+      font-weight: 700;
+      color: #fff;
+      text-decoration: none;
+    }
+
+    .navbar-logo:hover {
+      text-decoration: none;
+    }
+
+    .navbar-links {
+      display: flex;
+      gap: 28px;
+      list-style: none;
+    }
+
+    .navbar-links a {
+      color: #8b949e;
+      font-size: 14px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+
+    .navbar-links a:hover {
+      color: #fff;
+      text-decoration: none;
+    }
+
+    /* ── Hero ── */
+    .hero {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 80px 24px 48px;
+      text-align: center;
+    }
+
+    .hero h1 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: #fff;
+      line-height: 1.2;
+      margin-bottom: 24px;
+    }
+
+    .hero p {
+      font-size: 1.125rem;
+      color: #8b949e;
+      max-width: 640px;
+      margin: 0 auto;
+    }
+
+    /* ── Content Sections ── */
+    .content {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    .content section {
+      margin-bottom: 48px;
+    }
+
+    .content h2 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 16px;
+      line-height: 1.3;
+    }
+
+    .content p {
+      margin-bottom: 16px;
+      color: #e6edf3;
+    }
+
+    .content ul {
+      margin: 0 0 16px 20px;
+      color: #e6edf3;
+    }
+
+    .content li {
+      margin-bottom: 8px;
+    }
+
+    /* ── CTA ── */
+    .cta {
+      max-width: 800px;
+      margin: 48px auto;
+      padding: 0 24px;
+    }
+
+    .cta-card {
+      background: #161b22;
+      border-radius: 12px;
+      padding: 48px;
+      text-align: center;
+    }
+
+    .cta-card h2 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 16px;
+    }
+
+    .cta-card p {
+      color: #8b949e;
+      font-size: 1.05rem;
+      margin-bottom: 32px;
+      max-width: 520px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .cta-button {
+      display: inline-block;
+      background: #58a6ff;
+      color: #000;
+      padding: 16px 32px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 1rem;
+      text-decoration: none;
+      transition: opacity 0.15s;
+    }
+
+    .cta-button:hover {
+      opacity: 0.9;
+      text-decoration: none;
+    }
+
+    /* ── FAQ ── */
+    .faq {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 0 24px 64px;
+    }
+
+    .faq h2 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 24px;
+    }
+
+    .faq-item {
+      border-bottom: 1px solid #1b2130;
+      padding: 20px 0;
+    }
+
+    .faq-item:first-of-type {
+      border-top: 1px solid #1b2130;
+    }
+
+    .faq-item summary {
+      font-weight: 600;
+      color: #e6edf3;
+      cursor: pointer;
+      font-size: 1.05rem;
+      list-style: none;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .faq-item summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .faq-item summary::after {
+      content: '+';
+      font-size: 1.25rem;
+      color: #8b949e;
+      flex-shrink: 0;
+      margin-left: 16px;
+    }
+
+    .faq-item[open] summary::after {
+      content: '\2212';
+    }
+
+    .faq-item .faq-answer {
+      padding-top: 12px;
+      color: #8b949e;
+      line-height: 1.7;
+    }
+
+    /* ── Footer ── */
+    .footer {
+      border-top: 1px solid #1b2130;
+      background: #0d1117;
+    }
+
+    .footer-inner {
+      max-width: 1152px;
+      margin: 0 auto;
+      padding: 32px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .footer-copy {
+      color: #8b949e;
+      font-size: 14px;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 24px;
+      list-style: none;
+    }
+
+    .footer-links a {
+      color: #8b949e;
+      font-size: 14px;
+      text-decoration: none;
+    }
+
+    .footer-links a:hover {
+      color: #fff;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 640px) {
+      .hero h1 {
+        font-size: 1.75rem;
+      }
+
+      .hero {
+        padding-top: 48px;
+      }
+
+      .navbar-links {
+        gap: 16px;
+      }
+
+      .navbar-links a {
+        font-size: 13px;
+      }
+
+      .cta-card {
+        padding: 32px 24px;
+      }
+
+      .footer-inner {
+        flex-direction: column;
+        text-align: center;
+      }
+    }
+  </style>
+
+  <!-- FAQ Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What types of grants can nonprofits apply for?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Nonprofits can apply for several types of grants: program grants fund specific projects or initiatives; operating (general support) grants cover day-to-day expenses like rent, salaries, and utilities; capacity building grants help strengthen organizational infrastructure such as technology, training, or strategic planning; and capital grants fund major purchases like equipment, vehicles, or facility construction and renovation."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How many foundations are in the FunderMatch database?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "FunderMatch indexes over 460,000 foundations, 7.5 million grant records, and 1.1 million IRS 990 filings. The database includes private foundations, community foundations, corporate giving programs, and donor-advised fund sponsors across the United States."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Is FunderMatch really free?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes, FunderMatch's core grant search is completely free and requires no account to use. You can describe your nonprofit's mission and receive matched funder recommendations without signing up or entering any payment information."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How does AI grant matching work?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "FunderMatch uses AI to analyze your nonprofit's mission description and compare it against foundation giving patterns extracted from 990 filings and grant records. The system identifies funders whose past giving aligns with your program areas, geographic focus, and organizational size, then ranks them by relevance so you can prioritize your outreach."
+        }
+      }
+    ]
+  }
+  </script>
+</head>
+<body>
+
+  <!-- NavBar -->
+  <nav class="navbar" aria-label="Main navigation">
+    <div class="navbar-inner">
+      <a href="/" class="navbar-logo">FunderMatch</a>
+      <ul class="navbar-links">
+        <li><a href="/mission">Find Funders</a></li>
+        <li><a href="/browse">Browse Grants</a></li>
+        <li><a href="/search">Search</a></li>
+        <li><a href="/login">Log In</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main>
+    <!-- Hero -->
+    <header class="hero">
+      <h1>Find Grants for Nonprofits Matched to Your Mission</h1>
+      <p>Search over 460,000 foundations and 7.5 million grant records to find funders aligned with your work. FunderMatch uses AI-powered matching to connect nonprofits with relevant funding opportunities based on mission, geography, and program focus. Free to use, no account required.</p>
+    </header>
+
+    <!-- Content Sections -->
+    <article class="content">
+      <section>
+        <h2>Types of Grants Available for Nonprofits</h2>
+        <p>Foundation grants for nonprofits generally fall into four categories, each serving a different organizational need. Understanding these distinctions helps you target the right funders and frame your ask effectively.</p>
+        <ul>
+          <li><strong>Program grants</strong> fund specific projects or initiatives, such as launching an after-school tutoring program or expanding a food distribution network. These are the most common type of foundation grant and typically require detailed project budgets and measurable outcomes.</li>
+          <li><strong>Operating and general support grants</strong> cover core expenses like staff salaries, rent, insurance, and utilities. While harder to secure, these grants are the most flexible. According to the National Center for Charitable Statistics, general support represents roughly 20% of all foundation giving.</li>
+          <li><strong>Capacity building grants</strong> strengthen your organization's infrastructure: technology upgrades, board development, strategic planning, or financial systems. These grants help nonprofits grow sustainably rather than just funding programs.</li>
+          <li><strong>Capital and equipment grants</strong> fund major purchases such as vehicles, medical equipment, facility construction, or renovations. These are often larger awards with longer application timelines.</li>
+        </ul>
+        <p>The U.S. foundation sector distributed over $105 billion in grants in recent years, with giving concentrated among the largest 5% of foundations. Smaller and mid-sized foundations, however, often have less competition and stronger community ties, making them valuable targets for <a href="/nonprofit-funding-opportunities">nonprofit funding opportunities</a>.</p>
+      </section>
+
+      <section>
+        <h2>How to Find the Right Grant Funders</h2>
+        <p>The biggest challenge in securing <a href="/foundation-grants">foundation grants</a> is not the application itself but identifying which funders are genuinely aligned with your work. There are over 140,000 active grantmaking foundations in the United States, and most have specific giving priorities that are not always obvious from their names or websites.</p>
+        <p>Effective funder research starts with understanding a foundation's giving patterns: What NTEE codes (National Taxonomy of Exempt Entities) do their grantees fall under? What geographic regions do they prioritize? What is their typical grant size range? This information is publicly available through IRS 990-PF filings, but manually reviewing these documents across hundreds of potential funders is enormously time-consuming.</p>
+        <p>Mission alignment is the strongest predictor of grant success. A funder that has consistently supported organizations similar to yours in mission scope, budget size, and geographic focus is far more likely to fund your work than a large foundation where you are an outlier in their portfolio. Tools like <a href="/free-grant-search">free grant search</a> engines can accelerate this matching process by analyzing giving histories at scale.</p>
+      </section>
+
+      <section>
+        <h2>Why Mission-Based Grant Matching Works</h2>
+        <p>Traditional grant research relies on keyword searches against foundation directories, which often surface irrelevant results or miss funders that use different terminology for similar work. AI-powered matching takes a fundamentally different approach: instead of matching keywords, it compares the semantic meaning of your mission against the actual giving patterns of foundations.</p>
+        <p>FunderMatch indexes 1.1 million IRS 990 filings and extracts structured data about each foundation's grantees, grant amounts, geographic distribution, and program areas. When you describe your nonprofit's mission, the system identifies funders whose historical giving aligns with your work, even if they use different language to describe similar focus areas.</p>
+        <p>This approach surfaces relevant funders that keyword searches miss entirely. A youth mentoring nonprofit, for example, might match with foundations categorized under education, workforce development, or community services, depending on how similar grantees were classified. Mission-based matching captures all of these connections automatically, saving hours of manual research per funder prospect.</p>
+      </section>
+    </article>
+
+    <!-- CTA -->
+    <section class="cta" aria-label="Call to action">
+      <div class="cta-card">
+        <h2>Start Your Free Grant Search</h2>
+        <p>Describe your nonprofit's mission and get matched with relevant funders. Free, no account required.</p>
+        <a href="/mission" class="cta-button">Search Grants Now</a>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="faq" aria-label="Frequently asked questions">
+      <h2>Frequently Asked Questions</h2>
+
+      <details class="faq-item">
+        <summary>What types of grants can nonprofits apply for?</summary>
+        <div class="faq-answer">
+          <p>Nonprofits can apply for several types of grants: program grants fund specific projects or initiatives; operating (general support) grants cover day-to-day expenses like rent, salaries, and utilities; capacity building grants help strengthen organizational infrastructure such as technology, training, or strategic planning; and capital grants fund major purchases like equipment, vehicles, or facility construction and renovation.</p>
+        </div>
+      </details>
+
+      <details class="faq-item">
+        <summary>How many foundations are in the FunderMatch database?</summary>
+        <div class="faq-answer">
+          <p>FunderMatch indexes over 460,000 foundations, 7.5 million grant records, and 1.1 million IRS 990 filings. The database includes private foundations, community foundations, corporate giving programs, and donor-advised fund sponsors across the United States.</p>
+        </div>
+      </details>
+
+      <details class="faq-item">
+        <summary>Is FunderMatch really free?</summary>
+        <div class="faq-answer">
+          <p>Yes, FunderMatch's core grant search is completely free and requires no account to use. You can describe your nonprofit's mission and receive matched funder recommendations without signing up or entering any payment information.</p>
+        </div>
+      </details>
+
+      <details class="faq-item">
+        <summary>How does AI grant matching work?</summary>
+        <div class="faq-answer">
+          <p>FunderMatch uses AI to analyze your nonprofit's mission description and compare it against foundation giving patterns extracted from 990 filings and grant records. The system identifies funders whose past giving aligns with your program areas, geographic focus, and organizational size, then ranks them by relevance so you can prioritize your outreach.</p>
+        </div>
+      </details>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <span class="footer-copy">&copy; 2025 Armstrong HoldCo LLC</span>
+      <ul class="footer-links">
+        <li><a href="/contact">Contact</a></li>
+        <li><a href="/privacy">Privacy</a></li>
+        <li><a href="/terms">Terms</a></li>
+        <li><a href="/docs/api">API</a></li>
+      </ul>
+    </div>
+  </footer>
+
+  <!-- GoatCounter -->
+  <script data-goatcounter="https://fundermatch.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
+</body>
+</html>

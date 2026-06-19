@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nonprofit Funding Opportunities — AI-Powered Grant Matching | FunderMatch</title>
+  <meta name="description" content="Explore nonprofit funding opportunities from 460,000+ funders. FunderMatch uses AI to match your mission with private foundations, donor-advised funds, corporate giving programs, and government grants from a comprehensive database of 7.5M grant records.">
+  <link rel="canonical" href="https://fundermatch.org/nonprofit-funding-opportunities">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Nonprofit Funding Opportunities — AI-Powered Grant Matching | FunderMatch">
+  <meta property="og:description" content="Explore nonprofit funding opportunities from 460,000+ funders. FunderMatch uses AI to match your mission with private foundations, donor-advised funds, corporate giving programs, and government grants.">
+  <meta property="og:url" content="https://fundermatch.org/nonprofit-funding-opportunities">
+  <meta property="og:image" content="/og-image.png">
+  <meta property="og:site_name" content="FunderMatch">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Nonprofit Funding Opportunities — AI-Powered Grant Matching | FunderMatch">
+  <meta name="twitter:description" content="Explore nonprofit funding opportunities from 460,000+ funders. FunderMatch uses AI to match your mission with private foundations, donor-advised funds, corporate giving programs, and government grants.">
+  <meta name="twitter:image" content="/og-image.png">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- FAQ Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What types of nonprofit funding opportunities does FunderMatch cover?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "FunderMatch covers private foundations, donor-advised funds (DAFs), corporate giving programs, and community foundations. Our database includes over 460,000 funders with data drawn from 7.5 million grant records and 1.1 million IRS 990 filings, giving you a comprehensive view of the nonprofit funding landscape."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How is FunderMatch different from other grant databases?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Traditional grant databases rely on keyword search and self-reported funder interests. FunderMatch uses AI to analyze actual giving patterns — where foundations have sent money, how much they gave, and which types of organizations they funded — to surface funders whose real behavior aligns with your mission, not just their stated guidelines."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Do I need 501(c)(3) status to use FunderMatch?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Anyone can search FunderMatch and explore nonprofit funding opportunities for free. However, most private foundations and donor-advised funds are legally required to direct grants to organizations with 501(c)(3) status. If you don't have tax-exempt status yet, you may be able to receive grants through a fiscal sponsor."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How current is the funding data?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Our data is updated regularly from IRS 990 filings, foundation annual reports, and public grant records. Because 990 filings have a built-in reporting lag, we supplement them with more recent data sources to provide the most current picture of each funder's giving activity and priorities."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+      line-height: 1.7;
+      font-size: 16px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a {
+      color: #58a6ff;
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    h1, h2, h3 {
+      color: #ffffff;
+      line-height: 1.3;
+    }
+
+    /* ── NavBar ── */
+    .navbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: #0d1117;
+      border-bottom: 1px solid #1b2130;
+    }
+
+    .navbar-inner {
+      max-width: 1152px;
+      margin: 0 auto;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+    }
+
+    .navbar-logo {
+      font-size: 20px;
+      font-weight: 700;
+      color: #ffffff;
+      text-decoration: none;
+    }
+
+    .navbar-logo:hover {
+      text-decoration: none;
+    }
+
+    .navbar-links {
+      display: flex;
+      gap: 28px;
+      list-style: none;
+    }
+
+    .navbar-links a {
+      color: #8b949e;
+      font-size: 14px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+
+    .navbar-links a:hover {
+      color: #ffffff;
+      text-decoration: none;
+    }
+
+    /* ── Hero ── */
+    .hero {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 80px 24px 48px;
+      text-align: center;
+    }
+
+    .hero h1 {
+      font-size: 40px;
+      font-weight: 700;
+      margin-bottom: 24px;
+      letter-spacing: -0.02em;
+    }
+
+    .hero p {
+      font-size: 18px;
+      color: #8b949e;
+      line-height: 1.8;
+      max-width: 680px;
+      margin: 0 auto;
+    }
+
+    /* ── Content ── */
+    .content {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 24px 24px 0;
+    }
+
+    .content h2 {
+      font-size: 28px;
+      font-weight: 600;
+      margin: 48px 0 16px;
+      letter-spacing: -0.01em;
+    }
+
+    .content p {
+      margin-bottom: 16px;
+      color: #e6edf3;
+    }
+
+    /* ── CTA ── */
+    .cta {
+      max-width: 800px;
+      margin: 48px auto;
+      padding: 0 24px;
+    }
+
+    .cta-box {
+      background: #161b22;
+      border: 1px solid #1b2130;
+      border-radius: 12px;
+      padding: 48px;
+      text-align: center;
+    }
+
+    .cta-box h2 {
+      font-size: 28px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    .cta-box p {
+      color: #8b949e;
+      font-size: 16px;
+      margin-bottom: 28px;
+      max-width: 520px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .cta-button {
+      display: inline-block;
+      background: #58a6ff;
+      color: #000000;
+      padding: 16px 32px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 16px;
+      text-decoration: none;
+      transition: opacity 0.15s;
+    }
+
+    .cta-button:hover {
+      opacity: 0.9;
+      text-decoration: none;
+    }
+
+    /* ── FAQ ── */
+    .faq {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 24px 24px 48px;
+    }
+
+    .faq h2 {
+      font-size: 28px;
+      font-weight: 600;
+      margin-bottom: 24px;
+    }
+
+    .faq-item {
+      background: #161b22;
+      border: 1px solid #1b2130;
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+
+    .faq-item h3 {
+      font-size: 17px;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+
+    .faq-item p {
+      color: #8b949e;
+      font-size: 15px;
+      line-height: 1.7;
+    }
+
+    /* ── Footer ── */
+    .footer {
+      border-top: 1px solid #1b2130;
+    }
+
+    .footer-inner {
+      max-width: 1152px;
+      margin: 0 auto;
+      padding: 32px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .footer-copy {
+      color: #8b949e;
+      font-size: 14px;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 24px;
+      list-style: none;
+    }
+
+    .footer-links a {
+      color: #8b949e;
+      font-size: 14px;
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+
+    .footer-links a:hover {
+      color: #ffffff;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 640px) {
+      .hero h1 {
+        font-size: 28px;
+      }
+
+      .hero p {
+        font-size: 16px;
+      }
+
+      .content h2, .cta-box h2, .faq h2 {
+        font-size: 22px;
+      }
+
+      .cta-box {
+        padding: 32px 24px;
+      }
+
+      .navbar-links {
+        gap: 16px;
+      }
+
+      .navbar-links a {
+        font-size: 13px;
+      }
+
+      .footer-inner {
+        flex-direction: column;
+        text-align: center;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NavBar -->
+  <nav class="navbar">
+    <div class="navbar-inner">
+      <a href="/" class="navbar-logo">FunderMatch</a>
+      <ul class="navbar-links">
+        <li><a href="/mission">Find Funders</a></li>
+        <li><a href="/browse">Browse Grants</a></li>
+        <li><a href="/search">Search</a></li>
+        <li><a href="/login">Log In</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <header class="hero">
+    <h1>Discover Nonprofit Funding Opportunities Matched to Your Mission</h1>
+    <p>The nonprofit funding landscape includes private foundations, donor-advised funds, corporate giving programs, and government grants. FunderMatch helps you navigate all of them with AI-powered matching across 460,000+ funders.</p>
+  </header>
+
+  <!-- Content Sections -->
+  <main class="content">
+
+    <section>
+      <h2>Understanding the Nonprofit Funding Landscape</h2>
+      <p>Private foundations remain the largest source of institutional funding for nonprofits. In the United States, foundations distributed over $105 billion in grants in a single recent year, supporting everything from local food banks to international health research. These foundations range from household names with multi-billion-dollar endowments to small family foundations giving $50,000 per year in a single community.</p>
+      <p>Donor-advised funds have become the fastest-growing vehicle in philanthropy. DAF accounts now hold more than $230 billion in assets, and grants from DAFs have grown at roughly 20% per year over the past decade. For nonprofits, DAF grants often arrive without a formal application process, making them harder to find but potentially easier to secure once a connection is made.</p>
+      <p>Corporate giving programs contribute an additional layer of nonprofit funding opportunities. Many companies operate both a formal corporate foundation and a direct giving program, each with distinct priorities and application processes. Community foundations, which pool charitable funds within a specific geographic area, round out the landscape by providing localized <a href="/grants-for-nonprofits">grants for nonprofits</a> that larger national databases frequently overlook.</p>
+    </section>
+
+    <section>
+      <h2>How FunderMatch Surfaces Relevant Funding Opportunities</h2>
+      <p>Traditional grant searching asks you to guess which keywords a funder might use to describe their interests. FunderMatch works differently. You start by describing your organization's mission in plain language. Our algorithm then analyzes giving patterns drawn from 7.5 million grant records and 1.1 million IRS 990 filings to identify funders whose actual grantmaking history aligns with your work.</p>
+      <p>This distinction matters because many foundations' stated program interests are broad or outdated. A foundation's website might say it supports "education," but its 990 filings reveal that 80% of its grants go to early childhood literacy programs in the Midwest. FunderMatch reads that signal and matches you accordingly, surfacing <a href="/foundation-grants">foundation grants</a> that fit your specific focus rather than a generic category.</p>
+      <p>The result is a ranked list of funders with concrete data behind each recommendation: what they gave, how much, to whom, and how recently. You spend your time preparing strong applications for well-matched funders instead of sorting through directories hoping to find a fit.</p>
+    </section>
+
+    <section>
+      <h2>Beyond Traditional Grant Databases</h2>
+      <p>Manually searching grant directories is time-consuming and imprecise. You filter by keyword, scan through hundreds of results, and still miss funders that don't describe themselves using the terms you searched for. Many nonprofits report spending 10 or more hours per week on prospect research alone.</p>
+      <p>FunderMatch replaces that process with structured analysis. Geographic filtering lets you find funders active in your state, county, or city. Programmatic filtering uses NTEE codes — the standardized classification system for nonprofit activities — to match your work with funders who have a demonstrated track record in your program area. Giving capacity analysis shows you each funder's total assets, annual grant output, and typical grant size, so you can focus on <a href="/grants-for-501c3">grants for 501(c)(3) organizations</a> that match your budget scale.</p>
+      <p>These layers of analysis work together to move nonprofit funding research from a keyword-guessing exercise to a data-driven process, helping your organization identify the right funders faster and with greater confidence.</p>
+    </section>
+
+  </main>
+
+  <!-- CTA -->
+  <div class="cta">
+    <div class="cta-box">
+      <h2>Find Funding Opportunities for Your Nonprofit</h2>
+      <p>Enter your mission statement and let AI match you with foundations that fund work like yours. Free, no account required.</p>
+      <a href="/mission" class="cta-button">Start Matching Now</a>
+    </div>
+  </div>
+
+  <!-- FAQ -->
+  <section class="faq">
+    <h2>Frequently Asked Questions</h2>
+
+    <div class="faq-item">
+      <h3>What types of nonprofit funding opportunities does FunderMatch cover?</h3>
+      <p>FunderMatch covers private foundations, donor-advised funds (DAFs), corporate giving programs, and community foundations. Our database includes over 460,000 funders with data drawn from 7.5 million grant records and 1.1 million IRS 990 filings, giving you a comprehensive view of the nonprofit funding landscape.</p>
+    </div>
+
+    <div class="faq-item">
+      <h3>How is FunderMatch different from other grant databases?</h3>
+      <p>Traditional grant databases rely on keyword search and self-reported funder interests. FunderMatch uses AI to analyze actual giving patterns — where foundations have sent money, how much they gave, and which types of organizations they funded — to surface funders whose real behavior aligns with your mission, not just their stated guidelines.</p>
+    </div>
+
+    <div class="faq-item">
+      <h3>Do I need 501(c)(3) status to use FunderMatch?</h3>
+      <p>Anyone can search FunderMatch and explore nonprofit funding opportunities for free. However, most private foundations and donor-advised funds are legally required to direct grants to organizations with 501(c)(3) status. If you don't have tax-exempt status yet, you may be able to receive grants through a fiscal sponsor.</p>
+    </div>
+
+    <div class="faq-item">
+      <h3>How current is the funding data?</h3>
+      <p>Our data is updated regularly from IRS 990 filings, foundation annual reports, and public grant records. Because 990 filings have a built-in reporting lag, we supplement them with more recent data sources to provide the most current picture of each funder's giving activity and priorities.</p>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <span class="footer-copy">&copy; 2025 Armstrong HoldCo LLC</span>
+      <ul class="footer-links">
+        <li><a href="/contact">Contact</a></li>
+        <li><a href="/privacy">Privacy</a></li>
+        <li><a href="/terms">Terms</a></li>
+        <li><a href="/docs/api">API</a></li>
+      </ul>
+    </div>
+  </footer>
+
+  <!-- GoatCounter -->
+  <script data-goatcounter="https://fundermatch.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
+</body>
+</html>
