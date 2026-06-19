@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Grants for 501(c)(3) Organizations — Free Foundation Grant Search | FunderMatch</title>
+  <meta name="description" content="Search grants for 501(c)(3) organizations. Browse 460,000+ private foundations and 7.5M grant records in our free database. Find foundation funding aligned with your nonprofit mission." />
+  <link rel="canonical" href="https://fundermatch.org/grants-for-501c3" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://fundermatch.org/grants-for-501c3" />
+  <meta property="og:title" content="Grants for 501(c)(3) Organizations — Free Foundation Grant Search | FunderMatch" />
+  <meta property="og:description" content="Search grants for 501(c)(3) organizations. Browse 460,000+ private foundations and 7.5M grant records in our free database. Find foundation funding aligned with your nonprofit mission." />
+  <meta property="og:image" content="https://fundermatch.org/og-image.png" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Grants for 501(c)(3) Organizations — Free Foundation Grant Search | FunderMatch" />
+  <meta name="twitter:description" content="Search grants for 501(c)(3) organizations. Browse 460,000+ private foundations and 7.5M grant records in our free database." />
+  <meta name="twitter:image" content="https://fundermatch.org/og-image.png" />
+
+  <!-- Favicon -->
+  <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- FAQ Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "Can I search for grants without 501(c)(3) status?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes, you can search freely. But most private foundations require 501(c)(3) status or fiscal sponsorship to receive grants. Some community foundations and donor-advised funds (DAFs) may fund other types of organizations."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is an NTEE code and why does it matter?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "NTEE codes classify nonprofits by category (arts, education, health, etc.). Foundations often align their giving with specific NTEE categories, making it a powerful search filter for finding relevant funders."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I find foundations that give in my geographic area?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "FunderMatch lets you filter by state and region. Many foundations have geographic giving restrictions noted in their 990 filings, and our search surfaces these patterns automatically."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What size grants do foundations typically give?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Grant sizes vary widely, from $1,000 to millions of dollars. FunderMatch shows each foundation's typical grant range based on their historical giving data from IRS 990 filings."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a {
+      color: #58a6ff;
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    h1, h2, h3 {
+      color: #ffffff;
+      line-height: 1.3;
+    }
+
+    /* ── NavBar ── */
+    .navbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: #0d1117;
+      border-bottom: 1px solid #1b2130;
+    }
+
+    .navbar-inner {
+      max-width: 1152px;
+      margin: 0 auto;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+    }
+
+    .navbar-logo {
+      font-size: 20px;
+      font-weight: 700;
+      color: #ffffff;
+      text-decoration: none;
+    }
+
+    .navbar-logo:hover {
+      text-decoration: none;
+    }
+
+    .navbar-links {
+      display: flex;
+      gap: 28px;
+      list-style: none;
+    }
+
+    .navbar-links a {
+      color: #8b949e;
+      font-size: 14px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+
+    .navbar-links a:hover {
+      color: #ffffff;
+      text-decoration: none;
+    }
+
+    /* ── Hero ── */
+    .hero {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 80px 24px 48px;
+      text-align: center;
+    }
+
+    .hero h1 {
+      font-size: 40px;
+      font-weight: 700;
+      margin-bottom: 20px;
+      letter-spacing: -0.02em;
+    }
+
+    .hero p {
+      font-size: 18px;
+      color: #8b949e;
+      max-width: 640px;
+      margin: 0 auto;
+    }
+
+    /* ── Content Sections ── */
+    .content {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 0 24px 48px;
+    }
+
+    .content h2 {
+      font-size: 28px;
+      font-weight: 600;
+      margin: 48px 0 16px;
+      letter-spacing: -0.01em;
+    }
+
+    .content p {
+      margin-bottom: 16px;
+      font-size: 16px;
+    }
+
+    .content ul {
+      margin: 0 0 16px 24px;
+      font-size: 16px;
+    }
+
+    .content li {
+      margin-bottom: 8px;
+    }
+
+    /* ── CTA Section ── */
+    .cta {
+      max-width: 800px;
+      margin: 48px auto;
+      padding: 48px;
+      background: #161b22;
+      border: 1px solid #1b2130;
+      border-radius: 12px;
+      text-align: center;
+    }
+
+    .cta h2 {
+      font-size: 28px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    .cta p {
+      font-size: 16px;
+      color: #8b949e;
+      margin-bottom: 28px;
+      max-width: 520px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .cta-button {
+      display: inline-block;
+      background: #58a6ff;
+      color: #000000;
+      padding: 16px 32px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: opacity 0.15s;
+    }
+
+    .cta-button:hover {
+      opacity: 0.9;
+      text-decoration: none;
+    }
+
+    /* ── FAQ Section ── */
+    .faq {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 0 24px 64px;
+    }
+
+    .faq h2 {
+      font-size: 28px;
+      font-weight: 600;
+      margin-bottom: 24px;
+      text-align: center;
+    }
+
+    .faq-item {
+      background: #161b22;
+      border: 1px solid #1b2130;
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+
+    .faq-item h3 {
+      font-size: 17px;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+
+    .faq-item p {
+      font-size: 15px;
+      color: #8b949e;
+      line-height: 1.7;
+    }
+
+    /* ── Footer ── */
+    .footer {
+      border-top: 1px solid #1b2130;
+      background: #0d1117;
+    }
+
+    .footer-inner {
+      max-width: 1152px;
+      margin: 0 auto;
+      padding: 32px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .footer-copy {
+      color: #8b949e;
+      font-size: 14px;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 24px;
+      list-style: none;
+    }
+
+    .footer-links a {
+      color: #8b949e;
+      font-size: 14px;
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+
+    .footer-links a:hover {
+      color: #ffffff;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 640px) {
+      .hero h1 {
+        font-size: 28px;
+      }
+
+      .hero p {
+        font-size: 16px;
+      }
+
+      .hero {
+        padding-top: 48px;
+      }
+
+      .content h2 {
+        font-size: 22px;
+      }
+
+      .cta {
+        padding: 32px 20px;
+        margin-left: 16px;
+        margin-right: 16px;
+      }
+
+      .navbar-links {
+        gap: 16px;
+      }
+
+      .navbar-links a {
+        font-size: 13px;
+      }
+
+      .footer-inner {
+        flex-direction: column;
+        text-align: center;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NavBar -->
+  <nav class="navbar">
+    <div class="navbar-inner">
+      <a href="/" class="navbar-logo">FunderMatch</a>
+      <ul class="navbar-links">
+        <li><a href="/mission">Find Funders</a></li>
+        <li><a href="/browse">Browse Grants</a></li>
+        <li><a href="/search">Search</a></li>
+        <li><a href="/login">Log In</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <header class="hero">
+    <h1>Find Grants for 501(c)(3) Organizations</h1>
+    <p>501(c)(3) tax-exempt status opens the door to private foundation funding. Search 460,000+ foundations and 7.5M grant records to find funders aligned with your nonprofit's mission.</p>
+  </header>
+
+  <!-- Content Sections -->
+  <main class="content">
+    <section>
+      <h2>What 501(c)(3) Status Qualifies You For</h2>
+      <p>Private foundation grants are the backbone of nonprofit funding in the United States, and the vast majority require applicants to hold 501(c)(3) tax-exempt status. This designation, granted by the IRS, signals to grantmakers that your organization has a recognized charitable purpose and meets federal standards for governance and financial accountability. Your IRS determination letter serves as proof, and foundations will request a copy before awarding funds.</p>
+      <p>Within the 501(c)(3) classification, organizations fall into two broad categories: public charities and private foundations. Public charities (like community health clinics, schools, or arts organizations) receive broad public support and are the typical grant recipients. Private foundations (like the Ford Foundation or Gates Foundation) are the funders, distributing a required minimum of 5% of their assets annually. When grantmakers evaluate a 501(c)(3) applicant, they look for mission alignment, organizational capacity, a track record of impact, and sound financial management.</p>
+      <p>Organizations without 501(c)(3) status can sometimes access foundation funding through <a href="/grants-for-nonprofits">fiscal sponsorship</a>, where a qualified 501(c)(3) receives and manages grant funds on behalf of a sponsored project. However, direct 501(c)(3) status remains the clearest path to <a href="/foundation-grants">foundation grants</a>.</p>
+    </section>
+
+    <section>
+      <h2>Types of Foundation Grants for 501(c)(3) Nonprofits</h2>
+      <p>Foundations award several types of grants, each suited to different organizational needs and stages of development:</p>
+      <ul>
+        <li><strong>Program and project grants</strong> fund specific initiatives with defined outcomes and timelines. These are the most common grant type, typically ranging from $10,000 to $250,000. Foundations favor them because outcomes are measurable and directly tied to funding.</li>
+        <li><strong>General operating support</strong> covers day-to-day expenses like salaries, rent, and overhead. These unrestricted grants are the most flexible but also the hardest to secure, as foundations increasingly recognize that strong organizations need stable core funding.</li>
+        <li><strong>Capacity building grants</strong> invest in organizational infrastructure: strategic planning, technology upgrades, staff training, or evaluation systems. Grant sizes typically fall between $15,000 and $100,000.</li>
+        <li><strong>Capital grants</strong> fund facility construction, renovation, or major equipment purchases. These are often larger awards, sometimes exceeding $500,000, and may require matching funds.</li>
+        <li><strong>Seed funding</strong> supports new organizations or programs in their early stages, usually between $5,000 and $50,000. Foundations providing seed grants accept higher risk in exchange for the opportunity to support innovation.</li>
+      </ul>
+      <p>Understanding which grant types align with your current needs helps you target the right funders. Use <a href="/free-grant-search">FunderMatch's free search</a> to filter foundations by the types of support they provide.</p>
+    </section>
+
+    <section>
+      <h2>Searching by NTEE Code and Geography</h2>
+      <p>The National Taxonomy of Exempt Entities (NTEE) is a classification system developed by the National Center for Charitable Statistics. It categorizes nonprofits into 26 major groups (labeled A through Z), covering everything from Arts and Culture (A) to Mutual Benefit Organizations (Y). Each major group contains subcategories that further refine the classification. For example, B20 represents elementary and secondary schools, while E30 covers health care facilities.</p>
+      <p>NTEE codes matter because foundations often align their grantmaking with specific categories. A foundation focused on education will concentrate its giving among organizations classified under NTEE group B. Knowing your NTEE code and searching for foundations that fund within that category dramatically narrows the field to relevant prospects.</p>
+      <p>Geography adds a second critical filter. Many private foundations restrict their giving to specific states, metropolitan areas, or regions. These geographic preferences are documented in their IRS 990 filings, which foundations submit annually. FunderMatch indexes 1.1M 990 filings and lets you filter by both NTEE code and geographic focus, surfacing funders whose giving patterns match your organization's classification and location. This combination of mission-area and geographic filtering turns a database of hundreds of thousands of foundations into a focused prospect list for your 501(c)(3).</p>
+    </section>
+  </main>
+
+  <!-- CTA -->
+  <section class="cta" style="max-width: 800px;">
+    <h2>Search Foundation Grants for Your 501(c)(3)</h2>
+    <p>Describe your organization's mission and discover foundations that fund similar work. Free, no account required.</p>
+    <a href="/mission" class="cta-button">Find Matching Funders</a>
+  </section>
+
+  <!-- FAQ -->
+  <section class="faq">
+    <h2>Frequently Asked Questions</h2>
+
+    <div class="faq-item">
+      <h3>Can I search for grants without 501(c)(3) status?</h3>
+      <p>Yes, you can search freely. But most private foundations require 501(c)(3) status or fiscal sponsorship to receive grants. Some community foundations and donor-advised funds (DAFs) may fund other types of organizations.</p>
+    </div>
+
+    <div class="faq-item">
+      <h3>What is an NTEE code and why does it matter?</h3>
+      <p>NTEE codes classify nonprofits by category (arts, education, health, etc.). Foundations often align their giving with specific NTEE categories, making it a powerful search filter for finding relevant funders.</p>
+    </div>
+
+    <div class="faq-item">
+      <h3>How do I find foundations that give in my geographic area?</h3>
+      <p>FunderMatch lets you filter by state and region. Many foundations have geographic giving restrictions noted in their 990 filings. Our search indexes 1.1M filings and surfaces these geographic patterns automatically.</p>
+    </div>
+
+    <div class="faq-item">
+      <h3>What size grants do foundations typically give?</h3>
+      <p>Varies widely from $1,000 to millions. FunderMatch shows each foundation's typical grant range based on their historical giving data from IRS 990 filings.</p>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <span class="footer-copy">&copy; 2025 Armstrong HoldCo LLC</span>
+      <ul class="footer-links">
+        <li><a href="/contact">Contact</a></li>
+        <li><a href="/privacy">Privacy</a></li>
+        <li><a href="/terms">Terms</a></li>
+        <li><a href="/docs/api">API</a></li>
+      </ul>
+    </div>
+  </footer>
+
+  <!-- GoatCounter Analytics -->
+  <script data-goatcounter="https://fundermatch.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
+</body>
+</html>
