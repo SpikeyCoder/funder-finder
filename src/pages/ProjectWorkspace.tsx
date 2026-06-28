@@ -2126,7 +2126,7 @@ export default function ProjectWorkspace() {
                       <input type="text" value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)}
                         placeholder="New task..." onKeyDown={e => e.key === 'Enter' && handleAddTask()}
                         className="flex-1 bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500" />
-                      <button onClick={handleAddTask} disabled={!newTaskTitle.trim()}
+                      <button onClick={handleAddTask} aria-label="Add task" disabled={!newTaskTitle.trim()}
                         className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm transition-colors">
                         <Plus size={14} />
                       </button>
@@ -2253,7 +2253,7 @@ export default function ProjectWorkspace() {
                         </select>
                         <input type="date" value={newCompDue} onChange={e => setNewCompDue(e.target.value)}
                           className="bg-[#0d1117] border border-[#30363d] rounded-lg px-2 py-1.5 text-white text-xs" />
-                        <button onClick={handleAddCompliance} disabled={!newCompTitle.trim()}
+                        <button onClick={handleAddCompliance} aria-label="Add compliance deliverable" disabled={!newCompTitle.trim()}
                           className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-xs"><Plus size={13} /></button>
                       </div>
                       <input type="email" placeholder="Assignee email (optional)"

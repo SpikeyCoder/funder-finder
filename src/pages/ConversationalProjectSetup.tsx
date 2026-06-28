@@ -454,7 +454,7 @@ export default function ConversationalProjectSetup() {
                     disabled={waitingForReply}
                     aria-label="Message to project setup assistant"
                   />
-                  <button type="submit" disabled={!composerValue.trim() || waitingForReply}
+                  <button type="submit" aria-label="Send message" disabled={!composerValue.trim() || waitingForReply}
                     className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white w-9 h-9 rounded-lg flex items-center justify-center">
                     {waitingForReply ? <Loader size={16} className="animate-spin" /> : <ArrowUp size={16} />}
                   </button>
