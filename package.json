@@ -24,19 +24,19 @@
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
-    "@axe-core/cli": "^4.11.3",
+    "@axe-core/cli": "^4.12.1",
     "@types/papaparse": "^5.5.2",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
-    "@vitejs/plugin-react": "^6.0.2",
-    "autoprefixer": "^10.5.0",
+    "@vitejs/plugin-react": "^6.0.3",
+    "autoprefixer": "^10.5.2",
     "axe-core": "^4.12.1",
     "jsdom": "^29.1.1",
-    "postcss": "^8.5.15",
+    "postcss": "^8.5.16",
     "puppeteer": "^24.43.1",
     "tailwindcss": "^3.3.6",
     "typescript": "^5.2.2",
-    "vite": "^8.0.16"
+    "vite": "^8.1.0"
   },
   "overrides": {
     "ws": ">=8.21.0",
