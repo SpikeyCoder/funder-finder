@@ -40,6 +40,7 @@ const NotFound = lazy(() => import('./pages/NotFound'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 const ContactPage = lazy(() => import('./pages/ContactPage'));
 const TermsOfService = lazy(() => import('./pages/TermsOfService'));
+const ApiDocsPage = lazy(() => import('./pages/ApiDocsPage'));
 
 const RouteFallback = () => (
   <div className="min-h-[40vh] flex items-center justify-center text-gray-400 text-sm">
@@ -132,6 +133,7 @@ function AnimatedRoutes() {
           <Route path="/onboarding/save" element={<AuthGuard><OnboardingPage /></AuthGuard>} />
 
           {/* Public shared view (no auth required) */}
+          <Route path="/docs/api" element={<ApiDocsPage />} />
           <Route path="/shared/:token" element={<SharedViewPage />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/contact" element={<ContactPage />} />
@@ -165,3 +167,4 @@ function App() {
 }
 
 export default App;
+
