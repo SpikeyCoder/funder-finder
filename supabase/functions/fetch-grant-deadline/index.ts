@@ -9,19 +9,16 @@ const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') || '';
 
 import { safeFetch, SSRFBlockedError } from '../_shared/safe_fetch.ts';
 import { ipRateLimit } from '../_shared/rate_limit.ts';
+import { corsHeaders } from '../_shared/cors.ts';
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
-
-function json(data: unknown, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { ...CORS, 'Content-Type': 'application/json' },
-  });
-}
+// FM-2026-07-04-01: migrate this endpoint off the hardcoded
+// `Access-Control-Allow-Origin: *` and onto the shared allowlist helper
+// (`_shared/cors.ts`), matching the 30 other Edge Functions. This was the
+// last function still returning wildcard CORS. The FunderMatch app calls this
+// endpoint from an allowlisted origin (see src/pages/ProjectWorkspace.tsx), so
+// browser callers are unaffected; the deadline-sync cron uses a service-role
+// token with no Origin header and is CORS-exempt. `corsHeaders` also adds
+// `Vary: Origin` for correct cross-origin caching.
 
 // Strip HTML tags and collapse whitespace for a readable plain-text excerpt
 function htmlToText(html: string): string {
@@ -39,7 +36,15 @@ function htmlToText(html: string): string {
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
+  const cors = corsHeaders(req.headers.get('origin'), { methods: 'POST, OPTIONS' });
+
+  const json = (data: unknown, status = 200) =>
+    new Response(JSON.stringify(data), {
+      status,
+      headers: { ...cors, 'Content-Type': 'application/json' },
+    });
+
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
   // FM-2026-06-07-01: per-IP rate limit for LLM-backed endpoint.
@@ -55,7 +60,7 @@ Deno.serve(async (req: Request) => {
     namespace: 'fetch-grant-deadline',
     limit: 10,
     windowMs: 60_000,
-    extraHeaders: CORS,
+    extraHeaders: cors,
   });
   if (!limited.allow) return limited.response!;
 
