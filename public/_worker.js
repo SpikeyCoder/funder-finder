@@ -61,6 +61,9 @@ function withSecurityHeaders(response) {
   const headers = new Headers(response.headers);
   // Drop fingerprinting headers from upstream where present.
   headers.delete('X-Powered-By');
+  // Pages adds Access-Control-Allow-Origin: * to static asset responses;
+  // nothing consumes our assets cross-origin, so don't ship wildcard CORS.
+  headers.delete('Access-Control-Allow-Origin');
   for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
     headers.set(name, value);
   }
