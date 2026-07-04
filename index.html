@@ -26,8 +26,11 @@
 
       script-src:
         'self'             – Vite-bundled JS (dist/assets/index-*.js)
-        'sha256-…'         – the inline SPA-routing script below (hash-pinned, no unsafe-inline)
         gc.zgo.at          – GoatCounter analytics script
+
+        Note: the former 'sha256-…' allowance covered the inline GitHub
+        Pages SPA-routing decoder script, which was removed when legacy
+        /?/path URL restoration moved into public/_worker.js (301s).
 
         Note: axe-core is a dev-only dependency invoked via @axe-core/cli
         (see package.json devDependencies); it is never loaded by the
@@ -45,7 +48,7 @@
 
       img-src data:        – SVG data URIs used by Lucide icons
     -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-9Jn/cnXgKbJ7J7q33fTfvOmHEa+5yzYGzkbavQwjgws=' https://gc.zgo.at; style-src 'self' 'unsafe-inline'; connect-src 'self' https://tgtotjvdubhjxzybmdex.supabase.co https://accounts.google.com https://fundermatch.goatcounter.com; img-src 'self' data: https:; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self' https://tgtotjvdubhjxzybmdex.supabase.co; object-src 'none';" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://gc.zgo.at; style-src 'self' 'unsafe-inline'; connect-src 'self' https://tgtotjvdubhjxzybmdex.supabase.co https://accounts.google.com https://fundermatch.goatcounter.com; img-src 'self' data: https:; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self' https://tgtotjvdubhjxzybmdex.supabase.co; object-src 'none';" />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!-- Mobile browser UI + dark-mode hint (FM usability audit 2026-05-25) -->
@@ -70,8 +73,10 @@
     <!-- Google Search Console verification -->
     <meta name="google-site-verification" content="BV6XNr6ev9mMAwmpuczFNBOX9ODTTrtbxuC96R6sLvM" />
 
-    <!-- Canonical -->
-    <link rel="canonical" href="https://fundermatch.org/" />
+    <!-- Canonical: set per-route at runtime by src/components/CanonicalTag.tsx.
+         A static canonical here would mark every SPA route as a duplicate of
+         the homepage and exclude them from Google's index. The prerendered
+         landing pages under public/ carry their own static canonicals. -->
 
     <!-- Structured data — WebApplication -->
     <script type="application/ld+json">
@@ -156,18 +161,6 @@
     }
     </script>
 
-    <script type="text/javascript">
-      (function(l) {
-        if (l.search[1] === '/') {
-          var decoded = l.search.slice(1).split('&').map(function(s) {
-            return s.replace(/~and~/g, '&')
-          }).join('?');
-          window.history.replaceState(null, null,
-            l.pathname.slice(0, -1) + decoded + l.hash
-          );
-        }
-      }(window.location))
-    </script>
   </head>
   <body>
     <div id="root"></div>

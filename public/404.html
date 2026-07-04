@@ -3,26 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>FunderMatch</title>
-  <script type="text/javascript">
-    // GitHub Pages SPA redirect: encode the path into a query parameter
-    // and redirect to root, where index.html will decode and restore it.
-    var pathSegmentsToKeep = 0;
-    var l = window.location;
-    l.replace(
-      l.protocol + '//' + l.host + l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') + '/?/' +
-      l.pathname.slice(1).split('/').slice(pathSegmentsToKeep).join('/').replace(/&/g, '~and~') +
-      (l.search ? '&' + l.search.slice(1).replace(/&/g, '~and~') : '') +
-      l.hash
-    );
-  </script>
+  <meta name="robots" content="noindex">
+  <title>Page Not Found | FunderMatch</title>
 </head>
-<body>
-  <noscript>
-    <p style="max-width:42rem;margin:4rem auto;padding:0 1.25rem;font-family:system-ui,-apple-system,sans-serif;text-align:center;line-height:1.6">
-      The page you requested could not be loaded without JavaScript.
-      <a href="/">Return to the FunderMatch home page</a>.
-    </p>
-  </noscript>
+<body style="background:#0d1117">
+  <div style="max-width:42rem;margin:4rem auto;padding:0 1.25rem;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#e6edf3;text-align:center;line-height:1.6">
+    <h1 style="font-size:1.4rem;margin-bottom:.5rem">Page not found</h1>
+    <p>The page you requested doesn't exist or has moved.</p>
+    <p><a href="/" style="color:#58a6ff">Return to the FunderMatch home page</a></p>
+  </div>
 </body>
 </html>
