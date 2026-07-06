@@ -327,6 +327,19 @@
       color: #ffffff;
     }
 
+    /* Keyboard focus visibility (WCAG 2.4.7 Focus Visible) — usability audit 2026-07-06.
+       These prerendered pages previously had no visible focus indicator, so
+       keyboard and switch-access users could not tell which link/button was
+       focused. Additive rule; :focus-visible avoids showing rings on mouse click. */
+    a:focus-visible,
+    button:focus-visible,
+    summary:focus-visible,
+    details:focus-visible {
+      outline: 2px solid #58a6ff;
+      outline-offset: 2px;
+      border-radius: 2px;
+    }
+
     /* ── Responsive ── */
     @media (max-width: 640px) {
       .hero h1 {
