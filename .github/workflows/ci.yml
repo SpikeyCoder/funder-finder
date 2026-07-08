@@ -25,3 +25,8 @@ jobs:
       - name: Audit high/critical advisories (informational)
         run: npm audit --omit=dev --audit-level=high || echo "::warning::npm audit found high/critical advisories; review before merging"
       - run: npm run build
+      - name: Verify static prerender coverage
+        # Asserts the built dist/<route>/index.html pages carry real crawler-
+        # visible content (h1, meta, canonical, OG, JSON-LD, body copy).
+        # Pure Node + jsdom — no headless browser needed in CI.
+        run: npm test
