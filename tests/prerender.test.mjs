@@ -12,13 +12,17 @@
  * the prerender Vite plugin). With no fragments/plugin in place, dist/<dir>/
  * index.html does not exist and every assertion fails — which is the intended
  * red state for TDD.
+ *
+ * Parsing is deliberately dependency-free (small, tolerant regex helpers rather
+ * than a DOM library): the built HTML is machine-generated and stable, and this
+ * keeps the CI content-check hermetic — no headless browser, and no reliance on
+ * jsdom's transitive dependencies (which are pinned by the repo's `overrides`).
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { JSDOM } from 'jsdom';
 import { ROUTES, ORIGIN_URL } from '../prerender/manifest.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -29,75 +33,106 @@ function canonicalFor(route) {
   return route === '/' ? `${ORIGIN_URL}/` : `${ORIGIN_URL}${route}`;
 }
 
+const stripTags = (s) => s.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+
+/** Text of the first <h1>…</h1>, or null. */
+function h1Text(html) {
+  const m = html.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i);
+  return m ? stripTags(m[1]) : null;
+}
+
+/** Text of <title>…</title>, or null. */
+function titleText(html) {
+  const m = html.match(/<title>([\s\S]*?)<\/title>/i);
+  return m ? m[1].trim() : null;
+}
+
+/** `content` of a <meta> tag identified by `attr="val"` (attribute order tolerant). */
+function metaContent(html, attr, val) {
+  const re = new RegExp(`<meta\\b[^>]*\\b${attr}=["']${val.replace(/[/]/g, '\\$&')}["'][^>]*>`, 'i');
+  const tag = html.match(re);
+  if (!tag) return null;
+  const c = tag[0].match(/\bcontent=["']([^"']*)["']/i);
+  return c ? c[1] : null;
+}
+
+/** `href` of <link rel="canonical">, or null. */
+function canonicalHref(html) {
+  const tag = html.match(/<link\b[^>]*\brel=["']canonical["'][^>]*>/i);
+  if (!tag) return null;
+  const h = tag[0].match(/\bhref=["']([^"']*)["']/i);
+  return h ? h[1] : null;
+}
+
+/** All JSON-LD blocks, parsed. */
+function jsonLdBlocks(html) {
+  const re = /<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  return [...html.matchAll(re)].map((m) => JSON.parse(m[1]));
+}
+
+/** Visible text inside <div id="root">…</div> (the app entry follows in <head>,
+ *  so everything after this marker is body content). */
+function rootText(html) {
+  const i = html.indexOf('<div id="root">');
+  return i === -1 ? null : stripTags(html.slice(i));
+}
+
 function loadRoute(dir) {
   const file = join(DIST, dir, 'index.html');
   assert.ok(existsSync(file), `expected built page at dist/${join(dir, 'index.html')} — run \`npm run build\` first`);
-  const html = readFileSync(file, 'utf8');
-  return { html, doc: new JSDOM(html).window.document };
-}
-
-function metaContent(doc, selector) {
-  const el = doc.querySelector(selector);
-  return el ? el.getAttribute('content') : null;
+  return readFileSync(file, 'utf8');
 }
 
 for (const r of ROUTES) {
   test(`prerendered ${r.route} has crawler-visible content`, () => {
-    const { html, doc } = loadRoute(r.dir);
+    const html = loadRoute(r.dir);
 
     // --- Real heading -------------------------------------------------------
-    const h1 = doc.querySelector('h1');
-    assert.ok(h1, `${r.route}: missing <h1>`);
-    assert.ok(h1.textContent.trim().length > 0, `${r.route}: empty <h1>`);
+    const h1 = h1Text(html);
+    assert.ok(h1 && h1.length > 0, `${r.route}: missing/empty <h1>`);
 
     // --- Title --------------------------------------------------------------
-    const title = doc.querySelector('title');
-    assert.ok(title && title.textContent.trim().length > 0, `${r.route}: missing <title>`);
+    const title = titleText(html);
+    assert.ok(title && title.length > 0, `${r.route}: missing <title>`);
     if (r.headManaged !== false) {
-      assert.equal(title.textContent.trim(), r.title, `${r.route}: <title> should match manifest`);
+      assert.equal(title, r.title, `${r.route}: <title> should match manifest`);
     }
 
     // --- Meta description ---------------------------------------------------
-    const desc = metaContent(doc, 'meta[name="description"]');
+    const desc = metaContent(html, 'name', 'description');
     assert.ok(desc && desc.trim().length >= 50, `${r.route}: missing/short meta description`);
     if (r.headManaged !== false) {
       assert.equal(desc, r.description, `${r.route}: meta description should match manifest`);
     }
 
-    // --- Canonical ----------------------------------------------------------
+    // --- Canonical + og:url -------------------------------------------------
     // Dedicated subpage files carry a static canonical (safe: they are real
     // per-route files, not the SPA fallback). The homepage is served by the
     // shell that ALSO backs the SPA fallback, so per its deliberate design
     // (src/components/CanonicalTag.tsx) the static canonical is omitted and set
     // at runtime — a static one would mark every fallback route a duplicate.
     if (r.headManaged !== false) {
-      const canonical = doc.querySelector('link[rel="canonical"]');
-      assert.ok(canonical, `${r.route}: missing canonical link`);
-      assert.equal(canonical.getAttribute('href'), canonicalFor(r.route), `${r.route}: wrong canonical`);
-      assert.equal(metaContent(doc, 'meta[property="og:url"]'), canonicalFor(r.route), `${r.route}: wrong og:url`);
+      assert.equal(canonicalHref(html), canonicalFor(r.route), `${r.route}: wrong/missing canonical`);
+      assert.equal(metaContent(html, 'property', 'og:url'), canonicalFor(r.route), `${r.route}: wrong og:url`);
     }
 
     // --- Open Graph ---------------------------------------------------------
-    assert.ok(metaContent(doc, 'meta[property="og:title"]'), `${r.route}: missing og:title`);
-    assert.ok(metaContent(doc, 'meta[property="og:description"]'), `${r.route}: missing og:description`);
-    assert.ok(metaContent(doc, 'meta[property="og:url"]'), `${r.route}: missing og:url`);
-    assert.ok(metaContent(doc, 'meta[property="og:image"]'), `${r.route}: missing og:image`);
+    assert.ok(metaContent(html, 'property', 'og:title'), `${r.route}: missing og:title`);
+    assert.ok(metaContent(html, 'property', 'og:description'), `${r.route}: missing og:description`);
+    assert.ok(metaContent(html, 'property', 'og:url'), `${r.route}: missing og:url`);
+    assert.ok(metaContent(html, 'property', 'og:image'), `${r.route}: missing og:image`);
 
     // --- JSON-LD structured data -------------------------------------------
-    const ld = [...doc.querySelectorAll('script[type="application/ld+json"]')];
+    const ld = jsonLdBlocks(html); // JSON.parse throws here if malformed
     assert.ok(ld.length > 0, `${r.route}: missing JSON-LD`);
-    for (const block of ld) {
-      assert.doesNotThrow(() => JSON.parse(block.textContent), `${r.route}: JSON-LD does not parse`);
-    }
     if (r.headManaged !== false && r.jsonld) {
-      const types = ld.map((b) => JSON.parse(b.textContent)['@type']);
+      const types = ld.map((b) => b['@type']);
       assert.ok(types.includes(r.jsonld['@type']), `${r.route}: expected JSON-LD @type ${r.jsonld['@type']}`);
     }
 
     // --- Meaningful body copy ----------------------------------------------
-    const root = doc.getElementById('root');
-    assert.ok(root, `${r.route}: missing #root`);
-    const bodyText = root.textContent.replace(/\s+/g, ' ').trim();
+    const bodyText = rootText(html);
+    assert.ok(bodyText !== null, `${r.route}: missing #root`);
     assert.ok(bodyText.length >= 300, `${r.route}: thin body copy (${bodyText.length} chars) — crawlers would see near-empty page`);
 
     // --- App still boots (SPA hydrates over the prerendered markup) ---------
