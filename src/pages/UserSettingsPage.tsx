@@ -835,8 +835,8 @@ function UserSettingsContent() {
                     </div>
                     {weeklyDigest && (
                       <div>
-                        <label className="text-sm text-gray-400 mb-2 block">Send on</label>
-                        <select value={digestDay} onChange={(e) => setDigestDay(Number(e.target.value))} className={inputClass + ' max-w-[200px]'}>
+                        <label htmlFor="digest-day" className="text-sm text-gray-400 mb-2 block">Send on</label>
+                        <select id="digest-day" value={digestDay} onChange={(e) => setDigestDay(Number(e.target.value))} className={inputClass + ' max-w-[200px]'}>
                           {DAY_NAMES.map((name, idx) => (
                             <option key={idx} value={idx}>{name}</option>
                           ))}
@@ -921,8 +921,8 @@ function UserSettingsContent() {
                     <h3 className="text-md font-semibold text-white mb-4">Create new feed</h3>
                     <div className="space-y-4">
                       <div>
-                        <label className="text-sm text-gray-400 mb-2 block">Project (optional — leave blank for all projects)</label>
-                        <select value={newFeedProjectId} onChange={(e) => setNewFeedProjectId(e.target.value)} className={inputClass}>
+                        <label htmlFor="new-feed-project" className="text-sm text-gray-400 mb-2 block">Project (optional — leave blank for all projects)</label>
+                        <select id="new-feed-project" value={newFeedProjectId} onChange={(e) => setNewFeedProjectId(e.target.value)} className={inputClass}>
                           <option value="">All projects</option>
                           {projects.map(p => (
                             <option key={p.id} value={p.id}>{p.name}</option>

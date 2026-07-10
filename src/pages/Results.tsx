@@ -594,6 +594,7 @@ export default function Results() {
               Adjust the peer list to customize which funders appear. One per line or comma-separated.
             </p>
             <textarea
+              aria-label="Peer organization names, one per line"
               value={peerSearchInput}
               onChange={(event) => setPeerSearchInput(event.target.value)}
               placeholder={'Example: Greater Chicago Food Depository\nAustin Bat Cave\nGirls Who Code'}
