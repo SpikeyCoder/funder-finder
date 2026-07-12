@@ -18,11 +18,16 @@
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-const ALLOWED_ORIGINS = new Set([
+// Dev-only origin gated behind an explicit env flag (see
+// supabase/functions/_shared/cors.ts). Unset in production, so localhost is
+// not part of the production CORS allowlist. (FM-2026-07-12-01)
+const DEV_ORIGINS = ['http://localhost:5173'];
+
+const ALLOWED_ORIGINS = new Set<string>([
   'https://fundermatch.org',
   'https://www.fundermatch.org',
   'https://spikeycoder.github.io',
-  'http://localhost:5173',
+  ...(Deno.env.get('ALLOW_LOCAL_CORS') === 'true' ? DEV_ORIGINS : []),
 ]);
 
 function corsHeaders(requestOrigin: string | null): Record<string, string> {

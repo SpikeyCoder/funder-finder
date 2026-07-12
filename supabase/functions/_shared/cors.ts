@@ -12,10 +12,19 @@
  * case credentials are NOT permitted.
  */
 
-const ALLOWED_ORIGINS = new Set([
+// Dev-only origins are gated behind an explicit env flag so they are never
+// part of the *production* CORS allowlist. To develop against deployed Edge
+// Functions from a local Vite dev server, set `ALLOW_LOCAL_CORS=true` in the
+// function environment (e.g. `supabase functions serve` or a preview deploy).
+// In production the flag is unset, so a page served from localhost cannot
+// obtain a credentialed cross-origin grant against the Edge Functions.
+// (FM-2026-07-12-01)
+const DEV_ORIGINS = ["http://localhost:5173"];
+
+const ALLOWED_ORIGINS = new Set<string>([
   "https://fundermatch.org",
   "https://www.fundermatch.org",
-  "http://localhost:5173",
+  ...(Deno.env.get("ALLOW_LOCAL_CORS") === "true" ? DEV_ORIGINS : []),
 ]);
 
 interface CorsOptions {
