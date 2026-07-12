@@ -9,7 +9,7 @@ export default function Landing() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    document.title = 'Find Grants for Nonprofits — Free Nonprofit Grant Search | FunderMatch';
+    document.title = 'Find Grants for Nonprofits — Free Grant Search | FunderMatch';
   }, []);
 
   return (
