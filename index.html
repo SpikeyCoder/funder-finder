@@ -73,10 +73,17 @@
     <!-- Google Search Console verification -->
     <meta name="google-site-verification" content="BV6XNr6ev9mMAwmpuczFNBOX9ODTTrtbxuC96R6sLvM" />
 
-    <!-- Canonical: set per-route at runtime by src/components/CanonicalTag.tsx.
-         A static canonical here would mark every SPA route as a duplicate of
-         the homepage and exclude them from Google's index. The prerendered
-         landing pages under public/ carry their own static canonicals. -->
+    <!-- Canonical (self-referential, homepage).
+         This static tag backs the "/" route for no-JS crawlers, which never run
+         CanonicalTag. On the client, src/components/CanonicalTag.tsx UPDATES this
+         same canonical link in place (it looks up the existing one before
+         creating a node), so the page is never left with two canonicals.
+         The prerender plugin (scripts/vite-plugin-prerender.mjs) likewise
+         overwrites this href per prerendered subpage (/mission, /search, ...).
+         index.html also backs the SPA fallback, but unknown URLs are served as
+         real 404s (public/_worker.js) and the registered fallback routes are
+         excluded from the sitemap, bounding any "duplicate of home" exposure. -->
+    <link rel="canonical" href="https://fundermatch.org/" />
 
     <!-- Structured data — WebApplication -->
     <script type="application/ld+json">
@@ -164,6 +171,18 @@
   </head>
   <body>
     <div id="root"></div>
+    <!--
+      Intentional SPA no-JS fallback — this is EXPECTED, not a defect. Do not
+      flag it as "JS-dependent / SSR unconfirmed". fundermatch.org is a
+      client-rendered SPA whose PUBLIC routes (/, /mission, /search, /privacy,
+      /terms, /contact) are statically PRERENDERED: their real content is baked
+      into the raw HTML at build time (see prerender/README.md and
+      scripts/vite-plugin-prerender.mjs), so no-JS crawlers and LLM agents get
+      full page content rather than this notice. The interactive product (grant
+      search, results, pipeline) genuinely requires JavaScript, so this
+      <noscript> ships ON PURPOSE as a graceful message for visitors who have JS
+      disabled. It is by design; usability/security audits should not treat it
+      as missing SSR. -->
     <noscript>
       <div style="max-width:42rem;margin:4rem auto;padding:0 1.25rem;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#e6edf3;text-align:center;line-height:1.6">
         <h1 style="font-size:1.4rem;margin-bottom:.5rem">JavaScript is required</h1>

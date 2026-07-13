@@ -106,13 +106,14 @@ for (const r of ROUTES) {
     }
 
     // --- Canonical + og:url -------------------------------------------------
-    // Dedicated subpage files carry a static canonical (safe: they are real
-    // per-route files, not the SPA fallback). The homepage is served by the
-    // shell that ALSO backs the SPA fallback, so per its deliberate design
-    // (src/components/CanonicalTag.tsx) the static canonical is omitted and set
-    // at runtime — a static one would mark every fallback route a duplicate.
+    // Every prerendered route — the homepage included — carries a static,
+    // self-referential canonical in its raw HTML. index.html ships
+    // <link rel="canonical" href="https://fundermatch.org/"> for "/", and the
+    // prerender plugin overwrites it per subpage. The runtime CanonicalTag
+    // (src/components/CanonicalTag.tsx) updates this same tag in place on client
+    // navigation, so JS clients never end up with a duplicate.
+    assert.equal(canonicalHref(html), canonicalFor(r.route), `${r.route}: wrong/missing canonical`);
     if (r.headManaged !== false) {
-      assert.equal(canonicalHref(html), canonicalFor(r.route), `${r.route}: wrong/missing canonical`);
       assert.equal(metaContent(html, 'property', 'og:url'), canonicalFor(r.route), `${r.route}: wrong og:url`);
     }
 
