@@ -544,8 +544,9 @@ function UserSettingsContent() {
                 <div className="pb-6 border-b border-[#30363d]">
                   <h2 className="text-lg font-semibold text-white mb-4">Account</h2>
                   <div>
-                    <label className={labelClass}>Email address</label>
+                    <label htmlFor="account-email" className={labelClass}>Email address</label>
                     <input
+                      id="account-email"
                       type="email"
                       value={user?.email || ''}
                       disabled

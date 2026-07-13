@@ -543,10 +543,11 @@ export default function GrantWriter() {
           <div className="space-y-5">
             {/* Mission */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label htmlFor="gw-mission" className="block text-sm font-medium text-gray-300 mb-2">
                 Mission Statement <span className="text-red-400">*</span>
               </label>
               <textarea
+                id="gw-mission"
                 className="w-full bg-[#161b22] border border-[#30363d] rounded-xl px-4 py-3 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-600 resize-none"
                 rows={4}
                 placeholder="Describe your nonprofit's mission and the communities you serve…"
@@ -705,8 +706,9 @@ export default function GrantWriter() {
               {showOrg && (
                 <div className="px-5 pb-5 bg-[#0d1117] grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
-                    <label className={labelClass}>Organization Name</label>
+                    <label htmlFor="gw-org-name" className={labelClass}>Organization Name</label>
                     <input
+                      id="gw-org-name"
                       type="text"
                       className={inputClass}
                       placeholder="e.g. Community Youth Alliance"
@@ -715,10 +717,11 @@ export default function GrantWriter() {
                     />
                   </div>
                   <div>
-                    <label className={labelClass}>
+                    <label htmlFor="gw-org-budget" className={labelClass}>
                       Annual Operating Budget
                     </label>
                     <input
+                      id="gw-org-budget"
                       type="text"
                       className={inputClass}
                       placeholder="e.g. $500,000"
@@ -727,8 +730,9 @@ export default function GrantWriter() {
                     />
                   </div>
                   <div>
-                    <label className={labelClass}>Target Population</label>
+                    <label htmlFor="gw-target-pop" className={labelClass}>Target Population</label>
                     <input
+                      id="gw-target-pop"
                       type="text"
                       className={inputClass}
                       placeholder="e.g. Youth ages 12–18 in low-income communities"
@@ -737,8 +741,9 @@ export default function GrantWriter() {
                     />
                   </div>
                   <div>
-                    <label className={labelClass}>Geographic Focus</label>
+                    <label htmlFor="gw-geo-focus" className={labelClass}>Geographic Focus</label>
                     <input
+                      id="gw-geo-focus"
                       type="text"
                       className={inputClass}
                       placeholder="e.g. Greater Boston, MA"
@@ -747,10 +752,11 @@ export default function GrantWriter() {
                     />
                   </div>
                   <div className="sm:col-span-2">
-                    <label className={labelClass}>
+                    <label htmlFor="gw-org-desc" className={labelClass}>
                       Organization Description
                     </label>
                     <textarea
+                      id="gw-org-desc"
                       className={`${inputClass} resize-none`}
                       rows={2}
                       placeholder="Brief description of your organization's history, programs, and impact…"
@@ -784,10 +790,11 @@ export default function GrantWriter() {
               {showProgram && (
                 <div className="px-5 pb-5 bg-[#0d1117] grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
-                    <label className={labelClass}>
+                    <label htmlFor="gw-program-name" className={labelClass}>
                       Program / Project Name
                     </label>
                     <input
+                      id="gw-program-name"
                       type="text"
                       className={inputClass}
                       placeholder="e.g. Summer STEM Academy"
@@ -798,8 +805,9 @@ export default function GrantWriter() {
                     />
                   </div>
                   <div>
-                    <label className={labelClass}>Amount Requested</label>
+                    <label htmlFor="gw-program-budget" className={labelClass}>Amount Requested</label>
                     <input
+                      id="gw-program-budget"
                       type="text"
                       className={inputClass}
                       placeholder="e.g. $50,000"
@@ -810,8 +818,9 @@ export default function GrantWriter() {
                     />
                   </div>
                   <div>
-                    <label className={labelClass}>Project Timeline</label>
+                    <label htmlFor="gw-timeline" className={labelClass}>Project Timeline</label>
                     <input
+                      id="gw-timeline"
                       type="text"
                       className={inputClass}
                       placeholder="e.g. 12-month program, July 2026 – June 2027"
@@ -820,8 +829,9 @@ export default function GrantWriter() {
                     />
                   </div>
                   <div>
-                    <label className={labelClass}>Anticipated Outcomes</label>
+                    <label htmlFor="gw-outcomes" className={labelClass}>Anticipated Outcomes</label>
                     <input
+                      id="gw-outcomes"
                       type="text"
                       className={inputClass}
                       placeholder="e.g. Serve 200 youth, 80% improve STEM skills"
@@ -830,8 +840,9 @@ export default function GrantWriter() {
                     />
                   </div>
                   <div className="sm:col-span-2">
-                    <label className={labelClass}>Program Description</label>
+                    <label htmlFor="gw-program-desc" className={labelClass}>Program Description</label>
                     <textarea
+                      id="gw-program-desc"
                       className={`${inputClass} resize-none`}
                       rows={3}
                       placeholder="Describe the specific program or project you're seeking funding for…"
