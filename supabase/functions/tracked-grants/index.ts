@@ -6,6 +6,26 @@
 import { authFromRequest, adminClient, statusForAuthError } from "../_shared/auth.ts";
 import { corsHeaders as _corsHeaders } from "../_shared/cors.ts";
 
+
+// FM-IC-CFG-001 — normalise a user-supplied custom_fields map.
+// Coerces to a flat { label: string } object, trims keys, drops empty keys,
+// caps the number of fields and the length of keys/values to keep the JSONB
+// column bounded (defence against oversized payloads / abuse).
+function sanitiseCustomFields(raw: unknown): Record<string, string> | undefined {
+  if (raw === undefined) return undefined;
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const out: Record<string, string> = {};
+  let count = 0;
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    const key = String(k).trim().slice(0, 80);
+    if (!key) continue;
+    if (count >= 50) break;
+    out[key] = (v === null || v === undefined ? '' : String(v)).slice(0, 2000);
+    count++;
+  }
+  return out;
+}
+
 const CORS_HEADERS_OPTS = { methods: "GET, POST, PUT, DELETE, OPTIONS" } as const;
 function CORS_HEADERS(req: Request | null = null): Record<string, string> {
   return _corsHeaders(req?.headers.get("origin") ?? null, CORS_HEADERS_OPTS);
@@ -338,6 +358,8 @@ Deno.serve(async (req: Request) => {
         notes: notes || null,
         source: source || (is_external ? 'manual' : 'search'),
         is_external: is_external || false,
+        // FM-IC-CFG-001: user-defined custom field values
+        custom_fields: sanitiseCustomFields(body.custom_fields) ?? {},
       }).select('*, pipeline_statuses(name, slug, color, is_terminal)').single();
       if (error) return errorResponse(req, error.message, 500, { stage, details: error });
 
@@ -368,6 +390,8 @@ Deno.serve(async (req: Request) => {
       if (body.notes !== undefined) updates.notes = body.notes;
       if (body.awarded_amount !== undefined) updates.awarded_amount = body.awarded_amount ? parseFloat(body.awarded_amount) : null;
       if (body.awarded_date !== undefined) updates.awarded_date = body.awarded_date || null;
+      // FM-IC-CFG-001: user-defined custom field values
+      if (body.custom_fields !== undefined) updates.custom_fields = sanitiseCustomFields(body.custom_fields);
       if (body.status_id) {
         updates.status_id = body.status_id;
       } else if (body.status_slug) {
