@@ -733,6 +733,7 @@ function UserSettingsContent() {
                       type="text"
                       value={deleteConfirmText}
                       onChange={(e) => setDeleteConfirmText(e.target.value)}
+                      aria-label="Type DELETE to confirm account deletion"
                       placeholder="DELETE"
                       autoFocus
                       className={inputClass}

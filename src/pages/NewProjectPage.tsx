@@ -364,10 +364,11 @@ export default function NewProjectPage() {
             {step === 1 && (
               <div className="space-y-6">
                 <div>
-                  <label className="block text-sm font-medium text-white mb-2">
+                  <label htmlFor="project-name" className="block text-sm font-medium text-white mb-2">
                     Project Name *
                   </label>
                   <input
+                    id="project-name"
                     type="text"
                     value={form.name}
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -377,10 +378,11 @@ export default function NewProjectPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-white mb-2">
+                  <label htmlFor="project-description" className="block text-sm font-medium text-white mb-2">
                     Mission / Description *
                   </label>
                   <textarea
+                    id="project-description"
                     value={form.description}
                     onChange={(e) => setForm({ ...form, description: e.target.value })}
                     placeholder="Describe your project mission and goals — this is used to find matching funders..."
@@ -471,12 +473,13 @@ export default function NewProjectPage() {
 
                 {/* Keywords */}
                 <div>
-                  <label className="block text-sm font-medium text-white mb-4">
+                  <label htmlFor="project-keyword-input" className="block text-sm font-medium text-white mb-4">
                     Keywords
                   </label>
                   <div className="space-y-3">
                     <div className="flex gap-2">
                       <input
+                        id="project-keyword-input"
                         type="text"
                         value={currentKeyword}
                         onChange={(e) => setCurrentKeyword(e.target.value)}

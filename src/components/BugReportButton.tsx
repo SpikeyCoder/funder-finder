@@ -291,10 +291,11 @@ export default function BugReportButton() {
             ) : (
               <form onSubmit={handleSubmit}>
                 {/* Description */}
-                <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                <label htmlFor="bug-report-description" className="block text-sm font-medium text-gray-300 mb-1.5">
                   What happened? <span className="text-red-400">*</span>
                 </label>
                 <textarea
+                  id="bug-report-description"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder={

@@ -190,9 +190,9 @@ export default function MyTasksPage() {
                     <span className="text-xs text-gray-400">{task.tracked_grants.funder_name}{task.tracked_grants.grant_title ? ` — ${task.tracked_grants.grant_title}` : ''}</span>
                   )}
                   {task.projects && (
-                    <span className="text-xs text-blue-400 cursor-pointer hover:text-blue-300" onClick={() => navigate(`/projects/${task.project_id}/tracker`)}>
+                    <button type="button" aria-label={`Open project ${task.projects.name}`} className="text-xs text-blue-400 cursor-pointer hover:text-blue-300 hover:underline text-left" onClick={() => navigate(`/projects/${task.project_id}/tracker`)}>
                       {task.projects.name}
-                    </span>
+                    </button>
                   )}
                   {task.assignee_email && (
                     <span className="text-xs text-purple-400">@ {task.assignee_email}</span>

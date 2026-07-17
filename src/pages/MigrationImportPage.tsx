@@ -629,6 +629,7 @@ export default function MigrationImportPage() {
                   <select
                     value={selectedProjectId ?? ''}
                     onChange={e => setSelectedProjectId(e.target.value)}
+                    aria-label="Project to import into"
                     className="w-full bg-[#161b22] border border-[#30363d] rounded-lg px-4 py-2 text-sm text-gray-200 focus:border-blue-500 focus:outline-none"
                   >
                     {projects.map(p => (
