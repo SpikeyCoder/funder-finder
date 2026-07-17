@@ -218,9 +218,11 @@ export default function ApplicationsPage() {
           <div className="mb-6 p-4 bg-[#161b22] border border-[#30363d] rounded-lg">
             <h3 className="text-sm font-semibold mb-3">Add Application Content</h3>
             <input type="text" value={newTitle} onChange={e => setNewTitle(e.target.value)}
+              aria-label="Entry title"
               placeholder="Title (e.g., 'Ford Foundation 2027 LOI')"
               className="w-full mb-3 bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
             <textarea value={newContent} onChange={e => setNewContent(e.target.value)}
+              aria-label="Application content"
               placeholder="Paste your application text, proposal sections, or notes here..."
               rows={8}
               className="w-full mb-3 bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
@@ -324,6 +326,7 @@ export default function ApplicationsPage() {
                       <textarea
                         value={bookmarkText}
                         onChange={e => setBookmarkText(e.target.value)}
+                        aria-label="Passage to bookmark"
                         placeholder="Select or paste the passage you want to bookmark..."
                         rows={4}
                         className="w-full mb-2 bg-[#0d1117] border border-[#30363d] rounded px-2 py-2 text-sm text-gray-300 focus:outline-none focus:border-yellow-500" />
