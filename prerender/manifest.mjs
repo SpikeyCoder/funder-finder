@@ -73,7 +73,7 @@ export const ROUTES = [
     slug: 'mission',
     title: 'Find Funders for Your Nonprofit | FunderMatch',
     description:
-      'Describe your nonprofit’s mission and get an instant AI-ranked list of foundations, DAFs, and corporate giving programs aligned to your work. Free, no account required.',
+      'Describe your nonprofit’s mission and get an instant AI-ranked list of foundations, DAFs, and corporate giving aligned to your work. Free, no account.',
     jsonld: webPage(
       'WebPage',
       '/mission',
