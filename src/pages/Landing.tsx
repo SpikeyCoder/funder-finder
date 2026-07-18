@@ -23,7 +23,7 @@ export default function Landing() {
           Find Nonprofit Funding Opportunities Matched to Your Mission
         </h1>
         <p className="mt-6 text-lg md:text-xl text-gray-400 max-w-2xl">
-          Search 460,000+ foundations and find grants for your nonprofit in seconds.
+          Search 300,000+ foundations and find grants for your nonprofit in seconds.
           Free for every 501(c)(3) — no account required.
         </p>
         <button
@@ -61,7 +61,7 @@ export default function Landing() {
       <div className="px-6 py-12 max-w-5xl mx-auto w-full">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
           {[
-            { value: '460K+', label: 'Funders indexed', color: 'text-blue-400' },
+            { value: '300K+', label: 'Funders indexed', color: 'text-blue-400' },
             { value: '449K+', label: 'Grant recipients', color: 'text-green-400' },
             { value: '7.5M+', label: 'Individual grants', color: 'text-purple-400' },
             { value: '1.1M+', label: '990 filings', color: 'text-yellow-400' },
@@ -136,7 +136,7 @@ export default function Landing() {
       {/* SEO context */}
       <div className="px-6 pb-16 max-w-3xl mx-auto text-center">
         <p className="text-gray-400 leading-relaxed">
-          FunderMatch is a comprehensive free nonprofit funder database, indexing over 460,000
+          FunderMatch is a comprehensive free nonprofit funder database, indexing over 300,000
           foundations and 7.5 million grant records from IRS 990 filings. Whether you're
           looking for foundation grants for your 501(c)(3), exploring corporate giving
           programs, or searching for new nonprofit funding opportunities, our AI matches

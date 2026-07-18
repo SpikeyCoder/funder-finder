@@ -13,7 +13,7 @@ export default function OrgSearchPage() {
   useEffect(() => {
     document.title = 'Search Organizations | FunderMatch';
     const desc = document.querySelector<HTMLMetaElement>('meta[name="description"]');
-    if (desc) desc.content = 'Search 460K+ funders and 450K+ grant recipients by name or EIN. Explore 990 giving data.';
+    if (desc) desc.content = 'Search 300K+ funders and 450K+ grant recipients by name or EIN. Explore 990 giving data.';
   }, []);
 
   return (
@@ -37,7 +37,7 @@ export default function OrgSearchPage() {
           </div>
           <h1 className="text-3xl font-bold mb-2">Search Organizations</h1>
           <p className="text-gray-400 text-sm max-w-md mx-auto">
-            Explore 460,000+ funders and 450,000+ grant recipients. Search by name or EIN to view
+            Explore 300,000+ funders and 450,000+ grant recipients. Search by name or EIN to view
             990 giving data, funding trends, and connections.
           </p>
         </div>
@@ -46,7 +46,7 @@ export default function OrgSearchPage() {
 
         <div className="mt-12 grid grid-cols-2 gap-4">
           <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-5">
-            <p className="text-2xl font-bold text-blue-400">460K+</p>
+            <p className="text-2xl font-bold text-blue-400">300K+</p>
             <p className="text-xs text-gray-400 mt-1">Funders indexed</p>
           </div>
           <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-5">
