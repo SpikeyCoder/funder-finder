@@ -1825,10 +1825,10 @@ export default function ProjectWorkspace() {
       {/* Add Grant Modal */}
       {addGrantOpen && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setAddGrantOpen(false)}>
-          <div className="bg-[#161b22] border border-[#30363d] rounded-xl w-full max-w-lg p-6" onClick={e => e.stopPropagation()}>
+          <div role="dialog" aria-modal="true" aria-labelledby="add-grant-modal-title" className="bg-[#161b22] border border-[#30363d] rounded-xl w-full max-w-lg p-6" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-white">Add Grant to Tracker</h3>
-              <button onClick={() => { setAddGrantOpen(false); setAddGrantError(null); }} className="text-gray-400 hover:text-white"><X size={20} /></button>
+              <h3 id="add-grant-modal-title" className="text-lg font-semibold text-white">Add Grant to Tracker</h3>
+              <button onClick={() => { setAddGrantOpen(false); setAddGrantError(null); }} aria-label="Close dialog" className="text-gray-400 hover:text-white"><X size={20} /></button>
             </div>
             {addGrantError && (
               <div role="alert" aria-live="polite" className="mb-3 p-3 bg-red-900/20 border border-red-800 rounded-lg text-red-200 text-sm">
@@ -1887,10 +1887,10 @@ export default function ProjectWorkspace() {
       {/* CSV Import Modal */}
       {csvImportOpen && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setCsvImportOpen(false)}>
-          <div className="bg-[#161b22] border border-[#30363d] rounded-xl w-full max-w-2xl p-6 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div role="dialog" aria-modal="true" aria-labelledby="csv-import-modal-title" className="bg-[#161b22] border border-[#30363d] rounded-xl w-full max-w-2xl p-6 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-white">Import Grants from CSV</h3>
-              <button onClick={() => setCsvImportOpen(false)} className="text-gray-400 hover:text-white"><X size={20} /></button>
+              <h3 id="csv-import-modal-title" className="text-lg font-semibold text-white">Import Grants from CSV</h3>
+              <button onClick={() => setCsvImportOpen(false)} aria-label="Close dialog" className="text-gray-400 hover:text-white"><X size={20} /></button>
             </div>
 
             {csvStep === 1 && (
@@ -1969,6 +1969,9 @@ export default function ProjectWorkspace() {
           onClick={() => closeDrawer()}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="grant-drawer-title"
             className={`w-full max-w-lg bg-[#161b22] border-l border-[#30363d] h-full flex flex-col transform transition-transform duration-300 ease-in-out ${drawerVisible ? 'translate-x-0' : 'translate-x-full'}`}
             onClick={e => e.stopPropagation()}
           >
@@ -1977,10 +1980,10 @@ export default function ProjectWorkspace() {
             <div className="flex-shrink-0 px-5 py-4 border-b border-[#30363d] bg-[#161b22]">
               <div className="flex items-start justify-between">
                 <div className="min-w-0 flex-1 mr-3">
-                  <h3 className="text-lg font-semibold text-white truncate">{selectedGrant.funder_name}</h3>
+                  <h3 id="grant-drawer-title" className="text-lg font-semibold text-white truncate">{selectedGrant.funder_name}</h3>
                   {selectedGrant.grant_title && <p className="text-sm text-gray-400 mt-0.5 truncate">{selectedGrant.grant_title}</p>}
                 </div>
-                <button onClick={() => closeDrawer()} className="text-gray-400 hover:text-white flex-shrink-0 p-1"><X size={18} /></button>
+                <button onClick={() => closeDrawer()} aria-label="Close grant details" className="text-gray-400 hover:text-white flex-shrink-0 p-1"><X size={18} /></button>
               </div>
               {/* Quick status row */}
               <div className="flex items-center gap-3 mt-3">
@@ -2404,11 +2407,11 @@ export default function ProjectWorkspace() {
       {/* Share dialog */}
       {showShareDialog && shareUrl && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowShareDialog(false)}>
-          <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-6 w-[400px] max-w-[90vw]" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold mb-2">Share Link Created</h3>
+          <div role="dialog" aria-modal="true" aria-labelledby="share-dialog-title" className="bg-[#161b22] border border-[#30363d] rounded-lg p-6 w-[400px] max-w-[90vw]" onClick={e => e.stopPropagation()}>
+            <h3 id="share-dialog-title" className="text-lg font-semibold mb-2">Share Link Created</h3>
             <p className="text-sm text-gray-400 mb-4">Anyone with this link can view the tracker (read-only).</p>
             <div className="flex gap-2">
-              <input type="text" readOnly value={shareUrl}
+              <input type="text" readOnly value={shareUrl} aria-label="Shareable link"
                 className="flex-1 bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm" />
               <button onClick={() => { navigator.clipboard.writeText(shareUrl); setShowShareDialog(false); }}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm">Copy</button>

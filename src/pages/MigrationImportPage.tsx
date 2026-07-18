@@ -429,6 +429,15 @@ export default function MigrationImportPage() {
               onDrop={onDrop}
               onDragOver={e => e.preventDefault()}
               onClick={() => fileRef.current?.click()}
+              onKeyDown={e => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  fileRef.current?.click();
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              aria-label="Upload a spreadsheet file (CSV, TSV, XLSX, or XLS)"
               className="border-2 border-dashed border-gray-600 hover:border-blue-500 rounded-xl p-12 text-center cursor-pointer transition-colors"
             >
               <input
@@ -508,6 +517,16 @@ export default function MigrationImportPage() {
               <div
                 className="flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.02]"
                 onClick={() => setPreviewExpanded(!previewExpanded)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setPreviewExpanded(!previewExpanded);
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+                aria-expanded={previewExpanded}
+                aria-label="Toggle imported data preview"
               >
                 <span className="text-sm font-medium flex items-center gap-2">
                   <Eye size={16} /> Preview imported data
