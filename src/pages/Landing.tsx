@@ -136,7 +136,7 @@ export default function Landing() {
       {/* SEO context */}
       <div className="px-6 pb-16 max-w-3xl mx-auto text-center">
         <p className="text-gray-400 leading-relaxed">
-          FunderMatch is the largest free nonprofit funder database, indexing over 460,000
+          FunderMatch is a comprehensive free nonprofit funder database, indexing over 460,000
           foundations and 7.5 million grant records from IRS 990 filings. Whether you're
           looking for foundation grants for your 501(c)(3), exploring corporate giving
           programs, or searching for new nonprofit funding opportunities, our AI matches
