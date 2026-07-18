@@ -720,10 +720,10 @@ function UserSettingsContent() {
               {/* Delete confirmation modal */}
               {showDeleteModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
-                  <div className="w-full max-w-md bg-[#161b22] border border-[#30363d] rounded-lg p-6">
+                  <div role="dialog" aria-modal="true" aria-labelledby="delete-account-title" className="w-full max-w-md bg-[#161b22] border border-[#30363d] rounded-lg p-6">
                     <div className="flex items-center gap-2 mb-3">
                       <AlertCircle className="w-5 h-5 text-red-400" />
-                      <h3 className="text-lg font-semibold text-white">Delete account</h3>
+                      <h3 id="delete-account-title" className="text-lg font-semibold text-white">Delete account</h3>
                     </div>
                     <p className="text-sm text-gray-400 mb-4">
                       This permanently deletes your account and all your data. This action cannot
