@@ -542,7 +542,7 @@ export default function RecipientProfile() {
             onClick={() => navigate('/mission')}
             className="flex-1 border border-[#30363d] rounded-xl py-3 text-sm hover:bg-[#161b22] transition-colors"
           >
-            Find Matching Funders
+            Find Funders
           </button>
         </div>
       </div>
