@@ -31,7 +31,7 @@ export default function Landing() {
           className="mt-8 inline-flex items-center gap-3 bg-white text-gray-900 rounded-2xl px-10 py-4 text-lg font-semibold hover:bg-gray-100 transition shadow-lg"
         >
           <Search size={22} />
-          Get Started
+          Find Funders
         </button>
       </div>
 
@@ -155,7 +155,7 @@ export default function Landing() {
           className="inline-flex items-center gap-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl px-10 py-4 text-lg font-semibold transition"
         >
           <Search size={22} />
-          Find Funders Now
+          Find Funders
         </button>
       </div>
       </main>
