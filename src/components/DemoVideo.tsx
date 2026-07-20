@@ -40,6 +40,19 @@ const STREAMING_LINES = [
 
 const STEP_LABELS = ['Start', 'Mission', 'Search', 'Save', 'Pipeline', 'Write', 'Draft', 'Done'];
 
+/* Usability audit 2026-07-20 (WCAG 2.2.2 Pause/Stop/Hide + 2.3.3):
+   the demo loop is driven by JS timers (setTimeout/setInterval + React
+   state), so the global CSS `prefers-reduced-motion` rules in index.css
+   cannot stop it — CSS can only neutralise CSS animations/transitions.
+   For users who request reduced motion we skip the 20 s auto-loop
+   entirely and render a single static "completed" frame instead.
+   Read at mount; a live listener is intentionally omitted to keep the
+   change minimal. */
+const prefersReducedMotion = () =>
+  typeof window !== 'undefined' &&
+  typeof window.matchMedia === 'function' &&
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 export default function DemoVideo() {
   const [step, setStep] = useState(0);
   const [getStartedClicked, setGetStartedClicked] = useState(false);
@@ -52,6 +65,17 @@ export default function DemoVideo() {
 
   // Advance steps on a timer
   useEffect(() => {
+    // Reduced motion: show the final frame statically, schedule nothing.
+    if (prefersReducedMotion()) {
+      setStep(7);
+      setMissionChars(MISSION_TEXT.length);
+      setLocationChars(LOCATION_TEXT.length);
+      setSaved(true);
+      setStreamIdx(STREAMING_LINES.length);
+      setScore(87);
+      return;
+    }
+
     const timers: ReturnType<typeof setTimeout>[] = [];
 
     const scheduleSteps = () => {
@@ -147,6 +171,7 @@ export default function DemoVideo() {
   // Animate score counter during step 7
   useEffect(() => {
     if (step !== 7) return;
+    if (prefersReducedMotion()) { setScore(87); return; }
     let v = 0;
     const t = setInterval(() => {
       v += 3;
