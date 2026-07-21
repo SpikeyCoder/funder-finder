@@ -23,14 +23,16 @@ dist-ssr
 *.sln
 *.sw?
 
-# Environment / secrets — NEVER commit these
+# Environment / secrets — NEVER commit these.
+# Broadened to `.env.*` (any suffix) — the previous enumerated list
+# silently missed variants such as .env.test, .env.ci and
+# .env.enrich-websites (the FM-INC-2026-05-06-01 incident file, later
+# added below). Committed example templates are explicitly re-allowed.
 .env
-.env.local
-.env.*.local
-.env.development
-.env.production
-.env.staging
+.env.*
 *.env
+!.env.example
+!.env.*.example
 secrets.json
 service-account*.json
 
