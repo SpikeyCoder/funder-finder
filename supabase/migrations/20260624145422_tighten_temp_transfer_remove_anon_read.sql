@@ -1,0 +1,22 @@
+-- RECOVERED 2026-07-29 (FM-2026-07-29-06) from supabase_migrations.schema_migrations.
+--
+-- Applied to production on 2026-06-24 with NO source in this repo — applied
+-- ad-hoc (dashboard / MCP), which records the executed SQL in the ledger's
+-- `statements` column but writes no file. Body below is that recorded SQL
+-- verbatim; only this header was added.
+--
+-- Do NOT re-apply: already applied and recorded under version 20260624145422.
+-- The statement is `IF EXISTS`-guarded and idempotent regardless.
+--
+-- Verified against live state on recovery: no `anon_read_temp` policy exists on
+-- public._temp_transfer, so the drop did take effect.
+--
+-- Context: public._temp_transfer is a leftover scratch table (22 rows). It still
+-- has RLS enabled with no policies at all, which is deny-all and is the source
+-- of the long-standing `rls_enabled_no_policy` INFO in the security advisor.
+-- That INFO is the correct outcome here, not a defect. The table itself is a
+-- candidate for deletion, but that is a separate decision from this migration.
+
+-- Remove unauthenticated read access from the leftover scratch table _temp_transfer.
+-- Tightening only: drops the anon SELECT policy. No data is deleted.
+DROP POLICY IF EXISTS "anon_read_temp" ON public._temp_transfer;
