@@ -17,16 +17,10 @@
 //    and sends mail via Resend, so it was an open spam relay bounded only by
 //    payload size.
 //
-//    It does NOT use `_shared/rate_limit.ts`. That helper counts in a
-//    module-level Map, which requires the Deno isolate to be reused between
-//    requests — and on this project it is not. Measured 2026-07-29: eight rapid
-//    requests each got a different module-scope boot id and a hit count of 1, so
-//    a deliberately-low limit of 3 never tripped. See FM-2026-07-29-04 /
-//    migration 20260729040000 for the evidence and the replacement.
-//
-//    Instead this calls `public.check_rate_limit`, which keeps the counter in
-//    Postgres — the one store every isolate shares — and decides atomically in a
-//    single INSERT .. ON CONFLICT so concurrent isolates cannot race past it.
+//    Uses `_shared/rate_limit.ts`, which as of FM-2026-07-29-04 is backed by
+//    `public.check_rate_limit` in Postgres rather than a module-level Map. The
+//    old Map-based version enforced nothing on this project, because each
+//    request gets a fresh Deno isolate — see that migration for the measurement.
 //
 //    Threshold: 10 requests per IP per hour. Deliberately looser than one-per-
 //    person because small nonprofits often share one NAT'd office IP, and a
@@ -38,6 +32,7 @@
 // Note CORS only constrains browsers — it does nothing about a direct POST from
 // curl. The rate limiter is the control that actually bounds abuse here.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { ipRateLimit } from "../_shared/rate_limit.ts";
 import { corsHeaders as _sharedCorsHeaders } from "../_shared/cors.ts";
 
 function corsHeaders(req: Request | null = null): Record<string, string> {
@@ -50,54 +45,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") || "";
 const TO_EMAIL = "support@fundermatch.org";
 
 const RATE_LIMIT = 10;
-const RATE_WINDOW_SECONDS = 60 * 60;
-
-/**
- * Caller IP. Cloudflare sets `cf-connecting-ip` to the single true client
- * address; `x-forwarded-for` is a comma-separated chain (and on this project
- * repeats the client), so the leftmost entry is the fallback.
- */
-function callerIp(req: Request): string | null {
-  const cf = req.headers.get("cf-connecting-ip");
-  if (cf && cf.trim()) return cf.trim();
-  const xff = req.headers.get("x-forwarded-for");
-  const first = xff?.split(",")[0]?.trim();
-  return first || null;
-}
-
-/** Durable, cross-isolate rate limit. Fails open on any error. */
-async function underRateLimit(req: Request): Promise<boolean> {
-  const ip = callerIp(req);
-  if (!ip) return true; // unidentifiable caller: fail open, as before
-
-  const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-  if (!supabaseUrl || !serviceKey) return true;
-
-  try {
-    const res = await fetch(`${supabaseUrl}/rest/v1/rpc/check_rate_limit`, {
-      method: "POST",
-      headers: {
-        "apikey": serviceKey,
-        "Authorization": `Bearer ${serviceKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        p_key: `contact-form:${ip}`,
-        p_limit: RATE_LIMIT,
-        p_window_seconds: RATE_WINDOW_SECONDS,
-      }),
-    });
-    if (!res.ok) {
-      console.error("check_rate_limit failed:", res.status, await res.text());
-      return true;
-    }
-    return (await res.json()) !== false;
-  } catch (err) {
-    console.error("check_rate_limit threw:", err);
-    return true;
-  }
-}
+const RATE_WINDOW_MS = 60 * 60 * 1000;
 
 Deno.serve(async (req: Request) => {
   const CORS_HEADERS = corsHeaders(req);
@@ -114,19 +62,13 @@ Deno.serve(async (req: Request) => {
   }
 
   // Before any parsing or outbound mail: bound abuse per caller IP.
-  if (!(await underRateLimit(req))) {
-    return new Response(
-      JSON.stringify({ error: "Too many requests. Please try again later." }),
-      {
-        status: 429,
-        headers: {
-          ...CORS_HEADERS,
-          "Content-Type": "application/json",
-          "Retry-After": String(RATE_WINDOW_SECONDS),
-        },
-      },
-    );
-  }
+  const limited = await ipRateLimit(req, {
+    namespace: "contact-form",
+    limit: RATE_LIMIT,
+    windowMs: RATE_WINDOW_MS,
+    extraHeaders: CORS_HEADERS,
+  });
+  if (!limited.allow && limited.response) return limited.response;
 
   try {
     const { name, email, message } = await req.json();

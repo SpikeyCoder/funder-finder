@@ -1,41 +1,56 @@
 /**
  * Per-IP sliding-window rate limiter for FunderMatch Edge Functions.
  *
- * Lifted from the inline implementations in `calendar-feed/index.ts`
- * (PR #62, finding FM-2026-05-09-01) and `log-search-signal/index.ts`
- * so that public, unauthenticated entry points share a single
- * implementation and a consistent threshold.
+ * Originally lifted from the inline implementations in `calendar-feed/index.ts`
+ * (PR #62, finding FM-2026-05-09-01) and `log-search-signal/index.ts` so that
+ * public, unauthenticated entry points share a single implementation and a
+ * consistent threshold.
  *
- * Threat model: rate-limit complements high-entropy tokens (calendar
- * feeds, share links). Tokens are not brute-forceable online; the
- * limiter exists so a leaked token URL cannot be replayed at line
- * speed against the database, and so abuse signals surface in logs
- * before they reach a SELECT.
+ * ── FM-2026-07-29-04: rewritten. The previous version did nothing. ───────────
  *
- * The limiter is intentionally process-local (Map) — Supabase Edge
- * Functions run on Deno isolates and a region-wide counter is not
- * available without an external store. Per-isolate accuracy is
- * acceptable for the defense-in-depth role this control plays;
- * tighten by moving to a shared store (Upstash, Redis) if/when
- * abuse exceeds the per-isolate threshold.
+ * That version kept counters in a module-level `Map`. That only works if the
+ * Deno isolate is reused between requests — and on this project it is not.
+ * Measured 2026-07-29 against a deployed function: eight rapid sequential
+ * requests each returned a DIFFERENT module-scope boot id and a per-isolate hit
+ * count of 1. With the limit deliberately set to 3, every request was allowed:
  *
- * Usage:
+ *   req 1 boot=1762e9a1 hits=1 allow=true   req 5 boot=7685edb2 hits=1 allow=true
+ *   req 2 boot=278b821c hits=1 allow=true   req 6 boot=f928783d hits=1 allow=true
+ *   req 3 boot=b35ef3fc hits=1 allow=true   req 7 boot=5411ba25 hits=1 allow=true
+ *   req 4 boot=faea351c hits=1 allow=true   req 8 boot=16d27326 hits=1 allow=true
+ *
+ * Note what was NOT wrong with it: the caller IP resolved correctly — the Edge
+ * runtime does supply `x-forwarded-for` — and its docstring openly accepted
+ * "per-isolate accuracy". The flaw is that per-isolate accuracy degrades to ZERO
+ * limiting when isolates are per-request. It read correctly, reviewed clean, and
+ * enforced nothing, which is why it survived a pen-test.
+ *
+ * The counter now lives in Postgres — the one store every isolate shares — via
+ * `public.check_rate_limit`, which decides atomically inside a single
+ * INSERT .. ON CONFLICT so two isolates arriving together cannot both observe a
+ * stale count. See migration 20260729040000.
+ *
+ * COST: this adds one database round-trip per request to every caller. That is
+ * the deliberate trade for having a limit that actually exists. The statement is
+ * a single indexed upsert on a small table.
+ *
+ * FAIL-OPEN. If the caller cannot be identified, or the limiter itself errors,
+ * the request is allowed. A database blip must not take down a public endpoint;
+ * the upstream guards (token entropy, RLS, JWT) still apply. Failures are logged
+ * rather than swallowed silently.
+ *
+ * The public API is unchanged, so call sites did not need editing:
+ *
  *   import { ipRateLimit } from "../_shared/rate_limit.ts";
  *
  *   const limited = await ipRateLimit(req);
  *   if (!limited.allow) return limited.response;
  *
- * The returned `response` already includes `Retry-After` and a 429
- * body so callers can short-circuit before any DB access.
+ * CWE-770 (Allocation of Resources Without Limits or Throttling).
  */
 
 const DEFAULT_LIMIT = 60;             // requests per window
 const DEFAULT_WINDOW_MS = 60_000;     // 1 minute
-
-interface BucketEntry {
-  count: number;
-  reset: number;
-}
 
 interface RateLimitOptions {
   /** Maximum requests per window. Defaults to 60. */
@@ -43,13 +58,13 @@ interface RateLimitOptions {
   /** Window size in milliseconds. Defaults to 60_000 (1 min). */
   windowMs?: number;
   /**
-   * Optional namespace so two endpoints in the same isolate keep
-   * separate buckets (e.g. share-link vs. calendar-feed).
+   * Namespace so two endpoints keep separate buckets (e.g. share-link vs.
+   * calendar-feed). Forms part of the durable bucket key.
    */
   namespace?: string;
   /**
-   * Extra response headers to merge into the 429 body (typically
-   * CORS headers from the calling function).
+   * Extra response headers to merge into the 429 (typically CORS headers from
+   * the calling function, so the browser can actually read the rejection).
    */
   extraHeaders?: Record<string, string>;
 }
@@ -59,42 +74,32 @@ interface RateLimitDecision {
   response?: Response;
 }
 
-const _BUCKETS: Map<string, BucketEntry> = new Map();
-
-async function sha256Hex(input: string): Promise<string> {
-  const buf = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(input),
-  );
-  return Array.from(new Uint8Array(buf))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
 /**
- * Resolve the caller's IP from the standard Cloud Run / Supabase
- * Edge headers. Returns `null` if no IP can be determined; callers
- * should treat that as "fail-open" because the upstream guard
- * (token entropy + RLS) still applies.
+ * Resolve the caller's IP. Cloudflare sets `cf-connecting-ip` to the single
+ * true client address, which is unambiguous; `x-forwarded-for` is a
+ * comma-separated chain (and on this project repeats the client), so its
+ * leftmost entry is the fallback. Returns `null` when no IP can be determined.
  */
 function callerIp(req: Request): string | null {
+  const cf = req.headers.get("cf-connecting-ip");
+  if (cf && cf.trim()) return cf.trim();
+
   const xff = req.headers.get("x-forwarded-for");
   if (xff) {
-    // Standard XFF format: "client, proxy1, proxy2". The leftmost
-    // non-empty entry is the original client.
     const first = xff.split(",")[0]?.trim();
     if (first) return first;
   }
+
   const real = req.headers.get("x-real-ip");
   if (real && real.trim()) return real.trim();
+
   return null;
 }
 
 /**
- * Per-IP sliding-window rate limit. Returns `{ allow: false, response }`
- * when the caller has exceeded the limit; the response is a fully-formed
- * 429 with Retry-After. Otherwise returns `{ allow: true }` and the
- * caller proceeds with normal handling.
+ * Per-IP sliding-window rate limit backed by Postgres. Returns
+ * `{ allow: false, response }` when the caller has exceeded the limit; the
+ * response is a fully-formed 429 with Retry-After. Otherwise `{ allow: true }`.
  */
 export async function ipRateLimit(
   req: Request,
@@ -108,41 +113,63 @@ export async function ipRateLimit(
   } = options;
 
   const ip = callerIp(req);
-  // Fail-open if we cannot identify the caller. This matches the
-  // log-search-signal precedent: the SELECT itself is cheap and we
-  // do not want to lock out clients behind an unusual proxy chain.
-  if (!ip) return { allow: true };
+  if (!ip) return { allow: true }; // unidentifiable caller: fail open
 
-  const ipHash = await sha256Hex(`${namespace}:${ip}`);
-  const now = Date.now();
-  const slot = _BUCKETS.get(ipHash);
-
-  if (!slot || slot.reset < now) {
-    _BUCKETS.set(ipHash, { count: 1, reset: now + windowMs });
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  if (!supabaseUrl || !serviceKey) {
+    console.error("ipRateLimit: SUPABASE_URL / SERVICE_ROLE_KEY unset — failing open");
     return { allow: true };
   }
 
-  if (slot.count >= limit) {
-    const retryAfter = Math.max(1, Math.ceil((slot.reset - now) / 1000));
-    const headers: Record<string, string> = {
-      "Retry-After": String(retryAfter),
-      "Content-Type": "text/plain; charset=utf-8",
-      ...extraHeaders,
-    };
-    return {
-      allow: false,
-      response: new Response("Too Many Requests", { status: 429, headers }),
-    };
+  const windowSeconds = Math.max(1, Math.ceil(windowMs / 1000));
+
+  let allowed = true;
+  try {
+    const res = await fetch(`${supabaseUrl}/rest/v1/rpc/check_rate_limit`, {
+      method: "POST",
+      headers: {
+        "apikey": serviceKey,
+        "Authorization": `Bearer ${serviceKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        p_key: `${namespace}:${ip}`,
+        p_limit: limit,
+        p_window_seconds: windowSeconds,
+      }),
+    });
+
+    if (!res.ok) {
+      console.error("ipRateLimit: check_rate_limit failed", res.status, await res.text());
+      return { allow: true }; // fail open
+    }
+
+    allowed = (await res.json()) !== false;
+  } catch (err) {
+    console.error("ipRateLimit: check_rate_limit threw", err);
+    return { allow: true }; // fail open
   }
 
-  slot.count += 1;
-  return { allow: true };
+  if (allowed) return { allow: true };
+
+  const headers: Record<string, string> = {
+    "Retry-After": String(windowSeconds),
+    "Content-Type": "text/plain; charset=utf-8",
+    ...extraHeaders,
+  };
+  return {
+    allow: false,
+    response: new Response("Too Many Requests", { status: 429, headers }),
+  };
 }
 
 /**
- * Test-only helper to clear the bucket map between tests. Not exported
- * from the production surface; consumers should ignore this.
+ * Previously cleared the in-process bucket Map between tests. The counters now
+ * live in Postgres, so there is no in-process state to reset. Retained as a
+ * no-op so existing imports keep compiling; delete the bucket rows directly if
+ * a test needs a clean slate.
  */
 export function _resetBuckets(): void {
-  _BUCKETS.clear();
+  /* no-op — counters are durable, see public.rate_limit_hits */
 }
