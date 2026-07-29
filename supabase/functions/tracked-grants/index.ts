@@ -123,13 +123,22 @@ Deno.serve(async (req: Request) => {
     const supabase = adminClient();
     const url = new URL(req.url);
 
-    // Best-effort seed; non-fatal on permission issues.
-    stage = 'seed_pipeline_statuses';
-    try {
-      await supabase.rpc('seed_pipeline_statuses', { p_user_id: userId });
-    } catch (seedErr) {
-      console.error('seed rpc non-fatal:', seedErr);
-    }
+    // FM-2026-07-29-05: the "best-effort seed" RPC call that used to sit here is
+    // gone. It fired on EVERY request — before the method branch, so on every
+    // GET, POST and export — and it never actually seeded anyone:
+    // on_auth_user_created_pipeline is attached to auth.users and enabled, so
+    // statuses exist from signup, and a check on 2026-07-29 found all 16 users
+    // already covered with none missing. It was one wasted database round-trip
+    // per request.
+    //
+    // Removing it also lets `authenticated` lose EXECUTE on
+    // public.seed_pipeline_statuses (migration 20260729080000), which clears
+    // Supabase advisor lint 0029 and eliminates the write-side IDOR surface
+    // rather than merely guarding it.
+    //
+    // If a user ever does reach here with no statuses, the pipeline UI renders
+    // empty rather than erroring, and the function remains callable by
+    // service_role for a manual backfill.
 
     if (req.method === 'GET') {
       stage = 'get';
