@@ -84,6 +84,15 @@ begin
 end;
 $$;
 
+-- ─── hardening (added 2026-07-28, FM-2026-07-28-01) ─────────────────────────
+-- Same two defects as 20260509070000: the table lands in `public` with RLS off
+-- (advisor lint 0013, ERROR), and Supabase default privileges make the refresh —
+-- a TRUNCATE + full rebuild over ~7.3M rows — callable by anon/authenticated via
+-- RPC (lints 0028/0029, and a DoS vector). See that migration's note for detail.
+revoke all on function public.refresh_foundation_grant_locality_profiles() from public;
+revoke execute on function public.refresh_foundation_grant_locality_profiles() from anon, authenticated;
+alter table public.foundation_grant_locality_profiles enable row level security;
+
 -- Initial backfill for existing data.
 select public.refresh_foundation_grant_locality_profiles();
 
@@ -317,6 +326,24 @@ begin
 end;
 $$;
 
-grant execute on function public.filter_funders_grant_level(
+-- REVISED 2026-07-28 (FM-2026-07-28-01). This originally read:
+--   grant execute on function public.filter_funders_grant_level(...)
+--     to anon, authenticated;
+-- That is wrong for this project on two counts:
+--   1. The only caller — supabase/functions/filter-funders/index.ts — invokes the
+--      RPC with the SERVICE-ROLE key, so anon/authenticated never need EXECUTE.
+--      Production's prior 12-arg function carried {postgres, service_role} only.
+--   2. The function is SECURITY DEFINER over public.mv_funder_search_index, from
+--      which 20260408153622_fix_materialized_view_api_exposure deliberately
+--      REVOKEd SELECT for anon/authenticated to keep it off the public PostgREST
+--      surface. Granting RPC execute would hand that same data back out through
+--      the function and silently undo that migration.
+-- Explicit revokes are required, not merely omitting the grant: Supabase default
+-- privileges grant EXECUTE to anon/authenticated on newly created functions in
+-- `public`, and REVOKE ... FROM PUBLIC does not remove those explicit grants.
+revoke all on function public.filter_funders_grant_level(
   text, text, text, text, numeric, numeric, text, text, text, text, text, integer, integer
-) to anon, authenticated;
+) from public;
+revoke execute on function public.filter_funders_grant_level(
+  text, text, text, text, numeric, numeric, text, text, text, text, text, integer, integer
+) from anon, authenticated;
