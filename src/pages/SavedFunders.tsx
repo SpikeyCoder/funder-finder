@@ -5,7 +5,7 @@ import {
   LogOut, PenLine, User as UserIcon, StickyNote, ChevronDown, ChevronUp,
   Users, Building2, FileText, X, FolderPlus, Check,
 } from 'lucide-react';
-import { SavedFunderEntry, FunderStatus, PeerEntry, GrantDraft, Funder } from '../types';
+import { SavedFunderEntry, FunderStatus, PeerEntry, GrantDraft, Funder, CustomFieldDefinition, CustomFieldValue } from '../types';
 import { formatTotalGiving, fetchPeers } from '../utils/matching';
 import { fmtDollar } from '../components/InsightCharts';
 import { useAuth } from '../contexts/AuthContext';
@@ -13,6 +13,8 @@ import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import { friendlyError } from '../lib/friendlyErrors';
 import LoginModal from '../components/LoginModal';
 import NavBar from '../components/NavBar';
+import CustomFieldsEditor from '../components/CustomFieldsEditor';
+import { fetchCustomFieldDefinitions } from '../lib/customFields';
 
 const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const TRACKED_GRANTS_URL = `${SUPABASE_URL}/functions/v1/tracked-grants`;
@@ -45,6 +47,8 @@ export default function SavedFunders() {
   const [statusFilter, setStatusFilter] = useState<FunderStatus | 'all'>('all');
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
   const [notesDraft, setNotesDraft] = useState<Record<string, string>>({});
+  // FM-IC-CFG-001: user-defined custom field definitions for funders
+  const [funderFieldDefs, setFunderFieldDefs] = useState<CustomFieldDefinition[]>([]);
   const [showLoginModal, setShowLoginModal] = useState(false);
 
   // Grant drafts: keyed by funder_id, array of drafts per funder
@@ -111,6 +115,12 @@ export default function SavedFunders() {
       const draft: Record<string, string> = {};
       data.forEach(e => { draft[e.funder.id] = e.notes; });
       setNotesDraft(draft);
+      // FM-IC-CFG-001: load the user's custom field definitions for funders
+      try {
+        setFunderFieldDefs(await fetchCustomFieldDefinitions('funder'));
+      } catch (defErr) {
+        console.error('Failed to load custom field definitions:', defErr);
+      }
     } catch (e) {
       console.error('Failed to load saved funders:', e);
       setEntries([]);
@@ -151,6 +161,22 @@ export default function SavedFunders() {
       await updateSavedFunder(funderId, { notes });
     } catch (e) {
       console.error('Failed to save notes:', e);
+    }
+  };
+
+  // FM-IC-CFG-001: persist custom field values for a saved funder.
+  const saveCustomFields = async (
+    funderId: string,
+    customFields: Record<string, CustomFieldValue>,
+  ) => {
+    if (!user) return;
+    setEntries(prev => prev.map(e =>
+      e.funder.id === funderId ? { ...e, customFields } : e
+    ));
+    try {
+      await updateSavedFunder(funderId, { custom_fields: customFields });
+    } catch (e) {
+      console.error('Failed to save custom fields:', e);
     }
   };
 
@@ -467,7 +493,7 @@ export default function SavedFunders() {
               </div>
             ) : (
               <div className="space-y-4">
-                {filteredEntries.map(({ funder: f, status, notes }) => {
+                {filteredEntries.map(({ funder: f, status, notes, customFields }) => {
                   const notesOpen = expandedNotes.has(f.id);
                   return (
                     <div key={f.id} className="bg-[#161b22] border border-[#30363d] rounded-2xl p-6">
@@ -536,6 +562,16 @@ export default function SavedFunders() {
                           placeholder="Add notes about this funder, next steps, contacts, deadlines…"
                           value={notesDraft[f.id] ?? notes}
                           onChange={e => handleNotesChange(f.id, e.target.value)}
+                        />
+                      )}
+
+                      {/* FM-IC-CFG-001: custom field values for this funder */}
+                      {notesOpen && funderFieldDefs.length > 0 && (
+                        <CustomFieldsEditor
+                          entity="funder"
+                          definitions={funderFieldDefs}
+                          values={customFields ?? {}}
+                          onChange={(next) => saveCustomFields(f.id, next)}
                         />
                       )}
 
