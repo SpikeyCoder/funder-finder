@@ -50,7 +50,8 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const query = typeof body?.query === 'string' ? body.query.trim() : '';
+    // No organization name is longer; the RPC applies the same cap.
+    const query = typeof body?.query === 'string' ? body.query.trim().slice(0, 200) : '';
     const limit = typeof body?.limit === 'number' ? Math.min(Math.max(body.limit, 1), 50) : 15;
 
     if (!query || query.length < 2) {

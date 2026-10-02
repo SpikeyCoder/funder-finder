@@ -133,7 +133,11 @@ DECLARE
   e_first text;
   v_min_len int;  -- shortest word length that counts as a hit
   v_counted int;  -- how many query words can count
+  v_acronym boolean := false;  -- query was single letters joined into one word
 BEGIN
+  -- No organization name is this long, and every query word costs a string
+  -- search per candidate row: bound the work an anonymous caller can ask for.
+  p_query := left(p_query, 200);
   v_query_lower := lower(trim(p_query));
   -- Leading punctuation means nothing in a name search, and left in a prefix
   -- pattern ("% foundation%") only the common word's trigrams would remain.
@@ -183,10 +187,12 @@ BEGIN
   -- Being alphanumeric, they need no LIKE escaping.
   v_all_words := array_remove(
     regexp_split_to_array(coalesce(v_query_spaced, v_query_lower), '[^[:alnum:]]+'), '');
-  -- A dotted acronym ("y.m.c.a") is one word, not four single letters.
+  -- A dotted acronym ("y.m.c.a", "a b c", "h&m") is one word, not single
+  -- letters.
   IF array_length(v_all_words, 1) >= 2
      AND NOT EXISTS (SELECT 1 FROM unnest(v_all_words) x WHERE length(x) > 1) THEN
     v_all_words := ARRAY[array_to_string(v_all_words, '')];
+    v_acronym := true;
   END IF;
   v_distinctive := ARRAY[]::text[];
   FOREACH w IN ARRAY v_all_words LOOP
@@ -202,13 +208,16 @@ BEGIN
   WHERE length(dw) >= 3;
   v_driver := v_long[1];
 
+  -- Tier-2 prefix bonus keys off the first meaningful word, not a leading
+  -- "the" (which would credit every "THE …" name): a 1-letter word ("c#")
+  -- will do, but a query of only stop words ("the of") leaves it NULL so only
+  -- the whole-query prefixes below earn the bonus.
+  SELECT x INTO e_first FROM unnest(v_all_words) WITH ORDINALITY AS t(x, ord)
+  WHERE NOT (x = ANY(v_stop)) ORDER BY length(x) < 2, ord LIMIT 1;
   IF array_length(v_distinctive, 1) IS NULL THEN
-    -- Only stop words or 1-letter words ("the", "a b"): use the first word.
+    -- Only stop words or 1-letter words: match on the first word.
     v_distinctive := v_all_words[1:1];
   END IF;
-  -- Tier-2 prefix bonus keys off the first meaningful word, not a leading
-  -- "the" (which would credit every "THE …" name).
-  e_first := v_distinctive[1];
 
   -- Word hits ignore 1-letter words ("j paul getty") unless the query has
   -- nothing longer ("c#"); the Tier-4 denominator counts the same words.
@@ -295,13 +304,15 @@ BEGIN
   measured AS (
     -- Per-row values the tiers share, computed once. Word hits are checked
     -- against the name with punctuation removed, matching how the query was
-    -- tokenized ("y.m.c.a" → 'ymca' must hit "Y.M.C.A. OF …").
+    -- tokenized ("y.m.c.a" → 'ymca' must hit "Y.M.C.A. OF …"); for a joined
+    -- acronym, spaces go too ('abc' must hit "A B C CHILD CARE").
     SELECT n.*,
       (SELECT count(*)::numeric FROM unnest(v_all_words) aw
         WHERE length(aw) >= v_min_len AND strpos(n._bare, aw) > 0) AS _hits
     FROM (
       SELECT c.*, lower(trim(c._name)) AS _lname,
-        regexp_replace(lower(c._name), '[^[:alnum:][:space:]]', '', 'g') AS _bare
+        regexp_replace(lower(c._name),
+          CASE WHEN v_acronym THEN '[^[:alnum:]]' ELSE '[^[:alnum:][:space:]]' END, '', 'g') AS _bare
       FROM combined c
     ) n
   ),
