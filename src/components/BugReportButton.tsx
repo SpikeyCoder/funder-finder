@@ -26,7 +26,16 @@ interface TechnicalContext {
 
 // Error's name/message/stack are non-enumerable, so JSON.stringify(err) is
 // "{}". Spell them out so bug reports carry the actual failure.
+// Runs inside our console.error override, so it must never throw itself.
 function formatConsoleArg(arg: unknown, depth = 0): string {
+  try {
+    return formatArg(arg, depth);
+  } catch {
+    return '[unformattable value]';
+  }
+}
+
+function formatArg(arg: unknown, depth: number): string {
   if (typeof arg === 'string') return arg;
   if (arg instanceof Error) {
     const cause = (arg as { cause?: unknown }).cause;
@@ -35,8 +44,8 @@ function formatConsoleArg(arg: unknown, depth = 0): string {
     if (cause instanceof Error && depth < 2) {
       // Skip a wrapper message that just repeats the cause's (reports are
       // capped at 500 chars).
-      const own = cause.message && arg.message.includes(cause.message) ? arg.name : `${arg.name}: ${arg.message}`;
-      return `${own} caused by ${formatConsoleArg(cause, depth + 1)}`;
+      const own = cause.message && String(arg.message).includes(cause.message) ? arg.name : `${arg.name}: ${arg.message}`;
+      return `${own} caused by ${formatArg(cause, depth + 1)}`;
     }
     // Keep only frame-shaped lines: V8 "    at fn (url:1:2)", WebKit/Firefox
     // "fn@url:1:2". Header/message lines vary by engine and may contain '@'.
@@ -51,7 +60,7 @@ function formatConsoleArg(arg: unknown, depth = 0): string {
   try {
     return JSON.stringify(arg) ?? String(arg);
   } catch {
-    return String(arg);
+    return Object.prototype.toString.call(arg);
   }
 }
 

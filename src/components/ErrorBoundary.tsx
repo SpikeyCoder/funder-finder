@@ -46,10 +46,19 @@ export default class ErrorBoundary extends Component<Props, State> {
 
     // For a failed chunk load, reloading pulls a fresh index.html plus valid
     // chunks and almost always recovers — so do it automatically, once. If
-    // we've already tried, it isn't a transient load failure: show the error.
+    // we've already tried, render() shows a manual Reload with the details.
     if (isChunkLoadError(error) && reloadOnceForChunkError()) {
       this.setState({ reloading: true });
+      // If the reload never happens (sandboxed webview, cancelled
+      // beforeunload), fall back to the manual screen instead of hanging.
+      this.reloadFallback = setTimeout(() => this.setState({ reloading: false }), 5000);
     }
+  }
+
+  private reloadFallback?: ReturnType<typeof setTimeout>;
+
+  componentWillUnmount() {
+    clearTimeout(this.reloadFallback);
   }
 
   handleTryAgain = () => {
@@ -74,7 +83,7 @@ export default class ErrorBoundary extends Component<Props, State> {
             </div>
             <h1 className="text-2xl font-bold text-white mb-3">{copy.title}</h1>
             <p className="text-gray-400 mb-6">{copy.body}</p>
-            {mode === 'error' && shownError && (
+            {mode !== 'reloading' && shownError && (
               <details className="mb-6 text-left bg-[#161b22] border border-[#30363d] rounded-lg p-4">
                 <summary className="cursor-pointer text-sm text-gray-400 font-medium">
                   Error details

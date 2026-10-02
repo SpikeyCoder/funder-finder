@@ -13,31 +13,41 @@ const CHUNK_ERROR_MESSAGE = new RegExp(
     'importing binding name', // Safari link failure
     'does not provide an export named', // Chrome link failure
     'import not found', // Firefox link failure
-    'unable to preload css', // Vite CSS preload
   ].join('|'),
   'i',
 );
 
+// Every engine raises these as a TypeError (fetch) or SyntaxError (link);
+// requiring that keeps an app error that merely mentions, say, "import not
+// found" from being mistaken for one. Vite's CSS preload failure is a plain
+// Error with its own fixed message.
 export function isChunkLoadError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   const { name = '', message = '' } = error as { name?: string; message?: string };
-  return name === 'ChunkLoadError' || CHUNK_ERROR_MESSAGE.test(message);
+  if (name === 'ChunkLoadError' || /^Unable to preload CSS for /.test(message)) return true;
+  return (name === 'TypeError' || name === 'SyntaxError') && CHUNK_ERROR_MESSAGE.test(message);
 }
 
-// path -> time of our last automatic reload for it. One reload per path per
-// window: a chunk that can never load gets exactly one reload rather than a
-// loop (Back/Forward included), while a later deploy can still auto-recover.
+// Reloads are tracked per top-level section ("/funder" for /funder/123), so a
+// chunk that keeps failing doesn't earn a fresh reload for every id.
+export function reloadKey(pathname: string): string {
+  return '/' + (pathname.split('/')[1] ?? '');
+}
+
+// section -> time of our last automatic reload for it. One reload per section
+// per window: a chunk that can never load gets exactly one reload rather than
+// a loop (Back/Forward included), while a later deploy can still auto-recover.
 const CHUNK_RELOAD_KEY = 'ff_chunk_reloads';
 export const CHUNK_RELOAD_WINDOW_MS = 10 * 60 * 1000;
 
 // Reloading pulls a fresh index.html plus valid chunks and almost always
 // recovers. Returns true if a reload was started; false if we already reloaded
-// for this path within the window, or sessionStorage is unavailable — the
+// for this section within the window, or sessionStorage is unavailable — the
 // caller should then show a manual "Reload" screen. Without storage there's no
 // way to remember that we already reloaded, so we don't auto-reload at all
 // rather than risk a loop.
 export function reloadOnceForChunkError(now = Date.now()): boolean {
-  const path = window.location.pathname;
+  const path = reloadKey(window.location.pathname);
   try {
     let reloads: Record<string, number> = {};
     try {

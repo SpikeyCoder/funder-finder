@@ -11,7 +11,7 @@ const { outputText } = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 },
 });
 const mod = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);
-const { isChunkLoadError, reloadOnceForChunkError, CHUNK_RELOAD_WINDOW_MS } = mod;
+const { isChunkLoadError, reloadKey, reloadOnceForChunkError, CHUNK_RELOAD_WINDOW_MS } = mod;
 
 // Minimal browser globals.
 let store;
@@ -36,10 +36,11 @@ test('recognises each engine’s chunk-load wording', () => {
     "Importing binding name 'Dt' is not found.",                                   // Safari (link) — #214
     "The requested module './index-1.js' does not provide an export named 'Dt'",  // Chrome (link)
     'import not found: Dt',                                                        // Firefox (link)
-    'Unable to preload CSS for /assets/index.css',                                 // Vite
   ]) {
-    assert.equal(isChunkLoadError(new TypeError(message)), true, message);
+    const ErrorType = /binding|export named|import not found/.test(message) ? SyntaxError : TypeError;
+    assert.equal(isChunkLoadError(new ErrorType(message)), true, message);
   }
+  assert.equal(isChunkLoadError(new Error('Unable to preload CSS for /assets/index.css')), true); // Vite
   assert.equal(isChunkLoadError(Object.assign(new Error('x'), { name: 'ChunkLoadError' })), true);
 });
 
@@ -47,6 +48,23 @@ test('does not treat ordinary errors as chunk-load errors', () => {
   assert.equal(isChunkLoadError(new TypeError("Cannot read properties of undefined (reading 'x')")), false);
   assert.equal(isChunkLoadError(null), false);
   assert.equal(isChunkLoadError('Importing binding name'), false); // not an error object
+  // App errors that merely mention the words aren't load failures.
+  assert.equal(isChunkLoadError(new Error('Import not found')), false);
+  assert.equal(isChunkLoadError(new RangeError('dynamically imported module limit')), false);
+});
+
+test('reloads are keyed by top-level section', () => {
+  assert.equal(reloadKey('/funder/123'), '/funder');
+  assert.equal(reloadKey('/projects/9/matches'), '/projects');
+  assert.equal(reloadKey('/'), '/');
+});
+
+test('a section that keeps failing gets one reload, not one per id', () => {
+  window.location.pathname = '/funder/1';
+  assert.equal(reloadOnceForChunkError(1_000_000), true);
+  window.location.pathname = '/funder/2';
+  assert.equal(reloadOnceForChunkError(1_001_000), false);
+  assert.equal(reloads, 1);
 });
 
 test('reloads once per path, then refuses within the window (no loop)', () => {

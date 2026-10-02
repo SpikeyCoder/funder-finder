@@ -136,6 +136,8 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
           value={query}
           onChange={e => { dismissedRef.current = false; setQuery(e.target.value); }}
           onFocus={() => { dismissedRef.current = false; if (status !== 'idle') setShowDropdown(true); }}
+          // Clicking an already-focused input doesn't fire focus; reopen too.
+          onMouseDown={() => { dismissedRef.current = false; if (status !== 'idle') setShowDropdown(true); }}
           onKeyDown={handleKeyDown}
           autoFocus={autoFocus}
           placeholder={placeholder}
@@ -199,7 +201,9 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
             <button
               key={`${r.entity_type}-${r.id}`}
               onClick={() => handleSelect(r)}
-              className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[#21262d] transition-colors ${
+              // These rows belong to the previous query while a new one loads.
+              disabled={loading}
+              className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[#21262d] transition-colors disabled:opacity-50 disabled:cursor-default ${
                 idx === selectedIdx ? 'bg-[#21262d]' : ''
               } ${idx > 0 ? 'border-t border-[#30363d]/50' : ''}`}
             >

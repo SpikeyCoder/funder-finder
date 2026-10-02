@@ -115,7 +115,7 @@ export async function searchOrganizations(
 
   const data = await res.json();
   // A 200 without a results array is a failure, not "no matches".
-  if (!Array.isArray(data.results) || data.error) {
+  if (!Array.isArray(data.results)) {
     throw new Error(data.error || 'Unexpected search response');
   }
   return data.results;
