@@ -38,7 +38,9 @@ export function reloadKey(pathname: string): string {
 // per window: a chunk that can never load gets exactly one reload rather than
 // a loop (Back/Forward included), while a later deploy can still auto-recover.
 const CHUNK_RELOAD_KEY = 'ff_chunk_reloads';
-export const CHUNK_RELOAD_WINDOW_MS = 10 * 60 * 1000;
+// Far longer than a reload takes (so no loop), short enough that a second
+// deploy shortly after still auto-recovers.
+export const CHUNK_RELOAD_WINDOW_MS = 2 * 60 * 1000;
 
 // Reloading pulls a fresh index.html plus valid chunks and almost always
 // recovers. Returns true if a reload was started; false if we already reloaded

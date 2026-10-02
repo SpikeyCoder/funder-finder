@@ -138,6 +138,11 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
           onFocus={() => { dismissedRef.current = false; if (status !== 'idle') setShowDropdown(true); }}
           // Clicking an already-focused input doesn't fire focus; reopen too.
           onMouseDown={() => { dismissedRef.current = false; if (status !== 'idle') setShowDropdown(true); }}
+          // Tabbing away counts as dismissing, so a late response doesn't open
+          // the panel over whatever has focus now (moving into it is fine).
+          onBlur={(e) => {
+            if (!dropdownRef.current?.contains(e.relatedTarget as Node | null)) dismissedRef.current = true;
+          }}
           onKeyDown={handleKeyDown}
           autoFocus={autoFocus}
           placeholder={placeholder}
@@ -180,9 +185,12 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
             <div className="flex items-start gap-3 px-4 py-4 text-left">
               <AlertCircle size={16} className="text-red-400 shrink-0 mt-0.5" />
               <div className="flex-1">
-                <p className="text-sm text-white">Search is temporarily unavailable.</p>
+                <p className="text-sm text-white">
+                  Search for &ldquo;{searchedQuery}&rdquo; is temporarily unavailable.
+                </p>
                 <button
                   type="button"
+                  disabled={loading}
                   onClick={() => {
                     // Clear the error while the retry runs; the input's spinner
                     // shows progress, and focus there lets the result reopen.
@@ -190,7 +198,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
                     inputRef.current?.focus();
                     setRetryNonce((n) => n + 1);
                   }}
-                  className="text-xs text-blue-400 hover:text-blue-300 mt-1 underline"
+                  className="text-xs text-blue-400 hover:text-blue-300 mt-1 underline disabled:opacity-50 disabled:no-underline"
                 >
                   Try again
                 </button>
