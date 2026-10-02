@@ -1,7 +1,8 @@
 -- Rollback for 20261002120000_search_organizations_use_trgm_index.sql.
 -- Kept outside supabase/migrations/ so `supabase db push` never applies it.
 -- Restores the previous body (from 20260326100000_fix_recipients_showing_as_funders.sql),
--- whose lower(name) ILIKE filters sequentially scan funders and recipient_organizations.
+-- whose lower(name) ILIKE filters sequentially scan funders and recipient_organizations,
+-- and drops the plan_cache_mode setting the forward migration added.
 --
 -- Apply manually: psql "$DATABASE_URL" -f supabase/rollbacks/20261002120000_search_organizations_use_trgm_index.down.sql
 
@@ -136,3 +137,6 @@ BEGIN
   LIMIT p_limit;
 END;
 $function$;
+
+-- Explicit in case CREATE OR REPLACE left the forward migration's SET in place.
+ALTER FUNCTION public.search_organizations(text, integer) RESET plan_cache_mode;
