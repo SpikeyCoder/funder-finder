@@ -1,8 +1,11 @@
 -- Rollback for 20261002120000_search_organizations_use_trgm_index.sql.
 -- Kept outside supabase/migrations/ so `supabase db push` never applies it.
 -- Restores the previous body (from 20260326100000_fix_recipients_showing_as_funders.sql),
--- whose lower(name) ILIKE filters sequentially scan funders and recipient_organizations,
--- and drops the plan_cache_mode setting the forward migration added.
+-- whose lower(name) ILIKE filters sequentially scan funders and recipient_organizations.
+-- CREATE OR REPLACE also replaces the SET list, which drops the forward
+-- migration's plan_cache_mode / max_parallel_workers_per_gather /
+-- synchronize_seqscans settings. The pg_trgm extension and trigram indexes are
+-- left in place: they existed before the forward migration.
 --
 -- Apply manually: psql "$DATABASE_URL" -f supabase/rollbacks/20261002120000_search_organizations_use_trgm_index.down.sql
 
@@ -137,6 +140,3 @@ BEGIN
   LIMIT p_limit;
 END;
 $function$;
-
--- Explicit in case CREATE OR REPLACE left the forward migration's SET in place.
-ALTER FUNCTION public.search_organizations(text, integer) RESET plan_cache_mode;
