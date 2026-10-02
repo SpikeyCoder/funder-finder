@@ -9,15 +9,21 @@ import ProductTour from './components/ProductTour';
 import BugReportButton from './components/BugReportButton';
 import ThemeToggle from './components/ThemeToggle';
 import ErrorBoundary from './components/ErrorBoundary';
-import { asChunkLoadError } from './lib/chunkReload';
+import { asChunkLoadError, clearChunkReloadFlag } from './lib/chunkReload';
 
 // Must match the key used in AuthContext.storePendingFunder
 const REDIRECT_AFTER_LOGIN_KEY = 'ff_redirect_after_login';
 
 // A route chunk that fails to download or link is tagged as a chunk-load
-// error so the ErrorBoundary reloads once instead of showing a dead end.
+// error so the ErrorBoundary reloads once instead of showing a dead end. A
+// successful load re-arms that one automatic reload.
 function lazyRoute<T extends ComponentType<any>>(factory: () => Promise<{ default: T }>) {
-  return lazy(() => factory().catch((error: unknown) => { throw asChunkLoadError(error); }));
+  return lazy(() =>
+    factory().then(
+      (module) => { clearChunkReloadFlag(); return module; },
+      (error: unknown) => { throw asChunkLoadError(error); },
+    ),
+  );
 }
 
 const Landing = lazyRoute(() => import('./pages/Landing'));

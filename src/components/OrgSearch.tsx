@@ -19,6 +19,8 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
   // Outcome of the latest completed search, so a miss or a failure is shown
   // instead of the dropdown silently staying closed.
   const [status, setStatus] = useState<'idle' | 'results' | 'empty' | 'error'>('idle');
+  // The query `status` describes, which lags `query` while a search is pending.
+  const [searchedQuery, setSearchedQuery] = useState('');
   const [retryNonce, setRetryNonce] = useState(0);
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState(-1);
@@ -43,20 +45,28 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
     setLoading(true);
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
+      const searched = query.trim();
       try {
-        const data = await searchOrganizations(query.trim());
+        const data = await searchOrganizations(searched);
         if (requestId !== requestIdRef.current) return;
+        setSearchedQuery(searched);
         setResults(data);
         setStatus(data.length > 0 ? 'results' : 'empty');
         setSelectedIdx(-1);
       } catch {
         if (requestId !== requestIdRef.current) return;
+        setSearchedQuery(searched);
         setResults([]);
         setStatus('error');
       } finally {
         if (requestId === requestIdRef.current) {
           setLoading(false);
-          setShowDropdown(true);
+          // Only open for someone still using the search box: a slow response
+          // shouldn't pop the panel back up after Escape or an outside click.
+          const active = document.activeElement;
+          if (active === inputRef.current || dropdownRef.current?.contains(active)) {
+            setShowDropdown(true);
+          }
         }
       }
     }, 300);
@@ -126,7 +136,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
         )}
       </div>
 
-      {showDropdown && (
+      {showDropdown && status !== 'idle' && (
         <div
           ref={dropdownRef}
           className="absolute z-50 w-full mt-2 bg-[#161b22] border border-[#30363d] rounded-xl shadow-xl overflow-hidden max-h-80 overflow-y-auto"
@@ -135,7 +145,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
             <div role="status" className="flex items-start gap-3 px-4 py-4 text-left">
               <SearchX size={16} className="text-gray-400 shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm text-white">No organizations match &ldquo;{query.trim()}&rdquo;</p>
+                <p className="text-sm text-white">No organizations match &ldquo;{searchedQuery}&rdquo;</p>
                 <p className="text-xs text-gray-400 mt-1">
                   Try a shorter name, a different spelling, or search by EIN.
                 </p>
@@ -149,7 +159,13 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
                 <p className="text-sm text-white">Search is temporarily unavailable.</p>
                 <button
                   type="button"
-                  onClick={() => setRetryNonce((n) => n + 1)}
+                  onClick={() => {
+                    // Clear the error while the retry runs; the input's spinner
+                    // shows progress, and focus there lets the result reopen.
+                    setStatus('idle');
+                    inputRef.current?.focus();
+                    setRetryNonce((n) => n + 1);
+                  }}
                   className="text-xs text-blue-400 hover:text-blue-300 mt-1 underline"
                 >
                   Try again

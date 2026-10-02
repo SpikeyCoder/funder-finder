@@ -26,16 +26,21 @@ interface TechnicalContext {
 
 // Error's name/message/stack are non-enumerable, so JSON.stringify(err) is
 // "{}". Spell them out so bug reports carry the actual failure.
-function formatConsoleArg(arg: unknown): string {
+function formatConsoleArg(arg: unknown, depth = 0): string {
   if (typeof arg === 'string') return arg;
   if (arg instanceof Error) {
-    // V8 prefixes the stack with "Name: message"; WebKit doesn't.
-    const frames = arg.stack
-      ?.split('\n')
-      .filter((l) => l.trim() && !l.startsWith(`${arg.name}:`))
+    // Keep only frame lines: V8 writes "    at fn (url)", WebKit and Firefox
+    // write "fn@url". Header and message lines vary by engine (and by whether
+    // `name` was set after construction), so match frames instead.
+    const frames = (arg.stack ?? '')
+      .split('\n')
+      .filter((l) => /^\s*at\s|@/.test(l))
       .slice(0, 3)
+      .map((l) => l.trim())
       .join(' | ');
-    return `${arg.name}: ${arg.message}${frames ? ` [${frames}]` : ''}`;
+    const cause = (arg as { cause?: unknown }).cause;
+    const causeText = cause !== undefined && depth < 2 ? ` caused by ${formatConsoleArg(cause, depth + 1)}` : '';
+    return `${arg.name}: ${arg.message}${frames ? ` [${frames}]` : ''}${causeText}`;
   }
   try {
     return JSON.stringify(arg) ?? String(arg);
@@ -153,7 +158,7 @@ export default function BugReportButton() {
 
     console.error = function (...args: unknown[]) {
       originalError.apply(console, args);
-      const msg = args.map(formatConsoleArg).join(' ');
+      const msg = args.map((a) => formatConsoleArg(a)).join(' ');
       captureError(msg);
     };
 
