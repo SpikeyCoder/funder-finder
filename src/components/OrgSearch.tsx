@@ -26,7 +26,6 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
   const [selectedIdx, setSelectedIdx] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
   // Set when the user closes the dropdown (Escape / outside click) so a search
   // still in flight doesn't pop it back open; cleared when they type or refocus.
   const dismissedRef = useRef(false);
@@ -197,7 +196,6 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
 
       {showDropdown && status !== 'idle' && (
         <div
-          ref={dropdownRef}
           className="absolute z-50 w-full mt-2 bg-[#161b22] border border-[#30363d] rounded-xl shadow-xl overflow-hidden max-h-80 overflow-y-auto"
         >
           {status === 'empty' && (

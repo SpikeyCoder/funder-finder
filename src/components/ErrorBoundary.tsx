@@ -55,11 +55,6 @@ export default class ErrorBoundary extends Component<Props, State> {
     }
   }
 
-  handleTryAgain = () => {
-    this.setState({ hasError: false, error: null, reloading: false });
-    window.location.reload();
-  };
-
   render() {
     if (this.state.hasError) {
       const shownError = this.state.error;
@@ -88,9 +83,9 @@ export default class ErrorBoundary extends Component<Props, State> {
               </details>
             )}
             <button
-              // For a chunk error just reload: clearing the error first would
-              // re-render the failed lazy route and throw (and log) again.
-              onClick={mode === 'error' ? this.handleTryAgain : () => window.location.reload()}
+              // Just reload: clearing the error first would re-render the
+              // failed subtree and throw (and log) again before navigating.
+              onClick={() => window.location.reload()}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
             >
               {copy.button}
