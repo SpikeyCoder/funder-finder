@@ -118,8 +118,10 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
 
   // The form opens below the search box rather than inside the dropdown, so
   // closing or reopening the dropdown doesn't wipe what was typed into it.
+  // Prefilled from what's in the box now, which may be newer than the panel
+  // the link was clicked on.
   const openRequestForm = () => {
-    setRequestName(searchedQuery);
+    setRequestName(trimmedQuery);
     dismissedRef.current = true;
     setShowDropdown(false);
   };

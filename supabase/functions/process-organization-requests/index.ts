@@ -6,10 +6,12 @@
  * organization up in IRS data (ProPublica Nonprofit Explorer) and resolves it:
  *
  *   already_listed  EIN already in funders / recipient_organizations
- *   added           public charity matched by EIN or a near-exact name;
- *                   inserted into recipient_organizations so search finds it
- *   needs_review    private foundation (needs the 990-PF funder pipeline), or
- *                   only approximate name matches — kept in `candidates`
+ *   added           501(c)(3) public charity matched by EIN or a near-exact
+ *                   name; inserted into recipient_organizations so search
+ *                   finds it
+ *   needs_review    private foundation (needs the 990-PF funder pipeline),
+ *                   another kind of exempt org (501(c)(4), (c)(6), …), or only
+ *                   approximate name matches — kept in `candidates`
  *   not_found       nothing in IRS data
  *   failed          lookup errored MAX_ATTEMPTS times
  *
@@ -41,6 +43,9 @@ const BATCH_SIZE = 20;
 const MAX_ATTEMPTS = 3;
 // A claim older than this is from a run that died; the row may be retried.
 const CLAIM_TTL_MS = 10 * 60 * 1000;
+// Every outbound call is bounded, so one stalled lookup can't hold the
+// sequential batch until the runtime kills it.
+const FETCH_TIMEOUT_MS = 15_000;
 // IRS foundation codes 02/03/04 are private foundations (990-PF filers).
 const PRIVATE_FOUNDATION_CODES = new Set([2, 3, 4]);
 
@@ -104,6 +109,7 @@ export function pickExactMatch(query: string, state: string | null, results: Irs
 
 function rest(path: string, init: RequestInit = {}): Promise<Response> {
   return fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     ...init,
     headers: {
       apikey: SERVICE_KEY,
@@ -123,6 +129,7 @@ async function restJson<T>(path: string, init: RequestInit = {}): Promise<T> {
 async function propublica(path: string): Promise<Record<string, unknown> | null> {
   const res = await fetch(`${PROPUBLICA}${path}`, {
     headers: { "User-Agent": "FunderMatch (support@fundermatch.org)" },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`ProPublica ${res.status}`);
@@ -139,11 +146,29 @@ function toIrsOrg(o: Record<string, unknown>): IrsOrg {
   };
 }
 
-async function irsDetail(ein: string): Promise<{ org: IrsOrg; foundationCode: number | null } | null> {
+interface IrsDetail {
+  org: IrsOrg;
+  foundationCode: number | null;
+  subsectionCode: number | null; // 3 = 501(c)(3)
+}
+
+async function irsDetail(ein: string): Promise<IrsDetail | null> {
   const d = await propublica(`/organizations/${ein}.json`);
   const o = d?.organization as Record<string, unknown> | undefined;
   if (!o) return null;
-  return { org: toIrsOrg(o), foundationCode: typeof o.foundation_code === "number" ? o.foundation_code : null };
+  const num = (v: unknown) => (typeof v === "number" ? v : null);
+  return { org: toIrsOrg(o), foundationCode: num(o.foundation_code), subsectionCode: num(o.subsection_code) };
+}
+
+/**
+ * Why an IRS organization can't be added automatically as a recipient, or
+ * null if it can: only a 501(c)(3) public charity (known foundation code, not
+ * a private foundation) is added without a person looking at it.
+ */
+export function reviewReason(d: Pick<IrsDetail, "foundationCode" | "subsectionCode">): string | null {
+  if (d.foundationCode !== null && PRIVATE_FOUNDATION_CODES.has(d.foundationCode)) return "private foundation";
+  if (d.subsectionCode !== 3 || d.foundationCode === null) return "not a 501(c)(3) public charity";
+  return null;
 }
 
 type Existing = { entityType: "funder" | "recipient"; id: string; name: string };
@@ -206,9 +231,8 @@ async function resolve(row: QueueRow): Promise<Outcome> {
   const existing = row.ein ? null : await existingEntity(detail.org.ein);
   if (existing) return listed(existing, detail.org);
 
-  if (detail.foundationCode !== null && PRIVATE_FOUNDATION_CODES.has(detail.foundationCode)) {
-    return { status: "needs_review", reason: "private foundation", candidates: [detail.org] };
-  }
+  const reason = reviewReason(detail);
+  if (reason) return { status: "needs_review", reason, candidates: [detail.org] };
 
   const inserted = await restJson<{ id: string }[]>("recipient_organizations", {
     method: "POST",
@@ -216,7 +240,7 @@ async function resolve(row: QueueRow): Promise<Outcome> {
     body: JSON.stringify({
       ein: detail.org.ein,
       name: detail.org.name,
-      name_normalized: detail.org.name.toLowerCase(),
+      name_normalized: normalizeName(detail.org.name),
       primary_city: detail.org.city,
       primary_state: detail.org.state,
       ntee_code: detail.org.ntee_code,
@@ -269,6 +293,7 @@ async function sendEmail(to: string, subject: string, text: string): Promise<boo
   if (!RESEND_API_KEY) return false;
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       from: "FunderMatch <noreply@fundermatch.org>",
@@ -313,7 +338,10 @@ async function createReviewCard(card: { name: string; desc: string }): Promise<b
   const idList = Deno.env.get("TRELLO_LIST_ID");
   if (!key || !token || !idList) return false;
   const params = new URLSearchParams({ key, token, idList, name: card.name, desc: card.desc, pos: "top" });
-  const res = await fetch(`https://api.trello.com/1/cards?${params}`, { method: "POST" });
+  const res = await fetch(`https://api.trello.com/1/cards?${params}`, {
+    method: "POST",
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
   if (!res.ok) console.error("Trello card failed:", res.status, await res.text());
   return res.ok;
 }
@@ -346,16 +374,18 @@ async function patchRow(id: string, patch: Record<string, unknown>): Promise<voi
 }
 
 // Take the row for this run, unless another run holds a live claim on it
-// (overlapping cron ticks, or a manual invocation alongside one).
-async function claimRow(id: string, now: Date): Promise<boolean> {
+// (overlapping cron ticks, or a manual invocation alongside one). The claim
+// counts as an attempt, so a row whose run is killed mid-lookup (no catch
+// runs) still reaches MAX_ATTEMPTS instead of being retried forever.
+async function claimRow(row: QueueRow, now: Date): Promise<boolean> {
   const stale = new Date(now.getTime() - CLAIM_TTL_MS).toISOString();
   const res = await rest(
-    `organization_requests?id=eq.${id}&status=eq.pending` +
+    `organization_requests?id=eq.${row.id}&status=eq.pending&attempts=eq.${row.attempts}` +
       `&or=(claimed_at.is.null,claimed_at.lt.${encodeURIComponent(stale)})&select=id`,
     {
       method: "PATCH",
       headers: { Prefer: "return=representation" },
-      body: JSON.stringify({ claimed_at: now.toISOString() }),
+      body: JSON.stringify({ claimed_at: now.toISOString(), attempts: row.attempts + 1 }),
     },
   );
   if (!res.ok) throw new Error(`REST organization_requests claim ${res.status}: ${await res.text()}`);
@@ -365,7 +395,19 @@ async function claimRow(id: string, now: Date): Promise<boolean> {
 async function processRow(row: QueueRow): Promise<string> {
   const started = new Date();
   const now = started.toISOString();
-  if (!(await claimRow(row.id, started))) return "skipped";
+  try {
+    if (!(await claimRow(row, started))) return "skipped";
+  } catch (err) {
+    // Leave it for the next run; don't let one row end the batch.
+    console.error(`organization request ${row.id}: claim failed:`, err);
+    return "retry";
+  }
+  if (row.attempts >= MAX_ATTEMPTS) {
+    // Earlier runs claimed it and never finished (e.g. killed mid-lookup).
+    await patchRow(row.id, { status: "failed", processed_at: now, last_error: "gave up: earlier attempts never finished" })
+      .catch((e) => console.error(`organization request ${row.id}: could not mark it failed:`, e));
+    return "failed";
+  }
   let outcome: Outcome;
   try {
     outcome = await resolve(row);

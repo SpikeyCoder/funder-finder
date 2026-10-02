@@ -10,6 +10,7 @@ import {
   pickExactMatch,
   type QueueRow,
   reviewCardFor,
+  reviewReason,
 } from "./index.ts";
 
 const org = (name: string, state: string | null = "WA", ein = "123456789"): IrsOrg =>
@@ -88,4 +89,13 @@ Deno.test("reviewCardFor lists candidates with ProPublica links", () => {
   assertEquals(card.name, "[ORG REQUEST] Students Feeding Students");
   assertEquals(card.desc.includes("https://projects.propublica.org/nonprofits/organizations/863739484"), true);
   assertEquals(card.desc.includes("organization_requests.id = r1"), true);
+});
+
+Deno.test("reviewReason auto-adds only 501(c)(3) public charities", () => {
+  assertEquals(reviewReason({ subsectionCode: 3, foundationCode: 15 }), null);
+  assertEquals(reviewReason({ subsectionCode: 3, foundationCode: 4 }), "private foundation");
+  assertEquals(reviewReason({ subsectionCode: 4, foundationCode: 0 }), "not a 501(c)(3) public charity");
+  assertEquals(reviewReason({ subsectionCode: 6, foundationCode: null }), "not a 501(c)(3) public charity");
+  assertEquals(reviewReason({ subsectionCode: 3, foundationCode: null }), "not a 501(c)(3) public charity");
+  assertEquals(reviewReason({ subsectionCode: null, foundationCode: 15 }), "not a 501(c)(3) public charity");
 });

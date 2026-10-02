@@ -4,7 +4,7 @@ import { validate } from "./index.ts";
 
 Deno.test("validate cleans and accepts a full request", () => {
   assertEquals(
-    validate({ name: "  Students\tFeeding   Students ", ein: "86-3739484", state: "hi", email: " a@b.org " }),
+    validate({ name: "  Students\tFeeding   Students ", ein: "86-3739484", state: "hi", email: " A@B.org " }),
     { query: "Students Feeding Students", ein: "863739484", state: "HI", requester_email: "a@b.org" },
   );
 });
