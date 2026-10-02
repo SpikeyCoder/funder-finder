@@ -1,6 +1,6 @@
 import { Component, ReactNode } from 'react';
 import { AlertCircle } from 'lucide-react';
-import { isChunkLoadError, looksLikeLoadFailure, reloadOnceForChunkError, underlyingError } from '../lib/chunkReload';
+import { isChunkLoadError, reloadOnceForChunkError } from '../lib/chunkReload';
 
 interface Props {
   children: ReactNode;
@@ -59,13 +59,12 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.hasError) {
-      const shownError = this.state.error && underlyingError(this.state.error);
-      // While the automatic reload runs: "reloading". Afterwards, a failure the
-      // browser attributes to loading code still gets the "reload" screen
-      // (also when sessionStorage is blocked and we couldn't auto-reload);
-      // anything else — e.g. a page module that throws while loading — shows
-      // its real error.
-      const mode = this.state.reloading ? 'reloading' : looksLikeLoadFailure(shownError) ? 'reload' : 'error';
+      const shownError = this.state.error;
+      // While the automatic reload runs: "reloading". Afterwards, a chunk-load
+      // failure still gets the manual "reload" screen (also when
+      // sessionStorage is blocked and we couldn't auto-reload); anything else
+      // shows its real error.
+      const mode = this.state.reloading ? 'reloading' : isChunkLoadError(shownError) ? 'reload' : 'error';
       const copy = SCREEN_COPY[mode];
       return (
         <div className="min-h-screen bg-[#0d1117] flex items-center justify-center px-4">

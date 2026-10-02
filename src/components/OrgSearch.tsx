@@ -30,8 +30,14 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
   // still in flight doesn't pop it back open; cleared when they type or refocus.
   const dismissedRef = useRef(false);
 
+  // Whitespace-only edits shouldn't abort and resend an identical search.
+  const trimmedQuery = query.trim();
+
   useEffect(() => {
-    if (query.trim().length < 2) {
+    // The highlighted row belongs to the previous results.
+    setSelectedIdx(-1);
+
+    if (trimmedQuery.length < 2) {
       setResults([]);
       setStatus('idle');
       setLoading(false);
@@ -44,14 +50,13 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
     // component unmounts, so a stale response never lands.
     const controller = new AbortController();
     const timer = setTimeout(async () => {
-      const searched = query.trim();
+      const searched = trimmedQuery;
       try {
         const data = await searchOrganizations(searched, 15, controller.signal);
         if (controller.signal.aborted) return;
         setSearchedQuery(searched);
         setResults(data);
         setStatus(data.length > 0 ? 'results' : 'empty');
-        setSelectedIdx(-1);
       } catch {
         if (controller.signal.aborted) return;
         setSearchedQuery(searched);
@@ -71,7 +76,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
       clearTimeout(timer);
       controller.abort();
     };
-  }, [query, retryNonce]);
+  }, [trimmedQuery, retryNonce]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -79,6 +84,9 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
     const handler = (e: MouseEvent) => {
       const target = e.target as Node;
       if (inputRef.current?.contains(target) || dropdownRef.current?.contains(target)) return;
+      // A mousedown on the page scrollbar targets <html> and doesn't blur the
+      // input; it isn't a dismissal.
+      if (target === document.documentElement) return;
       dismissedRef.current = true;
       setShowDropdown(false);
     };
@@ -103,7 +111,8 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
       setShowDropdown(false);
       return;
     }
-    if (!showDropdown) return;
+    // While a new search is pending, the visible rows are the old query's.
+    if (!showDropdown || loading) return;
     if (status !== 'results') return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -141,9 +150,12 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
       {/* Persistent live region: screen readers announce changes inside a
           region that already exists, not one mounted along with its text. */}
       <div role="status" aria-live="polite" className="sr-only">
+        {/* Includes the query so a new search with the same count is still
+            announced. */}
         {status === 'empty' && `No organizations match ${searchedQuery}`}
-        {status === 'error' && 'Search is temporarily unavailable.'}
-        {status === 'results' && `${results.length} organization${results.length === 1 ? '' : 's'} found`}
+        {status === 'error' && `Search for ${searchedQuery} is temporarily unavailable.`}
+        {status === 'results' &&
+          `${results.length} organization${results.length === 1 ? '' : 's'} found for ${searchedQuery}`}
       </div>
 
       {showDropdown && status !== 'idle' && (
