@@ -22,7 +22,7 @@
 --        not_found      — no IRS record matches
 --        failed         — the lookup errored 3 times
 --   4. If the requester left an email and RESEND_API_KEY is set, they're told
---      the outcome.
+--      the outcome (for needs_review: that a person is reviewing it).
 --
 -- Access: RLS on with no policies, and no grants to anon/authenticated — only
 -- the service role (the two Edge Functions) touches this table.
@@ -31,6 +31,9 @@
 -- cleared 30 days after a request is processed; rows are deleted after 180
 -- days. Scheduled at 10:35 UTC, after the existing 10:xx purge jobs.
 -- ─────────────────────────────────────────────────────────────────────────────
+
+-- The processor is invoked over HTTP from pg_cron (below).
+CREATE EXTENSION IF NOT EXISTS pg_net WITH SCHEMA extensions;
 
 CREATE TABLE IF NOT EXISTS public.organization_requests (
   id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -53,9 +56,12 @@ CREATE TABLE IF NOT EXISTS public.organization_requests (
   notified_at          timestamptz
 );
 
--- One open request per organization: a repeat submission joins the pending one.
+-- One open request per organization and requester: a repeat submission joins
+-- the pending one, but a second person asking for the same organization gets
+-- their own row so they're notified too (the later one resolves as
+-- already_listed once the first adds it).
 CREATE UNIQUE INDEX IF NOT EXISTS organization_requests_pending_dedupe
-  ON public.organization_requests (lower(query), coalesce(ein, ''))
+  ON public.organization_requests (lower(query), coalesce(ein, ''), coalesce(lower(requester_email), ''))
   WHERE status = 'pending';
 
 CREATE INDEX IF NOT EXISTS organization_requests_status_created

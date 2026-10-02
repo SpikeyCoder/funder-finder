@@ -136,20 +136,45 @@ async function irsDetail(ein: string): Promise<{ org: IrsOrg; foundationCode: nu
   return { org: toIrsOrg(o), foundationCode: typeof o.foundation_code === "number" ? o.foundation_code : null };
 }
 
-async function existingEntity(ein: string): Promise<{ entityType: "funder" | "recipient"; id: string } | null> {
+type Existing = { entityType: "funder" | "recipient"; id: string; name: string };
+
+async function existingEntity(ein: string): Promise<Existing | null> {
   // funders.id / recipient_organizations.ein aren't consistently zero-padded.
   const variants = [...new Set([ein, ein.replace(/^0+/, "")])].map((v) => `"${v}"`).join(",");
-  const recips = await restJson<{ id: string }[]>(
-    `recipient_organizations?ein=in.(${variants})&select=id&limit=1`,
+  const recips = await restJson<{ id: string; name: string }[]>(
+    `recipient_organizations?ein=in.(${variants})&select=id,name&limit=1`,
   );
-  if (recips.length) return { entityType: "recipient", id: recips[0].id };
-  const funders = await restJson<{ id: string }[]>(`funders?id=in.(${variants})&select=id&limit=1`);
-  if (funders.length) return { entityType: "funder", id: funders[0].id };
+  if (recips.length) return { entityType: "recipient", ...recips[0] };
+  // Only a funder search can show counts as listed (search_organizations
+  // keeps NTEE T-code grantmakers and 990-PF filers).
+  const funders = await restJson<{ id: string; name: string; ntee_code: string | null }[]>(
+    `funders?id=in.(${variants})&select=id,name,ntee_code&limit=1`,
+  );
+  if (funders.length) {
+    const f = funders[0];
+    const searchable = f.ntee_code?.startsWith("T") ||
+      (await restJson<unknown[]>(`foundation_filings?foundation_id=eq.${encodeURIComponent(f.id)}&select=foundation_id&limit=1`))
+        .length > 0;
+    if (searchable) return { entityType: "funder", id: f.id, name: f.name };
+  }
   return null;
+}
+
+function listed(existing: Existing, org: IrsOrg): Outcome {
+  return { status: "already_listed", entityType: existing.entityType, id: existing.id, org };
 }
 
 async function resolve(row: QueueRow): Promise<Outcome> {
   let ein = row.ein;
+
+  // An EIN we already list needs no IRS lookup (and ProPublica may not have
+  // it: a revoked or very new filer).
+  if (ein) {
+    const existing = await existingEntity(padEin(ein));
+    if (existing) {
+      return listed(existing, { ein: padEin(ein), name: existing.name, city: null, state: null, ntee_code: null });
+    }
+  }
 
   if (!ein) {
     const params = new URLSearchParams({ q: row.query });
@@ -168,7 +193,7 @@ async function resolve(row: QueueRow): Promise<Outcome> {
   if (!detail) return { status: "not_found" };
 
   const existing = await existingEntity(detail.org.ein);
-  if (existing) return { status: "already_listed", ...existing, org: detail.org };
+  if (existing) return listed(existing, detail.org);
 
   if (detail.foundationCode !== null && PRIVATE_FOUNDATION_CODES.has(detail.foundationCode)) {
     return { status: "needs_review", reason: "private foundation", candidates: [detail.org] };
@@ -216,8 +241,14 @@ export function notificationFor(row: QueueRow, outcome: Outcome): { subject: str
           `If it has an EIN, you can request it again with the EIN at https://fundermatch.org/search.`,
       };
     case "needs_review":
-      // A person will follow up; don't email until there's an answer.
-      return null;
+      // The form promised an email; say where the request stands. (A person
+      // takes it from here via the review card.)
+      return {
+        subject: `We're reviewing your request for "${q}"`,
+        text: `We couldn't automatically match "${q}" to a single IRS nonprofit record, ` +
+          `so someone on our team will review it. If we can confirm it, it will appear in ` +
+          `FunderMatch search at https://fundermatch.org/search.`,
+      };
   }
 }
 
@@ -291,10 +322,20 @@ export function cronAuthorized(req: Request, expected: string): boolean {
   return auth.startsWith("Bearer cron:") && constantTimeEqual(auth.slice("Bearer cron:".length).trim(), expected);
 }
 
+async function patchRow(id: string, patch: Record<string, unknown>): Promise<void> {
+  const res = await rest(`organization_requests?id=eq.${id}`, {
+    method: "PATCH",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) throw new Error(`REST organization_requests PATCH ${res.status}: ${await res.text()}`);
+}
+
 async function processRow(row: QueueRow): Promise<string> {
   const now = new Date().toISOString();
+  let outcome: Outcome;
   try {
-    const outcome = await resolve(row);
+    outcome = await resolve(row);
     const patch: Record<string, unknown> = {
       status: outcome.status,
       attempts: row.attempts + 1,
@@ -312,32 +353,37 @@ async function processRow(row: QueueRow): Promise<string> {
     } else if (outcome.status === "needs_review") {
       patch.candidates = outcome.candidates;
       patch.last_error = outcome.reason;
-      await createReviewCard(reviewCardFor(row, outcome.reason, outcome.candidates)).catch((err) =>
-        console.error("Trello card failed:", err)
-      );
     }
-
-    const note = row.requester_email ? notificationFor(row, outcome) : null;
-    if (note && await sendEmail(row.requester_email!, note.subject, note.text)) {
-      patch.notified_at = now;
-    }
-
-    await rest(`organization_requests?id=eq.${row.id}`, { method: "PATCH", body: JSON.stringify(patch) });
-    return outcome.status;
+    // Record the outcome before any email or review card: if this write
+    // failed after them, the row would stay pending and the next run would
+    // send them again. (A repeated lookup is harmless: an organization added
+    // here is then found as already listed.)
+    await patchRow(row.id, patch);
   } catch (err) {
     const attempts = row.attempts + 1;
     const message = err instanceof Error ? err.message : String(err);
     console.error(`organization request ${row.id} failed (attempt ${attempts}):`, message);
-    await rest(`organization_requests?id=eq.${row.id}`, {
-      method: "PATCH",
-      body: JSON.stringify({
-        attempts,
-        last_error: message.slice(0, 500),
-        ...(attempts >= MAX_ATTEMPTS ? { status: "failed", processed_at: now } : {}),
-      }),
-    });
+    await patchRow(row.id, {
+      attempts,
+      last_error: message.slice(0, 500),
+      ...(attempts >= MAX_ATTEMPTS ? { status: "failed", processed_at: now } : {}),
+    }).catch((e) => console.error(`organization request ${row.id}: could not record the failure:`, e));
     return attempts >= MAX_ATTEMPTS ? "failed" : "retry";
   }
+
+  // Side effects, once each: the row is no longer pending.
+  if (outcome.status === "needs_review") {
+    await createReviewCard(reviewCardFor(row, outcome.reason, outcome.candidates)).catch((err) =>
+      console.error("Trello card failed:", err)
+    );
+  }
+  const note = row.requester_email ? notificationFor(row, outcome) : null;
+  if (note && await sendEmail(row.requester_email!, note.subject, note.text).catch(() => false)) {
+    await patchRow(row.id, { notified_at: now }).catch((e) =>
+      console.error(`organization request ${row.id}: notified but could not record it:`, e)
+    );
+  }
+  return outcome.status;
 }
 
 if (import.meta.main) {

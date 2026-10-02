@@ -200,10 +200,33 @@ Deno.serve(async (req) => {
       // (process-organization-requests) exist in recipient_organizations
       // before any grants to them are ingested. Serve an empty-history
       // profile from that row plus the 990 data instead of a 404.
-      const orgs = (await restQuery(
-        'recipient_organizations',
-        `ein=eq.${encodeURIComponent(lookupEin)}&select=name,primary_city,primary_state,ntee_codes&limit=1`,
-      )) as Array<{ name: string; primary_city: string | null; primary_state: string | null; ntee_codes: string[] | null }>;
+      // EINs aren't consistently zero-padded across tables (peer links may
+      // drop the leading zero), so match either form.
+      const digits = lookupEin.replace(/\D/g, '');
+      const variants = digits
+        ? [...new Set([digits.padStart(9, '0'), digits.replace(/^0+/, '')])]
+          .filter(Boolean)
+          .map((v) => `"${v}"`)
+          .join(',')
+        : '';
+      const orgs = (variants
+        ? await restQuery(
+          'recipient_organizations',
+          `ein=in.(${encodeURIComponent(variants)})&select=ein,name,primary_city,primary_state,ntee_codes,` +
+            'total_funding,grant_count,funder_count,first_grant_year,last_grant_year&limit=1',
+        )
+        : []) as Array<{
+          ein: string;
+          name: string;
+          primary_city: string | null;
+          primary_state: string | null;
+          ntee_codes: string[] | null;
+          total_funding: number | null;
+          grant_count: number | null;
+          funder_count: number | null;
+          first_grant_year: number | null;
+          last_grant_year: number | null;
+        }>;
       if (orgs.length === 0) {
         return new Response(
           JSON.stringify({ error: 'Recipient not found' }),
@@ -212,11 +235,20 @@ Deno.serve(async (req) => {
       }
       const org = orgs[0];
       return new Response(JSON.stringify({
-        id: lookupEin,
-        ein: lookupEin,
+        id: org.ein,
+        ein: org.ein,
         name: org.name,
         location: { city: org.primary_city, state: org.primary_state },
-        fundingSummary: { totalFunding: 0, grantCount: 0, funderCount: 0, firstGrantYear: null, lastGrantYear: null },
+        // The row's stored totals: zero for a queue-added organization, but an
+        // organization whose grants are stored under another EIN form keeps
+        // its numbers (and doesn't show the "no grants yet" note).
+        fundingSummary: {
+          totalFunding: Number(org.total_funding ?? 0),
+          grantCount: org.grant_count ?? 0,
+          funderCount: org.funder_count ?? 0,
+          firstGrantYear: org.first_grant_year,
+          lastGrantYear: org.last_grant_year,
+        },
         yearlyTrends: [],
         topFunders: [],
         ntee_codes: org.ntee_codes ?? [],

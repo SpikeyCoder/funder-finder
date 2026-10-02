@@ -26,7 +26,7 @@ export default function OrgRequestForm({ initialName }: OrgRequestFormProps) {
         <CheckCircle size={16} className="text-green-400 shrink-0 mt-0.5" />
         <p>
           Thanks — we&rsquo;ll look up &ldquo;{name.trim()}&rdquo; in IRS records and add it if we find it.
-          {email.trim() ? ' We’ll email you when it’s done.' : ' Check back in a little while.'}
+          {email.trim() ? ' We’ll email you what we find.' : ' Check back in a little while.'}
         </p>
       </div>
     );
@@ -58,6 +58,8 @@ export default function OrgRequestForm({ initialName }: OrgRequestFormProps) {
         required
         minLength={2}
         maxLength={200}
+        // Opened by "Request it", whose button disappears as the form appears.
+        autoFocus
         aria-label="Organization name"
         placeholder="Organization name"
         className={inputClass}

@@ -56,12 +56,15 @@ Deno.test("cronAuthorized fails closed and accepts both header forms", () => {
   assertEquals(cronAuthorized(req({ authorization: "Bearer cron:s3cret" }), "s3cret"), true);
 });
 
-Deno.test("notificationFor links to the right page and stays quiet while under review", () => {
+Deno.test("notificationFor links to the right page and acknowledges a review", () => {
   const added = notificationFor(row, { status: "added", id: "uuid-1", org: org("X") });
   assertEquals(added?.text.includes("https://fundermatch.org/recipient/uuid-1"), true);
   const funder = notificationFor(row, { status: "already_listed", entityType: "funder", id: "562618866", org: org("Gates") });
   assertEquals(funder?.text.includes("https://fundermatch.org/funder/562618866"), true);
-  assertEquals(notificationFor(row, { status: "needs_review", reason: "x", candidates: [] }), null);
+  assertEquals(
+    notificationFor(row, { status: "needs_review", reason: "x", candidates: [] })?.subject,
+    `We're reviewing your request for "Students Feeding Students"`,
+  );
   assertEquals(notificationFor(row, { status: "not_found" })?.subject, `We couldn't find "Students Feeding Students"`);
 });
 

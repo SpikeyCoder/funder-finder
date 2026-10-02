@@ -120,8 +120,9 @@ if (import.meta.main) {
         body: JSON.stringify(valid),
       });
 
-      // 409 = the pending-dedupe unique index: someone already asked for this
-      // organization and it's still queued. Same outcome for the caller.
+      // 409 = the pending-dedupe unique index: this requester (same email, or
+      // no email) already asked for this organization and it's still queued.
+      // Same outcome for the caller.
       if (res.ok || res.status === 409) {
         return json(200, { ok: true, queued: true }, headers);
       }

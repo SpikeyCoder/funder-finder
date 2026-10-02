@@ -113,6 +113,14 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
     if (status !== 'idle' && text.trim().length >= 2) setShowDropdown(true);
   };
 
+  // The form opens below the search box rather than inside the dropdown, so
+  // closing or reopening the dropdown doesn't wipe what was typed into it.
+  const openRequestForm = () => {
+    setShowRequestForm(true);
+    dismissedRef.current = true;
+    setShowDropdown(false);
+  };
+
   const handleSelect = (result: OrgSearchResult) => {
     setShowDropdown(false);
     setQuery('');
@@ -215,7 +223,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
                         {' '}Not listed?{' '}
                         <button
                           type="button"
-                          onClick={() => setShowRequestForm(true)}
+                          onClick={openRequestForm}
                           className="text-blue-400 hover:text-blue-300 underline"
                         >
                           Request it
@@ -225,11 +233,6 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
                   </p>
                 </div>
               </div>
-              {showRequestForm && (
-                <div className="mt-3">
-                  <OrgRequestForm key={searchedQuery} initialName={searchedQuery} />
-                </div>
-              )}
             </div>
           )}
           {status === 'error' && (
@@ -286,24 +289,26 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
               )}
             </button>
           ))}
-          {status === 'results' && (
+          {status === 'results' && !showRequestForm && (
             <div className="border-t border-[#30363d]/50 px-4 py-3 text-left">
-              {showRequestForm ? (
-                <OrgRequestForm key={searchedQuery} initialName={searchedQuery} />
-              ) : (
-                <p className="text-xs text-gray-400">
-                  Not seeing it?{' '}
-                  <button
-                    type="button"
-                    onClick={() => setShowRequestForm(true)}
-                    className="text-blue-400 hover:text-blue-300 underline"
-                  >
-                    Request it
-                  </button>
-                </p>
-              )}
+              <p className="text-xs text-gray-400">
+                Not seeing it?{' '}
+                <button
+                  type="button"
+                  onClick={openRequestForm}
+                  className="text-blue-400 hover:text-blue-300 underline"
+                >
+                  Request it
+                </button>
+              </p>
             </div>
           )}
+        </div>
+      )}
+
+      {showRequestForm && (
+        <div className="mt-2 bg-[#161b22] border border-[#30363d] rounded-xl px-4 py-3 text-left">
+          <OrgRequestForm key={searchedQuery} initialName={searchedQuery} />
         </div>
       )}
     </div>
