@@ -25,11 +25,6 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
 const RATE_LIMIT = 5;
 const RATE_WINDOW_MS = 60 * 60 * 1000;
-// The processor emails each request's outcome to an address nobody has
-// confirmed. Past this many requests per address per day, later ones are
-// still queued but without the address, so the form can't be used to flood
-// someone's inbox from rotating IPs.
-const EMAILS_PER_ADDRESS_PER_DAY = 3;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -78,7 +73,8 @@ export function validate(body: unknown): ValidRequest | string {
   if (typeof b.email === "string" && b.email.trim()) {
     const e = b.email.trim();
     if (e.length > 254 || !EMAIL_RE.test(e)) return "Invalid email address";
-    // Lowercased so the per-address cap and the dedupe index see one address.
+    // Lowercased so the processor's per-address cap and the dedupe index see
+    // one address.
     requester_email = e.toLowerCase();
   }
 
@@ -125,19 +121,6 @@ if (import.meta.main) {
     }
 
     try {
-      if (valid.requester_email) {
-        const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-        const recent = await fetch(
-          `${SUPABASE_URL}/rest/v1/organization_requests?requester_email=eq.${encodeURIComponent(valid.requester_email)}` +
-            `&created_at=gte.${encodeURIComponent(since)}&select=id&limit=${EMAILS_PER_ADDRESS_PER_DAY}`,
-          { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } },
-        );
-        // Fails open on a lookup error, like the rate limiter.
-        if (recent.ok && ((await recent.json()) as unknown[]).length >= EMAILS_PER_ADDRESS_PER_DAY) {
-          valid.requester_email = null;
-        }
-      }
-
       const res = await fetch(`${SUPABASE_URL}/rest/v1/organization_requests`, {
         method: "POST",
         headers: {
@@ -153,10 +136,10 @@ if (import.meta.main) {
       // no email) already asked for this organization and it's still queued.
       // Same outcome for the caller.
       if (res.ok || res.status === 409) {
-        // `notify` says whether an outcome email will go out, so the form
-        // doesn't promise one that the per-address cap dropped.
-        // (No email goes out at all without RESEND_API_KEY, a project-wide
-        // secret the processor shares.)
+        // `notify`: whether an outcome email can go out at all (no email
+        // without RESEND_API_KEY, a project-wide secret the processor shares).
+        // The processor's per-address daily cap isn't checked here: answering
+        // it would tell anyone how much an address has been used.
         const notify = valid.requester_email !== null && !!Deno.env.get("RESEND_API_KEY");
         return json(200, { ok: true, queued: true, notify }, headers);
       }

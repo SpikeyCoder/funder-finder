@@ -105,3 +105,9 @@ Deno.test("not_found for an EIN request names the EIN, not 'request it with the 
   assertEquals(n?.text.includes("EIN 123456789"), true);
   assertEquals(n?.text.includes("request it again with the EIN"), false);
 });
+
+Deno.test("normalizeName folds accents instead of dropping letters", () => {
+  assertEquals(normalizeName("Café Hope"), "cafe hope");
+  assertEquals(normalizeName("Café Hope") === normalizeName("CAF HOPE INC"), false);
+  assertEquals(normalizeName("Fundación Niños"), "fundacion ninos");
+});

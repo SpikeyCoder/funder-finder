@@ -44,16 +44,17 @@ const BATCH_SIZE = 20;
 // Stop taking new rows after this long, so a run (even with its last row
 // slow) ends well inside the Edge runtime's wall-clock limit and the
 // invoker's 120 s pg_net timeout; the rest wait for the next run.
-const RUN_BUDGET_MS = 45_000;
-// Outcome emails per address per day, enforced where they're sent (the
-// request endpoint's own check can be raced by concurrent submissions).
+const RUN_BUDGET_MS = 30_000;
+// Outcome emails per address per day, enforced here where they're sent.
 const EMAILS_PER_ADDRESS_PER_DAY = 3;
 const MAX_ATTEMPTS = 3;
 // A claim older than this is from a run that died; the row may be retried.
 const CLAIM_TTL_MS = 10 * 60 * 1000;
 // Every outbound call is bounded, so one stalled lookup can't hold the
 // sequential batch until the runtime kills it.
-const FETCH_TIMEOUT_MS = 10_000;
+// (A row makes at most ~9 calls, so a row started just inside RUN_BUDGET_MS
+// still ends inside the invoker's 120 s pg_net timeout.)
+const FETCH_TIMEOUT_MS = 8_000;
 // IRS foundation codes 02/03/04 are private foundations (990-PF filers).
 const PRIVATE_FOUNDATION_CODES = new Set([2, 3, 4]);
 
@@ -88,8 +89,12 @@ const LEGAL_SUFFIXES = new Set(["inc", "incorporated", "corp", "corporation", "c
 export function normalizeName(name: string): string {
   const words = name
     .toLowerCase()
+    // Fold accents ("Café" → "cafe") rather than dropping the letter, so
+    // "Café Hope" can't normalize to the same thing as "CAF HOPE".
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
     .replace(/&/g, " and ")
-    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
     .split(/\s+/)
     .filter(Boolean);
   while (words.length > 1 && LEGAL_SUFFIXES.has(words[words.length - 1])) words.pop();
@@ -399,13 +404,25 @@ export function cronAuthorized(req: Request, expected: string): boolean {
 }
 
 async function notifyFailure(row: QueueRow, now: string): Promise<void> {
-  if (!row.requester_email) return;
+  if (!row.requester_email || !RESEND_API_KEY) return;
   if (await emailsSentRecently(row.requester_email).catch(() => 0) >= EMAILS_PER_ADDRESS_PER_DAY) return;
   if (await sendEmail(row.requester_email, FAILURE_NOTICE.subject, FAILURE_NOTICE.text).catch(() => false)) {
     await patchRow(row.id, { notified_at: now }).catch((e) =>
       console.error(`organization request ${row.id}: notified but could not record it:`, e)
     );
   }
+}
+
+// Write to the row only while this run still holds it (pending, with our
+// claim): the purge may have expired it, or a later run reclaimed it after
+// our claim went stale. Returns false if the row was no longer ours.
+async function patchClaimed(id: string, claimedAt: string, patch: Record<string, unknown>): Promise<boolean> {
+  const res = await rest(
+    `organization_requests?id=eq.${id}&status=eq.pending&claimed_at=eq.${encodeURIComponent(claimedAt)}&select=id`,
+    { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify(patch) },
+  );
+  if (!res.ok) throw new Error(`REST organization_requests PATCH ${res.status}: ${await res.text()}`);
+  return ((await res.json()) as unknown[]).length === 1;
 }
 
 async function patchRow(id: string, patch: Record<string, unknown>): Promise<void> {
@@ -462,11 +479,11 @@ async function processRow(row: QueueRow, run: RunState): Promise<string> {
   }
   if (row.attempts >= MAX_ATTEMPTS) {
     // Earlier runs claimed it and never finished (e.g. killed mid-lookup).
-    const marked = await patchRow(row.id, {
+    const marked = await patchClaimed(row.id, now, {
       status: "failed",
       processed_at: now,
       last_error: "gave up: earlier attempts never finished",
-    }).then(() => true, (e) => {
+    }).then((ours) => ours, (e) => {
       console.error(`organization request ${row.id}: could not mark it failed:`, e);
       return false;
     });
@@ -474,9 +491,11 @@ async function processRow(row: QueueRow, run: RunState): Promise<string> {
     return "failed";
   }
   let outcome: Outcome;
+  let reviewCandidates: IrsOrg[] | null = null;
   try {
     outcome = await resolve(row);
     if (outcome.status === "needs_review") {
+      reviewCandidates = outcome.candidates;
       // The card *is* the review, so it's opened before the outcome is
       // recorded, and failing to open one counts as a failed attempt: the row
       // is retried, and after MAX_ATTEMPTS the requester is told we couldn't
@@ -495,11 +514,14 @@ async function processRow(row: QueueRow, run: RunState): Promise<string> {
     const attempts = row.attempts + 1; // as claimed
     const message = err instanceof Error ? err.message : String(err);
     console.error(`organization request ${row.id} failed (attempt ${attempts}):`, message);
-    const recorded = await patchRow(row.id, {
+    const recorded = await patchClaimed(row.id, now, {
       last_error: message.slice(0, 500),
       claimed_at: null, // retry on the next run
+      // Keep what the lookup found (e.g. when only the review card failed),
+      // so a failed request can still be picked up by hand.
+      ...(reviewCandidates ? { candidates: reviewCandidates } : {}),
       ...(attempts >= MAX_ATTEMPTS ? { status: "failed", processed_at: now } : {}),
-    }).then(() => true, (e) => {
+    }).then((ours) => ours, (e) => {
       console.error(`organization request ${row.id}: could not record the failure:`, e);
       return false;
     });
@@ -523,19 +545,25 @@ async function processRow(row: QueueRow, run: RunState): Promise<string> {
   // Record the outcome before emailing: if this write failed after the
   // email, the row would stay pending and the next run would send it again.
   try {
-    await patchRow(row.id, patch);
+    if (!(await patchClaimed(row.id, now, patch))) {
+      // Expired by the purge or reclaimed by another run meanwhile: leave the
+      // row as it is now and send nothing.
+      console.error(`organization request ${row.id}: no longer ours; outcome ${outcome.status} not recorded`);
+      return "skipped";
+    }
   } catch (err) {
     // The outcome itself stands (an added organization stays added); only
     // recording it failed. Release the claim without spending an attempt:
     // the next run resolves it again (an addition then as already listed).
     console.error(`organization request ${row.id}: could not record its outcome:`, err);
-    await patchRow(row.id, { claimed_at: null, attempts: row.attempts }).catch((e) =>
+    await patchClaimed(row.id, now, { claimed_at: null, attempts: row.attempts }).catch((e) =>
       console.error(`organization request ${row.id}: could not release it:`, e)
     );
     return "retry";
   }
 
-  const note = row.requester_email ? notificationFor(row, outcome) : null;
+  // (Without RESEND_API_KEY nothing can be sent; skip the cap lookup too.)
+  const note = row.requester_email && RESEND_API_KEY ? notificationFor(row, outcome) : null;
   const underCap = note
     ? await emailsSentRecently(row.requester_email!).then((n) => n < EMAILS_PER_ADDRESS_PER_DAY, () => true)
     : false;
