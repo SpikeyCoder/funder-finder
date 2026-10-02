@@ -35,8 +35,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { einVariants, padEin } from "../_shared/ein.ts";
 
-export { padEin };
-
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") || "";
@@ -47,9 +45,6 @@ const BATCH_SIZE = 20;
 // slow) ends well inside the Edge runtime's wall-clock limit and the
 // invoker's 120 s pg_net timeout; the rest wait for the next run.
 const RUN_BUDGET_MS = 45_000;
-// Review cards carry visitor-typed text onto the internal triage board:
-// at most this many per run, and one per distinct request.
-const MAX_CARDS_PER_RUN = 5;
 // Outcome emails per address per day, enforced where they're sent (the
 // request endpoint's own check can be raced by concurrent submissions).
 const EMAILS_PER_ADDRESS_PER_DAY = 3;
@@ -185,15 +180,15 @@ type Existing = { entityType: "funder" | "recipient"; id: string; name: string }
 async function existingEntity(ein: string): Promise<Existing | null> {
   // funders.id / recipient_organizations.ein aren't consistently zero-padded.
   const variants = einVariants(ein).map((v) => `"${v}"`).join(",");
-  const recips = await restJson<{ id: string; name: string }[]>(
-    `recipient_organizations?ein=in.(${variants})&select=id,name&limit=1`,
-  );
+  const [recips, funders] = await Promise.all([
+    restJson<{ id: string; name: string }[]>(`recipient_organizations?ein=in.(${variants})&select=id,name&limit=1`),
+    restJson<{ id: string; name: string; ntee_code: string | null }[]>(
+      `funders?id=in.(${variants})&select=id,name,ntee_code&limit=1`,
+    ),
+  ]);
   if (recips.length) return { entityType: "recipient", ...recips[0] };
   // Only a funder search can show counts as listed (search_organizations
   // keeps NTEE T-code grantmakers and 990-PF filers).
-  const funders = await restJson<{ id: string; name: string; ntee_code: string | null }[]>(
-    `funders?id=in.(${variants})&select=id,name,ntee_code&limit=1`,
-  );
   if (funders.length) {
     const f = funders[0];
     const searchable = f.ntee_code?.startsWith("T") ||
@@ -481,35 +476,26 @@ async function processRow(row: QueueRow, run: RunState): Promise<string> {
   let outcome: Outcome;
   try {
     outcome = await resolve(row);
-    const patch: Record<string, unknown> = {
-      status: outcome.status,
-      attempts: row.attempts + 1,
-      processed_at: now,
-      last_error: null,
-    };
-    if (outcome.status === "added") {
-      patch.resolved_entity_type = "recipient";
-      patch.resolved_id = outcome.id;
-      patch.candidates = [outcome.org];
-    } else if (outcome.status === "already_listed") {
-      patch.resolved_entity_type = outcome.entityType;
-      patch.resolved_id = outcome.id;
-      patch.candidates = [outcome.org];
-    } else if (outcome.status === "needs_review") {
-      patch.candidates = outcome.candidates;
-      patch.last_error = outcome.reason;
+    if (outcome.status === "needs_review") {
+      // The card *is* the review, so it's opened before the outcome is
+      // recorded, and failing to open one counts as a failed attempt: the row
+      // is retried, and after MAX_ATTEMPTS the requester is told we couldn't
+      // process it. (If the write below then failed, a retry could open a
+      // second card; that beats a request nobody is asked to review.) Rows
+      // for the same organization share one card per run.
+      const key = `${normalizeName(row.query)}|${row.ein ?? ""}|${row.state ?? ""}`;
+      if (!run.cardKeys.has(key)) {
+        if (!(await createReviewCard(reviewCardFor(row, outcome.reason, outcome.candidates)))) {
+          throw new Error("review card could not be created (TRELLO_* unset or Trello failing)");
+        }
+        run.cardKeys.add(key);
+      }
     }
-    // Record the outcome before any email or review card: if this write
-    // failed after them, the row would stay pending and the next run would
-    // send them again. (A repeated lookup is harmless: an organization added
-    // here is then found as already listed.)
-    await patchRow(row.id, patch);
   } catch (err) {
-    const attempts = row.attempts + 1;
+    const attempts = row.attempts + 1; // as claimed
     const message = err instanceof Error ? err.message : String(err);
     console.error(`organization request ${row.id} failed (attempt ${attempts}):`, message);
     const recorded = await patchRow(row.id, {
-      attempts,
       last_error: message.slice(0, 500),
       claimed_at: null, // retry on the next run
       ...(attempts >= MAX_ATTEMPTS ? { status: "failed", processed_at: now } : {}),
@@ -521,27 +507,35 @@ async function processRow(row: QueueRow, run: RunState): Promise<string> {
     return attempts >= MAX_ATTEMPTS ? "failed" : "retry";
   }
 
-  // Side effects, once each: the row is no longer pending.
-  let reviewable = true;
-  if (outcome.status === "needs_review") {
-    const key = `${normalizeName(row.query)}|${row.ein ?? ""}|${row.state ?? ""}`;
-    if (run.cardKeys.has(key)) {
-      // Another requester's row for the same organization opened a card this run.
-    } else if (run.cardKeys.size >= MAX_CARDS_PER_RUN) {
-      reviewable = false;
-    } else {
-      run.cardKeys.add(key);
-      reviewable = await createReviewCard(reviewCardFor(row, outcome.reason, outcome.candidates)).catch((err) => {
-        console.error("Trello card failed:", err);
-        return false;
-      });
-    }
-    // Don't tell the requester a person will review it when nobody has been
-    // asked to. The row stays findable (status needs_review, notified_at
-    // null) for whoever fixes the Trello config.
-    if (!reviewable) console.error(`organization request ${row.id} needs review but has no Trello card (TRELLO_* unset or failing)`);
+  const patch: Record<string, unknown> = { status: outcome.status, processed_at: now, last_error: null };
+  if (outcome.status === "added") {
+    patch.resolved_entity_type = "recipient";
+    patch.resolved_id = outcome.id;
+    patch.candidates = [outcome.org];
+  } else if (outcome.status === "already_listed") {
+    patch.resolved_entity_type = outcome.entityType;
+    patch.resolved_id = outcome.id;
+    patch.candidates = [outcome.org];
+  } else if (outcome.status === "needs_review") {
+    patch.candidates = outcome.candidates;
+    patch.last_error = outcome.reason;
   }
-  const note = row.requester_email && reviewable ? notificationFor(row, outcome) : null;
+  // Record the outcome before emailing: if this write failed after the
+  // email, the row would stay pending and the next run would send it again.
+  try {
+    await patchRow(row.id, patch);
+  } catch (err) {
+    // The outcome itself stands (an added organization stays added); only
+    // recording it failed. Release the claim without spending an attempt:
+    // the next run resolves it again (an addition then as already listed).
+    console.error(`organization request ${row.id}: could not record its outcome:`, err);
+    await patchRow(row.id, { claimed_at: null, attempts: row.attempts }).catch((e) =>
+      console.error(`organization request ${row.id}: could not release it:`, e)
+    );
+    return "retry";
+  }
+
+  const note = row.requester_email ? notificationFor(row, outcome) : null;
   const underCap = note
     ? await emailsSentRecently(row.requester_email!).then((n) => n < EMAILS_PER_ADDRESS_PER_DAY, () => true)
     : false;

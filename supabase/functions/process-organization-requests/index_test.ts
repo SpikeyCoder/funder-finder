@@ -6,12 +6,12 @@ import {
   type Outcome,
   normalizeName,
   notificationFor,
-  padEin,
   pickExactMatch,
   type QueueRow,
   reviewCardFor,
   reviewReason,
 } from "./index.ts";
+import { padEin } from "../_shared/ein.ts";
 
 const org = (name: string, state: string | null = "WA", ein = "123456789"): IrsOrg =>
   ({ ein, name, city: "Seattle", state, ntee_code: "B90" });

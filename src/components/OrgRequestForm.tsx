@@ -73,7 +73,8 @@ export default function OrgRequestForm({ initialName, onSubmitted }: OrgRequestF
           value={ein}
           onChange={(e) => setEin(e.target.value)}
           inputMode="numeric"
-          pattern="\d{2}-?\d{7}"
+          // 9 digits (dash optional), or 8 without the leading zero, as the server accepts.
+          pattern="\d{2}-?\d{7}|\d{8}"
           title="9-digit EIN, e.g. 12-3456789"
           aria-label="EIN (optional)"
           placeholder="EIN (optional)"

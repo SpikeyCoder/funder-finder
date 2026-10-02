@@ -65,9 +65,11 @@ CREATE TABLE IF NOT EXISTS public.organization_requests (
 -- already_listed once the first adds it).
 -- (The state is part of it: a resubmission that adds or corrects the state
 -- is a new request, not a duplicate.)
+-- An EIN request is keyed by the EIN alone, however the name was typed.
 CREATE UNIQUE INDEX IF NOT EXISTS organization_requests_pending_dedupe
   ON public.organization_requests
-     (lower(query), coalesce(ein, ''), coalesce(state, ''), coalesce(lower(requester_email), ''))
+     ((CASE WHEN ein IS NULL THEN lower(query) ELSE '' END), coalesce(ein, ''), coalesce(state, ''),
+      coalesce(lower(requester_email), ''))
   WHERE status = 'pending';
 
 CREATE INDEX IF NOT EXISTS organization_requests_status_created

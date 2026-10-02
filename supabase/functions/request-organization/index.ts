@@ -57,9 +57,10 @@ export function validate(body: unknown): ValidRequest | string {
 
   let ein: string | null = null;
   if (typeof b.ein === "string" && b.ein.trim()) {
-    const digits = b.ein.replace(/[\s-]/g, "");
-    if (!/^\d{9}$/.test(digits)) return "EIN must be 9 digits";
-    ein = digits;
+    // Same EIN shapes as an EIN typed as the name (8 digits = unpadded).
+    const digits = einDigits(b.ein.replace(/\s/g, ""));
+    if (!digits) return "EIN must be 9 digits";
+    ein = padEin(digits);
   } else if (einDigits(query)) {
     // An EIN search that found nothing prefills the *name* with the EIN
     // (padded or not); look it up as an EIN, not as a name.
