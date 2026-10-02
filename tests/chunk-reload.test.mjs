@@ -66,7 +66,7 @@ test('does not treat ordinary errors as chunk-load errors', () => {
 });
 
 test('reload key: the failing chunk when named, else the page path', () => {
-  assert.equal(reloadKey(fetchFail('FunderDetail-Ab1.js'), '/funder/1', 'index-B1.js'), 'chunk:FunderDetail-Ab1.js');
+  assert.equal(reloadKey(fetchFail('FunderDetail-Ab1.js'), '/funder/1', 'index-B1.js'), 'chunk:FunderDetail-Ab1.js@index-B1.js');
   assert.equal(reloadKey(LINK, '/results', 'index-B1.js'), 'path:/results@index-B1.js');
   // Chrome's link error names the shared dependency, not the failing route.
   const chromeLink = new SyntaxError("The requested module './index-B1.js' does not provide an export named 'Dt'");
@@ -88,9 +88,11 @@ test('a chunk that keeps failing gets one reload, not one per page using it', ()
   assert.equal(reloads, 1);
 });
 
-test('a later deploy (new chunk hash) still auto-recovers', () => {
-  assert.equal(reloadOnceForChunkError(fetchFail('Results-Old1.js')), true);
-  assert.equal(reloadOnceForChunkError(fetchFail('Results-New2.js')), true);
+test('a later deploy auto-recovers, even for a chunk whose hash is unchanged', () => {
+  assert.equal(reloadOnceForChunkError(fetchFail('Vendor-Same.js')), true);
+  assert.equal(reloadOnceForChunkError(fetchFail('Vendor-Same.js')), false); // same build: no loop
+  setBuild('index-Build2.js');
+  assert.equal(reloadOnceForChunkError(fetchFail('Vendor-Same.js')), true);
   assert.equal(reloads, 2);
 });
 

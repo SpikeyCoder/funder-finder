@@ -57,7 +57,17 @@ function formatArg(arg: unknown, depth: number): string {
     }
     // Keep only frame-shaped lines: V8 "    at fn (url:1:2)", WebKit/Firefox
     // "fn@url:1:2". Header/message lines vary by engine and may contain '@'.
-    const frames = (arg.stack ?? '')
+    // V8 starts the stack with the "Name: message" header (possibly several
+    // lines); strip it exactly so a message ending in e.g. "db@host:5432"
+    // isn't mistaken for a frame. WebKit/Firefox stacks have no header.
+    let stack = arg.stack ?? '';
+    for (const header of [String(arg), `Error: ${arg.message}`]) {
+      if (stack.startsWith(header)) {
+        stack = stack.slice(header.length);
+        break;
+      }
+    }
+    const frames = stack
       .split('\n')
       .filter((l) => /^\s*at\s|@\S+:\d+(:\d+)?$/.test(l))
       .slice(0, 3)

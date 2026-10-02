@@ -146,7 +146,22 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
   };
 
   return (
-    <div ref={wrapperRef} className="relative w-full">
+    <div
+      ref={wrapperRef}
+      className="relative w-full"
+      // Focus moving from anywhere in the search box (input, a result row,
+      // "Try again") to another control counts as dismissing, so a late
+      // response doesn't open the panel over it. A blur with no new focus
+      // target — hiding the mobile keyboard — doesn't: results should still
+      // appear.
+      onBlur={(e) => {
+        const next = e.relatedTarget as Node | null;
+        if (next && !wrapperRef.current?.contains(next)) {
+          dismissedRef.current = true;
+          setShowDropdown(false);
+        }
+      }}
+    >
       <div className="relative">
         <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
         <input
@@ -157,17 +172,6 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
           onFocus={() => reopenDropdown()}
           // Clicking an already-focused input doesn't fire focus; reopen too.
           onMouseDown={() => reopenDropdown()}
-          // Moving focus to another control (e.g. Tab) counts as dismissing, so
-          // a late response doesn't open the panel over it. A blur with no new
-          // focus target — hiding the mobile keyboard — doesn't: results
-          // should still appear.
-          onBlur={(e) => {
-            const next = e.relatedTarget as Node | null;
-            if (next && !dropdownRef.current?.contains(next)) {
-              dismissedRef.current = true;
-              setShowDropdown(false);
-            }
-          }}
           onKeyDown={handleKeyDown}
           autoFocus={autoFocus}
           placeholder={placeholder}
@@ -188,7 +192,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
         {status === 'error' &&
           (retrying ? `Retrying search for ${searchedQuery}` : `Search for ${searchedQuery} is temporarily unavailable.`)}
         {status === 'results' &&
-          `${results.length} organization${results.length === 1 ? '' : 's'} found for ${searchedQuery}`}
+          `Showing ${results.length} organization${results.length === 1 ? '' : 's'} for ${searchedQuery}`}
       </div>
 
       {showDropdown && status !== 'idle' && (

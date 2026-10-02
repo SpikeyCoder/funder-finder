@@ -88,7 +88,9 @@ export default class ErrorBoundary extends Component<Props, State> {
               </details>
             )}
             <button
-              onClick={this.handleTryAgain}
+              // For a chunk error just reload: clearing the error first would
+              // re-render the failed lazy route and throw (and log) again.
+              onClick={mode === 'error' ? this.handleTryAgain : () => window.location.reload()}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
             >
               {copy.button}
