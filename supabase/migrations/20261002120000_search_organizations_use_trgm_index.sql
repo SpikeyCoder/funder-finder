@@ -24,19 +24,23 @@
 --
 -- FIX
 -- ---
--- Candidates are the union of four sets, each capped at 500 *without* sorting
--- so a common word stops scanning early, then ranked together:
+-- Candidates are the union of four sets, each capped *without* sorting so a
+-- common word stops scanning early, then ranked together:
 --   exact       names equal to the query (also "The <query>"), by B-tree on
 --               lower(name) — an ILIKE without wildcards still goes through
 --               the trigram index and rechecks every row sharing the word's
 --               trigrams (6.6 s for "foundation"); never lost to other caps;
---   all words   names containing every indexable distinctive word (up to 4) —
---               small for multi-word queries;
---   prefix      names starting with the query;
---   one word    the first word with a 3+ letter/digit run, when there are
---               several (with one, it's the all-words set); or, with only
---               short words, names with a word starting with it ('st%' /
---               '% st%', which the index serves via leading trigrams).
+--   all words   names containing every indexable distinctive word (up to 4)
+--               and the first 2-letter one ("uw madison") — 2000 rows when
+--               there are 2+ such words (small by construction), else 500;
+--   prefix      names starting with the query or "The <query>" (500);
+--   one word    the first word with a 3+ letter/digit run when other words
+--               narrow the all-words set, or the word as typed when a
+--               camelCase split broke it up ("McDonald" → '%mcdonald%');
+--               with only short words, names with a word starting with it
+--               ('st%' / '% st%', served via leading trigrams) (500).
+-- Input is cut to 200 characters with whitespace collapsed, and p_limit is
+-- clamped to 1-50 (anon can call this RPC directly).
 -- Parallel workers and synchronized seq scans are off for the function, so
 -- each capped set — and the result — is the same call to call. LIKE wildcards
 -- in input are escaped; a query with no letters or digits returns nothing.
