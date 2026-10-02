@@ -182,16 +182,20 @@ BEGIN
     RETURN;
   END IF;
 
-  -- Handle EIN lookup (exact match on 7-9 digit numbers)
-  IF p_query ~ '^\d{7,9}$' THEN
+  -- Handle EIN lookup: 7-9 digits, or the dashed "12-3456789" form. Stored
+  -- EINs may or may not keep a leading zero, so match both forms.
+  IF p_query ~ '^\d{7,9}$' OR p_query ~ '^\d{2}-\d{7}$' THEN
+    v_query_lower := replace(p_query, '-', '');
     RETURN QUERY
     SELECT f.id::text, f.id::text, f.name::text, f.state::text, 'funder'::text,
            0::bigint, coalesce(f.total_giving, 0)::numeric
-    FROM funders f WHERE f.id = p_query
+    FROM funders f
+    WHERE f.id IN (v_query_lower, lpad(v_query_lower, 9, '0'), ltrim(v_query_lower, '0'))
     UNION ALL
     SELECT r.id::text, r.ein::text, r.name::text, r.primary_state::text, 'recipient'::text,
            coalesce(r.grant_count, 0)::bigint, coalesce(r.total_funding, 0)::numeric
-    FROM recipient_organizations r WHERE r.ein = p_query
+    FROM recipient_organizations r
+    WHERE r.ein IN (v_query_lower, lpad(v_query_lower, 9, '0'), ltrim(v_query_lower, '0'))
     LIMIT p_limit;
     RETURN;
   END IF;
