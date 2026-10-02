@@ -24,6 +24,26 @@ interface TechnicalContext {
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
+// Error's name/message/stack are non-enumerable, so JSON.stringify(err) is
+// "{}". Spell them out so bug reports carry the actual failure.
+function formatConsoleArg(arg: unknown): string {
+  if (typeof arg === 'string') return arg;
+  if (arg instanceof Error) {
+    // V8 prefixes the stack with "Name: message"; WebKit doesn't.
+    const frames = arg.stack
+      ?.split('\n')
+      .filter((l) => l.trim() && !l.startsWith(`${arg.name}:`))
+      .slice(0, 3)
+      .join(' | ');
+    return `${arg.name}: ${arg.message}${frames ? ` [${frames}]` : ''}`;
+  }
+  try {
+    return JSON.stringify(arg) ?? String(arg);
+  } catch {
+    return String(arg);
+  }
+}
+
 function getTechnicalContext(recentErrors: CapturedError[]): TechnicalContext {
   const isTouchDevice = navigator.maxTouchPoints > 0;
   return {
@@ -133,7 +153,7 @@ export default function BugReportButton() {
 
     console.error = function (...args: unknown[]) {
       originalError.apply(console, args);
-      const msg = args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
+      const msg = args.map(formatConsoleArg).join(' ');
       captureError(msg);
     };
 
@@ -142,7 +162,7 @@ export default function BugReportButton() {
       captureError(`${event.message} at ${event.filename}:${event.lineno}`);
     };
     const handleRejection = (event: PromiseRejectionEvent) => {
-      const msg = event.reason instanceof Error ? event.reason.message : String(event.reason);
+      const msg = formatConsoleArg(event.reason);
       captureError(`Unhandled Promise: ${msg}`);
     };
 

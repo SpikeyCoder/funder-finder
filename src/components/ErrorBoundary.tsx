@@ -1,5 +1,6 @@
 import { Component, ReactNode } from 'react';
 import { AlertCircle } from 'lucide-react';
+import { isChunkLoadError, reloadOnceForChunkError } from '../lib/chunkReload';
 
 interface Props {
   children: ReactNode;
@@ -8,25 +9,6 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
-}
-
-// Guards against an infinite reload loop if a chunk is genuinely gone.
-const CHUNK_RELOAD_KEY = 'ff_chunk_reload_at';
-const CHUNK_RELOAD_COOLDOWN_MS = 10_000;
-
-// A lazy/dynamic import that fails to download throws one of these. It usually
-// means a new deploy rotated the hashed chunk filenames out from under a client
-// that still has the old index.html, so the route's chunk 404s.
-function isChunkLoadError(error: Error | null): boolean {
-  if (!error) return false;
-  const msg = error.message || '';
-  return (
-    error.name === 'ChunkLoadError' ||
-    /failed to fetch dynamically imported module/i.test(msg) ||
-    /error loading dynamically imported module/i.test(msg) ||
-    /importing a module script failed/i.test(msg) ||
-    /dynamically imported module/i.test(msg)
-  );
 }
 
 export default class ErrorBoundary extends Component<Props, State> {
@@ -44,22 +26,7 @@ export default class ErrorBoundary extends Component<Props, State> {
 
     // For a failed chunk load, reloading pulls a fresh index.html plus valid
     // chunks and almost always recovers — so do it automatically, once.
-    if (isChunkLoadError(error)) {
-      let lastReload = 0;
-      try {
-        lastReload = Number(sessionStorage.getItem(CHUNK_RELOAD_KEY)) || 0;
-      } catch {
-        /* sessionStorage unavailable (private mode); fall through to manual UI */
-      }
-      if (Date.now() - lastReload > CHUNK_RELOAD_COOLDOWN_MS) {
-        try {
-          sessionStorage.setItem(CHUNK_RELOAD_KEY, String(Date.now()));
-        } catch {
-          /* ignore */
-        }
-        window.location.reload();
-      }
-    }
+    if (isChunkLoadError(error)) reloadOnceForChunkError();
   }
 
   handleTryAgain = () => {

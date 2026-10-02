@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Building2, Users, Loader2 } from 'lucide-react';
+import { Search, Building2, Users, Loader2, SearchX, AlertCircle } from 'lucide-react';
 import { OrgSearchResult } from '../types';
 import { searchOrganizations } from '../utils/matching';
 import { fmtDollar } from './InsightCharts';
@@ -16,15 +16,26 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
   const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<OrgSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
+  // Outcome of the latest completed search, so a miss or a failure is shown
+  // instead of the dropdown silently staying closed.
+  const [status, setStatus] = useState<'idle' | 'results' | 'empty' | 'error'>('idle');
+  const [retryNonce, setRetryNonce] = useState(0);
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
+    // Invalidate any in-flight request so a slow, older response can't
+    // overwrite the results for what the user has typed since.
+    const requestId = ++requestIdRef.current;
+
     if (query.trim().length < 2) {
       setResults([]);
+      setStatus('idle');
+      setLoading(false);
       setShowDropdown(false);
       return;
     }
@@ -34,18 +45,24 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
     debounceRef.current = setTimeout(async () => {
       try {
         const data = await searchOrganizations(query.trim());
+        if (requestId !== requestIdRef.current) return;
         setResults(data);
-        setShowDropdown(data.length > 0);
+        setStatus(data.length > 0 ? 'results' : 'empty');
         setSelectedIdx(-1);
       } catch {
+        if (requestId !== requestIdRef.current) return;
         setResults([]);
+        setStatus('error');
       } finally {
-        setLoading(false);
+        if (requestId === requestIdRef.current) {
+          setLoading(false);
+          setShowDropdown(true);
+        }
       }
     }, 300);
 
     return () => clearTimeout(debounceRef.current);
-  }, [query]);
+  }, [query, retryNonce]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -71,6 +88,11 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!showDropdown) return;
+    if (e.key === 'Escape') {
+      setShowDropdown(false);
+      return;
+    }
+    if (status !== 'results') return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       setSelectedIdx(prev => Math.min(prev + 1, results.length - 1));
@@ -80,8 +102,6 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
     } else if (e.key === 'Enter' && selectedIdx >= 0) {
       e.preventDefault();
       handleSelect(results[selectedIdx]);
-    } else if (e.key === 'Escape') {
-      setShowDropdown(false);
     }
   };
 
@@ -94,7 +114,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
           type="text"
           value={query}
           onChange={e => setQuery(e.target.value)}
-          onFocus={() => results.length > 0 && setShowDropdown(true)}
+          onFocus={() => status !== 'idle' && setShowDropdown(true)}
           onKeyDown={handleKeyDown}
           autoFocus={autoFocus}
           placeholder={placeholder}
@@ -111,7 +131,33 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
           ref={dropdownRef}
           className="absolute z-50 w-full mt-2 bg-[#161b22] border border-[#30363d] rounded-xl shadow-xl overflow-hidden max-h-80 overflow-y-auto"
         >
-          {results.map((r, idx) => (
+          {status === 'empty' && (
+            <div role="status" className="flex items-start gap-3 px-4 py-4 text-left">
+              <SearchX size={16} className="text-gray-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm text-white">No organizations match &ldquo;{query.trim()}&rdquo;</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Try a shorter name, a different spelling, or search by EIN.
+                </p>
+              </div>
+            </div>
+          )}
+          {status === 'error' && (
+            <div role="alert" className="flex items-start gap-3 px-4 py-4 text-left">
+              <AlertCircle size={16} className="text-red-400 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm text-white">Search is temporarily unavailable.</p>
+                <button
+                  type="button"
+                  onClick={() => setRetryNonce((n) => n + 1)}
+                  className="text-xs text-blue-400 hover:text-blue-300 mt-1 underline"
+                >
+                  Try again
+                </button>
+              </div>
+            </div>
+          )}
+          {status === 'results' && results.map((r, idx) => (
             <button
               key={`${r.entity_type}-${r.id}`}
               onClick={() => handleSelect(r)}
