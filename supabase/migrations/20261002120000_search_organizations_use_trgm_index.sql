@@ -186,16 +186,22 @@ BEGIN
   -- EINs may or may not keep a leading zero, so match both forms.
   IF p_query ~ '^\d{7,9}$' OR p_query ~ '^\d{2}-\d{7}$' THEN
     v_query_lower := replace(p_query, '-', '');
+    -- One row per organization, the recipient row preferred (as below).
     RETURN QUERY
-    SELECT f.id::text, f.id::text, f.name::text, f.state::text, 'funder'::text,
-           0::bigint, coalesce(f.total_giving, 0)::numeric
-    FROM funders f
-    WHERE f.id IN (v_query_lower, lpad(v_query_lower, 9, '0'), ltrim(v_query_lower, '0'))
-    UNION ALL
-    SELECT r.id::text, r.ein::text, r.name::text, r.primary_state::text, 'recipient'::text,
-           coalesce(r.grant_count, 0)::bigint, coalesce(r.total_funding, 0)::numeric
-    FROM recipient_organizations r
-    WHERE r.ein IN (v_query_lower, lpad(v_query_lower, 9, '0'), ltrim(v_query_lower, '0'))
+    SELECT DISTINCT ON (lpad(x._ein, 9, '0'))
+           x._id, x._ein, x._name, x._state, x._etype, x._gc, x._tf
+    FROM (
+      SELECT f.id::text AS _id, f.id::text AS _ein, f.name::text AS _name, f.state::text AS _state,
+             'funder'::text AS _etype, 0::bigint AS _gc, coalesce(f.total_giving, 0)::numeric AS _tf
+      FROM funders f
+      WHERE f.id IN (v_query_lower, lpad(v_query_lower, 9, '0'), ltrim(v_query_lower, '0'))
+      UNION ALL
+      SELECT r.id::text, r.ein::text, r.name::text, r.primary_state::text, 'recipient'::text,
+             coalesce(r.grant_count, 0)::bigint, coalesce(r.total_funding, 0)::numeric
+      FROM recipient_organizations r
+      WHERE r.ein IN (v_query_lower, lpad(v_query_lower, 9, '0'), ltrim(v_query_lower, '0'))
+    ) x
+    ORDER BY lpad(x._ein, 9, '0'), (x._etype = 'recipient') DESC, x._id
     LIMIT p_limit;
     RETURN;
   END IF;
@@ -247,6 +253,12 @@ BEGIN
   v_typed := CASE WHEN v_query_spaced IS NULL THEN v_all_words
     ELSE array_remove(regexp_split_to_array(v_query_lower, '[^[:alnum:]]+'), '') END;
   e_first := v_typed[CASE WHEN v_typed[1] = 'the' THEN 2 ELSE 1 END];
+  -- But a run-together name ("SitStayRead") starts with its first camelCase
+  -- part: use that when it's a real word (3+ letters, so not "Mc"/"De").
+  IF v_query_spaced IS NOT NULL
+     AND length(v_all_words[CASE WHEN v_all_words[1] = 'the' THEN 2 ELSE 1 END]) >= 3 THEN
+    e_first := v_all_words[CASE WHEN v_all_words[1] = 'the' THEN 2 ELSE 1 END];
+  END IF;
   IF e_first = ANY(v_stop) THEN
     e_first := NULL;
   END IF;

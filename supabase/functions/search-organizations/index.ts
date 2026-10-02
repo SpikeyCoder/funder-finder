@@ -52,12 +52,13 @@ Deno.serve(async (req) => {
     const body = await req.json();
     // No organization name is longer; the RPC applies the same cap. Cut by
     // code point so an emoji at the boundary isn't split into a lone surrogate
-    // (after a cheap code-unit cut, so a huge body isn't split up first; 1000
-    // units always hold more than 200 code points, so that cut can't leave a
-    // half pair in the result). Whitespace runs are collapsed first, as the
-    // RPC does, so padding can't push real words past either cut.
+    // (after cheap code-unit cuts, so a huge body isn't scanned or split up;
+    // 1000 units always hold more than 200 code points, so that cut can't
+    // leave a half pair in the result). Whitespace runs are collapsed before
+    // the 1000-unit cut, as the RPC does, so ordinary padding can't push real
+    // words past it.
     const query = typeof body?.query === 'string'
-      ? [...body.query.replace(/\s+/g, ' ').trim().slice(0, 1000)].slice(0, 200).join('')
+      ? [...body.query.slice(0, 4000).replace(/\s+/g, ' ').trim().slice(0, 1000)].slice(0, 200).join('')
       : '';
     // p_limit is an integer: a fractional limit would make PostgREST reject the call.
     const limit = Number.isFinite(body?.limit) ? Math.min(Math.max(Math.trunc(body.limit), 1), 50) : 15;
@@ -91,13 +92,19 @@ Deno.serve(async (req) => {
       return searchFailed();
     }
 
-    const rows = await rpcRes.json().catch(() => null);
+    const text = await rpcRes.text();
+    let rows: unknown = null;
+    try {
+      rows = JSON.parse(text);
+    } catch {
+      // Logged below with the raw body.
+    }
 
     // A 200 that isn't a row array (or isn't JSON) is a failure, not "no
     // matches" — report it so the client shows its error state instead of an
     // empty result.
     if (!Array.isArray(rows)) {
-      console.error('search_organizations RPC returned a non-array body:', JSON.stringify(rows).slice(0, 300));
+      console.error('search_organizations RPC returned a non-array body:', text.slice(0, 300));
       return searchFailed();
     }
 
