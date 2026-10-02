@@ -77,13 +77,15 @@ Deno.serve(async (req) => {
       body: JSON.stringify({ p_query: query, p_limit: limit }),
     });
 
+    const searchFailed = () => new Response(
+      JSON.stringify({ results: [], error: 'Search failed' }),
+      { status: 502, headers: { ...headers, 'Content-Type': 'application/json' } },
+    );
+
     if (!rpcRes.ok) {
       const errBody = await rpcRes.text();
       console.error('search_organizations RPC error:', errBody);
-      return new Response(
-        JSON.stringify({ results: [], error: 'Search failed' }),
-        { status: 502, headers: { ...headers, 'Content-Type': 'application/json' } },
-      );
+      return searchFailed();
     }
 
     const rows = await rpcRes.json();
@@ -92,10 +94,7 @@ Deno.serve(async (req) => {
     // so the client shows its error state instead of an empty result.
     if (!Array.isArray(rows)) {
       console.error('search_organizations RPC returned a non-array body:', JSON.stringify(rows).slice(0, 300));
-      return new Response(
-        JSON.stringify({ results: [], error: 'Search failed' }),
-        { status: 502, headers: { ...headers, 'Content-Type': 'application/json' } },
-      );
+      return searchFailed();
     }
 
     // Map RPC results to the OrgSearchResult shape the frontend expects

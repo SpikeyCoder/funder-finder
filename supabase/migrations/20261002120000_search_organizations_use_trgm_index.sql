@@ -42,7 +42,7 @@
 -- in input are escaped; a query with no letters or digits returns nothing.
 -- Ranking keeps the previous tiers (now on escaped patterns), adds trigram
 -- similarity to the whole (camelCase-split) query as a small tiebreaker
--- (weight 0.01, below the funding tiebreaker), and breaks remaining ties by
+-- (weight ≤ 0.01, below the funding tiebreaker), and breaks remaining ties by
 -- id (recipient preferred over funder on an exact tie for the same EIN, per
 -- 20260326100000).
 --
@@ -79,6 +79,14 @@
 -- Rollback: supabase/rollbacks/20261002120000_search_organizations_use_trgm_index.down.sql
 
 CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA extensions;
+-- IF NOT EXISTS keeps an install in another schema; everything below names
+-- extensions.* explicitly, so say so plainly rather than fail obscurely.
+DO $$
+BEGIN
+  IF (SELECT extnamespace::regnamespace::text FROM pg_extension WHERE extname = 'pg_trgm') <> 'extensions' THEN
+    RAISE EXCEPTION 'pg_trgm must be in schema extensions (run: ALTER EXTENSION pg_trgm SET SCHEMA extensions)';
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_funders_name_trgm
   ON public.funders USING gin (name extensions.gin_trgm_ops);
@@ -137,6 +145,7 @@ DECLARE
   v_acronym boolean := false;  -- query was single letters joined into one word
   v_all_cap int;  -- row cap for the all-words set
   v_short text;   -- a 2-letter word the all-words set must also contain
+  v_typed text[]; -- the query's words as typed (before any camelCase split)
 BEGIN
   -- No organization name is this long, and every query word costs a string
   -- search per candidate row: bound the work an anonymous caller can ask for.
@@ -220,8 +229,11 @@ BEGIN
   -- ("for the children", "the of") gives no word bonus; only the
   -- whole-query prefixes below earn it then. It must be a whole word ("st
   -- jude" credits "ST …", not "STANFORD …"); being alphanumeric, it is safe
-  -- in a regex.
-  e_first := v_all_words[CASE WHEN v_all_words[1] = 'the' THEN 2 ELSE 1 END];
+  -- in a regex. It's the word as typed, so "McDonald House" credits
+  -- "MCDONALD …" just as "mcdonald house" does.
+  v_typed := CASE WHEN v_query_spaced IS NULL THEN v_all_words
+    ELSE array_remove(regexp_split_to_array(v_query_lower, '[^[:alnum:]]+'), '') END;
+  e_first := v_typed[CASE WHEN v_typed[1] = 'the' THEN 2 ELSE 1 END];
   IF e_first = ANY(v_stop) THEN
     e_first := NULL;
   END IF;
@@ -241,23 +253,33 @@ BEGIN
     v_key_words := ARRAY(SELECT x FROM unnest(v_all_words) x WHERE length(x) >= v_min_len);
   END IF;
 
+  -- A 2-letter word can't drive the index but still narrows the all-words set
+  -- ("uw madison" shouldn't be a 500-row sample of '%madison%').
+  SELECT '%' || dw || '%' INTO v_short FROM unnest(v_distinctive) WITH ORDINALITY AS t(dw, ord)
+  WHERE length(dw) = 2 ORDER BY ord LIMIT 1;
+
   IF v_driver IS NULL THEN
     -- Only short words ("st", "uw") or stop words ("the"): match where a word
     -- starts with it, at the start or mid-name — both forms have leading
     -- trigrams the index can use.
     v_loose := v_distinctive[1] || '%';
     v_loose2 := '% ' || v_distinctive[1] || '%';
-  ELSIF array_length(v_long, 1) > 1 THEN
-    v_loose := '%' || v_driver || '%';  -- (with one word, the all-words set is this)
+  ELSIF array_length(v_long, 1) > 1 OR v_short IS NOT NULL THEN
+    -- The driver alone, unnarrowed by the other words (so "washington dc"
+    -- still reaches "WASHINGTON D.C. …"). With one word and nothing to narrow
+    -- it, the all-words set is already this.
+    v_loose := '%' || v_driver || '%';
   END IF;
   -- A camelCase split can leave the real word unsearched ("McDonald" →
   -- 'mc' + 'donald', and 'mc' can't drive a set): search the typed word too
   -- so "RONALD MCDONALD HOUSE" isn't left to a capped '%donald%' sample.
   IF v_query_spaced IS NOT NULL THEN
-    SELECT x INTO w FROM unnest(regexp_split_to_array(v_query_lower, '[^[:alnum:]]+')) WITH ORDINALITY AS t(x, ord)
+    SELECT x INTO w FROM unnest(v_typed) WITH ORDINALITY AS t(x, ord)
     WHERE length(x) >= 3 AND NOT (x = ANY(v_all_words)) ORDER BY ord LIMIT 1;
     IF w IS NOT NULL AND v_driver IS NULL THEN
-      v_loose2 := '%' || w || '%';  -- keep the short-word start pattern
+      -- Keep the name-start pattern ('st%' for "StJo"); the typed word
+      -- replaces the mid-name one.
+      v_loose2 := '%' || w || '%';
     ELSIF w IS NOT NULL THEN
       -- '%donald%' would subsume '%mcdonald%': search the typed word alone.
       v_loose := '%' || w || '%';
@@ -270,10 +292,6 @@ BEGIN
   v_all2 := '%' || v_long[2] || '%';  -- NULL when absent
   v_all3 := '%' || v_long[3] || '%';
   v_all4 := '%' || v_long[4] || '%';
-  -- A 2-letter word can't drive the index but still narrows what it finds
-  -- ("uw madison" shouldn't be a 500-row sample of '%madison%').
-  SELECT '%' || dw || '%' INTO v_short FROM unnest(v_distinctive) WITH ORDINALITY AS t(dw, ord)
-  WHERE length(dw) = 2 ORDER BY ord LIMIT 1;
   v_exact := nullif(v_query_normalized, '');
   v_prefix := e_norm || '%';  -- NULL when there's no prefix to match
   -- With 2+ words the all-words set is selective by construction, so a larger
@@ -370,7 +388,7 @@ BEGIN
       END
       -- TIER 2: PREFIX MATCHES (0.80)
       + CASE
-        WHEN m._lname ~ ('^' || e_first || '([^[:alnum:]]|$)') THEN 0.80
+        WHEN m._core ~ ('^' || e_first || '([^[:alnum:]]|$)') THEN 0.80
         WHEN m._lname LIKE e_lower || '%' THEN 0.80
         WHEN m._core LIKE e_norm || '%' THEN 0.80
         ELSE 0
@@ -383,8 +401,10 @@ BEGIN
         ELSE m._hits / GREATEST(v_counted, 1) * 0.15
       END
       -- Similarity to the whole (camelCase-split) query: a tiebreaker only,
-      -- kept well below the funding tiebreaker and every tier step.
-      + extensions.similarity(m._name, coalesce(v_query_spaced, v_query_lower)) * 0.01
+      -- kept below the funding tiebreaker and every tier step (including one
+      -- more matched word of a long query: 0.15 / v_counted).
+      + extensions.similarity(m._name, coalesce(v_query_spaced, v_query_lower))
+        * LEAST(0.01, 0.05 / GREATEST(v_counted, 1))
       -- Funding tiebreaker (0-0.05)
       + CASE WHEN m._tf > 0 THEN LEAST(ln(m._tf + 1) / 24.0 * 0.05, 0.05) ELSE 0 END
       -- REMOVED: Funder preference bias (+0.05) that caused recipients to
