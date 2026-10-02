@@ -72,10 +72,11 @@ export function validate(body: unknown): ValidRequest | string {
   let requester_email: string | null = null;
   if (typeof b.email === "string" && b.email.trim()) {
     const e = b.email.trim();
-    if (e.length > 254 || !EMAIL_RE.test(e)) return "Invalid email address";
     // Lowercased so the processor's per-address cap and the dedupe index see
-    // one address.
-    requester_email = e.toLowerCase();
+    // one address (and checked after, since lowercasing can lengthen it).
+    const lower = e.toLowerCase();
+    if ([...lower].length > 254 || !EMAIL_RE.test(lower)) return "Invalid email address";
+    requester_email = lower;
   }
 
   return { query, ein, state, requester_email };
@@ -137,10 +138,13 @@ if (import.meta.main) {
       // Same outcome for the caller.
       if (res.ok || res.status === 409) {
         // `notify`: whether an outcome email can go out at all (no email
-        // without RESEND_API_KEY, a project-wide secret the processor shares).
+        // without RESEND_API_KEY, and none for a request needing review
+        // without the TRELLO_* secrets; all project-wide, shared with the
+        // processor).
         // The processor's per-address daily cap isn't checked here: answering
         // it would tell anyone how much an address has been used.
-        const notify = valid.requester_email !== null && !!Deno.env.get("RESEND_API_KEY");
+        const notify = valid.requester_email !== null &&
+          ["RESEND_API_KEY", "TRELLO_API_KEY", "TRELLO_TOKEN", "TRELLO_LIST_ID"].every((k) => !!Deno.env.get(k));
         return json(200, { ok: true, queued: true, notify }, headers);
       }
 

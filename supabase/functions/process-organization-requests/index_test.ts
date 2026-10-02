@@ -111,3 +111,7 @@ Deno.test("normalizeName folds accents instead of dropping letters", () => {
   assertEquals(normalizeName("Café Hope") === normalizeName("CAF HOPE INC"), false);
   assertEquals(normalizeName("Fundación Niños"), "fundacion ninos");
 });
+
+Deno.test("normalizeName drops apostrophes as IRS names do", () => {
+  assertEquals(normalizeName("Children's Home Society"), normalizeName("CHILDRENS HOME SOCIETY"));
+});

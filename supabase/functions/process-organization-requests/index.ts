@@ -89,6 +89,8 @@ const LEGAL_SUFFIXES = new Set(["inc", "incorporated", "corp", "corporation", "c
 export function normalizeName(name: string): string {
   const words = name
     .toLowerCase()
+    // "Children's" → "childrens", as IRS names write it.
+    .replace(/['’]/g, "")
     // Fold accents ("Café" → "cafe") rather than dropping the letter, so
     // "Café Hope" can't normalize to the same thing as "CAF HOPE".
     .normalize("NFKD")
@@ -463,18 +465,26 @@ interface RunState {
   cardKeys: Set<string>;
 }
 
-// Counted per mailbox, not per exact address: "victim+1@x.org" and
-// "victim+2@x.org" share one allowance. (The pattern can over-match a
-// longer local part, which only makes the cap stricter.)
+// Counted per mailbox, not per exact address: "victim@x.org",
+// "victim+1@x.org" and "victim+2@x.org" share one allowance.
 async function emailsSentRecently(email: string): Promise<number> {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const at = email.lastIndexOf("@");
-  const mailbox = `${email.slice(0, at).split("+")[0]}*${email.slice(at)}`;
-  const rows = await restJson<unknown[]>(
-    `organization_requests?requester_email=ilike.${encodeURIComponent(mailbox)}` +
-      `&notified_at=gte.${encodeURIComponent(since)}&select=id&limit=${EMAILS_PER_ADDRESS_PER_DAY}`,
-  );
-  return rows.length;
+  const box = email.slice(0, at).split("+")[0];
+  const domain = email.slice(at);
+  // LIKE wildcards in the address itself are literal.
+  const likeEsc = (v: string) => v.replace(/[\\%_]/g, (c) => `\\${c}`);
+  const filters = [
+    `requester_email=eq.${encodeURIComponent(box + domain)}`,
+    `requester_email=like.${encodeURIComponent(`${likeEsc(box)}+*${likeEsc(domain)}`)}`,
+  ];
+  const counts = await Promise.all(filters.map((f) =>
+    restJson<unknown[]>(
+      `organization_requests?${f}&notified_at=gte.${encodeURIComponent(since)}` +
+        `&select=id&limit=${EMAILS_PER_ADDRESS_PER_DAY}`,
+    ).then((rows) => rows.length)
+  ));
+  return counts[0] + counts[1];
 }
 
 async function processRow(row: QueueRow, run: RunState): Promise<string> {
@@ -572,10 +582,12 @@ async function processRow(row: QueueRow, run: RunState): Promise<string> {
     }
   } catch (err) {
     // The outcome itself stands (an added organization stays added); only
-    // recording it failed. Release the claim without spending an attempt:
-    // the next run resolves it again (an addition then as already listed).
+    // recording it failed. Release the claim for the next run (an addition
+    // then resolves as already listed). The claim's attempt still counts, so
+    // a write that keeps failing ends in MAX_ATTEMPTS rather than repeating
+    // lookups and review cards forever.
     console.error(`organization request ${row.id}: could not record its outcome:`, err);
-    await patchClaimed(row.id, now, { claimed_at: null, attempts: row.attempts }).catch((e) =>
+    await patchClaimed(row.id, now, { claimed_at: null }).catch((e) =>
       console.error(`organization request ${row.id}: could not release it:`, e)
     );
     return "retry";
