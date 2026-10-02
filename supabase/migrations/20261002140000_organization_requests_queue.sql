@@ -29,8 +29,9 @@
 -- the service role (the two Edge Functions) touches this table.
 --
 -- Retention (see compliance/retention-and-deletion.md): requester_email is
--- cleared 30 days after a request is processed (or made, if it never was);
--- rows are deleted after 180 days. Scheduled at 10:35 UTC, after the existing 10:xx purge jobs.
+-- cleared 30 days after a request is processed; a request still unprocessed
+-- after 30 days is closed as failed and its email cleared; rows are deleted
+-- after 180 days. Scheduled at 10:35 UTC, after the existing 10:xx purge jobs.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- The processor is invoked over HTTP from pg_cron (below).
@@ -81,11 +82,21 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
-  -- Unprocessed requests too: a queue that never runs mustn't keep emails.
+  -- A request still pending after 30 days isn't going to be processed (the
+  -- queue isn't running): close it out and drop the email with it. (Clearing
+  -- only the email of a pending row could collide with another pending row
+  -- for the same organization in the dedupe index and fail the whole job.)
+  UPDATE public.organization_requests
+     SET status = 'failed', processed_at = now(),
+         last_error = 'expired: not processed within 30 days',
+         requester_email = NULL, claimed_at = NULL
+   WHERE status = 'pending'
+     AND created_at < now() - interval '30 days';
+
   UPDATE public.organization_requests
      SET requester_email = NULL
    WHERE requester_email IS NOT NULL
-     AND coalesce(processed_at, created_at) < now() - interval '30 days';
+     AND processed_at < now() - interval '30 days';
 
   DELETE FROM public.organization_requests
    WHERE created_at < now() - interval '180 days';
