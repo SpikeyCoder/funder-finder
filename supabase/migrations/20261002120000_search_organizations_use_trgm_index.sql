@@ -135,11 +135,13 @@ DECLARE
   v_counted int;  -- how many query words can count
   v_acronym boolean := false;  -- query was single letters joined into one word
   v_all_cap int;  -- row cap for the all-words set
+  v_short text;   -- a 2-letter word the all-words set must also contain
 BEGIN
   -- No organization name is this long, and every query word costs a string
   -- search per candidate row: bound the work an anonymous caller can ask for.
-  -- Runs of spaces mean one space ("red  cross" is "red cross").
-  p_query := regexp_replace(trim(left(p_query, 200)), '\s+', ' ', 'g');
+  -- Any run of whitespace (tabs, newlines) means one space ("red  cross" is
+  -- "red cross"), and none at either end.
+  p_query := btrim(left(btrim(regexp_replace(left(p_query, 1000), '\s+', ' ', 'g')), 200));
   -- Anon can call this RPC directly, past the Edge Function's clamp.
   p_limit := LEAST(GREATEST(coalesce(p_limit, 15), 1), 50);
   v_query_lower := lower(p_query);
@@ -242,14 +244,15 @@ BEGIN
     v_loose := '%' || v_driver || '%';  -- (with one word, the all-words set is this)
   END IF;
   -- A camelCase split can leave the real word unsearched ("McDonald" →
-  -- 'mc' + 'donald', and 'mc' can't drive a set): search the typed word too,
-  -- so "RONALD MCDONALD HOUSE" isn't left to a capped '%donald%' sample.
+  -- 'mc' + 'donald', and 'mc' can't drive a set): search the typed word too
+  -- (as the second pattern, or both when there was none), so "RONALD
+  -- MCDONALD HOUSE" isn't left to a capped '%donald%' sample.
   IF v_query_spaced IS NOT NULL THEN
     SELECT x INTO w FROM unnest(regexp_split_to_array(v_query_lower, '[^[:alnum:]]+')) WITH ORDINALITY AS t(x, ord)
     WHERE length(x) >= 3 AND NOT (x = ANY(v_all_words)) ORDER BY ord LIMIT 1;
     IF w IS NOT NULL THEN
-      v_loose := '%' || w || '%';
-      v_loose2 := v_loose;
+      v_loose2 := '%' || w || '%';
+      v_loose := coalesce(v_loose, v_loose2);
     END IF;
   END IF;
 
@@ -258,6 +261,10 @@ BEGIN
   v_all2 := '%' || v_long[2] || '%';  -- NULL when absent
   v_all3 := '%' || v_long[3] || '%';
   v_all4 := '%' || v_long[4] || '%';
+  -- A 2-letter word can't drive the index but still narrows what it finds
+  -- ("uw madison" shouldn't be a 500-row sample of '%madison%').
+  SELECT '%' || dw || '%' INTO v_short FROM unnest(v_distinctive) WITH ORDINALITY AS t(dw, ord)
+  WHERE length(dw) = 2 ORDER BY ord LIMIT 1;
   v_exact := nullif(v_query_normalized, '');
   v_prefix := e_norm || '%';  -- NULL when there's no prefix to match
   -- With 2+ words the all-words set is selective by construction, so a larger
@@ -283,6 +290,7 @@ BEGIN
         AND (v_all2 IS NULL OR f.name ILIKE v_all2)
         AND (v_all3 IS NULL OR f.name ILIKE v_all3)
         AND (v_all4 IS NULL OR f.name ILIKE v_all4)
+        AND (v_short IS NULL OR f.name ILIKE v_short)
         AND (f.ntee_code LIKE 'T%' OR EXISTS (SELECT 1 FROM foundation_filings ff WHERE ff.foundation_id = f.id))
       LIMIT v_all_cap)
     UNION
@@ -306,6 +314,7 @@ BEGIN
         AND (v_all2 IS NULL OR r.name ILIKE v_all2)
         AND (v_all3 IS NULL OR r.name ILIKE v_all3)
         AND (v_all4 IS NULL OR r.name ILIKE v_all4)
+        AND (v_short IS NULL OR r.name ILIKE v_short)
       LIMIT v_all_cap)
     UNION
     (SELECT r.id FROM recipient_organizations r WHERE v_prefix IS NOT NULL AND r.name ILIKE v_prefix LIMIT 500)
@@ -377,13 +386,13 @@ BEGIN
   ),
   deduped AS (
     -- One row per organization (EIN); fall back to the row id if an EIN is
-    -- ever missing so such rows don't collapse together.
-    SELECT DISTINCT ON (coalesce(lpad(s._ein, 9, '0'), 'id:' || s._id))
+    -- ever missing or blank so such rows don't collapse together.
+    SELECT DISTINCT ON (coalesce(lpad(nullif(s._ein, ''), 9, '0'), 'id:' || s._id))
       s._id, s._ein, s._name, s._state, s._etype, s._gc, s._tf, s._rel
     FROM scored s
-    -- On a relevance tie between a funder and recipient row for the same EIN,
-    -- prefer the recipient (see 20260326100000), then break ties by id.
-    ORDER BY coalesce(lpad(s._ein, 9, '0'), 'id:' || s._id), s._rel DESC, (s._etype = 'recipient') DESC, s._id
+    -- The more relevant row wins, as in 20260326100000; on an exact tie,
+    -- prefer the recipient, then the lower id, so the pick is deterministic.
+    ORDER BY coalesce(lpad(nullif(s._ein, ''), 9, '0'), 'id:' || s._id), s._rel DESC, (s._etype = 'recipient') DESC, s._id
   )
   SELECT d._id, d._ein, d._name, d._state, d._etype, d._gc, d._tf
   FROM deduped d

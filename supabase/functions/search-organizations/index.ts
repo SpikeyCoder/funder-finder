@@ -56,7 +56,8 @@ Deno.serve(async (req) => {
     const query = typeof body?.query === 'string'
       ? [...body.query.slice(0, 1000).trim()].slice(0, 200).join('')
       : '';
-    const limit = typeof body?.limit === 'number' ? Math.min(Math.max(body.limit, 1), 50) : 15;
+    // p_limit is an integer: a fractional limit would make PostgREST reject the call.
+    const limit = Number.isFinite(body?.limit) ? Math.min(Math.max(Math.trunc(body.limit), 1), 50) : 15;
 
     if (!query || query.length < 2) {
       return new Response(
