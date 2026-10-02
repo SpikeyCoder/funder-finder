@@ -29,18 +29,24 @@ interface TechnicalContext {
 function formatConsoleArg(arg: unknown, depth = 0): string {
   if (typeof arg === 'string') return arg;
   if (arg instanceof Error) {
-    // Keep only frame lines: V8 writes "    at fn (url)", WebKit and Firefox
-    // write "fn@url". Header and message lines vary by engine (and by whether
-    // `name` was set after construction), so match frames instead.
+    const cause = (arg as { cause?: unknown }).cause;
+    // A wrapper's own frames only point at where it was wrapped; spend the
+    // limited report space on the original error's frames instead.
+    if (cause instanceof Error && depth < 2) {
+      // Skip a wrapper message that just repeats the cause's (reports are
+      // capped at 500 chars).
+      const own = arg.message.includes(cause.message) ? arg.name : `${arg.name}: ${arg.message}`;
+      return `${own} caused by ${formatConsoleArg(cause, depth + 1)}`;
+    }
+    // Keep only frame-shaped lines: V8 "    at fn (url:1:2)", WebKit/Firefox
+    // "fn@url:1:2". Header/message lines vary by engine and may contain '@'.
     const frames = (arg.stack ?? '')
       .split('\n')
-      .filter((l) => /^\s*at\s|@/.test(l))
+      .filter((l) => /^\s*at\s|@\S+:\d+(:\d+)?$/.test(l))
       .slice(0, 3)
       .map((l) => l.trim())
       .join(' | ');
-    const cause = (arg as { cause?: unknown }).cause;
-    const causeText = cause !== undefined && depth < 2 ? ` caused by ${formatConsoleArg(cause, depth + 1)}` : '';
-    return `${arg.name}: ${arg.message}${frames ? ` [${frames}]` : ''}${causeText}`;
+    return `${arg.name}: ${arg.message}${frames ? ` [${frames}]` : ''}`;
   }
   try {
     return JSON.stringify(arg) ?? String(arg);

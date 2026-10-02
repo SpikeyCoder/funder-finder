@@ -95,12 +95,17 @@ export async function fetchFunderInsights(funderId: string): Promise<FunderInsig
   return res.json();
 }
 
-export async function searchOrganizations(query: string, limit = 15): Promise<OrgSearchResult[]> {
+export async function searchOrganizations(
+  query: string,
+  limit = 15,
+  signal?: AbortSignal,
+): Promise<OrgSearchResult[]> {
   const headers = await getEdgeFunctionHeaders('application/json', { useAnonOnly: true });
   const res = await fetch(SEARCH_ORGS_URL, {
     method: 'POST',
     headers,
     body: JSON.stringify({ query, limit }),
+    signal,
   });
 
   if (!res.ok) {
@@ -109,7 +114,11 @@ export async function searchOrganizations(query: string, limit = 15): Promise<Or
   }
 
   const data = await res.json();
-  return Array.isArray(data.results) ? data.results : [];
+  // A 200 without a results array is a failure, not "no matches".
+  if (!Array.isArray(data.results) || data.error) {
+    throw new Error(data.error || 'Unexpected search response');
+  }
+  return data.results;
 }
 
 export async function fetchRecipientProfile(

@@ -13,10 +13,15 @@ const CHUNK_RELOAD_KEY = 'ff_chunk_reloaded';
 const CHUNK_ERROR_MESSAGE =
   /dynamically imported module|importing a module script failed|importing binding name|unable to preload css/i;
 
+// Name of the wrapper asChunkLoadError puts around a failed route import. It
+// covers code that throws while a page module evaluates as well as network /
+// link failures, which browsers word too inconsistently to tell apart.
+export const ROUTE_LOAD_ERROR = 'RouteModuleLoadError';
+
 export function isChunkLoadError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   const { name = '', message = '' } = error as { name?: string; message?: string };
-  return name === 'ChunkLoadError' || CHUNK_ERROR_MESSAGE.test(message);
+  return name === 'ChunkLoadError' || name === ROUTE_LOAD_ERROR || CHUNK_ERROR_MESSAGE.test(message);
 }
 
 // Reloading pulls a fresh index.html plus valid chunks and almost always
@@ -49,7 +54,7 @@ export function asChunkLoadError(error: unknown): Error {
   if (isChunkLoadError(error)) return error as Error;
   const message = error instanceof Error ? error.message : String(error);
   const wrapped = new Error(`Failed to load route module: ${message}`);
-  wrapped.name = 'ChunkLoadError';
+  wrapped.name = ROUTE_LOAD_ERROR;
   return Object.assign(wrapped, { cause: error });
 }
 

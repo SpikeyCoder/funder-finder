@@ -28,6 +28,9 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
   const dropdownRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const requestIdRef = useRef(0);
+  // Set when the user closes the dropdown (Escape / outside click) so a search
+  // still in flight doesn't pop it back open; cleared when they type or refocus.
+  const dismissedRef = useRef(false);
 
   useEffect(() => {
     // Invalidate any in-flight request so a slow, older response can't
@@ -44,10 +47,12 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
 
     setLoading(true);
     clearTimeout(debounceRef.current);
+    // Cancel this request if the query changes before it finishes.
+    const controller = new AbortController();
     debounceRef.current = setTimeout(async () => {
       const searched = query.trim();
       try {
-        const data = await searchOrganizations(searched);
+        const data = await searchOrganizations(searched, 15, controller.signal);
         if (requestId !== requestIdRef.current) return;
         setSearchedQuery(searched);
         setResults(data);
@@ -64,14 +69,17 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
           // Only open for someone still using the search box: a slow response
           // shouldn't pop the panel back up after Escape or an outside click.
           const active = document.activeElement;
-          if (active === inputRef.current || dropdownRef.current?.contains(active)) {
+          if (!dismissedRef.current && (active === inputRef.current || dropdownRef.current?.contains(active))) {
             setShowDropdown(true);
           }
         }
       }
     }, 300);
 
-    return () => clearTimeout(debounceRef.current);
+    return () => {
+      clearTimeout(debounceRef.current);
+      controller.abort();
+    };
   }, [query, retryNonce]);
 
   // Close dropdown on outside click
@@ -79,6 +87,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
     const handler = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
           inputRef.current && !inputRef.current.contains(e.target as Node)) {
+        dismissedRef.current = true;
         setShowDropdown(false);
       }
     };
@@ -97,11 +106,13 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (!showDropdown) return;
+    // Escape counts even before the first response opens the dropdown.
     if (e.key === 'Escape') {
+      dismissedRef.current = true;
       setShowDropdown(false);
       return;
     }
+    if (!showDropdown) return;
     if (status !== 'results') return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -123,8 +134,8 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
           ref={inputRef}
           type="text"
           value={query}
-          onChange={e => setQuery(e.target.value)}
-          onFocus={() => status !== 'idle' && setShowDropdown(true)}
+          onChange={e => { dismissedRef.current = false; setQuery(e.target.value); }}
+          onFocus={() => { dismissedRef.current = false; if (status !== 'idle') setShowDropdown(true); }}
           onKeyDown={handleKeyDown}
           autoFocus={autoFocus}
           placeholder={placeholder}
@@ -136,13 +147,21 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
         )}
       </div>
 
+      {/* Persistent live region: screen readers announce changes inside a
+          region that already exists, not one mounted along with its text. */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {status === 'empty' && `No organizations match ${searchedQuery}`}
+        {status === 'error' && 'Search is temporarily unavailable.'}
+        {status === 'results' && `${results.length} organization${results.length === 1 ? '' : 's'} found`}
+      </div>
+
       {showDropdown && status !== 'idle' && (
         <div
           ref={dropdownRef}
           className="absolute z-50 w-full mt-2 bg-[#161b22] border border-[#30363d] rounded-xl shadow-xl overflow-hidden max-h-80 overflow-y-auto"
         >
           {status === 'empty' && (
-            <div role="status" className="flex items-start gap-3 px-4 py-4 text-left">
+            <div className="flex items-start gap-3 px-4 py-4 text-left">
               <SearchX size={16} className="text-gray-400 shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm text-white">No organizations match &ldquo;{searchedQuery}&rdquo;</p>
@@ -153,7 +172,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
             </div>
           )}
           {status === 'error' && (
-            <div role="alert" className="flex items-start gap-3 px-4 py-4 text-left">
+            <div className="flex items-start gap-3 px-4 py-4 text-left">
               <AlertCircle size={16} className="text-red-400 shrink-0 mt-0.5" />
               <div className="flex-1">
                 <p className="text-sm text-white">Search is temporarily unavailable.</p>

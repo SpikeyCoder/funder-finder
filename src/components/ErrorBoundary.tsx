@@ -41,8 +41,11 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.hasError) {
-      const chunkError = this.state.reloading;
       const shownError = this.state.error && underlyingError(this.state.error);
+      // A recognised load failure we couldn't (or already did) auto-reload for
+      // still gets the "reload" screen; anything else — e.g. a page module
+      // that throws while loading — shows its real error.
+      const reloadScreen = !this.state.reloading && isChunkLoadError(shownError);
       return (
         <div className="min-h-screen bg-[#0d1117] flex items-center justify-center px-4">
           <div className="max-w-md text-center">
@@ -50,14 +53,18 @@ export default class ErrorBoundary extends Component<Props, State> {
               <AlertCircle size={48} className="text-red-400" />
             </div>
             <h1 className="text-2xl font-bold text-white mb-3">
-              {chunkError ? 'A new version is available' : 'Oops! Something went wrong'}
+              {this.state.reloading
+                ? 'Reloading…'
+                : reloadScreen ? 'A new version may be available' : 'Oops! Something went wrong'}
             </h1>
             <p className="text-gray-400 mb-6">
-              {chunkError
-                ? 'The app was updated. Reload to get the latest version.'
-                : 'We encountered an unexpected error. Please try again or contact support if the problem persists.'}
+              {this.state.reloading
+                ? 'Part of the page didn’t load. Fetching it again.'
+                : reloadScreen
+                  ? 'Part of the app didn’t load — usually because it was just updated. Reload to get the latest version.'
+                  : 'We encountered an unexpected error. Please try again or contact support if the problem persists.'}
             </p>
-            {!chunkError && shownError && (
+            {!this.state.reloading && !reloadScreen && shownError && (
               <details className="mb-6 text-left bg-[#161b22] border border-[#30363d] rounded-lg p-4">
                 <summary className="cursor-pointer text-sm text-gray-400 font-medium">
                   Error details
@@ -71,7 +78,7 @@ export default class ErrorBoundary extends Component<Props, State> {
               onClick={this.handleTryAgain}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
             >
-              {chunkError ? 'Reload' : 'Try Again'}
+              {this.state.reloading || reloadScreen ? 'Reload' : 'Try Again'}
             </button>
           </div>
         </div>
