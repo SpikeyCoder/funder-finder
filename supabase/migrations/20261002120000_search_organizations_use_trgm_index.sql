@@ -51,10 +51,9 @@
 --
 -- MEASURED (production, pg_temp copy of this body; identical ordered results
 -- on repeat calls for every query), ms:
---   foundation 266-341 · "% foundation" 272 · foundation for children 569 ·
---   community foundation 934 (cold) · the 561 · st 477 · united way of king
---   county 341 · church of st mary 311 · habitat for humanity 208 · red cross
---   495 · SitStayRead 147 · xq 6 · y.m.c.a 51 · NULL / %% / __ 0
+--   foundation 573 · community foundation 642 · foundation for children 345 ·
+--   habitat for humanity 120 · y.m.c.a 213 · the 116 · st 117 · "the ." 118 ·
+--   "Habitat for Humanity, Inc." 168 · red cross 63 · xq 6 · NULL / %% / __ 0
 -- (The exact set was stubbed for these runs because its lower(name) indexes
 -- don't exist in production until this migration runs; on a temp copy of
 -- funders with that index, `lower(name) IN ('foundation','the foundation')`
@@ -64,7 +63,8 @@
 -- "red  cross" and "the community foundation" behave like their clean forms.
 -- (One funder name of ~760k rows has stray whitespace; the exact set's
 -- lower(name) match ignores it and the other sets still find it.)
--- Top results: "foundation" → FOUNDATION FOR THE CAROLINAS; "church of st
+-- Top results: "y.m.c.a" → YMCA OF THE USA; "foundation for children" →
+-- FOUNDATION FOR CHILDREN WITH NEUROIMMUNE DISORDERS INC; "church of st
 -- mary" → CHURCH OF ST MARY; "united way of king county" → UNITED WAY OF KING
 -- COUNTY; "SitStayRead" → SIT STAY READ INC.
 --
@@ -166,6 +166,11 @@ BEGIN
   -- and "_" are literal text rather than match-anything patterns.
   e_lower := replace(replace(replace(v_query_lower, '\', '\\'), '%', '\%'), '_', '\_');
   e_norm := replace(replace(replace(v_query_normalized, '\', '\\'), '%', '\%'), '_', '\_');
+  -- "the ." normalizes to nothing: no prefix to match (a bare '%' would match
+  -- and credit every row).
+  IF e_norm = '' THEN
+    e_norm := NULL;
+  END IF;
 
   -- Words are runs of letters/digits, like pg_trgm's own words, so
   -- "Humanity, Inc." gives 'humanity' and 'inc' (not 'humanity,' / 'inc.',
@@ -173,6 +178,11 @@ BEGIN
   -- Being alphanumeric, they need no LIKE escaping.
   v_all_words := array_remove(
     regexp_split_to_array(coalesce(v_query_spaced, v_query_lower), '[^[:alnum:]]+'), '');
+  -- A dotted acronym ("y.m.c.a") is one word, not four single letters.
+  IF array_length(v_all_words, 1) >= 2
+     AND NOT EXISTS (SELECT 1 FROM unnest(v_all_words) x WHERE length(x) > 1) THEN
+    v_all_words := ARRAY[array_to_string(v_all_words, '')];
+  END IF;
   v_distinctive := ARRAY[]::text[];
   FOREACH w IN ARRAY v_all_words LOOP
     IF length(w) >= 2 AND NOT (w = ANY(v_stop)) THEN
@@ -210,8 +220,8 @@ BEGIN
   v_all2 := '%' || v_long[2] || '%';  -- NULL when absent
   v_all3 := '%' || v_long[3] || '%';
   v_all4 := '%' || v_long[4] || '%';
-  v_exact := v_query_normalized;
-  v_prefix := e_norm || '%';
+  v_exact := nullif(v_query_normalized, '');
+  v_prefix := e_norm || '%';  -- NULL when there's no prefix to match
 
   RETURN QUERY
   WITH funder_ids AS (
@@ -231,9 +241,11 @@ BEGIN
         AND (v_all3 IS NULL OR f.name ILIKE v_all3)
         AND (v_all4 IS NULL OR f.name ILIKE v_all4)
         AND (f.ntee_code LIKE 'T%' OR EXISTS (SELECT 1 FROM foundation_filings ff WHERE ff.foundation_id = f.id))
-      LIMIT 500)
+      -- Selective by construction, so a larger cap costs little and keeps the
+      -- other sets' shared tail ("habitat for humanity": ~551) reachable.
+      LIMIT 2000)
     UNION
-    (SELECT f.id FROM funders f WHERE f.name ILIKE v_prefix AND (f.ntee_code LIKE 'T%' OR EXISTS (SELECT 1 FROM foundation_filings ff WHERE ff.foundation_id = f.id)) LIMIT 500)
+    (SELECT f.id FROM funders f WHERE v_prefix IS NOT NULL AND f.name ILIKE v_prefix AND (f.ntee_code LIKE 'T%' OR EXISTS (SELECT 1 FROM foundation_filings ff WHERE ff.foundation_id = f.id)) LIMIT 500)
     UNION
     (SELECT f.id FROM funders f WHERE v_loose IS NOT NULL AND (f.name ILIKE v_loose OR f.name ILIKE v_loose2) AND (f.ntee_code LIKE 'T%' OR EXISTS (SELECT 1 FROM foundation_filings ff WHERE ff.foundation_id = f.id)) LIMIT 500)
   ),
@@ -253,9 +265,9 @@ BEGIN
         AND (v_all2 IS NULL OR r.name ILIKE v_all2)
         AND (v_all3 IS NULL OR r.name ILIKE v_all3)
         AND (v_all4 IS NULL OR r.name ILIKE v_all4)
-      LIMIT 500)
+      LIMIT 2000)
     UNION
-    (SELECT r.id FROM recipient_organizations r WHERE r.name ILIKE v_prefix LIMIT 500)
+    (SELECT r.id FROM recipient_organizations r WHERE v_prefix IS NOT NULL AND r.name ILIKE v_prefix LIMIT 500)
     UNION
     (SELECT r.id FROM recipient_organizations r WHERE v_loose IS NOT NULL AND (r.name ILIKE v_loose OR r.name ILIKE v_loose2) LIMIT 500)
   ),
@@ -270,44 +282,49 @@ BEGIN
     UNION ALL
     SELECT * FROM recipient_hits
   ),
+  measured AS (
+    -- Per-row values the tiers share, computed once.
+    SELECT c.*, lower(trim(c._name)) AS _lname,
+      (SELECT count(*)::numeric FROM unnest(v_all_words) aw
+        WHERE length(aw) >= 2 AND strpos(lower(trim(c._name)), aw) > 0) AS _hits
+    FROM combined c
+  ),
   scored AS (
-    SELECT c.*,
+    SELECT m.*,
       -- TIER 1: EXACT MATCHES (1.0)
       CASE
-        WHEN lower(trim(c._name)) = v_query_lower THEN 1.0
-        WHEN regexp_replace(lower(trim(c._name)), '^the\s+', '') = v_query_lower THEN 1.0
-        WHEN lower(trim(c._name)) = v_query_normalized THEN 1.0
+        WHEN m._lname = v_query_lower THEN 1.0
+        WHEN regexp_replace(m._lname, '^the\s+', '') = v_query_lower THEN 1.0
+        WHEN m._lname = v_query_normalized THEN 1.0
         ELSE 0
       END
       -- TIER 2: PREFIX MATCHES (0.80)
       + CASE
-        WHEN lower(trim(c._name)) LIKE e_first || '%' THEN 0.80
-        WHEN lower(trim(c._name)) LIKE e_lower || '%' THEN 0.80
-        WHEN lower(trim(c._name)) LIKE e_norm || '%' THEN 0.80
+        WHEN m._lname LIKE e_first || '%' THEN 0.80
+        WHEN m._lname LIKE e_lower || '%' THEN 0.80
+        WHEN m._lname LIKE e_norm || '%' THEN 0.80
         ELSE 0
       END
       -- TIER 3: FULL PHRASE MATCH (0.50)
-      + CASE WHEN strpos(lower(c._name), v_query_lower) > 0 THEN 0.50 ELSE 0 END
+      + CASE WHEN strpos(m._lname, v_query_lower) > 0 THEN 0.50 ELSE 0 END
       -- TIER 4: PARTIAL/FUZZY - word count match
       + CASE
-        WHEN (SELECT count(*)::numeric FROM unnest(v_all_words) aw
-              WHERE length(aw) >= 2 AND strpos(lower(c._name), aw) > 0)
-             = GREATEST(array_length(v_all_words, 1), 1)
-        THEN 0.30
-        ELSE (SELECT count(*)::numeric FROM unnest(v_all_words) aw
-              WHERE length(aw) >= 2 AND strpos(lower(c._name), aw) > 0)
-             / GREATEST(array_length(v_all_words, 1), 1) * 0.15
+        WHEN m._hits = GREATEST(array_length(v_all_words, 1), 1) THEN 0.30
+        ELSE m._hits / GREATEST(array_length(v_all_words, 1), 1) * 0.15
       END
       -- Similarity to the whole (camelCase-split) query: a tiebreaker only,
       -- kept well below the funding tiebreaker and every tier step.
-      + extensions.similarity(c._name, coalesce(v_query_spaced, v_query_lower)) * 0.01
+      + extensions.similarity(m._name, coalesce(v_query_spaced, v_query_lower)) * 0.01
       -- Funding tiebreaker (0-0.05)
-      + CASE WHEN c._tf > 0 THEN LEAST(ln(c._tf + 1) / 24.0 * 0.05, 0.05) ELSE 0 END
+      + CASE WHEN m._tf > 0 THEN LEAST(ln(m._tf + 1) / 24.0 * 0.05, 0.05) ELSE 0 END
       -- REMOVED: Funder preference bias (+0.05) that caused recipients to
       -- incorrectly show as funders when they existed in both tables.
       -- Previously: + CASE WHEN c._etype = 'funder' THEN 0.05 ELSE 0 END
       AS _rel
-    FROM combined c
+    FROM measured m
+    -- A candidate must contain at least one query word (as before this
+    -- migration); e.g. a one-letter fallback match alone isn't relevant.
+    WHERE m._hits > 0
   ),
   deduped AS (
     -- One row per organization (EIN); fall back to the row id if an EIN is
