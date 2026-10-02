@@ -27,7 +27,7 @@
 -- Candidates are the union of four sets, each capped *without* sorting so a
 -- common word stops scanning early, then ranked together:
 --   exact       names equal to the query (also "The <query>"), by B-tree on
---               lower(name) — an ILIKE without wildcards still goes through
+--               lower(btrim(name)) — an ILIKE without wildcards still goes through
 --               the trigram index and rechecks every row sharing the word's
 --               trigrams (6.6 s for "foundation"); never lost to other caps;
 --   all words   names containing every indexable distinctive word (up to 4)
@@ -60,15 +60,13 @@
 --   habitat for humanity 69 · y.m.c.a 47 · c# 122 · the 132 · for the
 --   children 78 · McDonald Foundation 69 · uw madison 19 · st jude 14 ·
 --   "Habitat for Humanity, Inc." 168 · red cross 65 · xq 6 · NULL / %% / __ 0
--- (The exact set was stubbed for these runs because its lower(name) indexes
--- don't exist in production until this migration runs; on a temp copy of
--- funders with that index, `lower(name) IN ('foundation','the foundation')`
--- took 0.08 ms.)
+-- (The exact set was stubbed for these runs because its lower(btrim(name))
+-- indexes don't exist in production until this migration runs; on an
+-- analyzed temp copy of funders with that index, `lower(btrim(name)) IN
+-- ('foundation','the foundation')` was an index scan taking 0.08 ms.)
 -- Words are split on any non-letter/digit (as pg_trgm does): "Habitat for
 -- Humanity, Inc." (168 ms) → HABITAT FOR HUMANITY INTERNATIONAL INC first;
 -- "red  cross" and "the community foundation" behave like their clean forms.
--- (One funder name of ~760k rows has stray whitespace; the exact set's
--- lower(name) match ignores it and the other sets still find it.)
 -- Top results: "y.m.c.a" → YMCA OF THE USA; "j paul getty trust" → J PAUL
 -- GETTY TRUST; "foundation for children" →
 -- FOUNDATION FOR CHILDREN WITH NEUROIMMUNE DISORDERS INC; "church of st
@@ -77,7 +75,7 @@
 --
 -- The pg_trgm extension and both trigram indexes already exist in production;
 -- they're declared here (IF NOT EXISTS) so the schema this depends on is in
--- source control. The two lower(name) B-tree indexes are new. (Not
+-- source control. The two lower(btrim(name)) B-tree indexes are new. (Not
 -- CONCURRENTLY: migrations run in a transaction. Building them briefly blocks
 -- writes to these tables, which are batch-loaded.) CREATE OR REPLACE keeps the function's owner and grants.
 -- Rollback: supabase/rollbacks/20261002120000_search_organizations_use_trgm_index.down.sql
@@ -98,10 +96,15 @@ CREATE INDEX IF NOT EXISTS idx_recipient_org_name_trgm2
   ON public.recipient_organizations USING gin (name extensions.gin_trgm_ops);
 
 -- New: exact-name lookups for the "exact" candidate set.
+-- Trimmed, as ranking compares names (one funder name has stray whitespace).
 CREATE INDEX IF NOT EXISTS idx_funders_lower_name
-  ON public.funders (lower(name));
+  ON public.funders (lower(btrim(name)));
 CREATE INDEX IF NOT EXISTS idx_recipient_org_lower_name
-  ON public.recipient_organizations (lower(name));
+  ON public.recipient_organizations (lower(btrim(name)));
+-- Expression indexes have no statistics until the table is analyzed; without
+-- them the planner may skip the new indexes for the exact set.
+ANALYZE public.funders;
+ANALYZE public.recipient_organizations;
 
 CREATE OR REPLACE FUNCTION public.search_organizations(p_query text, p_limit integer DEFAULT 15)
 RETURNS TABLE(id text, ein text, name text, state text, entity_type text, grant_count bigint, total_funding numeric)
@@ -137,7 +140,7 @@ DECLARE
   v_all2 text;
   v_all3 text;
   v_all4 text;
-  v_exact text;   -- the whole (normalized) query, matched by lower(name) equality
+  v_exact text;   -- the whole (normalized) query, matched by lower(btrim(name)) equality
   v_prefix text;  -- names starting with the query
   -- LIKE-escaped forms of the query, for every pattern built from input.
   e_lower text;
@@ -287,7 +290,6 @@ BEGIN
     ELSIF w IS NOT NULL THEN
       -- '%donald%' would subsume '%mcdonald%': search the typed word alone.
       v_loose := '%' || w || '%';
-      v_loose2 := v_loose;
     END IF;
   END IF;
 
@@ -312,7 +314,7 @@ BEGIN
     -- Only legitimate grantmaking funders (NTEE T-code or 990-PF filers)
     -- count.
     (SELECT f.id FROM funders f
-      WHERE lower(f.name) IN (v_exact, 'the ' || v_exact)
+      WHERE lower(btrim(f.name)) IN (v_exact, 'the ' || v_exact)
         AND (f.ntee_code LIKE 'T%' OR EXISTS (SELECT 1 FROM foundation_filings ff WHERE ff.foundation_id = f.id))
       LIMIT 500)
     UNION
@@ -337,7 +339,7 @@ BEGIN
   ),
   recipient_ids AS (
     (SELECT r.id FROM recipient_organizations r
-      WHERE lower(r.name) IN (v_exact, 'the ' || v_exact)
+      WHERE lower(btrim(r.name)) IN (v_exact, 'the ' || v_exact)
       LIMIT 500)
     UNION
     (SELECT r.id FROM recipient_organizations r

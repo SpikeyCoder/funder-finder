@@ -53,8 +53,10 @@ Deno.serve(async (req) => {
     // No organization name is longer; the RPC applies the same cap. Cut by
     // code point so an emoji at the boundary isn't split into a lone surrogate
     // (after a cheap code-unit cut, so a huge body isn't split up first).
+    // Whitespace runs are collapsed first, as the RPC does, so padding can't
+    // push real words past the cut.
     const query = typeof body?.query === 'string'
-      ? [...body.query.trim().slice(0, 1000)].slice(0, 200).join('')
+      ? [...body.query.trim().slice(0, 1000).replace(/\s+/g, ' ')].slice(0, 200).join('')
       : '';
     // p_limit is an integer: a fractional limit would make PostgREST reject the call.
     const limit = Number.isFinite(body?.limit) ? Math.min(Math.max(Math.trunc(body.limit), 1), 50) : 15;
