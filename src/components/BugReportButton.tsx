@@ -182,7 +182,9 @@ export default function BugReportButton() {
 
     // Capture uncaught errors
     const handleError = (event: ErrorEvent) => {
-      captureError(event.error !== undefined && event.error !== null
+      // An Error carries its own frames; anything else thrown only has the
+      // event's location.
+      captureError(event.error instanceof Error
         ? `Uncaught ${formatConsoleArg(event.error)}`
         : `${event.message} at ${event.filename}:${event.lineno}`);
     };

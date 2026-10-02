@@ -68,6 +68,9 @@ test('does not treat ordinary errors as chunk-load errors', () => {
 test('reload key: the failing chunk when named, else the page path', () => {
   assert.equal(reloadKey(fetchFail('FunderDetail-Ab1.js'), '/funder/1', 'index-B1.js'), 'chunk:FunderDetail-Ab1.js');
   assert.equal(reloadKey(LINK, '/results', 'index-B1.js'), 'path:/results@index-B1.js');
+  // Chrome's link error names the shared dependency, not the failing route.
+  const chromeLink = new SyntaxError("The requested module './index-B1.js' does not provide an export named 'Dt'");
+  assert.equal(reloadKey(chromeLink, '/funder/1', 'index-B1.js'), 'path:/funder/1@index-B1.js');
 });
 
 test('one reload per key for the life of the tab — no loop however slow', () => {

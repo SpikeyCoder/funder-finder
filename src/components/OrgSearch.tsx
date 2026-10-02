@@ -84,10 +84,11 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
     const handler = (e: MouseEvent) => {
       const target = e.target as Node;
       if (inputRef.current?.contains(target) || dropdownRef.current?.contains(target)) return;
-      // Dragging the page scrollbar doesn't blur the input; it isn't a
-      // dismissal. (Scrollbars sit outside the viewport's client area.)
+      // Dragging a classic (space-taking) page scrollbar doesn't blur the
+      // input; it isn't a dismissal. Overlay scrollbars (mobile, macOS) take no
+      // width, so this never swallows a real tap there.
       const root = document.documentElement;
-      if (e.clientX >= root.clientWidth || e.clientY >= root.clientHeight) return;
+      if (window.innerWidth > root.clientWidth && e.clientX >= root.clientWidth) return;
       dismissedRef.current = true;
       setShowDropdown(false);
     };

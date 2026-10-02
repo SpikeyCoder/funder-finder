@@ -38,9 +38,10 @@ export function isChunkLoadError(error: unknown): boolean {
   return name === 'SyntaxError' && LINK_FAILURE.test(message);
 }
 
-// Keys we've already auto-reloaded for in this tab. The key is the failing
-// chunk's file when the browser names it (fetch failures do), else the page
-// path plus the running build's entry chunk (Safari's errors name no file).
+// Keys we've already auto-reloaded for in this tab. A fetch failure names the
+// chunk that failed, so it's keyed by that file. Link failures name a
+// dependency (Chrome's is usually the shared entry chunk) or nothing (Safari),
+// so they're keyed by page path plus the running build's entry chunk.
 // Each key gets one reload for the life of the tab, so nothing can loop
 // however long a failure takes to surface; a later deploy still auto-recovers
 // because it changes the hashed filenames, and with them the key.
@@ -49,7 +50,7 @@ const MAX_REMEMBERED = 50;
 
 export function reloadKey(error: unknown, pathname: string, build: string): string {
   const message = String((error as { message?: unknown } | null)?.message ?? '');
-  const chunk = message.match(/[\w.-]+\.(?:js|css)\b/);
+  const chunk = FETCH_FAILURE.test(message) ? message.match(/[\w.-]+\.(?:js|css)\b/) : null;
   return chunk ? `chunk:${chunk[0]}` : `path:${pathname}@${build}`;
 }
 
