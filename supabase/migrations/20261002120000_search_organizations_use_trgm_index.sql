@@ -59,6 +59,11 @@
 -- don't exist in production until this migration runs; on a temp copy of
 -- funders with that index, `lower(name) IN ('foundation','the foundation')`
 -- took 0.08 ms.)
+-- Words are split on any non-letter/digit (as pg_trgm does): "Habitat for
+-- Humanity, Inc." (168 ms) → HABITAT FOR HUMANITY INTERNATIONAL INC first;
+-- "red  cross" and "the community foundation" behave like their clean forms.
+-- (One funder name of ~760k rows has stray whitespace; the exact set's
+-- lower(name) match ignores it and the other sets still find it.)
 -- Top results: "foundation" → FOUNDATION FOR THE CAROLINAS; "church of st
 -- mary" → CHURCH OF ST MARY; "united way of king county" → UNITED WAY OF KING
 -- COUNTY; "SitStayRead" → SIT STAY READ INC.
@@ -105,7 +110,6 @@ DECLARE
   v_query_lower text;
   v_query_normalized text;
   v_query_spaced text;
-  v_first_word text;
   v_all_words text[];
   v_distinctive text[];
   v_stop text[] := ARRAY['the','of','for','and','a','an','inc','llc','co','org','corp'];
@@ -128,7 +132,9 @@ BEGIN
   v_query_lower := lower(trim(p_query));
   -- Leading punctuation means nothing in a name search, and left in a prefix
   -- pattern ("% foundation%") only the common word's trigrams would remain.
-  v_query_normalized := regexp_replace(regexp_replace(v_query_lower, '^[^[:alnum:]]+', ''), '^the\s+', '');
+  v_query_normalized := regexp_replace(
+    regexp_replace(regexp_replace(v_query_lower, '^[^[:alnum:]]+', ''), '^the\s+', ''),
+    '^[^[:alnum:]]+', '');
 
   -- Split camelCase/PascalCase: "SitStayRead" → "sit stay read"
   v_query_spaced := lower(regexp_replace(trim(p_query), '([a-z])([A-Z])', '\1 \2', 'g'));
@@ -156,32 +162,38 @@ BEGIN
     RETURN;
   END IF;
 
-  -- Escape LIKE wildcards in everything built from input, so "%" and "_" are
-  -- literal text rather than match-anything patterns.
+  -- Escape LIKE wildcards in the patterns built from the whole query, so "%"
+  -- and "_" are literal text rather than match-anything patterns.
   e_lower := replace(replace(replace(v_query_lower, '\', '\\'), '%', '\%'), '_', '\_');
   e_norm := replace(replace(replace(v_query_normalized, '\', '\\'), '%', '\%'), '_', '\_');
 
-  -- Split into all words and distinctive words
-  v_all_words := string_to_array(coalesce(v_query_spaced, v_query_lower), ' ');
-  e_first := replace(replace(replace(v_all_words[1], '\', '\\'), '%', '\%'), '_', '\_');
+  -- Words are runs of letters/digits, like pg_trgm's own words, so
+  -- "Humanity, Inc." gives 'humanity' and 'inc' (not 'humanity,' / 'inc.',
+  -- which IRS-style names never contain) and extra spaces give no empty words.
+  -- Being alphanumeric, they need no LIKE escaping.
+  v_all_words := array_remove(
+    regexp_split_to_array(coalesce(v_query_spaced, v_query_lower), '[^[:alnum:]]+'), '');
   v_distinctive := ARRAY[]::text[];
   FOREACH w IN ARRAY v_all_words LOOP
-    IF length(w) >= 2 AND w ~ '[[:alnum:]]' AND NOT (w = ANY(v_stop)) THEN
-      v_distinctive := array_append(v_distinctive, replace(replace(replace(w, '\', '\\'), '%', '\%'), '_', '\_'));
+    IF length(w) >= 2 AND NOT (w = ANY(v_stop)) THEN
+      v_distinctive := array_append(v_distinctive, w);
     END IF;
   END LOOP;
 
-  -- A trigram index can only serve a word with a run of 3+ letters/digits
-  -- ('%st%' or '%y.m.c.a%' would scan every row; pg_trgm splits on
-  -- punctuation). Only such words drive the indexed candidate sets.
+  -- A trigram index can only serve a word of 3+ characters ('%st%' would
+  -- scan every row). Only such words drive the indexed candidate sets.
   SELECT coalesce(array_agg(dw ORDER BY ord), ARRAY[]::text[]) INTO v_long
   FROM unnest(v_distinctive) WITH ORDINALITY AS t(dw, ord)
-  WHERE dw ~ '[[:alnum:]]{3}';
+  WHERE length(dw) >= 3;
   v_driver := v_long[1];
 
   IF array_length(v_distinctive, 1) IS NULL THEN
-    v_distinctive := ARRAY[e_norm];
+    -- Only stop words or 1-letter words ("the", "a b"): use the first word.
+    v_distinctive := v_all_words[1:1];
   END IF;
+  -- Tier-2 prefix bonus keys off the first meaningful word, not a leading
+  -- "the" (which would credit every "THE …" name).
+  e_first := v_distinctive[1];
 
   IF v_driver IS NULL THEN
     -- Only short words ("st", "uw") or stop words ("the"): match where a word
@@ -200,7 +212,6 @@ BEGIN
   v_all4 := '%' || v_long[4] || '%';
   v_exact := v_query_normalized;
   v_prefix := e_norm || '%';
-  v_first_word := v_all_words[1];
 
   RETURN QUERY
   WITH funder_ids AS (
