@@ -41,6 +41,9 @@ function formatArg(arg: unknown, depth: number): string {
     const cause = (arg as { cause?: unknown }).cause;
     // A wrapper's own frames only point at where it was wrapped; spend the
     // limited report space on the original error's frames instead.
+    if (cause !== undefined && !(cause instanceof Error)) {
+      return `${arg.name}: ${arg.message} caused by ${formatArg(cause, depth + 1)}`;
+    }
     if (cause instanceof Error && depth < 2) {
       // Skip a wrapper message that just repeats the cause's (reports are
       // capped at 500 chars).

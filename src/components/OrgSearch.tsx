@@ -84,9 +84,10 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
     const handler = (e: MouseEvent) => {
       const target = e.target as Node;
       if (inputRef.current?.contains(target) || dropdownRef.current?.contains(target)) return;
-      // A mousedown on the page scrollbar targets <html> and doesn't blur the
-      // input; it isn't a dismissal.
-      if (target === document.documentElement) return;
+      // Dragging the page scrollbar doesn't blur the input; it isn't a
+      // dismissal. (Scrollbars sit outside the viewport's client area.)
+      const root = document.documentElement;
+      if (e.clientX >= root.clientWidth || e.clientY >= root.clientHeight) return;
       dismissedRef.current = true;
       setShowDropdown(false);
     };
