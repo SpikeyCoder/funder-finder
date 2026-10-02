@@ -58,7 +58,16 @@ Deno.serve(async (req) => {
     // the 1000-unit cut, as the RPC does, so ordinary padding can't push real
     // words past it.
     const query = typeof body?.query === 'string'
-      ? [...body.query.slice(0, 4000).replace(/\s+/g, ' ').trim().slice(0, 1000)].slice(0, 200).join('')
+      ? [
+        ...body.query
+          .slice(0, 4000)
+          // The 4000-unit cut can leave half an emoji; drop any lone surrogate
+          // before whitespace collapse could pull it within the first 200.
+          .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 1000),
+      ].slice(0, 200).join('')
       : '';
     // p_limit is an integer: a fractional limit would make PostgREST reject the call.
     const limit = Number.isFinite(body?.limit) ? Math.min(Math.max(Math.trunc(body.limit), 1), 50) : 15;
@@ -109,7 +118,8 @@ Deno.serve(async (req) => {
     }
 
     // Map RPC results to the OrgSearchResult shape the frontend expects
-    const results = rows.map((r: Record<string, unknown>) => ({
+    // (A malformed element is skipped rather than throwing a 500.)
+    const results = rows.filter((r) => r !== null && typeof r === 'object').map((r: Record<string, unknown>) => ({
       id: r.id ?? r.ein ?? '',
       ein: r.ein ?? null,
       name: r.name ?? '',

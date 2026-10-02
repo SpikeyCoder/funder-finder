@@ -160,7 +160,8 @@ BEGIN
   -- search per candidate row: bound the work an anonymous caller can ask for.
   -- Any run of whitespace (tabs, newlines) means one space ("red  cross" is
   -- "red cross"), and none at either end.
-  p_query := btrim(left(btrim(regexp_replace(p_query, '\s+', ' ', 'g')), 200));
+  -- (Cut to 4000 first so the regex never runs over a huge payload.)
+  p_query := btrim(left(btrim(regexp_replace(left(p_query, 4000), '\s+', ' ', 'g')), 200));
   -- Anon can call this RPC directly, past the Edge Function's clamp.
   p_limit := LEAST(GREATEST(coalesce(p_limit, 15), 1), 50);
   v_query_lower := lower(p_query);
@@ -304,7 +305,12 @@ BEGIN
   IF v_query_spaced IS NOT NULL THEN
     SELECT x INTO w FROM unnest(v_typed) WITH ORDINALITY AS t(x, ord)
     WHERE length(x) >= 3 AND NOT (x = ANY(v_all_words)) ORDER BY ord LIMIT 1;
-    IF w IS NOT NULL AND v_driver IS NULL THEN
+    -- Only when the split left a part too short to search ("Mc", "De"):
+    -- "SitStayRead foundation" splits into real words, and its driver set
+    -- ('%sit%') can reach "SIT STAY READ INC" where '%sitstayread%' can't.
+    IF w IS NOT NULL AND NOT EXISTS (SELECT 1 FROM unnest(v_all_words) x WHERE length(x) < 3) THEN
+      NULL;
+    ELSIF w IS NOT NULL AND v_driver IS NULL THEN
       -- Keep the name-start pattern ('st%' for "StJo"); the typed word
       -- replaces the mid-name one.
       v_loose2 := '%' || w || '%';
