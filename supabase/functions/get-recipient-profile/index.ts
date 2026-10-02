@@ -196,10 +196,32 @@ Deno.serve(async (req) => {
     ]);
 
     if (grants.length === 0) {
-      return new Response(
-        JSON.stringify({ error: 'Recipient not found' }),
-        { status: 404, headers: { ...headers, 'Content-Type': 'application/json' } },
-      );
+      // FM-2026-10-02-02: organizations added through the request queue
+      // (process-organization-requests) exist in recipient_organizations
+      // before any grants to them are ingested. Serve an empty-history
+      // profile from that row plus the 990 data instead of a 404.
+      const orgs = (await restQuery(
+        'recipient_organizations',
+        `ein=eq.${encodeURIComponent(lookupEin)}&select=name,primary_city,primary_state,ntee_codes&limit=1`,
+      )) as Array<{ name: string; primary_city: string | null; primary_state: string | null; ntee_codes: string[] | null }>;
+      if (orgs.length === 0) {
+        return new Response(
+          JSON.stringify({ error: 'Recipient not found' }),
+          { status: 404, headers: { ...headers, 'Content-Type': 'application/json' } },
+        );
+      }
+      const org = orgs[0];
+      return new Response(JSON.stringify({
+        id: lookupEin,
+        ein: lookupEin,
+        name: org.name,
+        location: { city: org.primary_city, state: org.primary_state },
+        fundingSummary: { totalFunding: 0, grantCount: 0, funderCount: 0, firstGrantYear: null, lastGrantYear: null },
+        yearlyTrends: [],
+        topFunders: [],
+        ntee_codes: org.ntee_codes ?? [],
+        budget: budget990,
+      }), { headers: { ...headers, 'Content-Type': 'application/json' } });
     }
 
     // Determine name, location from most recent grant

@@ -4,6 +4,7 @@ import { Search, Building2, Users, Loader2, SearchX, AlertCircle } from 'lucide-
 import { OrgSearchResult } from '../types';
 import { searchOrganizations } from '../utils/matching';
 import { fmtDollar } from './InsightCharts';
+import OrgRequestForm from './OrgRequestForm';
 
 interface OrgSearchProps {
   autoFocus?: boolean;
@@ -20,6 +21,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
   // instead of the dropdown silently staying closed.
   const [status, setStatus] = useState<'idle' | 'results' | 'empty' | 'error'>('idle');
   const [retryNonce, setRetryNonce] = useState(0);
+  const [showRequestForm, setShowRequestForm] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -31,6 +33,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
     // Invalidate any in-flight request so a slow, older response can't
     // overwrite the results for what the user has typed since.
     const requestId = ++requestIdRef.current;
+    setShowRequestForm(false);
 
     if (query.trim().length < 2) {
       setResults([]);
@@ -132,14 +135,33 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
           className="absolute z-50 w-full mt-2 bg-[#161b22] border border-[#30363d] rounded-xl shadow-xl overflow-hidden max-h-80 overflow-y-auto"
         >
           {status === 'empty' && (
-            <div role="status" className="flex items-start gap-3 px-4 py-4 text-left">
-              <SearchX size={16} className="text-gray-400 shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm text-white">No organizations match &ldquo;{query.trim()}&rdquo;</p>
-                <p className="text-xs text-gray-400 mt-1">
-                  Try a shorter name, a different spelling, or search by EIN.
-                </p>
+            <div className="px-4 py-4 text-left">
+              <div role="status" className="flex items-start gap-3">
+                <SearchX size={16} className="text-gray-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm text-white">No organizations match &ldquo;{query.trim()}&rdquo;</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Try a shorter name, a different spelling, or search by EIN.
+                    {!showRequestForm && (
+                      <>
+                        {' '}Not listed?{' '}
+                        <button
+                          type="button"
+                          onClick={() => setShowRequestForm(true)}
+                          className="text-blue-400 hover:text-blue-300 underline"
+                        >
+                          Request it
+                        </button>
+                      </>
+                    )}
+                  </p>
+                </div>
               </div>
+              {showRequestForm && (
+                <div className="mt-3">
+                  <OrgRequestForm key={query.trim()} initialName={query.trim()} />
+                </div>
+              )}
             </div>
           )}
           {status === 'error' && (
@@ -186,6 +208,24 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
               )}
             </button>
           ))}
+          {status === 'results' && (
+            <div className="border-t border-[#30363d]/50 px-4 py-3 text-left">
+              {showRequestForm ? (
+                <OrgRequestForm key={query.trim()} initialName={query.trim()} />
+              ) : (
+                <p className="text-xs text-gray-400">
+                  Not seeing it?{' '}
+                  <button
+                    type="button"
+                    onClick={() => setShowRequestForm(true)}
+                    className="text-blue-400 hover:text-blue-300 underline"
+                  >
+                    Request it
+                  </button>
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

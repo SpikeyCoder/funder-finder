@@ -271,6 +271,18 @@ export default function RecipientProfile() {
 
           {/* Funding Summary */}
           <h2 className="text-lg font-semibold mb-3">Funding Summary</h2>
+          {profile.fundingSummary.grantCount === 0 && (
+            <div className="bg-[#0d1117] border border-[#30363d] rounded-xl p-4 mb-3 text-sm text-gray-300">
+              No foundation grants to this organization are in our data yet.{' '}
+              <button
+                type="button"
+                onClick={() => navigate('/mission')}
+                className="text-blue-400 hover:text-blue-300 underline"
+              >
+                Find funders that match its mission
+              </button>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3 mb-3">
             <StatCard label="Total Funding" value={fmtDollar(profile.fundingSummary.totalFunding)} color="text-green-400" />
             <StatCard label="Total Grants" value={profile.fundingSummary.grantCount.toLocaleString()} />

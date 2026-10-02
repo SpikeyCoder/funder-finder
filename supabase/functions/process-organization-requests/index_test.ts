@@ -1,0 +1,73 @@
+// Run: deno test supabase/functions/process-organization-requests/
+import { assertEquals } from "jsr:@std/assert@1";
+import {
+  cronAuthorized,
+  type IrsOrg,
+  normalizeName,
+  notificationFor,
+  padEin,
+  pickExactMatch,
+  type QueueRow,
+  reviewCardFor,
+} from "./index.ts";
+
+const org = (name: string, state: string | null = "WA", ein = "123456789"): IrsOrg =>
+  ({ ein, name, city: "Seattle", state, ntee_code: "B90" });
+
+const row: QueueRow = { id: "r1", query: "Students Feeding Students", ein: null, state: null, requester_email: "a@b.org", attempts: 0 };
+
+Deno.test("normalizeName folds case, punctuation, '&' and legal suffixes", () => {
+  assertEquals(normalizeName("The Sit Stay Read, Inc."), "sit stay read");
+  assertEquals(normalizeName("BOYS & GIRLS CLUB OF KING COUNTY"), "boys and girls club of king county");
+  assertEquals(normalizeName("Habitat for Humanity International Inc"), "habitat for humanity international");
+  assertEquals(normalizeName("The"), "the"); // never normalizes to empty
+});
+
+Deno.test("padEin zero-pads and strips formatting", () => {
+  assertEquals(padEin(62618866), "062618866");
+  assertEquals(padEin("86-3739484"), "863739484");
+});
+
+Deno.test("pickExactMatch refuses approximate names (the Trello #153 case)", () => {
+  // Real ProPublica results for "Students Feeding Students" on 2026-10-02.
+  const results = [org("Students Feeding Oahu Foundation", "HI"), org("Feedng And Teaching Students", "GA")];
+  assertEquals(pickExactMatch("Students Feeding Students", null, results), null);
+});
+
+Deno.test("pickExactMatch accepts a unique normalized-equal name", () => {
+  const hit = org("SIT STAY READ INC", "IL", "364368215");
+  assertEquals(pickExactMatch("SitStay Read", null, [hit]), null); // camel-case is search's job, not ours
+  assertEquals(pickExactMatch("Sit Stay Read", null, [org("Sit Stay Read Foundation"), hit]), hit);
+});
+
+Deno.test("pickExactMatch uses the requested state to break same-name ties", () => {
+  const wa = org("Community Food Bank", "WA", "111111111");
+  const or = org("Community Food Bank", "OR", "222222222");
+  assertEquals(pickExactMatch("Community Food Bank", null, [wa, or]), null);
+  assertEquals(pickExactMatch("Community Food Bank", "OR", [wa, or]), or);
+});
+
+Deno.test("cronAuthorized fails closed and accepts both header forms", () => {
+  const req = (h: Record<string, string>) => new Request("https://x", { method: "POST", headers: h });
+  assertEquals(cronAuthorized(req({ "x-cron-secret": "s3cret" }), ""), false);
+  assertEquals(cronAuthorized(req({}), "s3cret"), false);
+  assertEquals(cronAuthorized(req({ "x-cron-secret": "wrong!" }), "s3cret"), false);
+  assertEquals(cronAuthorized(req({ "x-cron-secret": "s3cret" }), "s3cret"), true);
+  assertEquals(cronAuthorized(req({ authorization: "Bearer cron:s3cret" }), "s3cret"), true);
+});
+
+Deno.test("notificationFor links to the right page and stays quiet while under review", () => {
+  const added = notificationFor(row, { status: "added", id: "uuid-1", org: org("X") });
+  assertEquals(added?.text.includes("https://fundermatch.org/recipient/uuid-1"), true);
+  const funder = notificationFor(row, { status: "already_listed", entityType: "funder", id: "562618866", org: org("Gates") });
+  assertEquals(funder?.text.includes("https://fundermatch.org/funder/562618866"), true);
+  assertEquals(notificationFor(row, { status: "needs_review", reason: "x", candidates: [] }), null);
+  assertEquals(notificationFor(row, { status: "not_found" })?.subject, `We couldn't find "Students Feeding Students"`);
+});
+
+Deno.test("reviewCardFor lists candidates with ProPublica links", () => {
+  const card = reviewCardFor(row, "no exact name match", [org("Students Feeding Oahu Foundation", "HI", "863739484")]);
+  assertEquals(card.name, "[ORG REQUEST] Students Feeding Students");
+  assertEquals(card.desc.includes("https://projects.propublica.org/nonprofits/organizations/863739484"), true);
+  assertEquals(card.desc.includes("organization_requests.id = r1"), true);
+});

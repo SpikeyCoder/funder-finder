@@ -1,0 +1,369 @@
+/**
+ * process-organization-requests — Supabase Edge Function (scheduled)
+ *
+ * Trello #153 / FM-2026-10-02-02. Works the queue that request-organization
+ * fills: for each pending public.organization_requests row it looks the
+ * organization up in IRS data (ProPublica Nonprofit Explorer) and resolves it:
+ *
+ *   already_listed  EIN already in funders / recipient_organizations
+ *   added           public charity matched by EIN or a near-exact name;
+ *                   inserted into recipient_organizations so search finds it
+ *   needs_review    private foundation (needs the 990-PF funder pipeline), or
+ *                   only approximate name matches — kept in `candidates`
+ *   not_found       nothing in IRS data
+ *   failed          lookup errored MAX_ATTEMPTS times
+ *
+ * Auto-adding is deliberately conservative: a wrong organization in search
+ * is worse than a request waiting for review. "Students Feeding Students"
+ * must not become "Students Feeding Oahu Foundation".
+ *
+ * Invoked every 15 minutes by pg_cron via public.invoke_organization_request_
+ * processor(). Requires CRON_SECRET (X-Cron-Secret or `Bearer cron:<secret>`),
+ * and unlike send-reminders it fails CLOSED when CRON_SECRET is unset: this
+ * function writes to recipient_organizations and sends email.
+ */
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
+const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") || "";
+
+const PROPUBLICA = "https://projects.propublica.org/nonprofits/api/v2";
+const BATCH_SIZE = 20;
+const MAX_ATTEMPTS = 3;
+// IRS foundation codes 02/03/04 are private foundations (990-PF filers).
+const PRIVATE_FOUNDATION_CODES = new Set([2, 3, 4]);
+
+export interface QueueRow {
+  id: string;
+  query: string;
+  ein: string | null;
+  state: string | null;
+  requester_email: string | null;
+  attempts: number;
+}
+
+export interface IrsOrg {
+  ein: string; // 9 digits, zero-padded
+  name: string;
+  city: string | null;
+  state: string | null;
+  ntee_code: string | null;
+}
+
+export type Outcome =
+  | { status: "already_listed"; entityType: "funder" | "recipient"; id: string; org: IrsOrg }
+  | { status: "added"; id: string; org: IrsOrg }
+  | { status: "needs_review"; reason: string; candidates: IrsOrg[] }
+  | { status: "not_found" };
+
+// ── Pure helpers (unit-tested) ──────────────────────────────────────────────
+
+const LEGAL_SUFFIXES = new Set(["inc", "incorporated", "corp", "corporation", "co", "llc", "ltd", "the"]);
+
+/** Lowercase, '&'→'and', drop punctuation and legal suffixes / leading "the". */
+export function normalizeName(name: string): string {
+  const words = name
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+  while (words.length > 1 && LEGAL_SUFFIXES.has(words[words.length - 1])) words.pop();
+  if (words.length > 1 && words[0] === "the") words.shift();
+  return words.join(" ");
+}
+
+export function padEin(ein: string | number): string {
+  return String(ein).replace(/\D/g, "").padStart(9, "0");
+}
+
+/**
+ * Pick the single IRS organization a name request unambiguously refers to:
+ * normalized names must be equal, and if several share the name the
+ * requested state must narrow it to one. Otherwise return null.
+ */
+export function pickExactMatch(query: string, state: string | null, results: IrsOrg[]): IrsOrg | null {
+  const target = normalizeName(query);
+  let exact = results.filter((r) => normalizeName(r.name) === target);
+  if (exact.length > 1 && state) exact = exact.filter((r) => r.state === state);
+  return exact.length === 1 ? exact[0] : null;
+}
+
+// ── IO ──────────────────────────────────────────────────────────────────────
+
+function rest(path: string, init: RequestInit = {}): Promise<Response> {
+  return fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    ...init,
+    headers: {
+      apikey: SERVICE_KEY,
+      Authorization: `Bearer ${SERVICE_KEY}`,
+      "Content-Type": "application/json",
+      ...(init.headers || {}),
+    },
+  });
+}
+
+async function restJson<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const res = await rest(path, init);
+  if (!res.ok) throw new Error(`REST ${path.split("?")[0]} ${res.status}: ${await res.text()}`);
+  return await res.json() as T;
+}
+
+async function propublica(path: string): Promise<Record<string, unknown> | null> {
+  const res = await fetch(`${PROPUBLICA}${path}`, {
+    headers: { "User-Agent": "FunderMatch (support@fundermatch.org)" },
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`ProPublica ${res.status}`);
+  return await res.json();
+}
+
+function toIrsOrg(o: Record<string, unknown>): IrsOrg {
+  return {
+    ein: padEin(o.ein as string | number),
+    name: String(o.name ?? "").trim(),
+    city: (o.city as string) || null,
+    state: (o.state as string) || null,
+    ntee_code: (o.ntee_code as string) || null,
+  };
+}
+
+async function irsDetail(ein: string): Promise<{ org: IrsOrg; foundationCode: number | null } | null> {
+  const d = await propublica(`/organizations/${ein}.json`);
+  const o = d?.organization as Record<string, unknown> | undefined;
+  if (!o) return null;
+  return { org: toIrsOrg(o), foundationCode: typeof o.foundation_code === "number" ? o.foundation_code : null };
+}
+
+async function existingEntity(ein: string): Promise<{ entityType: "funder" | "recipient"; id: string } | null> {
+  // funders.id / recipient_organizations.ein aren't consistently zero-padded.
+  const variants = [...new Set([ein, ein.replace(/^0+/, "")])].map((v) => `"${v}"`).join(",");
+  const recips = await restJson<{ id: string }[]>(
+    `recipient_organizations?ein=in.(${variants})&select=id&limit=1`,
+  );
+  if (recips.length) return { entityType: "recipient", id: recips[0].id };
+  const funders = await restJson<{ id: string }[]>(`funders?id=in.(${variants})&select=id&limit=1`);
+  if (funders.length) return { entityType: "funder", id: funders[0].id };
+  return null;
+}
+
+async function resolve(row: QueueRow): Promise<Outcome> {
+  let ein = row.ein;
+
+  if (!ein) {
+    const params = new URLSearchParams({ q: row.query });
+    if (row.state) params.set("state[id]", row.state);
+    const search = await propublica(`/search.json?${params}`);
+    const results = ((search?.organizations as Record<string, unknown>[]) || []).map(toIrsOrg);
+    if (!results.length) return { status: "not_found" };
+    const match = pickExactMatch(row.query, row.state, results);
+    if (!match) {
+      return { status: "needs_review", reason: "no exact name match", candidates: results.slice(0, 5) };
+    }
+    ein = match.ein;
+  }
+
+  const detail = await irsDetail(ein);
+  if (!detail) return { status: "not_found" };
+
+  const existing = await existingEntity(detail.org.ein);
+  if (existing) return { status: "already_listed", ...existing, org: detail.org };
+
+  if (detail.foundationCode !== null && PRIVATE_FOUNDATION_CODES.has(detail.foundationCode)) {
+    return { status: "needs_review", reason: "private foundation", candidates: [detail.org] };
+  }
+
+  const inserted = await restJson<{ id: string }[]>("recipient_organizations", {
+    method: "POST",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({
+      ein: detail.org.ein,
+      name: detail.org.name,
+      name_normalized: detail.org.name.toLowerCase(),
+      primary_city: detail.org.city,
+      primary_state: detail.org.state,
+      ntee_code: detail.org.ntee_code,
+      ntee_codes: detail.org.ntee_code ? [detail.org.ntee_code] : [],
+    }),
+  });
+  return { status: "added", id: inserted[0].id, org: detail.org };
+}
+
+// ── Email ───────────────────────────────────────────────────────────────────
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+export function notificationFor(row: QueueRow, outcome: Outcome): { subject: string; text: string } | null {
+  const q = row.query;
+  switch (outcome.status) {
+    case "added":
+    case "already_listed": {
+      const path = outcome.status === "already_listed" && outcome.entityType === "funder"
+        ? `/funder/${outcome.id}`
+        : `/recipient/${outcome.id}`;
+      return {
+        subject: `${outcome.org.name} is on FunderMatch`,
+        text: `You asked us to add "${q}". It's now available on FunderMatch:\n\nhttps://fundermatch.org${path}`,
+      };
+    }
+    case "not_found":
+      return {
+        subject: `We couldn't find "${q}"`,
+        text: `We searched IRS nonprofit records for "${q}" and couldn't find a match. ` +
+          `If it has an EIN, you can request it again with the EIN at https://fundermatch.org/search.`,
+      };
+    case "needs_review":
+      // A person will follow up; don't email until there's an answer.
+      return null;
+  }
+}
+
+async function sendEmail(to: string, subject: string, text: string): Promise<boolean> {
+  if (!RESEND_API_KEY) return false;
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      from: "FunderMatch <noreply@fundermatch.org>",
+      to: [to],
+      subject,
+      text,
+      html: `<p>${escapeHtml(text).replace(/\n/g, "<br>")}</p>`,
+    }),
+  });
+  if (!res.ok) console.error("Resend error:", res.status, await res.text());
+  return res.ok;
+}
+
+// ── Review queue (Trello) ───────────────────────────────────────────────────
+
+export function reviewCardFor(row: QueueRow, reason: string, candidates: IrsOrg[]): { name: string; desc: string } {
+  const lines = candidates.map((c) =>
+    `- ${c.name} — EIN ${c.ein}${c.city || c.state ? ` — ${[c.city, c.state].filter(Boolean).join(", ")}` : ""}` +
+    ` — https://projects.propublica.org/nonprofits/organizations/${Number(c.ein)}`
+  );
+  return {
+    name: `[ORG REQUEST] ${row.query}`.slice(0, 200),
+    desc: [
+      `Someone asked for "${row.query}" to be added to FunderMatch and it needs a person to decide (${reason}).`,
+      "",
+      row.ein ? `Requested EIN: ${row.ein}` : "No EIN given.",
+      row.state ? `Requested state: ${row.state}` : "",
+      "",
+      candidates.length ? "IRS candidates:" : "",
+      ...lines,
+      "",
+      `organization_requests.id = ${row.id}`,
+    ].filter((l, i, a) => l !== "" || a[i - 1] !== "").join("\n"),
+  };
+}
+
+// Reuses report-bug's Trello list so requests land where bug reports are
+// triaged. Best-effort: a missing config or Trello error doesn't fail the row.
+async function createReviewCard(card: { name: string; desc: string }): Promise<void> {
+  const key = Deno.env.get("TRELLO_API_KEY");
+  const token = Deno.env.get("TRELLO_TOKEN");
+  const idList = Deno.env.get("TRELLO_LIST_ID");
+  if (!key || !token || !idList) return;
+  const params = new URLSearchParams({ key, token, idList, name: card.name, desc: card.desc, pos: "top" });
+  const res = await fetch(`https://api.trello.com/1/cards?${params}`, { method: "POST" });
+  if (!res.ok) console.error("Trello card failed:", res.status, await res.text());
+}
+
+// ── Handler ─────────────────────────────────────────────────────────────────
+
+function constantTimeEqual(a: string, b: string): boolean {
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  }
+  return diff === 0;
+}
+
+export function cronAuthorized(req: Request, expected: string): boolean {
+  if (!expected) return false; // fail closed
+  const header = req.headers.get("x-cron-secret") || "";
+  if (header && constantTimeEqual(header, expected)) return true;
+  const auth = req.headers.get("authorization") || "";
+  return auth.startsWith("Bearer cron:") && constantTimeEqual(auth.slice("Bearer cron:".length).trim(), expected);
+}
+
+async function processRow(row: QueueRow): Promise<string> {
+  const now = new Date().toISOString();
+  try {
+    const outcome = await resolve(row);
+    const patch: Record<string, unknown> = {
+      status: outcome.status,
+      attempts: row.attempts + 1,
+      processed_at: now,
+      last_error: null,
+    };
+    if (outcome.status === "added") {
+      patch.resolved_entity_type = "recipient";
+      patch.resolved_id = outcome.id;
+      patch.candidates = [outcome.org];
+    } else if (outcome.status === "already_listed") {
+      patch.resolved_entity_type = outcome.entityType;
+      patch.resolved_id = outcome.id;
+      patch.candidates = [outcome.org];
+    } else if (outcome.status === "needs_review") {
+      patch.candidates = outcome.candidates;
+      patch.last_error = outcome.reason;
+      await createReviewCard(reviewCardFor(row, outcome.reason, outcome.candidates)).catch((err) =>
+        console.error("Trello card failed:", err)
+      );
+    }
+
+    const note = row.requester_email ? notificationFor(row, outcome) : null;
+    if (note && await sendEmail(row.requester_email!, note.subject, note.text)) {
+      patch.notified_at = now;
+    }
+
+    await rest(`organization_requests?id=eq.${row.id}`, { method: "PATCH", body: JSON.stringify(patch) });
+    return outcome.status;
+  } catch (err) {
+    const attempts = row.attempts + 1;
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`organization request ${row.id} failed (attempt ${attempts}):`, message);
+    await rest(`organization_requests?id=eq.${row.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        attempts,
+        last_error: message.slice(0, 500),
+        ...(attempts >= MAX_ATTEMPTS ? { status: "failed", processed_at: now } : {}),
+      }),
+    });
+    return attempts >= MAX_ATTEMPTS ? "failed" : "retry";
+  }
+}
+
+if (import.meta.main) {
+  Deno.serve(async (req: Request) => {
+    const json = (status: number, body: unknown) =>
+      new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+
+    if (req.method !== "POST") return json(405, { error: "Method not allowed" });
+    if (!cronAuthorized(req, Deno.env.get("CRON_SECRET") || "")) return json(401, { error: "Unauthorized" });
+    if (!SUPABASE_URL || !SERVICE_KEY) return json(500, { error: "Server config missing" });
+
+    try {
+      const rows = await restJson<QueueRow[]>(
+        `organization_requests?status=eq.pending&order=created_at.asc&limit=${BATCH_SIZE}` +
+          `&select=id,query,ein,state,requester_email,attempts`,
+      );
+      const summary: Record<string, number> = {};
+      // Sequential on purpose: be polite to ProPublica's free API.
+      for (const row of rows) {
+        const result = await processRow(row);
+        summary[result] = (summary[result] || 0) + 1;
+      }
+      return json(200, { processed: rows.length, summary });
+    } catch (err) {
+      console.error("process-organization-requests error:", err);
+      return json(500, { error: "Internal server error" });
+    }
+  });
+}
