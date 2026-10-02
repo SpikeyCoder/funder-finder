@@ -33,7 +33,8 @@
 --   all words   names containing every indexable distinctive word (up to 4)
 --               and the first 2-letter one ("uw madison") — 2000 rows when
 --               there are 2+ such words (small by construction), else 500;
---   prefix      names starting with the query or "The <query>" (500);
+--   prefix      names starting with the query or "The <query>", by range
+--               scan of the same B-tree (500);
 --   one word    the first word with a 3+ letter/digit run when other words
 --               narrow the all-words set, or the word as typed when a
 --               camelCase split broke it up ("McDonald" → '%mcdonald%');
@@ -53,21 +54,19 @@
 -- An earlier draft ranked every match *before* capping; "foundation" (148k
 -- funders) took 22 s. Don't do that.
 --
--- MEASURED (production, pg_temp copy of this body; identical ordered results
--- on repeat calls for every query), warm ms (a cold first call can take
--- several times longer while pages load):
---   foundation 377 · community foundation 353 · the community foundation 392 ·
---   habitat for humanity 69 · y.m.c.a 47 · c# 122 · the 132 · for the
---   children 78 · McDonald Foundation 69 · uw madison 19 · st jude 14 ·
---   "Habitat for Humanity, Inc." 168 · red cross 65 · xq 6 · NULL / %% / __ 0
--- (The exact set was stubbed for these runs because its lower(btrim(name))
--- indexes don't exist in production until this migration runs; on an
--- analyzed temp copy of funders with that index, `lower(btrim(name)) IN
--- ('foundation','the foundation')` was an index scan taking 0.08 ms.)
+-- MEASURED on production data: this exact body as a pg_temp function over
+-- session-temporary copies of funders and recipient_organizations carrying
+-- all of this migration's indexes (identical ordered results on repeat calls
+-- for every query), warm ms (a cold first call took up to ~1 s):
+--   foundation 88 · community foundation 244 · the community foundation 280 ·
+--   habitat for humanity 46 · y.m.c.a 33 · st jude 12 · red cross 56 ·
+--   Students feeding students 27 · c# 60 · NULL / %% / __ 0
+-- Before the prefix set used the lower(btrim(name)) B-tree, "foundation" took
+-- ~380 ms warm and up to 3.3 s cold (over anon's 3 s timeout).
 -- Words are split on any non-letter/digit (as pg_trgm does): "Habitat for
 -- Humanity, Inc." (168 ms) → HABITAT FOR HUMANITY INTERNATIONAL INC first;
 -- "red  cross" and "the community foundation" behave like their clean forms.
--- Top results: "y.m.c.a" → YMCA OF THE USA; "j paul getty trust" → J PAUL
+-- Top results: "y.m.c.a" → YMCA OF …; "j paul getty trust" → J PAUL
 -- GETTY TRUST; "foundation for children" →
 -- FOUNDATION FOR CHILDREN WITH NEUROIMMUNE DISORDERS INC; "church of st
 -- mary" → CHURCH OF ST MARY; "united way of king county" → UNITED WAY OF KING
@@ -97,10 +96,13 @@ CREATE INDEX IF NOT EXISTS idx_recipient_org_name_trgm2
 
 -- New: exact-name lookups for the "exact" candidate set.
 -- Trimmed, as ranking compares names (one funder name has stray whitespace).
+-- text_pattern_ops lets the prefix set use them too: a trigram index can't
+-- range-scan 'foundation%', so it rechecks every name containing the word
+-- (148k funders, ~200 ms warm and seconds cold) where this reads ~400 pages.
 CREATE INDEX IF NOT EXISTS idx_funders_lower_name
-  ON public.funders (lower(btrim(name)));
+  ON public.funders (lower(btrim(name)) text_pattern_ops);
 CREATE INDEX IF NOT EXISTS idx_recipient_org_lower_name
-  ON public.recipient_organizations (lower(btrim(name)));
+  ON public.recipient_organizations (lower(btrim(name)) text_pattern_ops);
 -- Expression indexes have no statistics until the table is analyzed; without
 -- them the planner may skip the new indexes for the exact set.
 ANALYZE public.funders;
@@ -158,7 +160,7 @@ BEGIN
   -- search per candidate row: bound the work an anonymous caller can ask for.
   -- Any run of whitespace (tabs, newlines) means one space ("red  cross" is
   -- "red cross"), and none at either end.
-  p_query := btrim(left(btrim(regexp_replace(left(p_query, 1000), '\s+', ' ', 'g')), 200));
+  p_query := btrim(left(btrim(regexp_replace(p_query, '\s+', ' ', 'g')), 200));
   -- Anon can call this RPC directly, past the Edge Function's clamp.
   p_limit := LEAST(GREATEST(coalesce(p_limit, 15), 1), 50);
   v_query_lower := lower(p_query);
@@ -300,11 +302,11 @@ BEGIN
   v_all4 := '%' || v_long[4] || '%';
   v_exact := nullif(v_query_normalized, '');
   v_prefix := e_norm || '%';  -- NULL when there's no prefix to match
-  -- With 2+ words the all-words set is selective by construction, so a larger
-  -- cap costs little and keeps the other sets' shared tail ("habitat for
-  -- humanity": ~551) reachable. With one word it is just '%word%', as broad
-  -- as the other sets.
-  v_all_cap := CASE WHEN array_length(v_long, 1) > 1 THEN 2000 ELSE 500 END;
+  -- With 2+ words (a 2-letter one counts) the all-words set is selective by
+  -- construction, so a larger cap costs little and keeps the other sets'
+  -- shared tail ("habitat for humanity": ~551) reachable. With one word it is
+  -- just '%word%', as broad as the other sets.
+  v_all_cap := CASE WHEN array_length(v_long, 1) > 1 OR v_short IS NOT NULL THEN 2000 ELSE 500 END;
 
   RETURN QUERY
   WITH funder_ids AS (
@@ -327,7 +329,7 @@ BEGIN
         AND (f.ntee_code LIKE 'T%' OR EXISTS (SELECT 1 FROM foundation_filings ff WHERE ff.foundation_id = f.id))
       LIMIT v_all_cap)
     UNION
-    (SELECT f.id FROM funders f WHERE v_prefix IS NOT NULL AND (f.name ILIKE v_prefix OR f.name ILIKE 'the ' || v_prefix) AND (f.ntee_code LIKE 'T%' OR EXISTS (SELECT 1 FROM foundation_filings ff WHERE ff.foundation_id = f.id)) LIMIT 500)
+    (SELECT f.id FROM funders f WHERE v_prefix IS NOT NULL AND (lower(btrim(f.name)) LIKE v_prefix OR lower(btrim(f.name)) LIKE 'the ' || v_prefix) AND (f.ntee_code LIKE 'T%' OR EXISTS (SELECT 1 FROM foundation_filings ff WHERE ff.foundation_id = f.id)) LIMIT 500)
     UNION
     (SELECT f.id FROM funders f WHERE v_loose IS NOT NULL AND (f.name ILIKE v_loose OR f.name ILIKE v_loose2) AND (f.ntee_code LIKE 'T%' OR EXISTS (SELECT 1 FROM foundation_filings ff WHERE ff.foundation_id = f.id)) LIMIT 500)
   ),
@@ -350,7 +352,7 @@ BEGIN
         AND (v_short IS NULL OR r.name ILIKE v_short)
       LIMIT v_all_cap)
     UNION
-    (SELECT r.id FROM recipient_organizations r WHERE v_prefix IS NOT NULL AND (r.name ILIKE v_prefix OR r.name ILIKE 'the ' || v_prefix) LIMIT 500)
+    (SELECT r.id FROM recipient_organizations r WHERE v_prefix IS NOT NULL AND (lower(btrim(r.name)) LIKE v_prefix OR lower(btrim(r.name)) LIKE 'the ' || v_prefix) LIMIT 500)
     UNION
     (SELECT r.id FROM recipient_organizations r WHERE v_loose IS NOT NULL AND (r.name ILIKE v_loose OR r.name ILIKE v_loose2) LIMIT 500)
   ),
@@ -388,7 +390,7 @@ BEGIN
       -- TIER 1: EXACT MATCHES (1.0)
       CASE
         WHEN m._lname = v_query_lower THEN 1.0
-        WHEN m._core = v_query_lower THEN 1.0
+        WHEN m._core IN (v_query_lower, v_query_normalized) THEN 1.0
         WHEN m._lname = v_query_normalized THEN 1.0
         ELSE 0
       END
