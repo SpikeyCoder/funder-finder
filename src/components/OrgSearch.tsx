@@ -94,6 +94,11 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  const reopenDropdown = () => {
+    dismissedRef.current = false;
+    if (status !== 'idle') setShowDropdown(true);
+  };
+
   const handleSelect = (result: OrgSearchResult) => {
     setShowDropdown(false);
     setQuery('');
@@ -135,9 +140,9 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
           type="text"
           value={query}
           onChange={e => { dismissedRef.current = false; setQuery(e.target.value); }}
-          onFocus={() => { dismissedRef.current = false; if (status !== 'idle') setShowDropdown(true); }}
+          onFocus={reopenDropdown}
           // Clicking an already-focused input doesn't fire focus; reopen too.
-          onMouseDown={() => { dismissedRef.current = false; if (status !== 'idle') setShowDropdown(true); }}
+          onMouseDown={reopenDropdown}
           // Tabbing away counts as dismissing, so a late response doesn't open
           // the panel over whatever has focus now (moving into it is fine).
           onBlur={(e) => {
@@ -209,9 +214,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
             <button
               key={`${r.entity_type}-${r.id}`}
               onClick={() => handleSelect(r)}
-              // These rows belong to the previous query while a new one loads.
-              disabled={loading}
-              className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[#21262d] transition-colors disabled:opacity-50 disabled:cursor-default ${
+              className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[#21262d] transition-colors ${
                 idx === selectedIdx ? 'bg-[#21262d]' : ''
               } ${idx > 0 ? 'border-t border-[#30363d]/50' : ''}`}
             >

@@ -28,28 +28,24 @@ export function isChunkLoadError(error: unknown): boolean {
   return (name === 'TypeError' || name === 'SyntaxError') && CHUNK_ERROR_MESSAGE.test(message);
 }
 
-// Reloads are tracked per top-level section ("/funder" for /funder/123), so a
-// chunk that keeps failing doesn't earn a fresh reload for every id.
-export function reloadKey(pathname: string): string {
-  return '/' + (pathname.split('/')[1] ?? '');
-}
 
-// section -> time of our last automatic reload for it. One reload per section
-// per window: a chunk that can never load gets exactly one reload rather than
-// a loop (Back/Forward included), while a later deploy can still auto-recover.
+
+// path -> time of our last automatic reload for it. A loop needs the same
+// failure on the same page faster than the window, which a reload never takes,
+// so a chunk that can never load gets one reload rather than a loop. Other
+// pages (and the same page after the window) still auto-recover; any further
+// reloads are bounded by the user's own navigation.
 const CHUNK_RELOAD_KEY = 'ff_chunk_reloads';
-// Far longer than a reload takes (so no loop), short enough that a second
-// deploy shortly after still auto-recovers.
 export const CHUNK_RELOAD_WINDOW_MS = 2 * 60 * 1000;
 
 // Reloading pulls a fresh index.html plus valid chunks and almost always
 // recovers. Returns true if a reload was started; false if we already reloaded
-// for this section within the window, or sessionStorage is unavailable — the
+// for this path within the window, or sessionStorage is unavailable — the
 // caller should then show a manual "Reload" screen. Without storage there's no
 // way to remember that we already reloaded, so we don't auto-reload at all
 // rather than risk a loop.
 export function reloadOnceForChunkError(now = Date.now()): boolean {
-  const path = reloadKey(window.location.pathname);
+  const path = window.location.pathname;
   try {
     let reloads: Record<string, number> = {};
     try {

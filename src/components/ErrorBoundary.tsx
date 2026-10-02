@@ -48,26 +48,11 @@ export default class ErrorBoundary extends Component<Props, State> {
     // For a failed chunk load, reloading pulls a fresh index.html plus valid
     // chunks and almost always recovers — so do it automatically, once. If
     // we've already tried, render() shows a manual Reload with the details.
-    clearTimeout(this.reloadFallback);
-    if (isChunkLoadError(error)) {
-      let unloading = false;
-      window.addEventListener('beforeunload', () => { unloading = true; }, { once: true });
-      if (reloadOnceForChunkError()) {
-        this.setState({ reloading: true });
-        // If reload() didn't start navigating (e.g. a sandboxed webview where
-        // it's a no-op), fall back to the manual screen instead of hanging.
-        // A slow reload that's under way has fired beforeunload: leave it be.
-        this.reloadFallback = setTimeout(() => {
-          if (!unloading) this.setState({ reloading: false });
-        }, 5000);
-      }
+    // The "Reloading…" screen keeps a Reload button, so if reload() is ever a
+    // no-op (e.g. a sandboxed webview) nobody is stranded.
+    if (isChunkLoadError(error) && reloadOnceForChunkError()) {
+      this.setState({ reloading: true });
     }
-  }
-
-  private reloadFallback?: ReturnType<typeof setTimeout>;
-
-  componentWillUnmount() {
-    clearTimeout(this.reloadFallback);
   }
 
   handleTryAgain = () => {

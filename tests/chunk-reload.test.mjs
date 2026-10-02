@@ -11,7 +11,7 @@ const { outputText } = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 },
 });
 const mod = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);
-const { isChunkLoadError, reloadKey, reloadOnceForChunkError, CHUNK_RELOAD_WINDOW_MS } = mod;
+const { isChunkLoadError, reloadOnceForChunkError, CHUNK_RELOAD_WINDOW_MS } = mod;
 
 // Minimal browser globals.
 let store;
@@ -51,20 +51,6 @@ test('does not treat ordinary errors as chunk-load errors', () => {
   // App errors that merely mention the words aren't load failures.
   assert.equal(isChunkLoadError(new Error('Import not found')), false);
   assert.equal(isChunkLoadError(new RangeError('dynamically imported module limit')), false);
-});
-
-test('reloads are keyed by top-level section', () => {
-  assert.equal(reloadKey('/funder/123'), '/funder');
-  assert.equal(reloadKey('/projects/9/matches'), '/projects');
-  assert.equal(reloadKey('/'), '/');
-});
-
-test('a section that keeps failing gets one reload, not one per id', () => {
-  window.location.pathname = '/funder/1';
-  assert.equal(reloadOnceForChunkError(1_000_000), true);
-  window.location.pathname = '/funder/2';
-  assert.equal(reloadOnceForChunkError(1_001_000), false);
-  assert.equal(reloads, 1);
 });
 
 test('reloads once per path, then refuses within the window (no loop)', () => {

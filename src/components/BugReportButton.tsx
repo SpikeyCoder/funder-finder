@@ -27,9 +27,9 @@ interface TechnicalContext {
 // Error's name/message/stack are non-enumerable, so JSON.stringify(err) is
 // "{}". Spell them out so bug reports carry the actual failure.
 // Runs inside our console.error override, so it must never throw itself.
-function formatConsoleArg(arg: unknown, depth = 0): string {
+function formatConsoleArg(arg: unknown): string {
   try {
-    return formatArg(arg, depth);
+    return formatArg(arg, 0);
   } catch {
     return '[unformattable value]';
   }
