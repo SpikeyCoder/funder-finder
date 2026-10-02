@@ -264,8 +264,11 @@ BEGIN
 
   -- A 2-letter word can't drive the index but still narrows the all-words set
   -- ("uw madison" shouldn't be a 500-row sample of '%madison%').
+  -- (Not one the long words already contain: '%st%' adds nothing to
+  -- '%stephen%'.)
   SELECT '%' || dw || '%' INTO v_short FROM unnest(v_distinctive) WITH ORDINALITY AS t(dw, ord)
-  WHERE length(dw) = 2 ORDER BY ord LIMIT 1;
+  WHERE length(dw) = 2 AND NOT EXISTS (SELECT 1 FROM unnest(v_long) l WHERE strpos(l, dw) > 0)
+  ORDER BY ord LIMIT 1;
 
   IF v_driver IS NULL THEN
     -- Only short words ("st", "uw") or stop words ("the"): match where a word
