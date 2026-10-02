@@ -154,7 +154,10 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
           // should still appear.
           onBlur={(e) => {
             const next = e.relatedTarget as Node | null;
-            if (next && !dropdownRef.current?.contains(next)) dismissedRef.current = true;
+            if (next && !dropdownRef.current?.contains(next)) {
+              dismissedRef.current = true;
+              setShowDropdown(false);
+            }
           }}
           onKeyDown={handleKeyDown}
           autoFocus={autoFocus}

@@ -19,6 +19,9 @@ const LINK = new SyntaxError("Importing binding name 'Dt' is not found.");
 const fetchFail = (file) => new TypeError(`Failed to fetch dynamically imported module: https://x/assets/${file}`);
 
 // Minimal browser globals.
+function setBuild(file) {
+  globalThis.document = { querySelector: () => ({ src: `https://fundermatch.org/assets/${file}` }) };
+}
 let store;
 let reloads;
 function installGlobals({ blocked = false } = {}) {
@@ -30,6 +33,7 @@ function installGlobals({ blocked = false } = {}) {
     setItem: (k, v) => { throwIfBlocked(); store.set(k, String(v)); },
   };
   globalThis.window = { location: { pathname: '/results', reload: () => { reloads++; } } };
+  setBuild('index-Build1.js');
 }
 beforeEach(() => installGlobals());
 
@@ -58,11 +62,12 @@ test('does not treat ordinary errors as chunk-load errors', () => {
   // App errors that merely mention the short link phrases aren't load failures.
   assert.equal(isChunkLoadError(new Error('Import not found')), false);
   assert.equal(isChunkLoadError(new Error('importing binding name failed in CSV mapper')), false);
+  assert.equal(isChunkLoadError(new TypeError('Import not found: column EIN')), false);
 });
 
 test('reload key: the failing chunk when named, else the page path', () => {
-  assert.equal(reloadKey(fetchFail('FunderDetail-Ab1.js'), '/funder/1'), 'chunk:FunderDetail-Ab1.js');
-  assert.equal(reloadKey(LINK, '/results'), 'path:/results');
+  assert.equal(reloadKey(fetchFail('FunderDetail-Ab1.js'), '/funder/1', 'index-B1.js'), 'chunk:FunderDetail-Ab1.js');
+  assert.equal(reloadKey(LINK, '/results', 'index-B1.js'), 'path:/results@index-B1.js');
 });
 
 test('one reload per key for the life of the tab — no loop however slow', () => {
@@ -93,6 +98,24 @@ test('different pages keyed by path each get their own reload; Back does not re-
   window.location.pathname = '/results';
   assert.equal(reloadOnceForChunkError(LINK), false);
   assert.equal(reloads, 2);
+});
+
+test('Safari (path-keyed) failures auto-recover again after a new deploy', () => {
+  assert.equal(reloadOnceForChunkError(LINK), true);
+  assert.equal(reloadOnceForChunkError(LINK), false); // same build: no loop
+  setBuild('index-Build2.js'); // a deploy later
+  assert.equal(reloadOnceForChunkError(LINK), true);
+  assert.equal(reloads, 2);
+});
+
+test('a storage read error means no reload and keeps the history', () => {
+  reloadOnceForChunkError(fetchFail('A-1.js'));
+  const before = store.get('ff_chunk_reloads');
+  const getItem = sessionStorage.getItem;
+  sessionStorage.getItem = () => { throw new DOMException('flaky', 'SecurityError'); };
+  assert.equal(reloadOnceForChunkError(fetchFail('B-2.js')), false);
+  sessionStorage.getItem = getItem;
+  assert.equal(store.get('ff_chunk_reloads'), before);
 });
 
 test('remembers a bounded number of keys', () => {

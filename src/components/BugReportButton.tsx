@@ -39,12 +39,11 @@ function formatArg(arg: unknown, depth: number): string {
   if (typeof arg === 'string') return arg;
   if (arg instanceof Error) {
     const cause = (arg as { cause?: unknown }).cause;
-    // A wrapper's own frames only point at where it was wrapped; spend the
-    // limited report space on the original error's frames instead.
-    if (cause !== undefined && !(cause instanceof Error)) {
-      return `${arg.name}: ${arg.message} caused by ${formatArg(cause, depth + 1)}`;
-    }
-    if (cause instanceof Error && depth < 2) {
+    const hasCause = cause !== undefined && cause !== null && depth < 2;
+    // A wrapper's own frames only point at where it was wrapped; when the
+    // cause is an Error with frames of its own, spend the limited report
+    // space on those instead.
+    if (hasCause && cause instanceof Error) {
       // Skip a wrapper message that just repeats the cause's (reports are
       // capped at 500 chars).
       const own = cause.message && String(arg.message).includes(cause.message) ? arg.name : `${arg.name}: ${arg.message}`;
@@ -58,7 +57,8 @@ function formatArg(arg: unknown, depth: number): string {
       .slice(0, 3)
       .map((l) => l.trim())
       .join(' | ');
-    return `${arg.name}: ${arg.message}${frames ? ` [${frames}]` : ''}`;
+    const causeText = hasCause ? ` caused by ${formatArg(cause, depth + 1)}` : '';
+    return `${arg.name}: ${arg.message}${frames ? ` [${frames}]` : ''}${causeText}`;
   }
   try {
     return JSON.stringify(arg) ?? String(arg);

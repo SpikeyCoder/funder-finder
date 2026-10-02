@@ -20,7 +20,7 @@ const FETCH_FAILURE = new RegExp(
 );
 
 // Shorter phrases an app error could plausibly contain, so they only count
-// when the engine raised them (always a SyntaxError for link failures).
+// on a SyntaxError, which is what every engine raises for link failures.
 const LINK_FAILURE = new RegExp(
   [
     'importing binding name', // Safari
@@ -35,22 +35,29 @@ export function isChunkLoadError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   const { name = '', message = '' } = error as { name?: string; message?: string };
   if (name === 'ChunkLoadError' || FETCH_FAILURE.test(message)) return true;
-  return (name === 'SyntaxError' || name === 'TypeError') && LINK_FAILURE.test(message);
+  return name === 'SyntaxError' && LINK_FAILURE.test(message);
 }
 
 // Keys we've already auto-reloaded for in this tab. The key is the failing
 // chunk's file when the browser names it (fetch failures do), else the page
-// path (Safari's binding error names no file). Each key gets one reload for
-// the life of the tab, so nothing can loop however long a failure takes to
-// surface; a later deploy still auto-recovers because it changes the chunk's
-// hashed filename, and with it the key.
+// path plus the running build's entry chunk (Safari's errors name no file).
+// Each key gets one reload for the life of the tab, so nothing can loop
+// however long a failure takes to surface; a later deploy still auto-recovers
+// because it changes the hashed filenames, and with them the key.
 const CHUNK_RELOAD_KEY = 'ff_chunk_reloads';
 const MAX_REMEMBERED = 50;
 
-export function reloadKey(error: unknown, pathname: string): string {
+export function reloadKey(error: unknown, pathname: string, build: string): string {
   const message = String((error as { message?: unknown } | null)?.message ?? '');
   const chunk = message.match(/[\w.-]+\.(?:js|css)\b/);
-  return chunk ? `chunk:${chunk[0]}` : `path:${pathname}`;
+  return chunk ? `chunk:${chunk[0]}` : `path:${pathname}@${build}`;
+}
+
+// The hashed entry chunk this page is running (index-AbC123.js), which
+// changes with every deploy.
+function currentBuild(): string {
+  const src = document.querySelector<HTMLScriptElement>('script[type="module"][src*="/assets/"]')?.src ?? '';
+  return src.split('/').pop() || 'dev';
 }
 
 // Reloading pulls a fresh index.html plus valid chunks and almost always
@@ -60,14 +67,17 @@ export function reloadKey(error: unknown, pathname: string): string {
 // remember that we already reloaded, so we don't auto-reload at all rather
 // than risk a loop.
 export function reloadOnceForChunkError(error: unknown): boolean {
-  const key = reloadKey(error, window.location.pathname);
+  const key = reloadKey(error, window.location.pathname, currentBuild());
   try {
+    // A read error propagates to the outer catch (no reload); only a corrupt
+    // value resets the history.
+    const raw = sessionStorage.getItem(CHUNK_RELOAD_KEY) || '[]';
     let seen: string[] = [];
     try {
-      const parsed = JSON.parse(sessionStorage.getItem(CHUNK_RELOAD_KEY) || '[]');
+      const parsed = JSON.parse(raw);
       seen = Array.isArray(parsed) ? parsed : [];
     } catch {
-      seen = []; // corrupt value: start over
+      seen = [];
     }
     if (seen.includes(key)) return false;
     sessionStorage.setItem(CHUNK_RELOAD_KEY, JSON.stringify([...seen, key].slice(-MAX_REMEMBERED)));
