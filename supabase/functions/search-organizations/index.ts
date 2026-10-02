@@ -82,18 +82,26 @@ Deno.serve(async (req) => {
 
     const rows = await rpcRes.json();
 
+    // A 200 that isn't a row array is a failure, not "no matches" — report it
+    // so the client shows its error state instead of an empty result.
+    if (!Array.isArray(rows)) {
+      console.error('search_organizations RPC returned a non-array body:', JSON.stringify(rows).slice(0, 300));
+      return new Response(
+        JSON.stringify({ results: [], error: 'Search failed' }),
+        { status: 502, headers: { ...headers, 'Content-Type': 'application/json' } },
+      );
+    }
+
     // Map RPC results to the OrgSearchResult shape the frontend expects
-    const results = Array.isArray(rows)
-      ? rows.map((r: Record<string, unknown>) => ({
-          id: r.id ?? r.ein ?? '',
-          ein: r.ein ?? null,
-          name: r.name ?? '',
-          state: r.state ?? null,
-          entity_type: r.entity_type ?? 'funder',
-          grant_count: Number(r.grant_count ?? 0),
-          total_funding: Number(r.total_funding ?? 0),
-        }))
-      : [];
+    const results = rows.map((r: Record<string, unknown>) => ({
+      id: r.id ?? r.ein ?? '',
+      ein: r.ein ?? null,
+      name: r.name ?? '',
+      state: r.state ?? null,
+      entity_type: r.entity_type ?? 'funder',
+      grant_count: Number(r.grant_count ?? 0),
+      total_funding: Number(r.total_funding ?? 0),
+    }));
 
     return new Response(JSON.stringify({ results }), {
       headers: { ...headers, 'Content-Type': 'application/json' },
