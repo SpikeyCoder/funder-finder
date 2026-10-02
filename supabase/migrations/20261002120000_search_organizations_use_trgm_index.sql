@@ -215,7 +215,9 @@ BEGIN
   -- Tier-2 prefix bonus: names starting with the query's first word, past a
   -- leading "the" (which would credit every "THE …" name). A stop word there
   -- ("for the children", "the of") gives no word bonus; only the
-  -- whole-query prefixes below earn it then.
+  -- whole-query prefixes below earn it then. It must be a whole word ("st
+  -- jude" credits "ST …", not "STANFORD …"); being alphanumeric, it is safe
+  -- in a regex.
   e_first := v_all_words[CASE WHEN v_all_words[1] = 'the' THEN 2 ELSE 1 END];
   IF e_first = ANY(v_stop) THEN
     e_first := NULL;
@@ -238,6 +240,17 @@ BEGIN
     v_loose2 := '% ' || v_distinctive[1] || '%';
   ELSIF array_length(v_long, 1) > 1 THEN
     v_loose := '%' || v_driver || '%';  -- (with one word, the all-words set is this)
+  END IF;
+  -- A camelCase split can leave the real word unsearched ("McDonald" →
+  -- 'mc' + 'donald', and 'mc' can't drive a set): search the typed word too,
+  -- so "RONALD MCDONALD HOUSE" isn't left to a capped '%donald%' sample.
+  IF v_query_spaced IS NOT NULL THEN
+    SELECT x INTO w FROM unnest(regexp_split_to_array(v_query_lower, '[^[:alnum:]]+')) WITH ORDINALITY AS t(x, ord)
+    WHERE length(x) >= 3 AND NOT (x = ANY(v_all_words)) ORDER BY ord LIMIT 1;
+    IF w IS NOT NULL THEN
+      v_loose := '%' || w || '%';
+      v_loose2 := v_loose;
+    END IF;
   END IF;
 
   -- All-words set: only indexable words; skipped (NULL) when there are none.
@@ -336,7 +349,7 @@ BEGIN
       END
       -- TIER 2: PREFIX MATCHES (0.80)
       + CASE
-        WHEN m._lname LIKE e_first || '%' THEN 0.80
+        WHEN m._lname ~ ('^' || e_first || '([^[:alnum:]]|$)') THEN 0.80
         WHEN m._lname LIKE e_lower || '%' THEN 0.80
         WHEN m._lname LIKE e_norm || '%' THEN 0.80
         ELSE 0
