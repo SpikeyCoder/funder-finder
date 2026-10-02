@@ -47,8 +47,13 @@ function formatArg(arg: unknown, depth: number): string {
     // own only point at where it was wrapped, and its message often repeats
     // the cause's. Reports are capped at 500 chars, so skip both then.
     if (hasCause && cause instanceof Error) {
-      const repeats = cause.message !== '' && String(arg.message).includes(cause.message);
-      return `${repeats ? arg.name : `${arg.name}: ${arg.message}`}${causeText}`;
+      // Strip only the repeated tail ("Failed to load funder 123: Network
+      // error" → "Failed to load funder 123"), keeping the wrapper's context.
+      let own = String(arg.message);
+      if (cause.message && own.endsWith(cause.message)) {
+        own = own.slice(0, -cause.message.length).replace(/[\s:;,-]+$/, '');
+      }
+      return `${own ? `${arg.name}: ${own}` : arg.name}${causeText}`;
     }
     // Keep only frame-shaped lines: V8 "    at fn (url:1:2)", WebKit/Firefox
     // "fn@url:1:2". Header/message lines vary by engine and may contain '@'.

@@ -25,6 +25,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   // Set when the user closes the dropdown (Escape / outside click) so a search
   // still in flight doesn't pop it back open; cleared when they type or refocus.
@@ -57,8 +58,10 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
         setSearchedQuery(searched);
         setResults(data);
         setStatus(data.length > 0 ? 'results' : 'empty');
-      } catch {
+      } catch (err) {
         if (controller.signal.aborted) return;
+        // Logged so a bug report filed from the error panel shows the cause.
+        console.error('Organization search failed:', err);
         setSearchedQuery(searched);
         setResults([]);
         setStatus('error');
@@ -82,8 +85,9 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
   useEffect(() => {
     // Also counts before the first response has opened the dropdown.
     const handler = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (inputRef.current?.contains(target) || dropdownRef.current?.contains(target)) return;
+      // Anything inside the search box (input, icon, spinner, dropdown) counts
+      // as inside.
+      if (wrapperRef.current?.contains(e.target as Node)) return;
       // Dragging a classic (space-taking) page scrollbar doesn't blur the
       // input; it isn't a dismissal. Overlay scrollbars (mobile, macOS) take no
       // width, so this never swallows a real tap there.
@@ -99,9 +103,11 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
   // The error panel's own query is being searched again.
   const retrying = status === 'error' && loading && searchedQuery === trimmedQuery;
 
-  const reopenDropdown = () => {
+  const reopenDropdown = (text = query) => {
     dismissedRef.current = false;
-    if (status !== 'idle') setShowDropdown(true);
+    // Below two characters the effect is about to reset to idle; don't flash
+    // the previous panel first.
+    if (status !== 'idle' && text.trim().length >= 2) setShowDropdown(true);
   };
 
   const handleSelect = (result: OrgSearchResult) => {
@@ -140,17 +146,17 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
   };
 
   return (
-    <div className="relative w-full">
+    <div ref={wrapperRef} className="relative w-full">
       <div className="relative">
         <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
         <input
           ref={inputRef}
           type="text"
           value={query}
-          onChange={e => { setQuery(e.target.value); reopenDropdown(); }}
-          onFocus={reopenDropdown}
+          onChange={e => { setQuery(e.target.value); reopenDropdown(e.target.value); }}
+          onFocus={() => reopenDropdown()}
           // Clicking an already-focused input doesn't fire focus; reopen too.
-          onMouseDown={reopenDropdown}
+          onMouseDown={() => reopenDropdown()}
           // Moving focus to another control (e.g. Tab) counts as dismissing, so
           // a late response doesn't open the panel over it. A blur with no new
           // focus target — hiding the mobile keyboard — doesn't: results
