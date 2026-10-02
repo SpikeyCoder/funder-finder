@@ -81,7 +81,7 @@ REVOKE ALL ON public.organization_requests FROM anon, authenticated;
 -- ── Adding a recipient ──────────────────────────────────────────────────────
 -- The processor adds an organization through this, not a plain INSERT: it
 -- locks the EIN and inserts only if neither stored form (zero-padded or not)
--- exists, so two runs resolving requests for the same organization can't
+-- nor an EIN-less row of the same name exists, so two runs resolving requests for the same organization can't
 -- both add it. recipient_organizations.ein has no unique constraint, and
 -- adding one to a table other pipelines load is out of scope here.
 
@@ -100,9 +100,13 @@ BEGIN
   END IF;
   PERFORM pg_advisory_xact_lock(hashtext('organization-request:' || p_ein));
 
+  -- Listed under either EIN form, or under this exact name with no EIN at
+  -- all (ein is nullable), so it isn't added a second time.
   SELECT r.id INTO v_id
     FROM public.recipient_organizations r
    WHERE r.ein IN (p_ein, ltrim(p_ein, '0'))
+      OR (r.ein IS NULL AND lower(btrim(r.name)) = lower(btrim(p_name)))
+   ORDER BY (r.ein IS NULL)
    LIMIT 1;
   IF v_id IS NOT NULL THEN
     RETURN QUERY SELECT v_id, false;
