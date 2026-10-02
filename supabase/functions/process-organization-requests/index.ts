@@ -52,9 +52,9 @@ const MAX_ATTEMPTS = 3;
 const CLAIM_TTL_MS = 10 * 60 * 1000;
 // Every outbound call is bounded, so one stalled lookup can't hold the
 // sequential batch until the runtime kills it.
-// (A row makes at most ~9 calls, so a row started just inside RUN_BUDGET_MS
-// still ends inside the invoker's 120 s pg_net timeout.)
-const FETCH_TIMEOUT_MS = 8_000;
+// (A row makes at most ~11 calls, so a row started just inside RUN_BUDGET_MS
+// still ends inside the invoker's 120 s pg_net timeout: 30 + 11 × 7 < 120.)
+const FETCH_TIMEOUT_MS = 7_000;
 // IRS foundation codes 02/03/04 are private foundations (990-PF filers).
 const PRIVATE_FOUNDATION_CODES = new Set([2, 3, 4]);
 
@@ -371,11 +371,13 @@ export function reviewCardFor(row: QueueRow, reason: string, candidates: IrsOrg[
 
 // Reuses report-bug's Trello list so requests land where bug reports are
 // triaged. Best-effort: a missing config or Trello error doesn't fail the row.
-async function createReviewCard(card: { name: string; desc: string }): Promise<boolean> {
+// "unconfigured" (no TRELLO_* secrets) is a deployment state, not a failure
+// to retry; false is a Trello error worth retrying.
+async function createReviewCard(card: { name: string; desc: string }): Promise<boolean | "unconfigured"> {
   const key = Deno.env.get("TRELLO_API_KEY");
   const token = Deno.env.get("TRELLO_TOKEN");
   const idList = Deno.env.get("TRELLO_LIST_ID");
-  if (!key || !token || !idList) return false;
+  if (!key || !token || !idList) return "unconfigured";
   const params = new URLSearchParams({ key, token, idList, name: card.name, desc: card.desc, pos: "top" });
   const res = await fetch(`https://api.trello.com/1/cards?${params}`, {
     method: "POST",
@@ -405,7 +407,10 @@ export function cronAuthorized(req: Request, expected: string): boolean {
 
 async function notifyFailure(row: QueueRow, now: string): Promise<void> {
   if (!row.requester_email || !RESEND_API_KEY) return;
-  if (await emailsSentRecently(row.requester_email).catch(() => 0) >= EMAILS_PER_ADDRESS_PER_DAY) return;
+  // Fails closed: if the cap can't be checked, don't send.
+  if (await emailsSentRecently(row.requester_email).catch(() => EMAILS_PER_ADDRESS_PER_DAY) >= EMAILS_PER_ADDRESS_PER_DAY) {
+    return;
+  }
   if (await sendEmail(row.requester_email, FAILURE_NOTICE.subject, FAILURE_NOTICE.text).catch(() => false)) {
     await patchRow(row.id, { notified_at: now }).catch((e) =>
       console.error(`organization request ${row.id}: notified but could not record it:`, e)
@@ -458,10 +463,15 @@ interface RunState {
   cardKeys: Set<string>;
 }
 
+// Counted per mailbox, not per exact address: "victim+1@x.org" and
+// "victim+2@x.org" share one allowance. (The pattern can over-match a
+// longer local part, which only makes the cap stricter.)
 async function emailsSentRecently(email: string): Promise<number> {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const at = email.lastIndexOf("@");
+  const mailbox = `${email.slice(0, at).split("+")[0]}*${email.slice(at)}`;
   const rows = await restJson<unknown[]>(
-    `organization_requests?requester_email=eq.${encodeURIComponent(email)}` +
+    `organization_requests?requester_email=ilike.${encodeURIComponent(mailbox)}` +
       `&notified_at=gte.${encodeURIComponent(since)}&select=id&limit=${EMAILS_PER_ADDRESS_PER_DAY}`,
   );
   return rows.length;
@@ -483,7 +493,7 @@ async function processRow(row: QueueRow, run: RunState): Promise<string> {
       status: "failed",
       processed_at: now,
       last_error: "gave up: earlier attempts never finished",
-    }).then((ours) => ours, (e) => {
+    }).catch((e) => {
       console.error(`organization request ${row.id}: could not mark it failed:`, e);
       return false;
     });
@@ -492,6 +502,7 @@ async function processRow(row: QueueRow, run: RunState): Promise<string> {
   }
   let outcome: Outcome;
   let reviewCandidates: IrsOrg[] | null = null;
+  let reviewable = true;
   try {
     outcome = await resolve(row);
     if (outcome.status === "needs_review") {
@@ -502,12 +513,20 @@ async function processRow(row: QueueRow, run: RunState): Promise<string> {
       // process it. (If the write below then failed, a retry could open a
       // second card; that beats a request nobody is asked to review.) Rows
       // for the same organization share one card per run.
-      const key = `${normalizeName(row.query)}|${row.ein ?? ""}|${row.state ?? ""}`;
+      // An EIN request is keyed by the EIN, however its name was typed.
+      const key = row.ein ? `ein:${padEin(row.ein)}` : `name:${normalizeName(row.query)}|${row.state ?? ""}`;
       if (!run.cardKeys.has(key)) {
-        if (!(await createReviewCard(reviewCardFor(row, outcome.reason, outcome.candidates)))) {
-          throw new Error("review card could not be created (TRELLO_* unset or Trello failing)");
+        const carded = await createReviewCard(reviewCardFor(row, outcome.reason, outcome.candidates));
+        if (carded === "unconfigured") {
+          // Retrying can't help: record it as needs_review (findable in the
+          // table) but don't tell the requester someone is reviewing it.
+          console.error(`organization request ${row.id} needs review but TRELLO_* is unset; no card, no email`);
+          reviewable = false;
+        } else if (!carded) {
+          throw new Error("review card could not be created (Trello failing)");
+        } else {
+          run.cardKeys.add(key);
         }
-        run.cardKeys.add(key);
       }
     }
   } catch (err) {
@@ -521,7 +540,7 @@ async function processRow(row: QueueRow, run: RunState): Promise<string> {
       // so a failed request can still be picked up by hand.
       ...(reviewCandidates ? { candidates: reviewCandidates } : {}),
       ...(attempts >= MAX_ATTEMPTS ? { status: "failed", processed_at: now } : {}),
-    }).then((ours) => ours, (e) => {
+    }).catch((e) => {
       console.error(`organization request ${row.id}: could not record the failure:`, e);
       return false;
     });
@@ -563,9 +582,10 @@ async function processRow(row: QueueRow, run: RunState): Promise<string> {
   }
 
   // (Without RESEND_API_KEY nothing can be sent; skip the cap lookup too.)
-  const note = row.requester_email && RESEND_API_KEY ? notificationFor(row, outcome) : null;
+  const note = row.requester_email && RESEND_API_KEY && reviewable ? notificationFor(row, outcome) : null;
   const underCap = note
-    ? await emailsSentRecently(row.requester_email!).then((n) => n < EMAILS_PER_ADDRESS_PER_DAY, () => true)
+    // Fails closed: an unchecked cap is no cap.
+    ? await emailsSentRecently(row.requester_email!).then((n) => n < EMAILS_PER_ADDRESS_PER_DAY, () => false)
     : false;
   if (note && underCap && await sendEmail(row.requester_email!, note.subject, note.text).catch(() => false)) {
     await patchRow(row.id, { notified_at: now }).catch((e) =>
