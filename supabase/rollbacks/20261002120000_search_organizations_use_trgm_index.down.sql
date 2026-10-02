@@ -5,7 +5,8 @@
 -- CREATE OR REPLACE also replaces the SET list, which drops the forward
 -- migration's plan_cache_mode / max_parallel_workers_per_gather /
 -- synchronize_seqscans settings. The pg_trgm extension and trigram indexes are
--- left in place: they existed before the forward migration.
+-- left in place: they existed before the forward migration. The forward
+-- migration's new lower(name) indexes are dropped at the end.
 --
 -- Apply manually: psql "$DATABASE_URL" -f supabase/rollbacks/20261002120000_search_organizations_use_trgm_index.down.sql
 
@@ -140,3 +141,6 @@ BEGIN
   LIMIT p_limit;
 END;
 $function$;
+
+DROP INDEX IF EXISTS public.idx_funders_lower_name;
+DROP INDEX IF EXISTS public.idx_recipient_org_lower_name;

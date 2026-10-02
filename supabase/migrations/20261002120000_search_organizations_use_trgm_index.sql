@@ -24,37 +24,50 @@
 --
 -- FIX
 -- ---
--- Candidates are the union of three sets, each capped at 500 *without* sorting
+-- Candidates are the union of four sets, each capped at 500 *without* sorting
 -- so a common word stops scanning early, then ranked together:
---   all words   names containing every distinctive word (up to 4) — small for
---               multi-word queries and where the intended org reliably is;
+--   exact       names equal to the query (also "The <query>"), by B-tree on
+--               lower(name) — an ILIKE without wildcards still goes through
+--               the trigram index and rechecks every row sharing the word's
+--               trigrams (6.6 s for "foundation"); never lost to other caps;
+--   all words   names containing every indexable distinctive word (up to 4) —
+--               small for multi-word queries;
 --   prefix      names starting with the query;
---   one word    the first distinctive word of 3+ letters (or, with only short
---               words, names with a word starting with it: 'st%' / '% st%',
---               which the index serves via leading trigrams).
+--   one word    the first word with a 3+ letter/digit run, when there are
+--               several (with one, it's the all-words set); or, with only
+--               short words, names with a word starting with it ('st%' /
+--               '% st%', which the index serves via leading trigrams).
 -- Parallel workers and synchronized seq scans are off for the function, so
 -- each capped set — and the result — is the same call to call. LIKE wildcards
 -- in input are escaped; a query with no letters or digits returns nothing.
--- Ranking keeps the previous tiers, adds trigram similarity to the whole
--- (camelCase-split) query as a fine tiebreaker, and breaks remaining ties by
+-- Ranking keeps the previous tiers (now on escaped patterns), adds trigram
+-- similarity to the whole (camelCase-split) query as a small tiebreaker
+-- (weight 0.01, below the funding tiebreaker), and breaks remaining ties by
 -- id (recipient preferred over funder on an exact tie for the same EIN, per
 -- 20260326100000).
 --
 -- An earlier draft ranked every match *before* capping; "foundation" (148k
 -- funders) took 22 s. Don't do that.
 --
--- MEASURED (production, pg_temp copy of this body, ms; identical ordered
--- results on 3 consecutive calls for every query):
---   foundation 374-653 · community foundation 445 · foundation for children
---   162-612 · family foundation 197-490 · the 161 · st 156 · the st 137 ·
---   united way of king county 305 · church of st mary 206 · habitat for
---   humanity 136 · red cross 126 · SitStayRead 86 · %% / __ 0
--- Top results: "church of st mary" → CHURCH OF ST MARY; "united way of king
--- county" → UNITED WAY OF KING COUNTY; "SitStayRead" → SIT STAY READ INC.
+-- MEASURED (production, pg_temp copy of this body; identical ordered results
+-- on repeat calls for every query), ms:
+--   foundation 266-341 · "% foundation" 272 · foundation for children 569 ·
+--   community foundation 934 (cold) · the 561 · st 477 · united way of king
+--   county 341 · church of st mary 311 · habitat for humanity 208 · red cross
+--   495 · SitStayRead 147 · xq 6 · y.m.c.a 51 · NULL / %% / __ 0
+-- (The exact set was stubbed for these runs because its lower(name) indexes
+-- don't exist in production until this migration runs; on a temp copy of
+-- funders with that index, `lower(name) IN ('foundation','the foundation')`
+-- took 0.08 ms.)
+-- Top results: "foundation" → FOUNDATION FOR THE CAROLINAS; "church of st
+-- mary" → CHURCH OF ST MARY; "united way of king county" → UNITED WAY OF KING
+-- COUNTY; "SitStayRead" → SIT STAY READ INC.
 --
 -- The pg_trgm extension and both trigram indexes already exist in production;
 -- they're declared here (IF NOT EXISTS) so the schema this depends on is in
--- source control. CREATE OR REPLACE keeps the function's owner and grants.
+-- source control. The two lower(name) B-tree indexes are new. (Not
+-- CONCURRENTLY: migrations run in a transaction. Building them briefly blocks
+-- writes to these tables, which are batch-loaded.) CREATE OR REPLACE keeps the function's owner and grants.
 -- Rollback: supabase/rollbacks/20261002120000_search_organizations_use_trgm_index.down.sql
 
 CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA extensions;
@@ -63,6 +76,12 @@ CREATE INDEX IF NOT EXISTS idx_funders_name_trgm
   ON public.funders USING gin (name extensions.gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_recipient_org_name_trgm2
   ON public.recipient_organizations USING gin (name extensions.gin_trgm_ops);
+
+-- New: exact-name lookups for the "exact" candidate set.
+CREATE INDEX IF NOT EXISTS idx_funders_lower_name
+  ON public.funders (lower(name));
+CREATE INDEX IF NOT EXISTS idx_recipient_org_lower_name
+  ON public.recipient_organizations (lower(name));
 
 CREATE OR REPLACE FUNCTION public.search_organizations(p_query text, p_limit integer DEFAULT 15)
 RETURNS TABLE(id text, ein text, name text, state text, entity_type text, grant_count bigint, total_funding numeric)
@@ -94,14 +113,22 @@ DECLARE
   v_driver text;
   v_loose text;   -- single-word candidate pattern
   v_loose2 text;  -- second pattern for a short word (word start mid-name)
+  v_long text[];  -- distinctive words with a 3+ letter/digit run (indexable)
   v_all1 text;    -- up to four patterns a name must ALL match
   v_all2 text;
   v_all3 text;
   v_all4 text;
+  v_exact text;   -- the whole (normalized) query, matched by lower(name) equality
   v_prefix text;  -- names starting with the query
+  -- LIKE-escaped forms of the query, for every pattern built from input.
+  e_lower text;
+  e_norm text;
+  e_first text;
 BEGIN
   v_query_lower := lower(trim(p_query));
-  v_query_normalized := regexp_replace(v_query_lower, '^the\s+', '');
+  -- Leading punctuation means nothing in a name search, and left in a prefix
+  -- pattern ("% foundation%") only the common word's trigrams would remain.
+  v_query_normalized := regexp_replace(regexp_replace(v_query_lower, '^[^[:alnum:]]+', ''), '^the\s+', '');
 
   -- Split camelCase/PascalCase: "SitStayRead" → "sit stay read"
   v_query_spaced := lower(regexp_replace(trim(p_query), '([a-z])([A-Z])', '\1 \2', 'g'));
@@ -111,7 +138,7 @@ BEGIN
 
   -- Nothing to match on (e.g. "%%" or "__"): such a pattern has no trigrams,
   -- so searching would scan both tables in full for nothing.
-  IF v_query_lower !~ '[[:alnum:]]' THEN
+  IF v_query_lower IS NULL OR v_query_lower !~ '[[:alnum:]]' THEN
     RETURN;
   END IF;
 
@@ -129,52 +156,66 @@ BEGIN
     RETURN;
   END IF;
 
+  -- Escape LIKE wildcards in everything built from input, so "%" and "_" are
+  -- literal text rather than match-anything patterns.
+  e_lower := replace(replace(replace(v_query_lower, '\', '\\'), '%', '\%'), '_', '\_');
+  e_norm := replace(replace(replace(v_query_normalized, '\', '\\'), '%', '\%'), '_', '\_');
+
   -- Split into all words and distinctive words
   v_all_words := string_to_array(coalesce(v_query_spaced, v_query_lower), ' ');
+  e_first := replace(replace(replace(v_all_words[1], '\', '\\'), '%', '\%'), '_', '\_');
   v_distinctive := ARRAY[]::text[];
   FOREACH w IN ARRAY v_all_words LOOP
     IF length(w) >= 2 AND w ~ '[[:alnum:]]' AND NOT (w = ANY(v_stop)) THEN
-      -- Escape LIKE wildcards so input like "%%" or "__" is literal text, not
-      -- a match-everything pattern.
       v_distinctive := array_append(v_distinctive, replace(replace(replace(w, '\', '\\'), '%', '\%'), '_', '\_'));
     END IF;
   END LOOP;
 
-  -- A trigram index needs a 3+ character word ('%st%' has no trigrams and
-  -- would scan every row): drive the single-word match with the first one.
-  -- (Counting letters and digits only: pg_trgm ignores punctuation.)
-  SELECT dw INTO v_driver FROM unnest(v_distinctive) WITH ORDINALITY AS t(dw, ord)
-  WHERE length(regexp_replace(dw, '[^[:alnum:]]', '', 'g')) >= 3 ORDER BY ord LIMIT 1;
+  -- A trigram index can only serve a word with a run of 3+ letters/digits
+  -- ('%st%' or '%y.m.c.a%' would scan every row; pg_trgm splits on
+  -- punctuation). Only such words drive the indexed candidate sets.
+  SELECT coalesce(array_agg(dw ORDER BY ord), ARRAY[]::text[]) INTO v_long
+  FROM unnest(v_distinctive) WITH ORDINALITY AS t(dw, ord)
+  WHERE dw ~ '[[:alnum:]]{3}';
+  v_driver := v_long[1];
 
   IF array_length(v_distinctive, 1) IS NULL THEN
-    v_distinctive := ARRAY[replace(replace(replace(v_query_normalized, '\', '\\'), '%', '\%'), '_', '\_')];
+    v_distinctive := ARRAY[e_norm];
   END IF;
 
-  IF v_driver IS NOT NULL THEN
-    v_loose := '%' || v_driver || '%';
-    v_loose2 := v_loose;
-  ELSE
+  IF v_driver IS NULL THEN
     -- Only short words ("st", "uw") or stop words ("the"): match where a word
     -- starts with it, at the start or mid-name — both forms have leading
     -- trigrams the index can use.
     v_loose := v_distinctive[1] || '%';
     v_loose2 := '% ' || v_distinctive[1] || '%';
+  ELSIF array_length(v_long, 1) > 1 THEN
+    v_loose := '%' || v_driver || '%';  -- (with one word, the all-words set is this)
   END IF;
 
-  v_all1 := '%' || v_distinctive[1] || '%';
-  v_all2 := '%' || v_distinctive[2] || '%';  -- NULL when absent
-  v_all3 := '%' || v_distinctive[3] || '%';
-  v_all4 := '%' || v_distinctive[4] || '%';
-  v_prefix := replace(replace(replace(v_query_normalized, '\', '\\'), '%', '\%'), '_', '\_') || '%';
+  -- All-words set: only indexable words; skipped (NULL) when there are none.
+  v_all1 := '%' || v_long[1] || '%';
+  v_all2 := '%' || v_long[2] || '%';  -- NULL when absent
+  v_all3 := '%' || v_long[3] || '%';
+  v_all4 := '%' || v_long[4] || '%';
+  v_exact := v_query_normalized;
+  v_prefix := e_norm || '%';
   v_first_word := v_all_words[1];
 
   RETURN QUERY
   WITH funder_ids AS (
-    -- Three bounded candidate sets, each capped without sorting so a common
-    -- word stops scanning early; ranking happens on their union below. Only
-    -- legitimate grantmaking funders (NTEE T-code or 990-PF filers) count.
+    -- Bounded candidate sets, each capped without sorting so a common word
+    -- stops scanning early; ranking happens on their union below. The exact-
+    -- name set guarantees an exact match is never cut by the others' caps.
+    -- Only legitimate grantmaking funders (NTEE T-code or 990-PF filers)
+    -- count.
     (SELECT f.id FROM funders f
-      WHERE f.name ILIKE v_all1
+      WHERE lower(f.name) IN (v_exact, 'the ' || v_exact)
+        AND (f.ntee_code LIKE 'T%' OR EXISTS (SELECT 1 FROM foundation_filings ff WHERE ff.foundation_id = f.id))
+      LIMIT 500)
+    UNION
+    (SELECT f.id FROM funders f
+      WHERE v_all1 IS NOT NULL AND f.name ILIKE v_all1
         AND (v_all2 IS NULL OR f.name ILIKE v_all2)
         AND (v_all3 IS NULL OR f.name ILIKE v_all3)
         AND (v_all4 IS NULL OR f.name ILIKE v_all4)
@@ -183,7 +224,7 @@ BEGIN
     UNION
     (SELECT f.id FROM funders f WHERE f.name ILIKE v_prefix AND (f.ntee_code LIKE 'T%' OR EXISTS (SELECT 1 FROM foundation_filings ff WHERE ff.foundation_id = f.id)) LIMIT 500)
     UNION
-    (SELECT f.id FROM funders f WHERE (f.name ILIKE v_loose OR f.name ILIKE v_loose2) AND (f.ntee_code LIKE 'T%' OR EXISTS (SELECT 1 FROM foundation_filings ff WHERE ff.foundation_id = f.id)) LIMIT 500)
+    (SELECT f.id FROM funders f WHERE v_loose IS NOT NULL AND (f.name ILIKE v_loose OR f.name ILIKE v_loose2) AND (f.ntee_code LIKE 'T%' OR EXISTS (SELECT 1 FROM foundation_filings ff WHERE ff.foundation_id = f.id)) LIMIT 500)
   ),
   funder_hits AS (
     SELECT f.id::text AS _id, f.id::text AS _ein, f.name::text AS _name, f.state::text AS _state,
@@ -193,7 +234,11 @@ BEGIN
   ),
   recipient_ids AS (
     (SELECT r.id FROM recipient_organizations r
-      WHERE r.name ILIKE v_all1
+      WHERE lower(r.name) IN (v_exact, 'the ' || v_exact)
+      LIMIT 500)
+    UNION
+    (SELECT r.id FROM recipient_organizations r
+      WHERE v_all1 IS NOT NULL AND r.name ILIKE v_all1
         AND (v_all2 IS NULL OR r.name ILIKE v_all2)
         AND (v_all3 IS NULL OR r.name ILIKE v_all3)
         AND (v_all4 IS NULL OR r.name ILIKE v_all4)
@@ -201,7 +246,7 @@ BEGIN
     UNION
     (SELECT r.id FROM recipient_organizations r WHERE r.name ILIKE v_prefix LIMIT 500)
     UNION
-    (SELECT r.id FROM recipient_organizations r WHERE r.name ILIKE v_loose OR r.name ILIKE v_loose2 LIMIT 500)
+    (SELECT r.id FROM recipient_organizations r WHERE v_loose IS NOT NULL AND (r.name ILIKE v_loose OR r.name ILIKE v_loose2) LIMIT 500)
   ),
   recipient_hits AS (
     SELECT r.id::text, r.ein::text, r.name::text, r.primary_state::text,
@@ -225,9 +270,9 @@ BEGIN
       END
       -- TIER 2: PREFIX MATCHES (0.80)
       + CASE
-        WHEN lower(trim(c._name)) LIKE v_first_word || '%' THEN 0.80
-        WHEN lower(trim(c._name)) LIKE v_query_lower || '%' THEN 0.80
-        WHEN lower(trim(c._name)) LIKE v_query_normalized || '%' THEN 0.80
+        WHEN lower(trim(c._name)) LIKE e_first || '%' THEN 0.80
+        WHEN lower(trim(c._name)) LIKE e_lower || '%' THEN 0.80
+        WHEN lower(trim(c._name)) LIKE e_norm || '%' THEN 0.80
         ELSE 0
       END
       -- TIER 3: FULL PHRASE MATCH (0.50)
@@ -242,8 +287,9 @@ BEGIN
               WHERE length(aw) >= 2 AND strpos(lower(c._name), aw) > 0)
              / GREATEST(array_length(v_all_words, 1), 1) * 0.15
       END
-      -- Similarity to the whole (camelCase-split) query, as a fine tiebreaker
-      + extensions.similarity(c._name, coalesce(v_query_spaced, v_query_lower)) * 0.10
+      -- Similarity to the whole (camelCase-split) query: a tiebreaker only,
+      -- kept well below the funding tiebreaker and every tier step.
+      + extensions.similarity(c._name, coalesce(v_query_spaced, v_query_lower)) * 0.01
       -- Funding tiebreaker (0-0.05)
       + CASE WHEN c._tf > 0 THEN LEAST(ln(c._tf + 1) / 24.0 * 0.05, 0.05) ELSE 0 END
       -- REMOVED: Funder preference bias (+0.05) that caused recipients to
