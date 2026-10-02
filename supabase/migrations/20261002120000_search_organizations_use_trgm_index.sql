@@ -52,10 +52,10 @@
 -- MEASURED (production, pg_temp copy of this body; identical ordered results
 -- on repeat calls for every query), warm ms (a cold first call can take
 -- several times longer while pages load):
---   foundation 274 · community foundation 328 · foundation for children 345 ·
---   habitat for humanity 58 · y.m.c.a 39 · c# 96 · for the children 78 ·
---   the 116 · st 117 · "the ." 118 · "Habitat for Humanity, Inc." 168 ·
---   red cross 63 · xq 6 · NULL / %% / __ 0
+--   foundation 377 · community foundation 353 · the community foundation 392 ·
+--   habitat for humanity 69 · y.m.c.a 47 · c# 122 · the 132 · for the
+--   children 78 · McDonald Foundation 69 · uw madison 19 · st jude 14 ·
+--   "Habitat for Humanity, Inc." 168 · red cross 65 · xq 6 · NULL / %% / __ 0
 -- (The exact set was stubbed for these runs because its lower(name) indexes
 -- don't exist in production until this migration runs; on a temp copy of
 -- funders with that index, `lower(name) IN ('foundation','the foundation')`
@@ -133,6 +133,7 @@ DECLARE
   e_first text;
   v_min_len int;  -- shortest word length that counts as a hit
   v_counted int;  -- how many query words can count
+  v_key_words text[];  -- words a candidate must contain one of
   v_acronym boolean := false;  -- query was single letters joined into one word
   v_all_cap int;  -- row cap for the all-words set
   v_short text;   -- a 2-letter word the all-words set must also contain
@@ -233,6 +234,12 @@ BEGIN
   -- nothing longer ("c#"); the Tier-4 denominator counts the same words.
   v_min_len := CASE WHEN EXISTS (SELECT 1 FROM unnest(v_all_words) x WHERE length(x) >= 2) THEN 2 ELSE 1 END;
   SELECT count(*) INTO v_counted FROM unnest(v_all_words) x WHERE length(x) >= v_min_len;
+  -- A candidate must contain a non-stop word ("of" inside "PROFESSIONAL"
+  -- isn't relevance), unless the query is nothing but stop words ("the").
+  v_key_words := ARRAY(SELECT x FROM unnest(v_all_words) x WHERE length(x) >= v_min_len AND NOT (x = ANY(v_stop)));
+  IF cardinality(v_key_words) = 0 THEN
+    v_key_words := ARRAY(SELECT x FROM unnest(v_all_words) x WHERE length(x) >= v_min_len);
+  END IF;
 
   IF v_driver IS NULL THEN
     -- Only short words ("st", "uw") or stop words ("the"): match where a word
@@ -245,14 +252,16 @@ BEGIN
   END IF;
   -- A camelCase split can leave the real word unsearched ("McDonald" →
   -- 'mc' + 'donald', and 'mc' can't drive a set): search the typed word too
-  -- (as the second pattern, or both when there was none), so "RONALD
-  -- MCDONALD HOUSE" isn't left to a capped '%donald%' sample.
+  -- so "RONALD MCDONALD HOUSE" isn't left to a capped '%donald%' sample.
   IF v_query_spaced IS NOT NULL THEN
     SELECT x INTO w FROM unnest(regexp_split_to_array(v_query_lower, '[^[:alnum:]]+')) WITH ORDINALITY AS t(x, ord)
     WHERE length(x) >= 3 AND NOT (x = ANY(v_all_words)) ORDER BY ord LIMIT 1;
-    IF w IS NOT NULL THEN
-      v_loose2 := '%' || w || '%';
-      v_loose := coalesce(v_loose, v_loose2);
+    IF w IS NOT NULL AND v_driver IS NULL THEN
+      v_loose2 := '%' || w || '%';  -- keep the short-word start pattern
+    ELSIF w IS NOT NULL THEN
+      -- '%donald%' would subsume '%mcdonald%': search the typed word alone.
+      v_loose := '%' || w || '%';
+      v_loose2 := v_loose;
     END IF;
   END IF;
 
@@ -294,7 +303,7 @@ BEGIN
         AND (f.ntee_code LIKE 'T%' OR EXISTS (SELECT 1 FROM foundation_filings ff WHERE ff.foundation_id = f.id))
       LIMIT v_all_cap)
     UNION
-    (SELECT f.id FROM funders f WHERE v_prefix IS NOT NULL AND f.name ILIKE v_prefix AND (f.ntee_code LIKE 'T%' OR EXISTS (SELECT 1 FROM foundation_filings ff WHERE ff.foundation_id = f.id)) LIMIT 500)
+    (SELECT f.id FROM funders f WHERE v_prefix IS NOT NULL AND (f.name ILIKE v_prefix OR f.name ILIKE 'the ' || v_prefix) AND (f.ntee_code LIKE 'T%' OR EXISTS (SELECT 1 FROM foundation_filings ff WHERE ff.foundation_id = f.id)) LIMIT 500)
     UNION
     (SELECT f.id FROM funders f WHERE v_loose IS NOT NULL AND (f.name ILIKE v_loose OR f.name ILIKE v_loose2) AND (f.ntee_code LIKE 'T%' OR EXISTS (SELECT 1 FROM foundation_filings ff WHERE ff.foundation_id = f.id)) LIMIT 500)
   ),
@@ -317,7 +326,7 @@ BEGIN
         AND (v_short IS NULL OR r.name ILIKE v_short)
       LIMIT v_all_cap)
     UNION
-    (SELECT r.id FROM recipient_organizations r WHERE v_prefix IS NOT NULL AND r.name ILIKE v_prefix LIMIT 500)
+    (SELECT r.id FROM recipient_organizations r WHERE v_prefix IS NOT NULL AND (r.name ILIKE v_prefix OR r.name ILIKE 'the ' || v_prefix) LIMIT 500)
     UNION
     (SELECT r.id FROM recipient_organizations r WHERE v_loose IS NOT NULL AND (r.name ILIKE v_loose OR r.name ILIKE v_loose2) LIMIT 500)
   ),
@@ -339,7 +348,10 @@ BEGIN
     -- acronym, spaces go too ('abc' must hit "A B C CHILD CARE").
     SELECT n.*,
       (SELECT count(*)::numeric FROM unnest(v_all_words) aw
-        WHERE length(aw) >= v_min_len AND strpos(n._bare, aw) > 0) AS _hits
+        WHERE length(aw) >= v_min_len AND strpos(n._bare, aw) > 0) AS _hits,
+      EXISTS (SELECT 1 FROM unnest(v_key_words) kw WHERE strpos(n._bare, kw) > 0) AS _relevant,
+      -- The name without a leading "the", as the query was normalized.
+      regexp_replace(n._lname, '^the\s+', '') AS _core
     FROM (
       SELECT c.*, lower(trim(c._name)) AS _lname,
         regexp_replace(lower(c._name),
@@ -352,7 +364,7 @@ BEGIN
       -- TIER 1: EXACT MATCHES (1.0)
       CASE
         WHEN m._lname = v_query_lower THEN 1.0
-        WHEN regexp_replace(m._lname, '^the\s+', '') = v_query_lower THEN 1.0
+        WHEN m._core = v_query_lower THEN 1.0
         WHEN m._lname = v_query_normalized THEN 1.0
         ELSE 0
       END
@@ -360,7 +372,7 @@ BEGIN
       + CASE
         WHEN m._lname ~ ('^' || e_first || '([^[:alnum:]]|$)') THEN 0.80
         WHEN m._lname LIKE e_lower || '%' THEN 0.80
-        WHEN m._lname LIKE e_norm || '%' THEN 0.80
+        WHEN m._core LIKE e_norm || '%' THEN 0.80
         ELSE 0
       END
       -- TIER 3: FULL PHRASE MATCH (0.50)
@@ -380,9 +392,9 @@ BEGIN
       -- Previously: + CASE WHEN c._etype = 'funder' THEN 0.05 ELSE 0 END
       AS _rel
     FROM measured m
-    -- A candidate must contain at least one query word (as before this
-    -- migration); e.g. a one-letter fallback match alone isn't relevant.
-    WHERE m._hits > 0
+    -- A candidate must contain at least one distinctive query word (as before
+    -- this migration); e.g. a one-letter fallback match alone isn't relevant.
+    WHERE m._relevant
   ),
   deduped AS (
     -- One row per organization (EIN); fall back to the row id if an EIN is

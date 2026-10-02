@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
     // code point so an emoji at the boundary isn't split into a lone surrogate
     // (after a cheap code-unit cut, so a huge body isn't split up first).
     const query = typeof body?.query === 'string'
-      ? [...body.query.slice(0, 1000).trim()].slice(0, 200).join('')
+      ? [...body.query.trim().slice(0, 1000)].slice(0, 200).join('')
       : '';
     // p_limit is an integer: a fractional limit would make PostgREST reject the call.
     const limit = Number.isFinite(body?.limit) ? Math.min(Math.max(Math.trunc(body.limit), 1), 50) : 15;
