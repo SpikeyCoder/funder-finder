@@ -63,8 +63,11 @@ CREATE TABLE IF NOT EXISTS public.organization_requests (
 -- the pending one, but a second person asking for the same organization gets
 -- their own row so they're notified too (the later one resolves as
 -- already_listed once the first adds it).
+-- (The state is part of it: a resubmission that adds or corrects the state
+-- is a new request, not a duplicate.)
 CREATE UNIQUE INDEX IF NOT EXISTS organization_requests_pending_dedupe
-  ON public.organization_requests (lower(query), coalesce(ein, ''), coalesce(lower(requester_email), ''))
+  ON public.organization_requests
+     (lower(query), coalesce(ein, ''), coalesce(state, ''), coalesce(lower(requester_email), ''))
   WHERE status = 'pending';
 
 CREATE INDEX IF NOT EXISTS organization_requests_status_created
@@ -213,7 +216,7 @@ BEGIN
       'Content-Type', 'application/json',
       'X-Cron-Secret', v_secret
     ),
-    timeout_milliseconds := 60000
+    timeout_milliseconds := 120000
   );
 END;
 $$;

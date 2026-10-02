@@ -9,6 +9,11 @@ export function einDigits(input: string): string | null {
   return /^\d{2}-?\d{7}$|^\d{8,9}$/.test(s) ? s.replace(/\D/g, "") : null;
 }
 
+/** Digits only, zero-padded to 9 (ProPublica returns EINs as numbers). */
+export function padEin(ein: string | number): string {
+  return String(ein).replace(/\D/g, "").padStart(9, "0");
+}
+
 /** Both stored forms of an EIN (zero-padded and unpadded), for an `in.(…)` match. */
 export function einVariants(digits: string): string[] {
   return [...new Set([digits.padStart(9, "0"), digits.replace(/^0+/, "")])].filter(Boolean);

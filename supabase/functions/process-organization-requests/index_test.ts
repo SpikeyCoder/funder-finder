@@ -99,3 +99,9 @@ Deno.test("reviewReason auto-adds only 501(c)(3) public charities", () => {
   assertEquals(reviewReason({ subsectionCode: 3, foundationCode: null }), "not a 501(c)(3) public charity");
   assertEquals(reviewReason({ subsectionCode: null, foundationCode: 15 }), "not a 501(c)(3) public charity");
 });
+
+Deno.test("not_found for an EIN request names the EIN, not 'request it with the EIN'", () => {
+  const n = notificationFor({ ...row, ein: "123456789" }, { status: "not_found" });
+  assertEquals(n?.text.includes("EIN 123456789"), true);
+  assertEquals(n?.text.includes("request it again with the EIN"), false);
+});

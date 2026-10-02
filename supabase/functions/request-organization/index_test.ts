@@ -28,5 +28,8 @@ Deno.test("validate treats an EIN-shaped name as the EIN", () => {
   assertEquals(validate({ name: "86-3739484" }), {
     query: "86-3739484", ein: "863739484", state: null, requester_email: null,
   });
+  assertEquals((validate({ name: "62618866" }) as { ein: string | null }).ein, "062618866");
   assertEquals((validate({ name: "Org 123456789" }) as { ein: string | null }).ein, null);
+  // Code points, not UTF-16 units: one emoji is one character.
+  assertEquals(validate({ name: "🏥" }), "Organization name must be 2–200 characters");
 });

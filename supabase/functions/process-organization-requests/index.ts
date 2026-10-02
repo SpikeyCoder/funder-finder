@@ -33,7 +33,9 @@
  * or our own tables. They can't be used to deliver someone else's message.
  */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { einVariants } from "../_shared/ein.ts";
+import { einVariants, padEin } from "../_shared/ein.ts";
+
+export { padEin };
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -41,15 +43,16 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") || "";
 
 const PROPUBLICA = "https://projects.propublica.org/nonprofits/api/v2";
 const BATCH_SIZE = 20;
-// Stop taking new rows after this long, well inside the Edge runtime's
-// wall-clock limit; the rest wait for the next run.
-const RUN_BUDGET_MS = 90_000;
+// Stop taking new rows after this long, so a run (even with its last row
+// slow) ends well inside the Edge runtime's wall-clock limit and the
+// invoker's 120 s pg_net timeout; the rest wait for the next run.
+const RUN_BUDGET_MS = 45_000;
 const MAX_ATTEMPTS = 3;
 // A claim older than this is from a run that died; the row may be retried.
 const CLAIM_TTL_MS = 10 * 60 * 1000;
 // Every outbound call is bounded, so one stalled lookup can't hold the
 // sequential batch until the runtime kills it.
-const FETCH_TIMEOUT_MS = 15_000;
+const FETCH_TIMEOUT_MS = 10_000;
 // IRS foundation codes 02/03/04 are private foundations (990-PF filers).
 const PRIVATE_FOUNDATION_CODES = new Set([2, 3, 4]);
 
@@ -91,10 +94,6 @@ export function normalizeName(name: string): string {
   while (words.length > 1 && LEGAL_SUFFIXES.has(words[words.length - 1])) words.pop();
   if (words.length > 1 && words[0] === "the") words.shift();
   return words.join(" ");
-}
-
-export function padEin(ein: string | number): string {
-  return String(ein).replace(/\D/g, "").padStart(9, "0");
 }
 
 /**
@@ -266,7 +265,7 @@ function escapeHtml(s: string): string {
 
 // Never quotes the visitor's own text (see the header): the recipient address
 // is unconfirmed. Organization names come from IRS data or our own tables.
-export function notificationFor(_row: QueueRow, outcome: Outcome): { subject: string; text: string } | null {
+export function notificationFor(row: QueueRow, outcome: Outcome): { subject: string; text: string } | null {
   switch (outcome.status) {
     case "added":
     case "already_listed": {
@@ -280,11 +279,18 @@ export function notificationFor(_row: QueueRow, outcome: Outcome): { subject: st
       };
     }
     case "not_found":
-      return {
-        subject: "We couldn't find the organization you requested",
-        text: "We searched IRS nonprofit records for the organization you asked us to add and couldn't " +
-          "find a match. If it has an EIN, you can request it again with the EIN at https://fundermatch.org/search.",
-      };
+      return row.ein
+        ? {
+          // The EIN is validated digits, safe to quote.
+          subject: "We couldn't find the organization you requested",
+          text: `We couldn't find EIN ${row.ein} in IRS nonprofit records. Please check the number; a ` +
+            "newly registered organization may not be listed yet.",
+        }
+        : {
+          subject: "We couldn't find the organization you requested",
+          text: "We searched IRS nonprofit records for the organization you asked us to add and couldn't " +
+            "find a match. If it has an EIN, you can request it again with the EIN at https://fundermatch.org/search.",
+        };
     case "needs_review": {
       // The form promised an email; say where the request stands. (A person
       // takes it from here via the review card.) The reason is our own
@@ -490,16 +496,18 @@ async function processRow(row: QueueRow): Promise<string> {
   }
 
   // Side effects, once each: the row is no longer pending.
+  let reviewable = true;
   if (outcome.status === "needs_review") {
-    const carded = await createReviewCard(reviewCardFor(row, outcome.reason, outcome.candidates)).catch((err) => {
+    reviewable = await createReviewCard(reviewCardFor(row, outcome.reason, outcome.candidates)).catch((err) => {
       console.error("Trello card failed:", err);
       return false;
     });
-    // Still findable as status = needs_review, but say so loudly: the
-    // requester is told a person will review it.
-    if (!carded) console.error(`organization request ${row.id} needs review but has no Trello card (TRELLO_* unset or failing)`);
+    // Don't tell the requester a person will review it when nobody has been
+    // asked to. The row stays findable (status needs_review, notified_at
+    // null) for whoever fixes the Trello config.
+    if (!reviewable) console.error(`organization request ${row.id} needs review but has no Trello card (TRELLO_* unset or failing)`);
   }
-  const note = row.requester_email ? notificationFor(row, outcome) : null;
+  const note = row.requester_email && reviewable ? notificationFor(row, outcome) : null;
   if (note && await sendEmail(row.requester_email!, note.subject, note.text).catch(() => false)) {
     await patchRow(row.id, { notified_at: now }).catch((e) =>
       console.error(`organization request ${row.id}: notified but could not record it:`, e)

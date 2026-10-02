@@ -110,6 +110,10 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
   const retrying = status === 'error' && loading && searchedQuery === trimmedQuery;
 
   const reopenDropdown = (text = query) => {
+    // With the request form open for this text, clicking back into the box
+    // shouldn't cover the form with the panel it came from. (Typing new text
+    // reopens as usual, and the new search closes the form.)
+    if (requestName !== null && text.trim() === requestName) return;
     dismissedRef.current = false;
     // Below two characters the effect is about to reset to idle; don't flash
     // the previous panel first.

@@ -18,7 +18,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { ipRateLimit } from "../_shared/rate_limit.ts";
 import { corsHeaders, preflightResponse } from "../_shared/cors.ts";
-import { einDigits } from "../_shared/ein.ts";
+import { einDigits, padEin } from "../_shared/ein.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -49,7 +49,9 @@ export function validate(body: unknown): ValidRequest | string {
   const query = typeof b.name === "string"
     ? b.name.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim()
     : "";
-  if (query.length < 2 || query.length > 200) {
+  // Counted in code points, as the table's char_length CHECK does.
+  const chars = [...query].length;
+  if (chars < 2 || chars > 200) {
     return "Organization name must be 2–200 characters";
   }
 
@@ -58,10 +60,10 @@ export function validate(body: unknown): ValidRequest | string {
     const digits = b.ein.replace(/[\s-]/g, "");
     if (!/^\d{9}$/.test(digits)) return "EIN must be 9 digits";
     ein = digits;
-  } else if (/^\d{2}-?\d{7}$/.test(query)) {
-    // An EIN search that found nothing prefills the *name* with the EIN; look
-    // it up as an EIN, not as a name.
-    ein = einDigits(query);
+  } else if (einDigits(query)) {
+    // An EIN search that found nothing prefills the *name* with the EIN
+    // (padded or not); look it up as an EIN, not as a name.
+    ein = padEin(einDigits(query)!);
   }
 
   let state: string | null = null;
