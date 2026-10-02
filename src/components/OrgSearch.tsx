@@ -27,6 +27,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
   // opens, so a search landing afterwards can't remount it and wipe its input.
   const [requestName, setRequestName] = useState<string | null>(null);
   const showRequestForm = requestName !== null;
+  const [requestSubmitted, setRequestSubmitted] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -43,6 +44,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
     // results.
     setSelectedIdx(-1);
     setRequestName(null);
+    setRequestSubmitted(false);
 
     if (trimmedQuery.length < 2) {
       setResults([]);
@@ -113,7 +115,8 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
     // With the request form open for this text, clicking back into the box
     // shouldn't cover the form with the panel it came from. (Typing new text
     // reopens as usual, and the new search closes the form.)
-    if (requestName !== null && text.trim() === requestName) return;
+    // Once it's submitted, the results are worth reaching again.
+    if (requestName !== null && !requestSubmitted && text.trim() === requestName) return;
     dismissedRef.current = false;
     // Below two characters the effect is about to reset to idle; don't flash
     // the previous panel first.
@@ -317,7 +320,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
 
       {showRequestForm && (
         <div className="mt-2 bg-[#161b22] border border-[#30363d] rounded-xl px-4 py-3 text-left">
-          <OrgRequestForm initialName={requestName} />
+          <OrgRequestForm initialName={requestName} onSubmitted={() => setRequestSubmitted(true)} />
         </div>
       )}
     </div>

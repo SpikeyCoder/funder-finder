@@ -20,7 +20,9 @@ END $$;
 
 -- Organizations the queue added have no grants and exist only because of it.
 -- Remove them (only if they still have no grants) so search doesn't keep
--- linking to them after the profile fallback is reverted.
+-- linking to them after the profile fallback is reverted. (Only those whose
+-- request rows still exist: rows are purged after 180 days, so a later
+-- rollback leaves older additions in place.)
 DELETE FROM public.recipient_organizations r
  USING public.organization_requests q
  WHERE q.status = 'added'

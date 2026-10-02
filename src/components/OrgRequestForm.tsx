@@ -4,6 +4,7 @@ import { requestOrganization } from '../utils/matching';
 
 interface OrgRequestFormProps {
   initialName: string;
+  onSubmitted?: () => void;
 }
 
 const inputClass =
@@ -12,7 +13,7 @@ const inputClass =
 // Trello #153: lets a visitor ask for a missing nonprofit or foundation to be
 // added. The request is queued and resolved against IRS records on a schedule
 // (see supabase/functions/process-organization-requests).
-export default function OrgRequestForm({ initialName }: OrgRequestFormProps) {
+export default function OrgRequestForm({ initialName, onSubmitted }: OrgRequestFormProps) {
   const [name, setName] = useState(initialName);
   const [ein, setEin] = useState('');
   const [state, setState] = useState('');
@@ -46,6 +47,7 @@ export default function OrgRequestForm({ initialName }: OrgRequestFormProps) {
       });
       setWillEmail(notify);
       setStatus('done');
+      onSubmitted?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
       setStatus('error');

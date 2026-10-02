@@ -47,6 +47,12 @@ const BATCH_SIZE = 20;
 // slow) ends well inside the Edge runtime's wall-clock limit and the
 // invoker's 120 s pg_net timeout; the rest wait for the next run.
 const RUN_BUDGET_MS = 45_000;
+// Review cards carry visitor-typed text onto the internal triage board:
+// at most this many per run, and one per distinct request.
+const MAX_CARDS_PER_RUN = 5;
+// Outcome emails per address per day, enforced where they're sent (the
+// request endpoint's own check can be raced by concurrent submissions).
+const EMAILS_PER_ADDRESS_PER_DAY = 3;
 const MAX_ATTEMPTS = 3;
 // A claim older than this is from a run that died; the row may be retried.
 const CLAIM_TTL_MS = 10 * 60 * 1000;
@@ -203,36 +209,41 @@ function listed(existing: Existing, org: IrsOrg): Outcome {
 }
 
 async function resolve(row: QueueRow): Promise<Outcome> {
-  let ein = row.ein;
-
-  // An EIN we already list needs no IRS lookup (and ProPublica may not have
-  // it: a revoked or very new filer).
-  if (ein) {
-    const existing = await existingEntity(padEin(ein));
-    if (existing) {
-      return listed(existing, { ein: padEin(ein), name: existing.name, city: null, state: null, ntee_code: null });
-    }
+  if (row.ein) {
+    // An EIN we already list needs no IRS lookup (and ProPublica may not
+    // have it: a revoked or very new filer).
+    const ein = padEin(row.ein);
+    const existing = await existingEntity(ein);
+    if (existing) return listed(existing, { ein, name: existing.name, city: null, state: null, ntee_code: null });
+    const detail = await irsDetail(ein);
+    if (!detail) return { status: "not_found" };
+    return await addOrList(detail, false);
   }
 
-  if (!ein) {
-    const params = new URLSearchParams({ q: row.query });
-    if (row.state) params.set("state[id]", row.state);
-    const search = await propublica(`/search.json?${params}`);
-    const results = ((search?.organizations as Record<string, unknown>[]) || []).map(toIrsOrg);
-    if (!results.length) return { status: "not_found" };
-    const match = pickExactMatch(row.query, row.state, results);
-    if (!match) {
-      return { status: "needs_review", reason: "no exact name match", candidates: results.slice(0, 5) };
-    }
-    ein = match.ein;
+  const params = new URLSearchParams({ q: row.query });
+  if (row.state) params.set("state[id]", row.state);
+  const search = await propublica(`/search.json?${params}`);
+  const results = ((search?.organizations as Record<string, unknown>[]) || []).map(toIrsOrg);
+  if (!results.length) return { status: "not_found" };
+  // Only the first page is fetched: with more pages, another organization of
+  // the same name could be on one of them, so "unique" can't be known.
+  const onePage = Number(search?.num_pages ?? 1) <= 1;
+  const match = onePage ? pickExactMatch(row.query, row.state, results) : null;
+  if (!match) {
+    return { status: "needs_review", reason: "no exact name match", candidates: results.slice(0, 5) };
   }
+  const detail = await irsDetail(match.ein);
+  // Found by search but its detail record is missing (search can run ahead of
+  // it): a person can look, rather than telling the requester "not found".
+  if (!detail) return { status: "needs_review", reason: "no exact name match", candidates: [match] };
+  return await addOrList(detail, true);
+}
 
-  const detail = await irsDetail(ein);
-  if (!detail) return { status: "not_found" };
-
-  // (An EIN request was already checked above.)
-  const existing = row.ein ? null : await existingEntity(detail.org.ein);
-  if (existing) return listed(existing, detail.org);
+async function addOrList(detail: IrsDetail, checkExisting: boolean): Promise<Outcome> {
+  if (checkExisting) {
+    const existing = await existingEntity(detail.org.ein);
+    if (existing) return listed(existing, detail.org);
+  }
 
   const reason = reviewReason(detail);
   if (reason) return { status: "needs_review", reason, candidates: [detail.org] };
@@ -394,6 +405,7 @@ export function cronAuthorized(req: Request, expected: string): boolean {
 
 async function notifyFailure(row: QueueRow, now: string): Promise<void> {
   if (!row.requester_email) return;
+  if (await emailsSentRecently(row.requester_email).catch(() => 0) >= EMAILS_PER_ADDRESS_PER_DAY) return;
   if (await sendEmail(row.requester_email, FAILURE_NOTICE.subject, FAILURE_NOTICE.text).catch(() => false)) {
     await patchRow(row.id, { notified_at: now }).catch((e) =>
       console.error(`organization request ${row.id}: notified but could not record it:`, e)
@@ -429,7 +441,21 @@ async function claimRow(row: QueueRow, now: Date): Promise<boolean> {
   return ((await res.json()) as unknown[]).length === 1;
 }
 
-async function processRow(row: QueueRow): Promise<string> {
+// Per-run state: which review cards this run already opened.
+interface RunState {
+  cardKeys: Set<string>;
+}
+
+async function emailsSentRecently(email: string): Promise<number> {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const rows = await restJson<unknown[]>(
+    `organization_requests?requester_email=eq.${encodeURIComponent(email)}` +
+      `&notified_at=gte.${encodeURIComponent(since)}&select=id&limit=${EMAILS_PER_ADDRESS_PER_DAY}`,
+  );
+  return rows.length;
+}
+
+async function processRow(row: QueueRow, run: RunState): Promise<string> {
   const started = new Date();
   const now = started.toISOString();
   try {
@@ -498,17 +524,28 @@ async function processRow(row: QueueRow): Promise<string> {
   // Side effects, once each: the row is no longer pending.
   let reviewable = true;
   if (outcome.status === "needs_review") {
-    reviewable = await createReviewCard(reviewCardFor(row, outcome.reason, outcome.candidates)).catch((err) => {
-      console.error("Trello card failed:", err);
-      return false;
-    });
+    const key = `${normalizeName(row.query)}|${row.ein ?? ""}|${row.state ?? ""}`;
+    if (run.cardKeys.has(key)) {
+      // Another requester's row for the same organization opened a card this run.
+    } else if (run.cardKeys.size >= MAX_CARDS_PER_RUN) {
+      reviewable = false;
+    } else {
+      run.cardKeys.add(key);
+      reviewable = await createReviewCard(reviewCardFor(row, outcome.reason, outcome.candidates)).catch((err) => {
+        console.error("Trello card failed:", err);
+        return false;
+      });
+    }
     // Don't tell the requester a person will review it when nobody has been
     // asked to. The row stays findable (status needs_review, notified_at
     // null) for whoever fixes the Trello config.
     if (!reviewable) console.error(`organization request ${row.id} needs review but has no Trello card (TRELLO_* unset or failing)`);
   }
   const note = row.requester_email && reviewable ? notificationFor(row, outcome) : null;
-  if (note && await sendEmail(row.requester_email!, note.subject, note.text).catch(() => false)) {
+  const underCap = note
+    ? await emailsSentRecently(row.requester_email!).then((n) => n < EMAILS_PER_ADDRESS_PER_DAY, () => true)
+    : false;
+  if (note && underCap && await sendEmail(row.requester_email!, note.subject, note.text).catch(() => false)) {
     await patchRow(row.id, { notified_at: now }).catch((e) =>
       console.error(`organization request ${row.id}: notified but could not record it:`, e)
     );
@@ -533,13 +570,14 @@ if (import.meta.main) {
       );
       const summary: Record<string, number> = {};
       const runStart = Date.now();
+      const run: RunState = { cardKeys: new Set() };
       // Sequential on purpose: be polite to ProPublica's free API.
       for (const row of rows) {
         if (Date.now() - runStart > RUN_BUDGET_MS) {
           summary.deferred = (summary.deferred || 0) + 1;
           continue;
         }
-        const result = await processRow(row);
+        const result = await processRow(row, run);
         summary[result] = (summary[result] || 0) + 1;
       }
       return json(200, { processed: rows.length, summary });

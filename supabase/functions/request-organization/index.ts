@@ -154,7 +154,10 @@ if (import.meta.main) {
       if (res.ok || res.status === 409) {
         // `notify` says whether an outcome email will go out, so the form
         // doesn't promise one that the per-address cap dropped.
-        return json(200, { ok: true, queued: true, notify: valid.requester_email !== null }, headers);
+        // (No email goes out at all without RESEND_API_KEY, a project-wide
+        // secret the processor shares.)
+        const notify = valid.requester_email !== null && !!Deno.env.get("RESEND_API_KEY");
+        return json(200, { ok: true, queued: true, notify }, headers);
       }
 
       console.error("request-organization insert failed:", res.status, await res.text());
