@@ -35,7 +35,7 @@ function formatConsoleArg(arg: unknown, depth = 0): string {
     if (cause instanceof Error && depth < 2) {
       // Skip a wrapper message that just repeats the cause's (reports are
       // capped at 500 chars).
-      const own = arg.message.includes(cause.message) ? arg.name : `${arg.name}: ${arg.message}`;
+      const own = cause.message && arg.message.includes(cause.message) ? arg.name : `${arg.name}: ${arg.message}`;
       return `${own} caused by ${formatConsoleArg(cause, depth + 1)}`;
     }
     // Keep only frame-shaped lines: V8 "    at fn (url:1:2)", WebKit/Firefox

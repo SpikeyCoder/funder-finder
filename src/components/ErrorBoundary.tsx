@@ -1,6 +1,6 @@
 import { Component, ReactNode } from 'react';
 import { AlertCircle } from 'lucide-react';
-import { isChunkLoadError, reloadOnceForChunkError, underlyingError } from '../lib/chunkReload';
+import { isChunkLoadError, looksLikeLoadFailure, reloadOnceForChunkError, underlyingError } from '../lib/chunkReload';
 
 interface Props {
   children: ReactNode;
@@ -12,6 +12,24 @@ interface State {
   // True while an automatic chunk-error reload is in flight.
   reloading: boolean;
 }
+
+const SCREEN_COPY = {
+  reloading: {
+    title: 'Reloading…',
+    body: 'Part of the page didn’t load. Fetching it again.',
+    button: 'Reload',
+  },
+  reload: {
+    title: 'A new version may be available',
+    body: 'Part of the app didn’t load — usually because it was just updated. Reload to get the latest version.',
+    button: 'Reload',
+  },
+  error: {
+    title: 'Oops! Something went wrong',
+    body: 'We encountered an unexpected error. Please try again or contact support if the problem persists.',
+    button: 'Try Again',
+  },
+};
 
 export default class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
@@ -42,29 +60,22 @@ export default class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       const shownError = this.state.error && underlyingError(this.state.error);
-      // A recognised load failure we couldn't (or already did) auto-reload for
-      // still gets the "reload" screen; anything else — e.g. a page module
-      // that throws while loading — shows its real error.
-      const reloadScreen = !this.state.reloading && isChunkLoadError(shownError);
+      // While the automatic reload runs: "reloading". Afterwards, a failure the
+      // browser attributes to loading code still gets the "reload" screen
+      // (also when sessionStorage is blocked and we couldn't auto-reload);
+      // anything else — e.g. a page module that throws while loading — shows
+      // its real error.
+      const mode = this.state.reloading ? 'reloading' : looksLikeLoadFailure(shownError) ? 'reload' : 'error';
+      const copy = SCREEN_COPY[mode];
       return (
         <div className="min-h-screen bg-[#0d1117] flex items-center justify-center px-4">
           <div className="max-w-md text-center">
             <div className="flex justify-center mb-6">
               <AlertCircle size={48} className="text-red-400" />
             </div>
-            <h1 className="text-2xl font-bold text-white mb-3">
-              {this.state.reloading
-                ? 'Reloading…'
-                : reloadScreen ? 'A new version may be available' : 'Oops! Something went wrong'}
-            </h1>
-            <p className="text-gray-400 mb-6">
-              {this.state.reloading
-                ? 'Part of the page didn’t load. Fetching it again.'
-                : reloadScreen
-                  ? 'Part of the app didn’t load — usually because it was just updated. Reload to get the latest version.'
-                  : 'We encountered an unexpected error. Please try again or contact support if the problem persists.'}
-            </p>
-            {!this.state.reloading && !reloadScreen && shownError && (
+            <h1 className="text-2xl font-bold text-white mb-3">{copy.title}</h1>
+            <p className="text-gray-400 mb-6">{copy.body}</p>
+            {mode === 'error' && shownError && (
               <details className="mb-6 text-left bg-[#161b22] border border-[#30363d] rounded-lg p-4">
                 <summary className="cursor-pointer text-sm text-gray-400 font-medium">
                   Error details
@@ -78,7 +89,7 @@ export default class ErrorBoundary extends Component<Props, State> {
               onClick={this.handleTryAgain}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
             >
-              {this.state.reloading || reloadScreen ? 'Reload' : 'Try Again'}
+              {copy.button}
             </button>
           </div>
         </div>

@@ -16,7 +16,7 @@ const REDIRECT_AFTER_LOGIN_KEY = 'ff_redirect_after_login';
 
 // A route chunk that fails to download or link is tagged as a chunk-load
 // error so the ErrorBoundary reloads once instead of showing a dead end. A
-// successful load re-arms that one automatic reload.
+// successful load on another page re-arms that one automatic reload.
 function lazyRoute<T extends ComponentType<any>>(factory: () => Promise<{ default: T }>) {
   return lazy(() =>
     factory().then(

@@ -1,7 +1,9 @@
-// Set when we auto-reload for a failed route chunk; cleared once a route
-// module loads successfully. While it's set we don't reload again, so a chunk
-// that can never load (or a module that throws on import) gets exactly one
-// reload, never a loop — however slow the connection.
+// Holds the path we auto-reloaded for after a failed route chunk; cleared once
+// a route module loads successfully at a *different* path. While it's set for
+// the current path we don't reload again, so a chunk that can never load (or a
+// module that throws on import) gets exactly one reload, never a loop —
+// however slow the connection, and even if some other chunk on that page
+// loads fine.
 const CHUNK_RELOAD_KEY = 'ff_chunk_reloaded';
 
 // A lazy/dynamic import that fails to download or link throws one of these. It
@@ -18,20 +20,28 @@ const CHUNK_ERROR_MESSAGE =
 // link failures, which browsers word too inconsistently to tell apart.
 export const ROUTE_LOAD_ERROR = 'RouteModuleLoadError';
 
-export function isChunkLoadError(error: unknown): boolean {
+// A failure the browser itself attributes to loading code (any wording we
+// recognise), as opposed to our wrapper around every route-import rejection.
+export function looksLikeLoadFailure(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   const { name = '', message = '' } = error as { name?: string; message?: string };
-  return name === 'ChunkLoadError' || name === ROUTE_LOAD_ERROR || CHUNK_ERROR_MESSAGE.test(message);
+  return name === 'ChunkLoadError' || CHUNK_ERROR_MESSAGE.test(message);
+}
+
+export function isChunkLoadError(error: unknown): boolean {
+  return looksLikeLoadFailure(error) || (error as { name?: string } | null)?.name === ROUTE_LOAD_ERROR;
 }
 
 // Reloading pulls a fresh index.html plus valid chunks and almost always
 // recovers. Returns true if a reload was started; false if we already reloaded
-// for a chunk error that hasn't since cleared, or sessionStorage is unavailable
-// (private mode) — the caller should then show the error instead.
+// for this path, or sessionStorage is unavailable — the caller should then
+// show the error instead. Without storage there's no way to remember that we
+// already reloaded, so we deliberately don't auto-reload at all rather than
+// risk a loop; those users get the manual "Reload" screen.
 export function reloadOnceForChunkError(): boolean {
   try {
-    if (sessionStorage.getItem(CHUNK_RELOAD_KEY)) return false;
-    sessionStorage.setItem(CHUNK_RELOAD_KEY, '1');
+    if (sessionStorage.getItem(CHUNK_RELOAD_KEY) === window.location.pathname) return false;
+    sessionStorage.setItem(CHUNK_RELOAD_KEY, window.location.pathname);
   } catch {
     return false;
   }
@@ -41,7 +51,10 @@ export function reloadOnceForChunkError(): boolean {
 
 export function clearChunkReloadFlag(): void {
   try {
-    sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+    const failedPath = sessionStorage.getItem(CHUNK_RELOAD_KEY);
+    if (failedPath !== null && failedPath !== window.location.pathname) {
+      sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+    }
   } catch {
     /* ignore */
   }

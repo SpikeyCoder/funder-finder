@@ -26,17 +26,11 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
   const [selectedIdx, setSelectedIdx] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
-  const requestIdRef = useRef(0);
   // Set when the user closes the dropdown (Escape / outside click) so a search
   // still in flight doesn't pop it back open; cleared when they type or refocus.
   const dismissedRef = useRef(false);
 
   useEffect(() => {
-    // Invalidate any in-flight request so a slow, older response can't
-    // overwrite the results for what the user has typed since.
-    const requestId = ++requestIdRef.current;
-
     if (query.trim().length < 2) {
       setResults([]);
       setStatus('idle');
@@ -46,50 +40,47 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
     }
 
     setLoading(true);
-    clearTimeout(debounceRef.current);
-    // Cancel this request if the query changes before it finishes.
+    // Aborted by the cleanup when the query changes, a retry starts or the
+    // component unmounts, so a stale response never lands.
     const controller = new AbortController();
-    debounceRef.current = setTimeout(async () => {
+    const timer = setTimeout(async () => {
       const searched = query.trim();
       try {
         const data = await searchOrganizations(searched, 15, controller.signal);
-        if (requestId !== requestIdRef.current) return;
+        if (controller.signal.aborted) return;
         setSearchedQuery(searched);
         setResults(data);
         setStatus(data.length > 0 ? 'results' : 'empty');
         setSelectedIdx(-1);
       } catch {
-        if (requestId !== requestIdRef.current) return;
+        if (controller.signal.aborted) return;
         setSearchedQuery(searched);
         setResults([]);
         setStatus('error');
       } finally {
-        if (requestId === requestIdRef.current) {
+        if (!controller.signal.aborted) {
           setLoading(false);
-          // Only open for someone still using the search box: a slow response
-          // shouldn't pop the panel back up after Escape or an outside click.
-          const active = document.activeElement;
-          if (!dismissedRef.current && (active === inputRef.current || dropdownRef.current?.contains(active))) {
-            setShowDropdown(true);
-          }
+          // A slow response shouldn't pop the panel back up after Escape or an
+          // outside click.
+          if (!dismissedRef.current) setShowDropdown(true);
         }
       }
     }, 300);
 
     return () => {
-      clearTimeout(debounceRef.current);
+      clearTimeout(timer);
       controller.abort();
     };
   }, [query, retryNonce]);
 
   // Close dropdown on outside click
   useEffect(() => {
+    // Also counts before the first response has opened the dropdown.
     const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
-          inputRef.current && !inputRef.current.contains(e.target as Node)) {
-        dismissedRef.current = true;
-        setShowDropdown(false);
-      }
+      const target = e.target as Node;
+      if (inputRef.current?.contains(target) || dropdownRef.current?.contains(target)) return;
+      dismissedRef.current = true;
+      setShowDropdown(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
