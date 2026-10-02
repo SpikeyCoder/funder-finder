@@ -305,10 +305,11 @@ BEGIN
   IF v_query_spaced IS NOT NULL THEN
     SELECT x INTO w FROM unnest(v_typed) WITH ORDINALITY AS t(x, ord)
     WHERE length(x) >= 3 AND NOT (x = ANY(v_all_words)) ORDER BY ord LIMIT 1;
-    -- Only when the split left a part too short to search ("Mc", "De"):
-    -- "SitStayRead foundation" splits into real words, and its driver set
-    -- ('%sit%') can reach "SIT STAY READ INC" where '%sitstayread%' can't.
-    IF w IS NOT NULL AND NOT EXISTS (SELECT 1 FROM unnest(v_all_words) x WHERE length(x) < 3) THEN
+    -- Only when the split cut a short part off the front of it ("Mc" +
+    -- 'donald'): when the typed word starts with the driver ("SitStayRead
+    -- foundation" → '%sit%'), the driver set can reach "SIT STAY READ INC"
+    -- where '%sitstayread%' can't, so it stays.
+    IF w IS NOT NULL AND v_driver IS NOT NULL AND strpos(w, v_driver) = 1 THEN
       NULL;
     ELSIF w IS NOT NULL AND v_driver IS NULL THEN
       -- Keep the name-start pattern ('st%' for "StJo"); the typed word
