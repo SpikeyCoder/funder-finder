@@ -129,8 +129,12 @@ export interface OrganizationRequest {
   email?: string;
 }
 
-/** Queue a missing organization to be looked up and added (Trello #153). */
-export async function requestOrganization(request: OrganizationRequest): Promise<void> {
+/**
+ * Queue a missing organization to be looked up and added (Trello #153).
+ * Resolves to whether the outcome will be emailed (an email can be dropped by
+ * the server's per-address cap).
+ */
+export async function requestOrganization(request: OrganizationRequest): Promise<{ notify: boolean }> {
   const headers = await getEdgeFunctionHeaders('application/json', { useAnonOnly: true });
   const res = await fetch(REQUEST_ORG_URL, {
     method: 'POST',
@@ -143,6 +147,8 @@ export async function requestOrganization(request: OrganizationRequest): Promise
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || `Server error (${res.status})`);
   }
+  const body = await res.json().catch(() => ({}));
+  return { notify: body.notify === true };
 }
 
 export async function fetchRecipientProfile(

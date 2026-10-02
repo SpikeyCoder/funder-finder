@@ -18,6 +18,7 @@ export default function OrgRequestForm({ initialName }: OrgRequestFormProps) {
   const [state, setState] = useState('');
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState<'idle' | 'submitting' | 'done' | 'error'>('idle');
+  const [willEmail, setWillEmail] = useState(false);
   const [error, setError] = useState('');
 
   if (status === 'done') {
@@ -26,7 +27,7 @@ export default function OrgRequestForm({ initialName }: OrgRequestFormProps) {
         <CheckCircle size={16} className="text-green-400 shrink-0 mt-0.5" />
         <p>
           Thanks — we&rsquo;ll look up &ldquo;{name.trim()}&rdquo; in IRS records and add it if we find it.
-          {email.trim() ? ' We’ll email you what we find.' : ' Check back in a little while.'}
+          {willEmail ? ' We’ll email you what we find.' : ' Check back in a little while.'}
         </p>
       </div>
     );
@@ -37,12 +38,13 @@ export default function OrgRequestForm({ initialName }: OrgRequestFormProps) {
     setStatus('submitting');
     setError('');
     try {
-      await requestOrganization({
+      const { notify } = await requestOrganization({
         name: name.trim(),
         ein: ein.trim() || undefined,
         state: state.trim() || undefined,
         email: email.trim() || undefined,
       });
+      setWillEmail(notify);
       setStatus('done');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');

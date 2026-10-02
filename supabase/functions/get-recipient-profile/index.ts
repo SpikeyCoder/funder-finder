@@ -1,6 +1,7 @@
 import { corsHeaders } from '../_shared/cors.ts';
 import { sanitiseError } from '../_shared/errors.ts';
 import { ipRateLimit } from "../_shared/rate_limit.ts";
+import { einDigits, einVariants } from '../_shared/ein.ts';
 /**
  * get-recipient-profile — Supabase Edge Function
  *
@@ -187,16 +188,13 @@ Deno.serve(async (req) => {
     }
 
     // EINs aren't consistently zero-padded across tables (peer links may drop
-    // the leading zero), so match either form — for an EIN-shaped id only.
-    // (An unpadded EIN loses at most one leading zero: 8 or 9 digits.)
-    const digits = /^\d{2}-?\d{7}$|^\d{8,9}$/.test(lookupEin) ? lookupEin.replace(/\D/g, '') : '';
-    const variants = digits
-      ? [...new Set([digits.padStart(9, '0'), digits.replace(/^0+/, '')])]
-        .filter(Boolean)
-        .map((v) => `"${v}"`)
-        .join(',')
-      : '';
-    const einFilter = variants ? `in.(${encodeURIComponent(variants)})` : `eq.${encodeURIComponent(lookupEin)}`;
+    // the leading zero), so match either form — for an EIN-shaped id only. A
+    // dashed id is used without its dash from here on (990 lookup, response).
+    const digits = einDigits(lookupEin);
+    if (digits) lookupEin = digits;
+    const einFilter = digits
+      ? `in.(${encodeURIComponent(einVariants(digits).map((v) => `"${v}"`).join(','))})`
+      : `eq.${encodeURIComponent(lookupEin)}`;
 
     // Fetch grants and 990 budget concurrently
     const [grants, budget990] = await Promise.all([

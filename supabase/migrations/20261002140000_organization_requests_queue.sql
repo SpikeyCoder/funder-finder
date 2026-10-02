@@ -73,6 +73,52 @@ CREATE INDEX IF NOT EXISTS organization_requests_status_created
 ALTER TABLE public.organization_requests ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.organization_requests FROM anon, authenticated;
 
+-- ── Adding a recipient ──────────────────────────────────────────────────────
+-- The processor adds an organization through this, not a plain INSERT: it
+-- locks the EIN and inserts only if neither stored form (zero-padded or not)
+-- exists, so two runs resolving requests for the same organization can't
+-- both add it. recipient_organizations.ein has no unique constraint, and
+-- adding one to a table other pipelines load is out of scope here.
+
+CREATE OR REPLACE FUNCTION public.add_requested_recipient(
+  p_ein text, p_name text, p_name_normalized text,
+  p_city text, p_state text, p_ntee_code text)
+RETURNS TABLE (id uuid, created boolean)
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+DECLARE
+  v_id uuid;
+BEGIN
+  IF p_ein !~ '^\d{9}$' THEN
+    RAISE EXCEPTION 'add_requested_recipient: EIN must be 9 digits';
+  END IF;
+  PERFORM pg_advisory_xact_lock(hashtext('organization-request:' || p_ein));
+
+  SELECT r.id INTO v_id
+    FROM public.recipient_organizations r
+   WHERE r.ein IN (p_ein, ltrim(p_ein, '0'))
+   LIMIT 1;
+  IF v_id IS NOT NULL THEN
+    RETURN QUERY SELECT v_id, false;
+    RETURN;
+  END IF;
+
+  INSERT INTO public.recipient_organizations
+    (ein, name, name_normalized, primary_city, primary_state, ntee_code, ntee_codes)
+  VALUES
+    (p_ein, p_name, p_name_normalized, p_city, p_state, p_ntee_code,
+     CASE WHEN p_ntee_code IS NULL THEN '{}'::text[] ELSE ARRAY[p_ntee_code] END)
+  RETURNING recipient_organizations.id INTO v_id;
+  RETURN QUERY SELECT v_id, true;
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.add_requested_recipient(text, text, text, text, text, text)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.add_requested_recipient(text, text, text, text, text, text)
+  TO service_role;
+
 -- ── Retention ───────────────────────────────────────────────────────────────
 
 CREATE OR REPLACE FUNCTION public.purge_expired_organization_requests()

@@ -33,6 +33,7 @@
  * or our own tables. They can't be used to deliver someone else's message.
  */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { einVariants } from "../_shared/ein.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -40,6 +41,9 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") || "";
 
 const PROPUBLICA = "https://projects.propublica.org/nonprofits/api/v2";
 const BATCH_SIZE = 20;
+// Stop taking new rows after this long, well inside the Edge runtime's
+// wall-clock limit; the rest wait for the next run.
+const RUN_BUDGET_MS = 90_000;
 const MAX_ATTEMPTS = 3;
 // A claim older than this is from a run that died; the row may be retried.
 const CLAIM_TTL_MS = 10 * 60 * 1000;
@@ -175,7 +179,7 @@ type Existing = { entityType: "funder" | "recipient"; id: string; name: string }
 
 async function existingEntity(ein: string): Promise<Existing | null> {
   // funders.id / recipient_organizations.ein aren't consistently zero-padded.
-  const variants = [...new Set([ein, ein.replace(/^0+/, "")])].map((v) => `"${v}"`).join(",");
+  const variants = einVariants(ein).map((v) => `"${v}"`).join(",");
   const recips = await restJson<{ id: string; name: string }[]>(
     `recipient_organizations?ein=in.(${variants})&select=id,name&limit=1`,
   );
@@ -234,20 +238,24 @@ async function resolve(row: QueueRow): Promise<Outcome> {
   const reason = reviewReason(detail);
   if (reason) return { status: "needs_review", reason, candidates: [detail.org] };
 
-  const inserted = await restJson<{ id: string }[]>("recipient_organizations", {
+  // Inserted by an RPC that locks the EIN and inserts only if neither stored
+  // form exists, so two runs handling requests for the same organization
+  // can't both add it.
+  const [row0] = await restJson<{ id: string; created: boolean }[]>("rpc/add_requested_recipient", {
     method: "POST",
-    headers: { Prefer: "return=representation" },
     body: JSON.stringify({
-      ein: detail.org.ein,
-      name: detail.org.name,
-      name_normalized: normalizeName(detail.org.name),
-      primary_city: detail.org.city,
-      primary_state: detail.org.state,
-      ntee_code: detail.org.ntee_code,
-      ntee_codes: detail.org.ntee_code ? [detail.org.ntee_code] : [],
+      p_ein: detail.org.ein,
+      p_name: detail.org.name,
+      p_name_normalized: normalizeName(detail.org.name),
+      p_city: detail.org.city,
+      p_state: detail.org.state,
+      p_ntee_code: detail.org.ntee_code,
     }),
   });
-  return { status: "added", id: inserted[0].id, org: detail.org };
+  if (!row0.created) {
+    return { status: "already_listed", entityType: "recipient", id: row0.id, org: detail.org };
+  }
+  return { status: "added", id: row0.id, org: detail.org };
 }
 
 // ── Email ───────────────────────────────────────────────────────────────────
@@ -277,17 +285,31 @@ export function notificationFor(_row: QueueRow, outcome: Outcome): { subject: st
         text: "We searched IRS nonprofit records for the organization you asked us to add and couldn't " +
           "find a match. If it has an EIN, you can request it again with the EIN at https://fundermatch.org/search.",
       };
-    case "needs_review":
+    case "needs_review": {
       // The form promised an email; say where the request stands. (A person
-      // takes it from here via the review card.)
+      // takes it from here via the review card.) The reason is our own
+      // fixed text, never the visitor's.
+      const why = outcome.reason === "no exact name match"
+        ? "We couldn't automatically match the organization you asked us to add to a single IRS nonprofit record"
+        : outcome.reason === "private foundation"
+        ? "We found the organization you asked us to add in IRS records. It's a private foundation, which we add by hand"
+        : "We found the organization you asked us to add in IRS records, but it isn't a type of organization we add automatically";
       return {
         subject: "We're reviewing your organization request",
-        text: "We couldn't automatically match the organization you asked us to add to a single IRS " +
-          "nonprofit record, so someone on our team will review it. If we can confirm it, it will " +
-          "appear in FunderMatch search at https://fundermatch.org/search.",
+        text: `${why}, so someone on our team will review it. If we can add it, it will appear in ` +
+          "FunderMatch search at https://fundermatch.org/search.",
       };
+    }
   }
 }
+
+// For a request we gave up on (lookups kept failing), so the requester isn't
+// left waiting on the email the form promised.
+export const FAILURE_NOTICE = {
+  subject: "We couldn't process your organization request",
+  text: "We weren't able to look up the organization you asked us to add, because of a problem on our " +
+    "side. Please request it again at https://fundermatch.org/search.",
+};
 
 async function sendEmail(to: string, subject: string, text: string): Promise<boolean> {
   if (!RESEND_API_KEY) return false;
@@ -364,6 +386,15 @@ export function cronAuthorized(req: Request, expected: string): boolean {
   return auth.startsWith("Bearer cron:") && constantTimeEqual(auth.slice("Bearer cron:".length).trim(), expected);
 }
 
+async function notifyFailure(row: QueueRow, now: string): Promise<void> {
+  if (!row.requester_email) return;
+  if (await sendEmail(row.requester_email, FAILURE_NOTICE.subject, FAILURE_NOTICE.text).catch(() => false)) {
+    await patchRow(row.id, { notified_at: now }).catch((e) =>
+      console.error(`organization request ${row.id}: notified but could not record it:`, e)
+    );
+  }
+}
+
 async function patchRow(id: string, patch: Record<string, unknown>): Promise<void> {
   const res = await rest(`organization_requests?id=eq.${id}`, {
     method: "PATCH",
@@ -404,8 +435,15 @@ async function processRow(row: QueueRow): Promise<string> {
   }
   if (row.attempts >= MAX_ATTEMPTS) {
     // Earlier runs claimed it and never finished (e.g. killed mid-lookup).
-    await patchRow(row.id, { status: "failed", processed_at: now, last_error: "gave up: earlier attempts never finished" })
-      .catch((e) => console.error(`organization request ${row.id}: could not mark it failed:`, e));
+    const marked = await patchRow(row.id, {
+      status: "failed",
+      processed_at: now,
+      last_error: "gave up: earlier attempts never finished",
+    }).then(() => true, (e) => {
+      console.error(`organization request ${row.id}: could not mark it failed:`, e);
+      return false;
+    });
+    if (marked) await notifyFailure(row, now);
     return "failed";
   }
   let outcome: Outcome;
@@ -438,12 +476,16 @@ async function processRow(row: QueueRow): Promise<string> {
     const attempts = row.attempts + 1;
     const message = err instanceof Error ? err.message : String(err);
     console.error(`organization request ${row.id} failed (attempt ${attempts}):`, message);
-    await patchRow(row.id, {
+    const recorded = await patchRow(row.id, {
       attempts,
       last_error: message.slice(0, 500),
       claimed_at: null, // retry on the next run
       ...(attempts >= MAX_ATTEMPTS ? { status: "failed", processed_at: now } : {}),
-    }).catch((e) => console.error(`organization request ${row.id}: could not record the failure:`, e));
+    }).then(() => true, (e) => {
+      console.error(`organization request ${row.id}: could not record the failure:`, e);
+      return false;
+    });
+    if (attempts >= MAX_ATTEMPTS && recorded) await notifyFailure(row, now);
     return attempts >= MAX_ATTEMPTS ? "failed" : "retry";
   }
 
@@ -482,8 +524,13 @@ if (import.meta.main) {
           `&select=id,query,ein,state,requester_email,attempts`,
       );
       const summary: Record<string, number> = {};
+      const runStart = Date.now();
       // Sequential on purpose: be polite to ProPublica's free API.
       for (const row of rows) {
+        if (Date.now() - runStart > RUN_BUDGET_MS) {
+          summary.deferred = (summary.deferred || 0) + 1;
+          continue;
+        }
         const result = await processRow(row);
         summary[result] = (summary[result] || 0) + 1;
       }

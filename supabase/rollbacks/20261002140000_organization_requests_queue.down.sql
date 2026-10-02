@@ -29,6 +29,7 @@ DELETE FROM public.recipient_organizations r
    AND coalesce(r.grant_count, 0) = 0;
 
 DROP FUNCTION IF EXISTS public.invoke_organization_request_processor();
+DROP FUNCTION IF EXISTS public.add_requested_recipient(text, text, text, text, text, text);
 DROP FUNCTION IF EXISTS public.purge_expired_organization_requests();
 DROP TABLE IF EXISTS public.organization_requests;
 

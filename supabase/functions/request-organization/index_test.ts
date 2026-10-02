@@ -23,3 +23,10 @@ Deno.test("validate rejects bad input", () => {
   assertEquals(validate({ name: "Org", state: "Washington" }), "State must be a 2-letter code");
   assertEquals(validate({ name: "Org", email: "not-an-email" }), "Invalid email address");
 });
+
+Deno.test("validate treats an EIN-shaped name as the EIN", () => {
+  assertEquals(validate({ name: "86-3739484" }), {
+    query: "86-3739484", ein: "863739484", state: null, requester_email: null,
+  });
+  assertEquals((validate({ name: "Org 123456789" }) as { ein: string | null }).ein, null);
+});

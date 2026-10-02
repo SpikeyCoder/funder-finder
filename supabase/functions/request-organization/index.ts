@@ -18,6 +18,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { ipRateLimit } from "../_shared/rate_limit.ts";
 import { corsHeaders, preflightResponse } from "../_shared/cors.ts";
+import { einDigits } from "../_shared/ein.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -57,6 +58,10 @@ export function validate(body: unknown): ValidRequest | string {
     const digits = b.ein.replace(/[\s-]/g, "");
     if (!/^\d{9}$/.test(digits)) return "EIN must be 9 digits";
     ein = digits;
+  } else if (/^\d{2}-?\d{7}$/.test(query)) {
+    // An EIN search that found nothing prefills the *name* with the EIN; look
+    // it up as an EIN, not as a name.
+    ein = einDigits(query);
   }
 
   let state: string | null = null;
@@ -91,14 +96,6 @@ if (import.meta.main) {
     if (req.method === "OPTIONS") return preflightResponse(req);
     if (req.method !== "POST") return json(405, { error: "Method not allowed" }, headers);
 
-    const limited = await ipRateLimit(req, {
-      namespace: "request-organization",
-      limit: RATE_LIMIT,
-      windowMs: RATE_WINDOW_MS,
-      extraHeaders: headers,
-    });
-    if (!limited.allow && limited.response) return limited.response;
-
     let body: unknown;
     try {
       body = await req.json();
@@ -108,6 +105,16 @@ if (import.meta.main) {
 
     const valid = validate(body);
     if (typeof valid === "string") return json(400, { error: valid }, headers);
+
+    // Only requests that would be queued count against the limit, so fixing
+    // a typo in the form doesn't use it up.
+    const limited = await ipRateLimit(req, {
+      namespace: "request-organization",
+      limit: RATE_LIMIT,
+      windowMs: RATE_WINDOW_MS,
+      extraHeaders: headers,
+    });
+    if (!limited.allow && limited.response) return limited.response;
 
     if (!SUPABASE_URL || !SERVICE_KEY) {
       console.error("request-organization: SUPABASE_URL / SERVICE_ROLE_KEY unset");
@@ -143,7 +150,9 @@ if (import.meta.main) {
       // no email) already asked for this organization and it's still queued.
       // Same outcome for the caller.
       if (res.ok || res.status === 409) {
-        return json(200, { ok: true, queued: true }, headers);
+        // `notify` says whether an outcome email will go out, so the form
+        // doesn't promise one that the per-address cap dropped.
+        return json(200, { ok: true, queued: true, notify: valid.requester_email !== null }, headers);
       }
 
       console.error("request-organization insert failed:", res.status, await res.text());
