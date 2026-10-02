@@ -179,7 +179,9 @@ export default function BugReportButton() {
 
     // Capture uncaught errors
     const handleError = (event: ErrorEvent) => {
-      captureError(`${event.message} at ${event.filename}:${event.lineno}`);
+      captureError(event.error !== undefined && event.error !== null
+        ? `Uncaught ${formatConsoleArg(event.error)}`
+        : `${event.message} at ${event.filename}:${event.lineno}`);
     };
     const handleRejection = (event: PromiseRejectionEvent) => {
       const msg = formatConsoleArg(event.reason);

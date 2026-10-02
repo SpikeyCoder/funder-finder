@@ -116,8 +116,12 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
       setShowDropdown(false);
       return;
     }
-    // While a new search is pending, the visible rows are the old query's.
-    if (!showDropdown || loading) return;
+    // Once the text differs from the query these rows came from, they're stale;
+    // don't act on a keyboard highlight the user may not be looking at. Both
+    // values come from this render, so a fast Enter can't slip past (a
+    // `loading` flag set in an effect lags by a render). A mouse click on a
+    // visible row is an explicit choice and still works.
+    if (!showDropdown || searchedQuery !== trimmedQuery) return;
     if (status !== 'results') return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -143,10 +147,13 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
           onFocus={reopenDropdown}
           // Clicking an already-focused input doesn't fire focus; reopen too.
           onMouseDown={reopenDropdown}
-          // Tabbing away counts as dismissing, so a late response doesn't open
-          // the panel over whatever has focus now (moving into it is fine).
+          // Moving focus to another control (e.g. Tab) counts as dismissing, so
+          // a late response doesn't open the panel over it. A blur with no new
+          // focus target — hiding the mobile keyboard — doesn't: results
+          // should still appear.
           onBlur={(e) => {
-            if (!dropdownRef.current?.contains(e.relatedTarget as Node | null)) dismissedRef.current = true;
+            const next = e.relatedTarget as Node | null;
+            if (next && !dropdownRef.current?.contains(next)) dismissedRef.current = true;
           }}
           onKeyDown={handleKeyDown}
           autoFocus={autoFocus}

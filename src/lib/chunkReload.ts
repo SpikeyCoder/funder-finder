@@ -13,6 +13,7 @@ const CHUNK_ERROR_MESSAGE = new RegExp(
     'importing binding name', // Safari link failure
     'does not provide an export named', // Chrome link failure
     'import not found', // Firefox link failure
+    'ambiguous indirect export', // Firefox link failure
   ].join('|'),
   'i',
 );
@@ -28,24 +29,29 @@ export function isChunkLoadError(error: unknown): boolean {
   return (name === 'TypeError' || name === 'SyntaxError') && CHUNK_ERROR_MESSAGE.test(message);
 }
 
-
-
-// path -> time of our last automatic reload for it. A loop needs the same
-// failure on the same page faster than the window, which a reload never takes,
-// so a chunk that can never load gets one reload rather than a loop. Other
-// pages (and the same page after the window) still auto-recover; any further
-// reloads are bounded by the user's own navigation.
+// key -> time of our last automatic reload for it. The key is the failing
+// chunk's file when the browser names it (fetch failures do), so a chunk that
+// can never load gets one reload however many pages (/funder/1, /funder/2…)
+// use it; otherwise the page path (e.g. Safari's binding error names no file).
+// A loop needs the same failure faster than the window, which a reload never
+// takes, while a later deploy still auto-recovers.
 const CHUNK_RELOAD_KEY = 'ff_chunk_reloads';
 export const CHUNK_RELOAD_WINDOW_MS = 2 * 60 * 1000;
 
+export function reloadKey(error: unknown, pathname: string): string {
+  const message = String((error as { message?: unknown } | null)?.message ?? '');
+  const chunk = message.match(/[\w.-]+\.(?:js|css)\b/);
+  return chunk ? `chunk:${chunk[0]}` : `path:${pathname}`;
+}
+
 // Reloading pulls a fresh index.html plus valid chunks and almost always
 // recovers. Returns true if a reload was started; false if we already reloaded
-// for this path within the window, or sessionStorage is unavailable — the
+// for this chunk/path within the window, or sessionStorage is unavailable — the
 // caller should then show a manual "Reload" screen. Without storage there's no
 // way to remember that we already reloaded, so we don't auto-reload at all
 // rather than risk a loop.
-export function reloadOnceForChunkError(now = Date.now()): boolean {
-  const path = window.location.pathname;
+export function reloadOnceForChunkError(error: unknown, now = Date.now()): boolean {
+  const path = reloadKey(error, window.location.pathname);
   try {
     let reloads: Record<string, number> = {};
     try {

@@ -11,7 +11,11 @@ const { outputText } = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 },
 });
 const mod = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);
-const { isChunkLoadError, reloadOnceForChunkError, CHUNK_RELOAD_WINDOW_MS } = mod;
+const { isChunkLoadError, reloadKey, reloadOnceForChunkError, CHUNK_RELOAD_WINDOW_MS } = mod;
+
+// Safari's link error names no file, so it's keyed by path.
+const LINK = new SyntaxError("Importing binding name 'Dt' is not found.");
+const fetchFail = (file) => new TypeError(`Failed to fetch dynamically imported module: https://x/assets/${file}`);
 
 // Minimal browser globals.
 let store;
@@ -36,8 +40,9 @@ test('recognises each engine’s chunk-load wording', () => {
     "Importing binding name 'Dt' is not found.",                                   // Safari (link) — #214
     "The requested module './index-1.js' does not provide an export named 'Dt'",  // Chrome (link)
     'import not found: Dt',                                                        // Firefox (link)
+    'ambiguous indirect export: Dt',                                               // Firefox (link)
   ]) {
-    const ErrorType = /binding|export named|import not found/.test(message) ? SyntaxError : TypeError;
+    const ErrorType = /binding|export named|import not found|indirect export/.test(message) ? SyntaxError : TypeError;
     assert.equal(isChunkLoadError(new ErrorType(message)), true, message);
   }
   assert.equal(isChunkLoadError(new Error('Unable to preload CSS for /assets/index.css')), true); // Vite
@@ -53,47 +58,61 @@ test('does not treat ordinary errors as chunk-load errors', () => {
   assert.equal(isChunkLoadError(new RangeError('dynamically imported module limit')), false);
 });
 
+test('reload key: the failing chunk when named, else the page path', () => {
+  assert.equal(reloadKey(fetchFail('FunderDetail-Ab1.js'), '/funder/1'), 'chunk:FunderDetail-Ab1.js');
+  assert.equal(reloadKey(LINK, '/results'), 'path:/results');
+});
+
+test('a chunk that keeps failing gets one reload, not one per page using it', () => {
+  window.location.pathname = '/funder/1';
+  assert.equal(reloadOnceForChunkError(fetchFail('FunderDetail-Ab1.js'), 1_000_000), true);
+  window.location.pathname = '/funder/2';
+  assert.equal(reloadOnceForChunkError(fetchFail('FunderDetail-Ab1.js'), 1_001_000), false);
+  assert.equal(reloadOnceForChunkError(fetchFail('Results-Zz9.js'), 1_002_000), true); // different chunk
+  assert.equal(reloads, 2);
+});
+
 test('reloads once per path, then refuses within the window (no loop)', () => {
   const t0 = 1_000_000;
-  assert.equal(reloadOnceForChunkError(t0), true);
+  assert.equal(reloadOnceForChunkError(LINK, t0), true);
   assert.equal(reloads, 1);
-  assert.equal(reloadOnceForChunkError(t0 + 5_000), false);
-  assert.equal(reloadOnceForChunkError(t0 + CHUNK_RELOAD_WINDOW_MS - 1), false);
+  assert.equal(reloadOnceForChunkError(LINK, t0 + 5_000), false);
+  assert.equal(reloadOnceForChunkError(LINK, t0 + CHUNK_RELOAD_WINDOW_MS - 1), false);
   assert.equal(reloads, 1);
 });
 
 test('a different path gets its own reload, without re-arming the first', () => {
   const t0 = 1_000_000;
-  reloadOnceForChunkError(t0);
+  reloadOnceForChunkError(LINK, t0);
   window.location.pathname = '/reports';
-  assert.equal(reloadOnceForChunkError(t0 + 1_000), true);
+  assert.equal(reloadOnceForChunkError(LINK, t0 + 1_000), true);
   window.location.pathname = '/results'; // Back to the still-broken page
-  assert.equal(reloadOnceForChunkError(t0 + 2_000), false);
+  assert.equal(reloadOnceForChunkError(LINK, t0 + 2_000), false);
   assert.equal(reloads, 2);
 });
 
 test('re-arms after the window so a later deploy can auto-recover', () => {
   const t0 = 1_000_000;
-  reloadOnceForChunkError(t0);
-  assert.equal(reloadOnceForChunkError(t0 + CHUNK_RELOAD_WINDOW_MS), true);
+  reloadOnceForChunkError(LINK, t0);
+  assert.equal(reloadOnceForChunkError(LINK, t0 + CHUNK_RELOAD_WINDOW_MS), true);
   assert.equal(reloads, 2);
 });
 
 test('prunes expired paths from storage', () => {
   const t0 = 1_000_000;
-  reloadOnceForChunkError(t0);
+  reloadOnceForChunkError(LINK, t0);
   window.location.pathname = '/reports';
-  reloadOnceForChunkError(t0 + CHUNK_RELOAD_WINDOW_MS + 1);
-  assert.deepEqual(Object.keys(JSON.parse(store.get('ff_chunk_reloads'))), ['/reports']);
+  reloadOnceForChunkError(LINK, t0 + CHUNK_RELOAD_WINDOW_MS + 1);
+  assert.deepEqual(Object.keys(JSON.parse(store.get('ff_chunk_reloads'))), ['path:/reports']);
 });
 
 test('never auto-reloads when sessionStorage is blocked', () => {
   installGlobals({ blocked: true });
-  assert.equal(reloadOnceForChunkError(1_000_000), false);
+  assert.equal(reloadOnceForChunkError(LINK, 1_000_000), false);
   assert.equal(reloads, 0);
 });
 
 test('a corrupt stored value is treated as empty, not as a crash', () => {
   store.set('ff_chunk_reloads', '{not json');
-  assert.equal(reloadOnceForChunkError(1_000_000), true);
+  assert.equal(reloadOnceForChunkError(LINK, 1_000_000), true);
 });

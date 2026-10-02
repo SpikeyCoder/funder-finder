@@ -50,7 +50,7 @@ export default class ErrorBoundary extends Component<Props, State> {
     // we've already tried, render() shows a manual Reload with the details.
     // The "Reloading…" screen keeps a Reload button, so if reload() is ever a
     // no-op (e.g. a sandboxed webview) nobody is stranded.
-    if (isChunkLoadError(error) && reloadOnceForChunkError()) {
+    if (isChunkLoadError(error) && reloadOnceForChunkError(error)) {
       this.setState({ reloading: true });
     }
   }
