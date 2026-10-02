@@ -52,10 +52,10 @@
 -- MEASURED (production, pg_temp copy of this body; identical ordered results
 -- on repeat calls for every query), warm ms (a cold first call can take
 -- several times longer while pages load):
---   foundation 460 · community foundation 300 · foundation for children 345 ·
---   habitat for humanity 105 · y.m.c.a 213 · c# 97 · the 116 · st 117 ·
---   "the ." 118 · "Habitat for Humanity, Inc." 168 · red cross 63 · xq 6 ·
---   NULL / %% / __ 0
+--   foundation 274 · community foundation 328 · foundation for children 345 ·
+--   habitat for humanity 58 · y.m.c.a 39 · c# 96 · for the children 78 ·
+--   the 116 · st 117 · "the ." 118 · "Habitat for Humanity, Inc." 168 ·
+--   red cross 63 · xq 6 · NULL / %% / __ 0
 -- (The exact set was stubbed for these runs because its lower(name) indexes
 -- don't exist in production until this migration runs; on a temp copy of
 -- funders with that index, `lower(name) IN ('foundation','the foundation')`
@@ -134,11 +134,15 @@ DECLARE
   v_min_len int;  -- shortest word length that counts as a hit
   v_counted int;  -- how many query words can count
   v_acronym boolean := false;  -- query was single letters joined into one word
+  v_all_cap int;  -- row cap for the all-words set
 BEGIN
   -- No organization name is this long, and every query word costs a string
   -- search per candidate row: bound the work an anonymous caller can ask for.
-  p_query := left(p_query, 200);
-  v_query_lower := lower(trim(p_query));
+  -- Runs of spaces mean one space ("red  cross" is "red cross").
+  p_query := regexp_replace(trim(left(p_query, 200)), '\s+', ' ', 'g');
+  -- Anon can call this RPC directly, past the Edge Function's clamp.
+  p_limit := LEAST(GREATEST(coalesce(p_limit, 15), 1), 50);
+  v_query_lower := lower(p_query);
   -- Leading punctuation means nothing in a name search, and left in a prefix
   -- pattern ("% foundation%") only the common word's trigrams would remain.
   v_query_normalized := regexp_replace(
@@ -208,12 +212,14 @@ BEGIN
   WHERE length(dw) >= 3;
   v_driver := v_long[1];
 
-  -- Tier-2 prefix bonus keys off the first meaningful word, not a leading
-  -- "the" (which would credit every "THE …" name): a 1-letter word ("c#")
-  -- will do, but a query of only stop words ("the of") leaves it NULL so only
-  -- the whole-query prefixes below earn the bonus.
-  SELECT x INTO e_first FROM unnest(v_all_words) WITH ORDINALITY AS t(x, ord)
-  WHERE NOT (x = ANY(v_stop)) ORDER BY length(x) < 2, ord LIMIT 1;
+  -- Tier-2 prefix bonus: names starting with the query's first word, past a
+  -- leading "the" (which would credit every "THE …" name). A stop word there
+  -- ("for the children", "the of") gives no word bonus; only the
+  -- whole-query prefixes below earn it then.
+  e_first := v_all_words[CASE WHEN v_all_words[1] = 'the' THEN 2 ELSE 1 END];
+  IF e_first = ANY(v_stop) THEN
+    e_first := NULL;
+  END IF;
   IF array_length(v_distinctive, 1) IS NULL THEN
     -- Only stop words or 1-letter words: match on the first word.
     v_distinctive := v_all_words[1:1];
@@ -241,6 +247,11 @@ BEGIN
   v_all4 := '%' || v_long[4] || '%';
   v_exact := nullif(v_query_normalized, '');
   v_prefix := e_norm || '%';  -- NULL when there's no prefix to match
+  -- With 2+ words the all-words set is selective by construction, so a larger
+  -- cap costs little and keeps the other sets' shared tail ("habitat for
+  -- humanity": ~551) reachable. With one word it is just '%word%', as broad
+  -- as the other sets.
+  v_all_cap := CASE WHEN array_length(v_long, 1) > 1 THEN 2000 ELSE 500 END;
 
   RETURN QUERY
   WITH funder_ids AS (
@@ -260,9 +271,7 @@ BEGIN
         AND (v_all3 IS NULL OR f.name ILIKE v_all3)
         AND (v_all4 IS NULL OR f.name ILIKE v_all4)
         AND (f.ntee_code LIKE 'T%' OR EXISTS (SELECT 1 FROM foundation_filings ff WHERE ff.foundation_id = f.id))
-      -- Selective by construction, so a larger cap costs little and keeps the
-      -- other sets' shared tail ("habitat for humanity": ~551) reachable.
-      LIMIT 2000)
+      LIMIT v_all_cap)
     UNION
     (SELECT f.id FROM funders f WHERE v_prefix IS NOT NULL AND f.name ILIKE v_prefix AND (f.ntee_code LIKE 'T%' OR EXISTS (SELECT 1 FROM foundation_filings ff WHERE ff.foundation_id = f.id)) LIMIT 500)
     UNION
@@ -284,7 +293,7 @@ BEGIN
         AND (v_all2 IS NULL OR r.name ILIKE v_all2)
         AND (v_all3 IS NULL OR r.name ILIKE v_all3)
         AND (v_all4 IS NULL OR r.name ILIKE v_all4)
-      LIMIT 2000)
+      LIMIT v_all_cap)
     UNION
     (SELECT r.id FROM recipient_organizations r WHERE v_prefix IS NOT NULL AND r.name ILIKE v_prefix LIMIT 500)
     UNION
