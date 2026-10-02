@@ -37,17 +37,18 @@ function formatConsoleArg(arg: unknown): string {
 
 function formatArg(arg: unknown, depth: number): string {
   if (typeof arg === 'string') return arg;
+  if (typeof arg === 'function') return `[function ${arg.name || 'anonymous'}]`;
+  if (typeof arg === 'symbol') return arg.toString();
   if (arg instanceof Error) {
     const cause = (arg as { cause?: unknown }).cause;
     const hasCause = cause !== undefined && cause !== null && depth < 2;
-    // A wrapper's own frames only point at where it was wrapped; when the
-    // cause is an Error with frames of its own, spend the limited report
-    // space on those instead.
+    const causeText = hasCause ? ` caused by ${formatArg(cause, depth + 1)}` : '';
+    // When the cause is an Error it carries the useful frames; a wrapper's
+    // own only point at where it was wrapped, and its message often repeats
+    // the cause's. Reports are capped at 500 chars, so skip both then.
     if (hasCause && cause instanceof Error) {
-      // Skip a wrapper message that just repeats the cause's (reports are
-      // capped at 500 chars).
-      const own = cause.message && String(arg.message).includes(cause.message) ? arg.name : `${arg.name}: ${arg.message}`;
-      return `${own} caused by ${formatArg(cause, depth + 1)}`;
+      const repeats = cause.message !== '' && String(arg.message).includes(cause.message);
+      return `${repeats ? arg.name : `${arg.name}: ${arg.message}`}${causeText}`;
     }
     // Keep only frame-shaped lines: V8 "    at fn (url:1:2)", WebKit/Firefox
     // "fn@url:1:2". Header/message lines vary by engine and may contain '@'.
@@ -57,7 +58,6 @@ function formatArg(arg: unknown, depth: number): string {
       .slice(0, 3)
       .map((l) => l.trim())
       .join(' | ');
-    const causeText = hasCause ? ` caused by ${formatArg(cause, depth + 1)}` : '';
     return `${arg.name}: ${arg.message}${frames ? ` [${frames}]` : ''}${causeText}`;
   }
   try {

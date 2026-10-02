@@ -95,6 +95,9 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  // The error panel's own query is being searched again.
+  const retrying = status === 'error' && loading && searchedQuery === trimmedQuery;
+
   const reopenDropdown = () => {
     dismissedRef.current = false;
     if (status !== 'idle') setShowDropdown(true);
@@ -122,8 +125,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
     // values come from this render, so a fast Enter can't slip past (a
     // `loading` flag set in an effect lags by a render). A mouse click on a
     // visible row is an explicit choice and still works.
-    if (!showDropdown || searchedQuery !== trimmedQuery) return;
-    if (status !== 'results') return;
+    if (!showDropdown || status !== 'results' || searchedQuery !== trimmedQuery) return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       setSelectedIdx(prev => Math.min(prev + 1, results.length - 1));
@@ -144,7 +146,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
           ref={inputRef}
           type="text"
           value={query}
-          onChange={e => { dismissedRef.current = false; setQuery(e.target.value); }}
+          onChange={e => { setQuery(e.target.value); reopenDropdown(); }}
           onFocus={reopenDropdown}
           // Clicking an already-focused input doesn't fire focus; reopen too.
           onMouseDown={reopenDropdown}
@@ -176,7 +178,8 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
         {/* Includes the query so a new search with the same count is still
             announced. */}
         {status === 'empty' && `No organizations match ${searchedQuery}`}
-        {status === 'error' && `Search for ${searchedQuery} is temporarily unavailable.`}
+        {status === 'error' &&
+          (retrying ? `Retrying search for ${searchedQuery}` : `Search for ${searchedQuery} is temporarily unavailable.`)}
         {status === 'results' &&
           `${results.length} organization${results.length === 1 ? '' : 's'} found for ${searchedQuery}`}
       </div>
@@ -202,15 +205,16 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
               <AlertCircle size={16} className="text-red-400 shrink-0 mt-0.5" />
               <div className="flex-1">
                 <p className="text-sm text-white">
-                  Search for &ldquo;{searchedQuery}&rdquo; is temporarily unavailable.
+                  {retrying
+                    ? <>Retrying search for &ldquo;{searchedQuery}&rdquo;…</>
+                    : <>Search for &ldquo;{searchedQuery}&rdquo; is temporarily unavailable.</>}
                 </p>
                 <button
                   type="button"
+                  // Disabled while any search runs: a retry, or a newer query
+                  // (then this panel still describes the old one).
                   disabled={loading}
                   onClick={() => {
-                    // Clear the error while the retry runs; the input's spinner
-                    // shows progress, and focus there lets the result reopen.
-                    setStatus('idle');
                     inputRef.current?.focus();
                     setRetryNonce((n) => n + 1);
                   }}
