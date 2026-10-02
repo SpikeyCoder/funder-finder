@@ -50,10 +50,12 @@
 -- funders) took 22 s. Don't do that.
 --
 -- MEASURED (production, pg_temp copy of this body; identical ordered results
--- on repeat calls for every query), ms:
---   foundation 573 · community foundation 642 · foundation for children 345 ·
---   habitat for humanity 120 · y.m.c.a 213 · the 116 · st 117 · "the ." 118 ·
---   "Habitat for Humanity, Inc." 168 · red cross 63 · xq 6 · NULL / %% / __ 0
+-- on repeat calls for every query), warm ms (a cold first call can take
+-- several times longer while pages load):
+--   foundation 460 · community foundation 300 · foundation for children 345 ·
+--   habitat for humanity 105 · y.m.c.a 213 · c# 97 · the 116 · st 117 ·
+--   "the ." 118 · "Habitat for Humanity, Inc." 168 · red cross 63 · xq 6 ·
+--   NULL / %% / __ 0
 -- (The exact set was stubbed for these runs because its lower(name) indexes
 -- don't exist in production until this migration runs; on a temp copy of
 -- funders with that index, `lower(name) IN ('foundation','the foundation')`
@@ -63,7 +65,8 @@
 -- "red  cross" and "the community foundation" behave like their clean forms.
 -- (One funder name of ~760k rows has stray whitespace; the exact set's
 -- lower(name) match ignores it and the other sets still find it.)
--- Top results: "y.m.c.a" → YMCA OF THE USA; "foundation for children" →
+-- Top results: "y.m.c.a" → YMCA OF THE USA; "j paul getty trust" → J PAUL
+-- GETTY TRUST; "foundation for children" →
 -- FOUNDATION FOR CHILDREN WITH NEUROIMMUNE DISORDERS INC; "church of st
 -- mary" → CHURCH OF ST MARY; "united way of king county" → UNITED WAY OF KING
 -- COUNTY; "SitStayRead" → SIT STAY READ INC.
@@ -128,6 +131,8 @@ DECLARE
   e_lower text;
   e_norm text;
   e_first text;
+  v_min_len int;  -- shortest word length that counts as a hit
+  v_counted int;  -- how many query words can count
 BEGIN
   v_query_lower := lower(trim(p_query));
   -- Leading punctuation means nothing in a name search, and left in a prefix
@@ -204,6 +209,11 @@ BEGIN
   -- Tier-2 prefix bonus keys off the first meaningful word, not a leading
   -- "the" (which would credit every "THE …" name).
   e_first := v_distinctive[1];
+
+  -- Word hits ignore 1-letter words ("j paul getty") unless the query has
+  -- nothing longer ("c#"); the Tier-4 denominator counts the same words.
+  v_min_len := CASE WHEN EXISTS (SELECT 1 FROM unnest(v_all_words) x WHERE length(x) >= 2) THEN 2 ELSE 1 END;
+  SELECT count(*) INTO v_counted FROM unnest(v_all_words) x WHERE length(x) >= v_min_len;
 
   IF v_driver IS NULL THEN
     -- Only short words ("st", "uw") or stop words ("the"): match where a word
@@ -283,11 +293,17 @@ BEGIN
     SELECT * FROM recipient_hits
   ),
   measured AS (
-    -- Per-row values the tiers share, computed once.
-    SELECT c.*, lower(trim(c._name)) AS _lname,
+    -- Per-row values the tiers share, computed once. Word hits are checked
+    -- against the name with punctuation removed, matching how the query was
+    -- tokenized ("y.m.c.a" → 'ymca' must hit "Y.M.C.A. OF …").
+    SELECT n.*,
       (SELECT count(*)::numeric FROM unnest(v_all_words) aw
-        WHERE length(aw) >= 2 AND strpos(lower(trim(c._name)), aw) > 0) AS _hits
-    FROM combined c
+        WHERE length(aw) >= v_min_len AND strpos(n._bare, aw) > 0) AS _hits
+    FROM (
+      SELECT c.*, lower(trim(c._name)) AS _lname,
+        regexp_replace(lower(c._name), '[^[:alnum:][:space:]]', '', 'g') AS _bare
+      FROM combined c
+    ) n
   ),
   scored AS (
     SELECT m.*,
@@ -309,8 +325,8 @@ BEGIN
       + CASE WHEN strpos(m._lname, v_query_lower) > 0 THEN 0.50 ELSE 0 END
       -- TIER 4: PARTIAL/FUZZY - word count match
       + CASE
-        WHEN m._hits = GREATEST(array_length(v_all_words, 1), 1) THEN 0.30
-        ELSE m._hits / GREATEST(array_length(v_all_words, 1), 1) * 0.15
+        WHEN m._hits = GREATEST(v_counted, 1) THEN 0.30
+        ELSE m._hits / GREATEST(v_counted, 1) * 0.15
       END
       -- Similarity to the whole (camelCase-split) query: a tiebreaker only,
       -- kept well below the funding tiebreaker and every tier step.
