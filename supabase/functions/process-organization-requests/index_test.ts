@@ -3,6 +3,7 @@ import { assertEquals } from "jsr:@std/assert@1";
 import {
   cronAuthorized,
   type IrsOrg,
+  type Outcome,
   normalizeName,
   notificationFor,
   padEin,
@@ -63,9 +64,23 @@ Deno.test("notificationFor links to the right page and acknowledges a review", (
   assertEquals(funder?.text.includes("https://fundermatch.org/funder/562618866"), true);
   assertEquals(
     notificationFor(row, { status: "needs_review", reason: "x", candidates: [] })?.subject,
-    `We're reviewing your request for "Students Feeding Students"`,
+    "We're reviewing your organization request",
   );
-  assertEquals(notificationFor(row, { status: "not_found" })?.subject, `We couldn't find "Students Feeding Students"`);
+  assertEquals(notificationFor(row, { status: "not_found" })?.subject, "We couldn't find the organization you requested");
+});
+
+Deno.test("notificationFor never quotes the visitor's text (unconfirmed recipient)", () => {
+  const spam = { ...row, query: "Your account is suspended, visit evil.example" };
+  const outcomes: Outcome[] = [
+    { status: "added", id: "u", org: org("REAL ORG") },
+    { status: "already_listed", entityType: "recipient", id: "u", org: org("REAL ORG") },
+    { status: "needs_review", reason: "x", candidates: [] },
+    { status: "not_found" },
+  ];
+  for (const o of outcomes) {
+    const note = notificationFor(spam, o);
+    assertEquals(`${note?.subject} ${note?.text}`.includes("evil.example"), false, o.status);
+  }
 });
 
 Deno.test("reviewCardFor lists candidates with ProPublica links", () => {

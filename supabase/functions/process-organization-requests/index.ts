@@ -21,6 +21,14 @@
  * processor(). Requires CRON_SECRET (X-Cron-Secret or `Bearer cron:<secret>`),
  * and unlike send-reminders it fails CLOSED when CRON_SECRET is unset: this
  * function writes to recipient_organizations and sends email.
+ *
+ * Deploy with `--no-verify-jwt`, like send-reminders / process-notifications:
+ * pg_net sends no JWT, so the gateway would reject every call otherwise. The
+ * CRON_SECRET check above is this function's authentication.
+ *
+ * Emails go to an address the visitor typed and nobody has confirmed, so they
+ * never quote what the visitor typed: only fixed text and names from IRS data
+ * or our own tables. They can't be used to deliver someone else's message.
  */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
@@ -31,6 +39,8 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") || "";
 const PROPUBLICA = "https://projects.propublica.org/nonprofits/api/v2";
 const BATCH_SIZE = 20;
 const MAX_ATTEMPTS = 3;
+// A claim older than this is from a run that died; the row may be retried.
+const CLAIM_TTL_MS = 10 * 60 * 1000;
 // IRS foundation codes 02/03/04 are private foundations (990-PF filers).
 const PRIVATE_FOUNDATION_CODES = new Set([2, 3, 4]);
 
@@ -192,7 +202,8 @@ async function resolve(row: QueueRow): Promise<Outcome> {
   const detail = await irsDetail(ein);
   if (!detail) return { status: "not_found" };
 
-  const existing = await existingEntity(detail.org.ein);
+  // (An EIN request was already checked above.)
+  const existing = row.ein ? null : await existingEntity(detail.org.ein);
   if (existing) return listed(existing, detail.org);
 
   if (detail.foundationCode !== null && PRIVATE_FOUNDATION_CODES.has(detail.foundationCode)) {
@@ -221,8 +232,9 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-export function notificationFor(row: QueueRow, outcome: Outcome): { subject: string; text: string } | null {
-  const q = row.query;
+// Never quotes the visitor's own text (see the header): the recipient address
+// is unconfirmed. Organization names come from IRS data or our own tables.
+export function notificationFor(_row: QueueRow, outcome: Outcome): { subject: string; text: string } | null {
   switch (outcome.status) {
     case "added":
     case "already_listed": {
@@ -231,23 +243,24 @@ export function notificationFor(row: QueueRow, outcome: Outcome): { subject: str
         : `/recipient/${outcome.id}`;
       return {
         subject: `${outcome.org.name} is on FunderMatch`,
-        text: `You asked us to add "${q}". It's now available on FunderMatch:\n\nhttps://fundermatch.org${path}`,
+        text: `The organization you asked us to add is now available on FunderMatch:\n\n` +
+          `${outcome.org.name}\nhttps://fundermatch.org${path}`,
       };
     }
     case "not_found":
       return {
-        subject: `We couldn't find "${q}"`,
-        text: `We searched IRS nonprofit records for "${q}" and couldn't find a match. ` +
-          `If it has an EIN, you can request it again with the EIN at https://fundermatch.org/search.`,
+        subject: "We couldn't find the organization you requested",
+        text: "We searched IRS nonprofit records for the organization you asked us to add and couldn't " +
+          "find a match. If it has an EIN, you can request it again with the EIN at https://fundermatch.org/search.",
       };
     case "needs_review":
       // The form promised an email; say where the request stands. (A person
       // takes it from here via the review card.)
       return {
-        subject: `We're reviewing your request for "${q}"`,
-        text: `We couldn't automatically match "${q}" to a single IRS nonprofit record, ` +
-          `so someone on our team will review it. If we can confirm it, it will appear in ` +
-          `FunderMatch search at https://fundermatch.org/search.`,
+        subject: "We're reviewing your organization request",
+        text: "We couldn't automatically match the organization you asked us to add to a single IRS " +
+          "nonprofit record, so someone on our team will review it. If we can confirm it, it will " +
+          "appear in FunderMatch search at https://fundermatch.org/search.",
       };
   }
 }
@@ -294,14 +307,15 @@ export function reviewCardFor(row: QueueRow, reason: string, candidates: IrsOrg[
 
 // Reuses report-bug's Trello list so requests land where bug reports are
 // triaged. Best-effort: a missing config or Trello error doesn't fail the row.
-async function createReviewCard(card: { name: string; desc: string }): Promise<void> {
+async function createReviewCard(card: { name: string; desc: string }): Promise<boolean> {
   const key = Deno.env.get("TRELLO_API_KEY");
   const token = Deno.env.get("TRELLO_TOKEN");
   const idList = Deno.env.get("TRELLO_LIST_ID");
-  if (!key || !token || !idList) return;
+  if (!key || !token || !idList) return false;
   const params = new URLSearchParams({ key, token, idList, name: card.name, desc: card.desc, pos: "top" });
   const res = await fetch(`https://api.trello.com/1/cards?${params}`, { method: "POST" });
   if (!res.ok) console.error("Trello card failed:", res.status, await res.text());
+  return res.ok;
 }
 
 // ── Handler ─────────────────────────────────────────────────────────────────
@@ -331,8 +345,27 @@ async function patchRow(id: string, patch: Record<string, unknown>): Promise<voi
   if (!res.ok) throw new Error(`REST organization_requests PATCH ${res.status}: ${await res.text()}`);
 }
 
+// Take the row for this run, unless another run holds a live claim on it
+// (overlapping cron ticks, or a manual invocation alongside one).
+async function claimRow(id: string, now: Date): Promise<boolean> {
+  const stale = new Date(now.getTime() - CLAIM_TTL_MS).toISOString();
+  const res = await rest(
+    `organization_requests?id=eq.${id}&status=eq.pending` +
+      `&or=(claimed_at.is.null,claimed_at.lt.${encodeURIComponent(stale)})&select=id`,
+    {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({ claimed_at: now.toISOString() }),
+    },
+  );
+  if (!res.ok) throw new Error(`REST organization_requests claim ${res.status}: ${await res.text()}`);
+  return ((await res.json()) as unknown[]).length === 1;
+}
+
 async function processRow(row: QueueRow): Promise<string> {
-  const now = new Date().toISOString();
+  const started = new Date();
+  const now = started.toISOString();
+  if (!(await claimRow(row.id, started))) return "skipped";
   let outcome: Outcome;
   try {
     outcome = await resolve(row);
@@ -366,6 +399,7 @@ async function processRow(row: QueueRow): Promise<string> {
     await patchRow(row.id, {
       attempts,
       last_error: message.slice(0, 500),
+      claimed_at: null, // retry on the next run
       ...(attempts >= MAX_ATTEMPTS ? { status: "failed", processed_at: now } : {}),
     }).catch((e) => console.error(`organization request ${row.id}: could not record the failure:`, e));
     return attempts >= MAX_ATTEMPTS ? "failed" : "retry";
@@ -373,9 +407,13 @@ async function processRow(row: QueueRow): Promise<string> {
 
   // Side effects, once each: the row is no longer pending.
   if (outcome.status === "needs_review") {
-    await createReviewCard(reviewCardFor(row, outcome.reason, outcome.candidates)).catch((err) =>
-      console.error("Trello card failed:", err)
-    );
+    const carded = await createReviewCard(reviewCardFor(row, outcome.reason, outcome.candidates)).catch((err) => {
+      console.error("Trello card failed:", err);
+      return false;
+    });
+    // Still findable as status = needs_review, but say so loudly: the
+    // requester is told a person will review it.
+    if (!carded) console.error(`organization request ${row.id} needs review but has no Trello card (TRELLO_* unset or failing)`);
   }
   const note = row.requester_email ? notificationFor(row, outcome) : null;
   if (note && await sendEmail(row.requester_email!, note.subject, note.text).catch(() => false)) {
@@ -398,6 +436,7 @@ if (import.meta.main) {
     try {
       const rows = await restJson<QueueRow[]>(
         `organization_requests?status=eq.pending&order=created_at.asc&limit=${BATCH_SIZE}` +
+          `&or=(claimed_at.is.null,claimed_at.lt.${encodeURIComponent(new Date(Date.now() - CLAIM_TTL_MS).toISOString())})` +
           `&select=id,query,ein,state,requester_email,attempts`,
       );
       const summary: Record<string, number> = {};

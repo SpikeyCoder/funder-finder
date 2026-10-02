@@ -186,11 +186,22 @@ Deno.serve(async (req) => {
       );
     }
 
+    // EINs aren't consistently zero-padded across tables (peer links may drop
+    // the leading zero), so match either form.
+    const digits = lookupEin.replace(/\D/g, '');
+    const variants = digits
+      ? [...new Set([digits.padStart(9, '0'), digits.replace(/^0+/, '')])]
+        .filter(Boolean)
+        .map((v) => `"${v}"`)
+        .join(',')
+      : '';
+    const einFilter = variants ? `in.(${encodeURIComponent(variants)})` : `eq.${encodeURIComponent(lookupEin)}`;
+
     // Fetch grants and 990 budget concurrently
     const [grants, budget990] = await Promise.all([
       restQuery(
         'foundation_grants',
-        `grantee_ein=eq.${encodeURIComponent(lookupEin)}&select=foundation_id,grant_year,grant_amount,grantee_name,grantee_ein,grantee_city,grantee_state&order=grant_year.desc&limit=10000`,
+        `grantee_ein=${einFilter}&select=foundation_id,grant_year,grant_amount,grantee_name,grantee_ein,grantee_city,grantee_state&order=grant_year.desc&limit=10000`,
       ) as Promise<GrantRow[]>,
       fetchGrantee990Budget(lookupEin),
     ]);
@@ -200,22 +211,11 @@ Deno.serve(async (req) => {
       // (process-organization-requests) exist in recipient_organizations
       // before any grants to them are ingested. Serve an empty-history
       // profile from that row plus the 990 data instead of a 404.
-      // EINs aren't consistently zero-padded across tables (peer links may
-      // drop the leading zero), so match either form.
-      const digits = lookupEin.replace(/\D/g, '');
-      const variants = digits
-        ? [...new Set([digits.padStart(9, '0'), digits.replace(/^0+/, '')])]
-          .filter(Boolean)
-          .map((v) => `"${v}"`)
-          .join(',')
-        : '';
-      const orgs = (variants
-        ? await restQuery(
-          'recipient_organizations',
-          `ein=in.(${encodeURIComponent(variants)})&select=ein,name,primary_city,primary_state,ntee_codes,` +
-            'total_funding,grant_count,funder_count,first_grant_year,last_grant_year&limit=1',
-        )
-        : []) as Array<{
+      const orgs = (await restQuery(
+        'recipient_organizations',
+        `ein=${einFilter}&select=ein,name,primary_city,primary_state,ntee_codes,` +
+          'total_funding,grant_count,funder_count,first_grant_year,last_grant_year&limit=1',
+      )) as Array<{
           ein: string;
           name: string;
           primary_city: string | null;
@@ -239,9 +239,7 @@ Deno.serve(async (req) => {
         ein: org.ein,
         name: org.name,
         location: { city: org.primary_city, state: org.primary_state },
-        // The row's stored totals: zero for a queue-added organization, but an
-        // organization whose grants are stored under another EIN form keeps
-        // its numbers (and doesn't show the "no grants yet" note).
+        // The row's stored totals (zero for a queue-added organization).
         fundingSummary: {
           totalFunding: Number(org.total_funding ?? 0),
           grantCount: org.grant_count ?? 0,

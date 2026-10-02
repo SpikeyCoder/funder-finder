@@ -22,14 +22,15 @@
 --        not_found      — no IRS record matches
 --        failed         — the lookup errored 3 times
 --   4. If the requester left an email and RESEND_API_KEY is set, they're told
---      the outcome (for needs_review: that a person is reviewing it).
+--      the outcome (for needs_review: that a person is reviewing it). The
+--      address is unconfirmed, so emails never quote the visitor's text.
 --
 -- Access: RLS on with no policies, and no grants to anon/authenticated — only
 -- the service role (the two Edge Functions) touches this table.
 --
 -- Retention (see compliance/retention-and-deletion.md): requester_email is
--- cleared 30 days after a request is processed; rows are deleted after 180
--- days. Scheduled at 10:35 UTC, after the existing 10:xx purge jobs.
+-- cleared 30 days after a request is processed (or made, if it never was);
+-- rows are deleted after 180 days. Scheduled at 10:35 UTC, after the existing 10:xx purge jobs.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- The processor is invoked over HTTP from pg_cron (below).
@@ -53,7 +54,8 @@ CREATE TABLE IF NOT EXISTS public.organization_requests (
   last_error           text,
   created_at           timestamptz NOT NULL DEFAULT now(),
   processed_at         timestamptz,
-  notified_at          timestamptz
+  notified_at          timestamptz,
+  claimed_at           timestamptz  -- set by the processor run working on it
 );
 
 -- One open request per organization and requester: a repeat submission joins
@@ -79,10 +81,11 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
+  -- Unprocessed requests too: a queue that never runs mustn't keep emails.
   UPDATE public.organization_requests
      SET requester_email = NULL
    WHERE requester_email IS NOT NULL
-     AND processed_at < now() - interval '30 days';
+     AND coalesce(processed_at, created_at) < now() - interval '30 days';
 
   DELETE FROM public.organization_requests
    WHERE created_at < now() - interval '180 days';
@@ -109,8 +112,12 @@ SELECT cron.schedule(
 -- pg_cron can't call HTTPS itself, so it calls this function, which POSTs to
 -- the processor via pg_net. The processor requires CRON_SECRET (same scheme as
 -- send-reminders / process-notifications); this reads the same value from
--- Vault under the name 'cron_secret'. Until that secret exists the job is a
--- no-op, so deploying this migration before configuring it is safe.
+-- Vault under the name 'cron_secret', and the project's URL (e.g.
+-- https://<ref>.supabase.co) under 'project_url', so a branch or staging
+-- database calls its own functions, not production's. Until both secrets
+-- exist the job is a no-op, so deploying this migration before configuring
+-- them is safe. pg_net sends no JWT: deploy the processor with
+-- --no-verify-jwt (its CRON_SECRET check authenticates the call).
 
 CREATE OR REPLACE FUNCTION public.invoke_organization_request_processor()
 RETURNS void
@@ -120,6 +127,7 @@ SET search_path = ''
 AS $$
 DECLARE
   v_secret text;
+  v_url text;
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM public.organization_requests WHERE status = 'pending'
@@ -131,14 +139,18 @@ BEGIN
     FROM vault.decrypted_secrets
    WHERE name = 'cron_secret'
    LIMIT 1;
+  SELECT rtrim(decrypted_secret, '/') INTO v_url
+    FROM vault.decrypted_secrets
+   WHERE name = 'project_url'
+   LIMIT 1;
 
-  IF v_secret IS NULL THEN
-    RAISE NOTICE 'invoke_organization_request_processor: vault secret cron_secret is not set; skipping';
+  IF v_secret IS NULL OR v_url IS NULL THEN
+    RAISE NOTICE 'invoke_organization_request_processor: vault secrets cron_secret / project_url are not set; skipping';
     RETURN;
   END IF;
 
   PERFORM net.http_post(
-    url     := 'https://tgtotjvdubhjxzybmdex.supabase.co/functions/v1/process-organization-requests',
+    url     := v_url || '/functions/v1/process-organization-requests',
     body    := '{}'::jsonb,
     headers := jsonb_build_object(
       'Content-Type', 'application/json',

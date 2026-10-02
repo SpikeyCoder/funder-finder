@@ -23,7 +23,10 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
   // The query `status` describes, which lags `query` while a search is pending.
   const [searchedQuery, setSearchedQuery] = useState('');
   const [retryNonce, setRetryNonce] = useState(0);
-  const [showRequestForm, setShowRequestForm] = useState(false);
+  // The name the request form was opened for (null = closed). Fixed when it
+  // opens, so a search landing afterwards can't remount it and wipe its input.
+  const [requestName, setRequestName] = useState<string | null>(null);
+  const showRequestForm = requestName !== null;
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -39,7 +42,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
     // The highlighted row and an open request form belong to the previous
     // results.
     setSelectedIdx(-1);
-    setShowRequestForm(false);
+    setRequestName(null);
 
     if (trimmedQuery.length < 2) {
       setResults([]);
@@ -116,7 +119,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
   // The form opens below the search box rather than inside the dropdown, so
   // closing or reopening the dropdown doesn't wipe what was typed into it.
   const openRequestForm = () => {
-    setShowRequestForm(true);
+    setRequestName(searchedQuery);
     dismissedRef.current = true;
     setShowDropdown(false);
   };
@@ -308,7 +311,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
 
       {showRequestForm && (
         <div className="mt-2 bg-[#161b22] border border-[#30363d] rounded-xl px-4 py-3 text-left">
-          <OrgRequestForm key={searchedQuery} initialName={searchedQuery} />
+          <OrgRequestForm initialName={requestName} />
         </div>
       )}
     </div>
