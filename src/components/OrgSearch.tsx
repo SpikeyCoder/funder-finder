@@ -20,22 +20,28 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
   // Outcome of the latest completed search, so a miss or a failure is shown
   // instead of the dropdown silently staying closed.
   const [status, setStatus] = useState<'idle' | 'results' | 'empty' | 'error'>('idle');
+  // The query `status` describes, which lags `query` while a search is pending.
+  const [searchedQuery, setSearchedQuery] = useState('');
   const [retryNonce, setRetryNonce] = useState(0);
   const [showRequestForm, setShowRequestForm] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
-  const requestIdRef = useRef(0);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  // Set when the user closes the dropdown (Escape / outside click) so a search
+  // still in flight doesn't pop it back open; cleared when they type or refocus.
+  const dismissedRef = useRef(false);
+
+  // Whitespace-only edits shouldn't abort and resend an identical search.
+  const trimmedQuery = query.trim();
 
   useEffect(() => {
-    // Invalidate any in-flight request so a slow, older response can't
-    // overwrite the results for what the user has typed since.
-    const requestId = ++requestIdRef.current;
+    // The highlighted row and an open request form belong to the previous
+    // results.
+    setSelectedIdx(-1);
     setShowRequestForm(false);
 
-    if (query.trim().length < 2) {
+    if (trimmedQuery.length < 2) {
       setResults([]);
       setStatus('idle');
       setLoading(false);
@@ -44,40 +50,68 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
     }
 
     setLoading(true);
-    clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(async () => {
+    // Aborted by the cleanup when the query changes, a retry starts or the
+    // component unmounts, so a stale response never lands.
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      const searched = trimmedQuery;
       try {
-        const data = await searchOrganizations(query.trim());
-        if (requestId !== requestIdRef.current) return;
+        const data = await searchOrganizations(searched, 15, controller.signal);
+        if (controller.signal.aborted) return;
+        setSearchedQuery(searched);
         setResults(data);
         setStatus(data.length > 0 ? 'results' : 'empty');
-        setSelectedIdx(-1);
-      } catch {
-        if (requestId !== requestIdRef.current) return;
+      } catch (err) {
+        if (controller.signal.aborted) return;
+        // Logged so a bug report filed from the error panel shows the cause.
+        console.error('Organization search failed:', err);
+        setSearchedQuery(searched);
         setResults([]);
         setStatus('error');
       } finally {
-        if (requestId === requestIdRef.current) {
+        if (!controller.signal.aborted) {
           setLoading(false);
-          setShowDropdown(true);
+          // A slow response shouldn't pop the panel back up after Escape or an
+          // outside click.
+          if (!dismissedRef.current) setShowDropdown(true);
         }
       }
     }, 300);
 
-    return () => clearTimeout(debounceRef.current);
-  }, [query, retryNonce]);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [trimmedQuery, retryNonce]);
 
   // Close dropdown on outside click
   useEffect(() => {
+    // Also counts before the first response has opened the dropdown.
     const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
-          inputRef.current && !inputRef.current.contains(e.target as Node)) {
-        setShowDropdown(false);
-      }
+      // Anything inside the search box (input, icon, spinner, dropdown) counts
+      // as inside.
+      if (wrapperRef.current?.contains(e.target as Node)) return;
+      // Dragging a classic (space-taking) page scrollbar doesn't blur the
+      // input; it isn't a dismissal. Overlay scrollbars (mobile, macOS) take no
+      // width, so this never swallows a real tap there.
+      const root = document.documentElement;
+      if (window.innerWidth > root.clientWidth && e.clientX >= root.clientWidth) return;
+      dismissedRef.current = true;
+      setShowDropdown(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  // The error panel's own query is being searched again.
+  const retrying = status === 'error' && loading && searchedQuery === trimmedQuery;
+
+  const reopenDropdown = (text = query) => {
+    dismissedRef.current = false;
+    // Below two characters the effect is about to reset to idle; don't flash
+    // the previous panel first.
+    if (status !== 'idle' && text.trim().length >= 2) setShowDropdown(true);
+  };
 
   const handleSelect = (result: OrgSearchResult) => {
     setShowDropdown(false);
@@ -90,12 +124,18 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (!showDropdown) return;
+    // Escape counts even before the first response opens the dropdown.
     if (e.key === 'Escape') {
+      dismissedRef.current = true;
       setShowDropdown(false);
       return;
     }
-    if (status !== 'results') return;
+    // Once the text differs from the query these rows came from, they're stale;
+    // don't act on a keyboard highlight the user may not be looking at. Both
+    // values come from this render, so a fast Enter can't slip past (a
+    // `loading` flag set in an effect lags by a render). A mouse click on a
+    // visible row is an explicit choice and still works.
+    if (!showDropdown || status !== 'results' || searchedQuery !== trimmedQuery) return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       setSelectedIdx(prev => Math.min(prev + 1, results.length - 1));
@@ -109,15 +149,32 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
   };
 
   return (
-    <div className="relative w-full">
+    <div
+      ref={wrapperRef}
+      className="relative w-full"
+      // Focus moving from anywhere in the search box (input, a result row,
+      // "Try again") to another control counts as dismissing, so a late
+      // response doesn't open the panel over it. A blur with no new focus
+      // target — hiding the mobile keyboard — doesn't: results should still
+      // appear.
+      onBlur={(e) => {
+        const next = e.relatedTarget as Node | null;
+        if (next && !wrapperRef.current?.contains(next)) {
+          dismissedRef.current = true;
+          setShowDropdown(false);
+        }
+      }}
+    >
       <div className="relative">
         <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
         <input
           ref={inputRef}
           type="text"
           value={query}
-          onChange={e => setQuery(e.target.value)}
-          onFocus={() => status !== 'idle' && setShowDropdown(true)}
+          onChange={e => { setQuery(e.target.value); reopenDropdown(e.target.value); }}
+          onFocus={() => reopenDropdown()}
+          // Clicking an already-focused input doesn't fire focus; reopen too.
+          onMouseDown={() => reopenDropdown()}
           onKeyDown={handleKeyDown}
           autoFocus={autoFocus}
           placeholder={placeholder}
@@ -129,17 +186,28 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
         )}
       </div>
 
-      {showDropdown && (
+      {/* Persistent live region: screen readers announce changes inside a
+          region that already exists, not one mounted along with its text. */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {/* Includes the query so a new search with the same count is still
+            announced. */}
+        {status === 'empty' && `No organizations match ${searchedQuery}`}
+        {status === 'error' &&
+          (retrying ? `Retrying search for ${searchedQuery}` : `Search for ${searchedQuery} is temporarily unavailable.`)}
+        {status === 'results' &&
+          `Showing ${results.length} organization${results.length === 1 ? '' : 's'} for ${searchedQuery}`}
+      </div>
+
+      {showDropdown && status !== 'idle' && (
         <div
-          ref={dropdownRef}
           className="absolute z-50 w-full mt-2 bg-[#161b22] border border-[#30363d] rounded-xl shadow-xl overflow-hidden max-h-80 overflow-y-auto"
         >
           {status === 'empty' && (
             <div className="px-4 py-4 text-left">
-              <div role="status" className="flex items-start gap-3">
+              <div className="flex items-start gap-3">
                 <SearchX size={16} className="text-gray-400 shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-sm text-white">No organizations match &ldquo;{query.trim()}&rdquo;</p>
+                  <p className="text-sm text-white">No organizations match &ldquo;{searchedQuery}&rdquo;</p>
                   <p className="text-xs text-gray-400 mt-1">
                     Try a shorter name, a different spelling, or search by EIN.
                     {!showRequestForm && (
@@ -159,20 +227,30 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
               </div>
               {showRequestForm && (
                 <div className="mt-3">
-                  <OrgRequestForm key={query.trim()} initialName={query.trim()} />
+                  <OrgRequestForm key={searchedQuery} initialName={searchedQuery} />
                 </div>
               )}
             </div>
           )}
           {status === 'error' && (
-            <div role="alert" className="flex items-start gap-3 px-4 py-4 text-left">
+            <div className="flex items-start gap-3 px-4 py-4 text-left">
               <AlertCircle size={16} className="text-red-400 shrink-0 mt-0.5" />
               <div className="flex-1">
-                <p className="text-sm text-white">Search is temporarily unavailable.</p>
+                <p className="text-sm text-white">
+                  {retrying
+                    ? <>Retrying search for &ldquo;{searchedQuery}&rdquo;…</>
+                    : <>Search for &ldquo;{searchedQuery}&rdquo; is temporarily unavailable.</>}
+                </p>
                 <button
                   type="button"
-                  onClick={() => setRetryNonce((n) => n + 1)}
-                  className="text-xs text-blue-400 hover:text-blue-300 mt-1 underline"
+                  // Disabled while any search runs: a retry, or a newer query
+                  // (then this panel still describes the old one).
+                  disabled={loading}
+                  onClick={() => {
+                    inputRef.current?.focus();
+                    setRetryNonce((n) => n + 1);
+                  }}
+                  className="text-xs text-blue-400 hover:text-blue-300 mt-1 underline disabled:opacity-50 disabled:no-underline"
                 >
                   Try again
                 </button>
@@ -211,7 +289,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
           {status === 'results' && (
             <div className="border-t border-[#30363d]/50 px-4 py-3 text-left">
               {showRequestForm ? (
-                <OrgRequestForm key={query.trim()} initialName={query.trim()} />
+                <OrgRequestForm key={searchedQuery} initialName={searchedQuery} />
               ) : (
                 <p className="text-xs text-gray-400">
                   Not seeing it?{' '}

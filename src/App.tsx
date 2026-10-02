@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
-import { Suspense, lazy, useEffect, useRef, type ComponentType } from 'react';
+import { Suspense, lazy, useEffect, useRef } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import AnalyticsTracker from './components/AnalyticsTracker';
 import CanonicalTag from './components/CanonicalTag';
@@ -9,45 +9,38 @@ import ProductTour from './components/ProductTour';
 import BugReportButton from './components/BugReportButton';
 import ThemeToggle from './components/ThemeToggle';
 import ErrorBoundary from './components/ErrorBoundary';
-import { asChunkLoadError } from './lib/chunkReload';
 
 // Must match the key used in AuthContext.storePendingFunder
 const REDIRECT_AFTER_LOGIN_KEY = 'ff_redirect_after_login';
 
-// A route chunk that fails to download or link is tagged as a chunk-load
-// error so the ErrorBoundary reloads once instead of showing a dead end.
-function lazyRoute<T extends ComponentType<any>>(factory: () => Promise<{ default: T }>) {
-  return lazy(() => factory().catch((error: unknown) => { throw asChunkLoadError(error); }));
-}
-
-const Landing = lazyRoute(() => import('./pages/Landing'));
-const MissionInput = lazyRoute(() => import('./pages/MissionInput'));
-const Results = lazyRoute(() => import('./pages/Results'));
-const FunderDetail = lazyRoute(() => import('./pages/FunderDetail'));
-const SavedFunders = lazyRoute(() => import('./pages/SavedFunders'));
-const GrantWriter = lazyRoute(() => import('./pages/GrantWriter'));
-const OrgSearchPage = lazyRoute(() => import('./pages/OrgSearchPage'));
-const RecipientProfile = lazyRoute(() => import('./pages/RecipientProfile'));
-const LoginPage = lazyRoute(() => import('./pages/LoginPage'));
-const SignupPage = lazyRoute(() => import('./pages/SignupPage'));
-const DashboardPage = lazyRoute(() => import('./pages/DashboardPage'));
-const NewProjectPage = lazyRoute(() => import('./pages/NewProjectPage'));
-const ConversationalProjectSetup = lazyRoute(() => import('./pages/ConversationalProjectSetup'));
-const ProjectWorkspace = lazyRoute(() => import('./pages/ProjectWorkspace'));
-const BrowsePage = lazyRoute(() => import('./pages/BrowsePage'));
-const UserSettingsPage = lazyRoute(() => import('./pages/UserSettingsPage'));
-const PortfolioPage = lazyRoute(() => import('./pages/PortfolioPage'));
-const MyTasksPage = lazyRoute(() => import('./pages/MyTasksPage'));
-const TeamSettingsPage = lazyRoute(() => import('./pages/TeamSettingsPage'));
-const SharedViewPage = lazyRoute(() => import('./pages/SharedViewPage'));
-const ReportsPage = lazyRoute(() => import('./pages/ReportsPage'));
-const ApplicationsPage = lazyRoute(() => import('./pages/ApplicationsPage'));
-const MigrationImportPage = lazyRoute(() => import('./pages/MigrationImportPage'));
-const OnboardingPage = lazyRoute(() => import('./pages/OnboardingPage'));
-const NotFound = lazyRoute(() => import('./pages/NotFound'));
-const PrivacyPolicy = lazyRoute(() => import('./pages/PrivacyPolicy'));
-const ContactPage = lazyRoute(() => import('./pages/ContactPage'));
-const TermsOfService = lazyRoute(() => import('./pages/TermsOfService'));
+const Landing = lazy(() => import('./pages/Landing'));
+const MissionInput = lazy(() => import('./pages/MissionInput'));
+const Results = lazy(() => import('./pages/Results'));
+const FunderDetail = lazy(() => import('./pages/FunderDetail'));
+const SavedFunders = lazy(() => import('./pages/SavedFunders'));
+const GrantWriter = lazy(() => import('./pages/GrantWriter'));
+const OrgSearchPage = lazy(() => import('./pages/OrgSearchPage'));
+const RecipientProfile = lazy(() => import('./pages/RecipientProfile'));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const SignupPage = lazy(() => import('./pages/SignupPage'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const NewProjectPage = lazy(() => import('./pages/NewProjectPage'));
+const ConversationalProjectSetup = lazy(() => import('./pages/ConversationalProjectSetup'));
+const ProjectWorkspace = lazy(() => import('./pages/ProjectWorkspace'));
+const BrowsePage = lazy(() => import('./pages/BrowsePage'));
+const UserSettingsPage = lazy(() => import('./pages/UserSettingsPage'));
+const PortfolioPage = lazy(() => import('./pages/PortfolioPage'));
+const MyTasksPage = lazy(() => import('./pages/MyTasksPage'));
+const TeamSettingsPage = lazy(() => import('./pages/TeamSettingsPage'));
+const SharedViewPage = lazy(() => import('./pages/SharedViewPage'));
+const ReportsPage = lazy(() => import('./pages/ReportsPage'));
+const ApplicationsPage = lazy(() => import('./pages/ApplicationsPage'));
+const MigrationImportPage = lazy(() => import('./pages/MigrationImportPage'));
+const OnboardingPage = lazy(() => import('./pages/OnboardingPage'));
+const NotFound = lazy(() => import('./pages/NotFound'));
+const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
+const ContactPage = lazy(() => import('./pages/ContactPage'));
+const TermsOfService = lazy(() => import('./pages/TermsOfService'));
 
 const RouteFallback = () => (
   <div className="min-h-[40vh] flex items-center justify-center text-gray-400 text-sm">

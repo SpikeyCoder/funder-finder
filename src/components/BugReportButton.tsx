@@ -26,21 +26,59 @@ interface TechnicalContext {
 
 // Error's name/message/stack are non-enumerable, so JSON.stringify(err) is
 // "{}". Spell them out so bug reports carry the actual failure.
+// Runs inside our console.error override, so it must never throw itself.
 function formatConsoleArg(arg: unknown): string {
+  try {
+    return formatArg(arg, 0);
+  } catch {
+    return '[unformattable value]';
+  }
+}
+
+function formatArg(arg: unknown, depth: number): string {
   if (typeof arg === 'string') return arg;
+  if (typeof arg === 'function') return `[function ${arg.name || 'anonymous'}]`;
+  if (typeof arg === 'symbol') return arg.toString();
   if (arg instanceof Error) {
-    // V8 prefixes the stack with "Name: message"; WebKit doesn't.
-    const frames = arg.stack
-      ?.split('\n')
-      .filter((l) => l.trim() && !l.startsWith(`${arg.name}:`))
+    const cause = (arg as { cause?: unknown }).cause;
+    const hasCause = cause !== undefined && cause !== null && depth < 2;
+    const causeText = hasCause ? ` caused by ${formatArg(cause, depth + 1)}` : '';
+    // When the cause is an Error it carries the useful frames; a wrapper's
+    // own only point at where it was wrapped, and its message often repeats
+    // the cause's. Reports are capped at 500 chars, so skip both then.
+    if (hasCause && cause instanceof Error) {
+      // Strip only the repeated tail ("Failed to load funder 123: Network
+      // error" → "Failed to load funder 123"), keeping the wrapper's context.
+      let own = String(arg.message);
+      if (cause.message && own.endsWith(cause.message)) {
+        own = own.slice(0, -cause.message.length).replace(/[\s:;,-]+$/, '');
+      }
+      return `${own ? `${arg.name}: ${own}` : arg.name}${causeText}`;
+    }
+    // Keep only frame-shaped lines: V8 "    at fn (url:1:2)", WebKit/Firefox
+    // "fn@url:1:2". Header/message lines vary by engine and may contain '@'.
+    // V8 starts the stack with the "Name: message" header (possibly several
+    // lines); strip it exactly so a message ending in e.g. "db@host:5432"
+    // isn't mistaken for a frame. WebKit/Firefox stacks have no header.
+    let stack = arg.stack ?? '';
+    for (const header of [String(arg), `Error: ${arg.message}`]) {
+      if (stack.startsWith(header)) {
+        stack = stack.slice(header.length);
+        break;
+      }
+    }
+    const frames = stack
+      .split('\n')
+      .filter((l) => /^\s*at\s|@\S+:\d+(:\d+)?$/.test(l))
       .slice(0, 3)
+      .map((l) => l.trim())
       .join(' | ');
-    return `${arg.name}: ${arg.message}${frames ? ` [${frames}]` : ''}`;
+    return `${arg.name}: ${arg.message}${frames ? ` [${frames}]` : ''}${causeText}`;
   }
   try {
     return JSON.stringify(arg) ?? String(arg);
   } catch {
-    return String(arg);
+    return Object.prototype.toString.call(arg);
   }
 }
 
@@ -153,13 +191,17 @@ export default function BugReportButton() {
 
     console.error = function (...args: unknown[]) {
       originalError.apply(console, args);
-      const msg = args.map(formatConsoleArg).join(' ');
+      const msg = args.map((a) => formatConsoleArg(a)).join(' ');
       captureError(msg);
     };
 
     // Capture uncaught errors
     const handleError = (event: ErrorEvent) => {
-      captureError(`${event.message} at ${event.filename}:${event.lineno}`);
+      // An Error carries its own frames; anything else thrown only has the
+      // event's location.
+      captureError(event.error instanceof Error
+        ? `Uncaught ${formatConsoleArg(event.error)}`
+        : `${event.message} at ${event.filename}:${event.lineno}`);
     };
     const handleRejection = (event: PromiseRejectionEvent) => {
       const msg = formatConsoleArg(event.reason);
