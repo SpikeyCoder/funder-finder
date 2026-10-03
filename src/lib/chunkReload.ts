@@ -115,7 +115,7 @@ export function reloadOnceForChunkError(error: unknown): ChunkReloadResult {
     // this page already wrote, since one reload can be for several keys.
     const previous = sessionStorage.getItem(PENDING_RELOAD_KEY);
     const pending = readMarker(previous);
-    const keys = pending && pending.path === window.location.pathname ? [...pending.keys, key] : [key];
+    const keys = pending && samePath(pending.path) === samePath(window.location.pathname) ? [...pending.keys, key] : [key];
     sessionStorage.setItem(PENDING_RELOAD_KEY, JSON.stringify({ keys, path: window.location.pathname, at: Date.now() }));
     try {
       sessionStorage.setItem(CHUNK_RELOAD_KEY, JSON.stringify([...seen, key].slice(-MAX_REMEMBERED)));

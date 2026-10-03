@@ -360,9 +360,10 @@ if (import.meta.main) {
       const rows = parseVitals(body);
       if (typeof rows === "string") return reply(400, rows);
       if (rows.length === 0) return reply(204);
-      // A larger value for a metric id replaces the earlier one (one that
-      // arrives late doesn't), and dates the row to now: a tab open for days
-      // still counts in the 24 h window. See record_vitals.
+      // The latest report (by its per-page seq) for a metric id replaces the
+      // earlier one, even if lower (INP can go down); one that arrives late
+      // doesn't. It dates the row to now, so a tab open for days still
+      // counts in the 24 h window. See record_vitals.
       write = () => rest("rpc/record_vitals", { p_rows: rows });
     }
 
