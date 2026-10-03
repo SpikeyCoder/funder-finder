@@ -34,8 +34,14 @@
 --   recipient_organizations_pkey       18 MB  joining candidates back
 --   idx_recipient_org_ein              14 MB  EIN search
 -- Not idx_recipient_org_name_trgm (name_normalized), which search doesn't use.
--- An index that no longer exists is skipped with a WARNING in the Postgres
--- log, so a rename shows up there instead of silently warming nothing.
+-- An index that no longer exists, or that pg_prewarm fails on, is skipped with
+-- a WARNING in the Postgres log (so a rename shows up there instead of
+-- silently warming nothing) and the rest are still warmed.
+--
+-- Locks: a run holds AccessShareLock on these indexes until it returns
+-- (~45 ms when cached, ~0.85 s when four of them were cold, measured on
+-- production). That conflicts only with DDL on these tables, not with the
+-- batch loads' INSERT/UPDATE.
 --
 -- Also purges pg_cron's run history (cron.job_run_details), which nothing
 -- purged: this job adds 288 rows a day.
@@ -47,6 +53,12 @@
 -- call with Content-Profile: extensions gets PGRST106), and pg_prewarm checks
 -- SELECT on the relation it's given, which for an index means its owner.
 CREATE EXTENSION IF NOT EXISTS pg_prewarm WITH SCHEMA extensions;
+
+-- Exists in production but wasn't in source control; declared here (a no-op
+-- there) like 20261002120000's indexes, since search and this job use it.
+CREATE INDEX IF NOT EXISTS idx_recipient_org_ein
+  ON public.recipient_organizations (ein) WHERE ein IS NOT NULL;
+
 -- IF NOT EXISTS keeps an install in another schema; the function below names
 -- extensions.pg_prewarm, so say so plainly rather than fail obscurely.
 DO $$
@@ -82,9 +94,13 @@ BEGIN
     v_rel := to_regclass(v_name);
     IF v_rel IS NULL THEN
       RAISE WARNING 'prewarm_search_indexes: index % does not exist; update this list', v_name;
-    ELSE
-      v_blocks := v_blocks + extensions.pg_prewarm(v_rel, 'read');
+      CONTINUE;
     END IF;
+    BEGIN
+      v_blocks := v_blocks + extensions.pg_prewarm(v_rel, 'read');
+    EXCEPTION WHEN OTHERS THEN
+      RAISE WARNING 'prewarm_search_indexes: could not warm %: %', v_name, SQLERRM;
+    END;
   END LOOP;
   RETURN v_blocks;
 END;
@@ -115,7 +131,9 @@ RETURNS void
 LANGUAGE sql
 SET search_path = ''
 AS $$
-  DELETE FROM cron.job_run_details WHERE end_time < now() - interval '30 days';
+  -- A run interrupted by a restart is marked failed with no end_time.
+  DELETE FROM cron.job_run_details
+   WHERE coalesce(end_time, start_time) < now() - interval '30 days';
 $$;
 
 REVOKE EXECUTE ON FUNCTION public.purge_cron_run_details() FROM PUBLIC, anon, authenticated;

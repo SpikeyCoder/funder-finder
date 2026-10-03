@@ -24,12 +24,14 @@ Three pg_cron jobs were scheduled by migration
 `20260515000000_retention_purge_jobs.sql` (pen-test 2026-05-15 finding
 **FM-2026-05-15-01**). The previous "planned" annotation in this table
 was an unenforced policy floor — rows could accumulate indefinitely
-until the migration shipped. Verify scheduled state with:
+until the migration shipped. Later migrations added more purge jobs
+(all named `purge-*`). Verify scheduled state with:
 
 ```sql
 SELECT jobname, schedule, command, active
 FROM cron.job
-WHERE jobname IN ('purge-access-log', 'purge-grant-drafts', 'purge-search-signal-events');
+WHERE jobname LIKE 'purge-%'
+ORDER BY schedule;
 ```
 
 Data subject requests (access / correction / erasure) are handled by
