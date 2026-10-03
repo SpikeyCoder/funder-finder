@@ -146,3 +146,10 @@ Deno.test("scrub strips a query string that holds an address, and masks a bare o
     "GET https://x.supabase.co/rest/v1/t failed for [email]",
   );
 });
+
+Deno.test("an address cut by the length limit is still masked (scrub before cut)", async () => {
+  const row = await parseCrash({ kind: "error", message: "x".repeat(490) + " jane.doe@example.org and more" }, "");
+  if (typeof row === "string") throw new Error(row);
+  assert(!row.message.includes("jane"));
+  assertEquals(row.message.length, 500);
+});

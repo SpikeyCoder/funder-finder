@@ -108,7 +108,8 @@ REVOKE ALL ON public.monitor_crashes, public.monitor_vitals, public.monitor_sla_
 -- One row per fingerprint: a repeat bumps the count and keeps the latest
 -- occurrence's details (its release and browser are the most useful). The
 -- kind becomes 'boundary' once any occurrence showed the error screen, so
--- the card says the worst way it was seen.
+-- the card says the worst way it was seen. A crash that comes back after
+-- 7 quiet days counts as a regression: it starts over and gets a new card.
 
 CREATE OR REPLACE FUNCTION public.record_client_crash(
   p_fingerprint text, p_kind text, p_name text, p_message text, p_stack text,
@@ -122,8 +123,12 @@ AS $$
   VALUES
     (p_fingerprint, p_kind, p_name, p_message, p_stack, p_component_stack, p_path, p_release, p_user_agent)
   ON CONFLICT (fingerprint) DO UPDATE
-    SET occurrences = c.occurrences + 1,
-        kind = CASE WHEN EXCLUDED.kind = 'boundary' THEN 'boundary' ELSE c.kind END,
+    SET occurrences = CASE WHEN c.last_seen < now() - interval '7 days' THEN 1 ELSE c.occurrences + 1 END,
+        first_seen = CASE WHEN c.last_seen < now() - interval '7 days' THEN now() ELSE c.first_seen END,
+        trello_card_url = CASE WHEN c.last_seen < now() - interval '7 days' THEN NULL ELSE c.trello_card_url END,
+        card_attempted_at = CASE WHEN c.last_seen < now() - interval '7 days' THEN NULL ELSE c.card_attempted_at END,
+        card_attempts = CASE WHEN c.last_seen < now() - interval '7 days' THEN 0 ELSE c.card_attempts END,
+        kind = CASE WHEN c.last_seen < now() - interval '7 days' OR EXCLUDED.kind = 'boundary' THEN EXCLUDED.kind ELSE c.kind END,
         last_seen = now(),
         message = EXCLUDED.message,
         stack = EXCLUDED.stack,
@@ -184,11 +189,15 @@ BEGIN
   DELETE FROM public.monitor_alerts WHERE last_carded_at < now() - interval '90 days';
   GET DIAGNOSTICS v_n = ROW_COUNT; v_deleted := v_deleted + v_n;
   -- The 15-minute sweep's own run history (96 rows a day), matched by its
-  -- jobid or its command as purge_prewarm_run_details does.
+  -- jobid or its command, and a run with no timestamps (failed before it
+  -- started) aged by its runid, as purge_prewarm_run_details does.
   DELETE FROM cron.job_run_details
    WHERE (jobid IN (SELECT jobid FROM cron.job WHERE jobname = 'monitor-sweep')
           OR command = 'SELECT public.invoke_monitor_sweep()')
-     AND coalesce(end_time, start_time) < now() - interval '30 days';
+     AND (coalesce(end_time, start_time) < now() - interval '30 days'
+          OR (start_time IS NULL AND end_time IS NULL
+              AND runid < (SELECT min(runid) FROM cron.job_run_details
+                            WHERE start_time >= now() - interval '30 days')));
   GET DIAGNOSTICS v_n = ROW_COUNT; v_deleted := v_deleted + v_n;
   RAISE LOG 'purge_monitoring: deleted % rows', v_deleted;
   RETURN v_deleted;

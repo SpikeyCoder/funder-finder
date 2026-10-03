@@ -61,6 +61,18 @@ export function currentBuild(): string {
   return src.split('/').pop() || 'dev';
 }
 
+// The keys this tab already reloaded for. Throws if sessionStorage can't be
+// read; a corrupt value counts as no history.
+function readReloaded(): string[] {
+  const raw = sessionStorage.getItem(CHUNK_RELOAD_KEY) || '[]';
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Whether this tab already reloaded automatically for this error, i.e. the
  * reload happened and didn't help. False if storage is unavailable (then no
@@ -68,8 +80,7 @@ export function currentBuild(): string {
  */
 export function alreadyReloadedFor(error: unknown): boolean {
   try {
-    const seen = JSON.parse(sessionStorage.getItem(CHUNK_RELOAD_KEY) || '[]');
-    return Array.isArray(seen) && seen.includes(reloadKey(error, window.location.pathname, currentBuild()));
+    return readReloaded().includes(reloadKey(error, window.location.pathname, currentBuild()));
   } catch {
     return false;
   }
@@ -84,16 +95,8 @@ export function alreadyReloadedFor(error: unknown): boolean {
 export function reloadOnceForChunkError(error: unknown): boolean {
   const key = reloadKey(error, window.location.pathname, currentBuild());
   try {
-    // A read error propagates to the outer catch (no reload); only a corrupt
-    // value resets the history.
-    const raw = sessionStorage.getItem(CHUNK_RELOAD_KEY) || '[]';
-    let seen: string[] = [];
-    try {
-      const parsed = JSON.parse(raw);
-      seen = Array.isArray(parsed) ? parsed : [];
-    } catch {
-      seen = [];
-    }
+    // A read error propagates to the catch below (no reload).
+    const seen = readReloaded();
     if (seen.includes(key)) return false;
     sessionStorage.setItem(CHUNK_RELOAD_KEY, JSON.stringify([...seen, key].slice(-MAX_REMEMBERED)));
   } catch {

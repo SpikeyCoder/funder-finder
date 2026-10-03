@@ -61,7 +61,6 @@ export interface VitalRow {
 
 // ── Pure helpers (unit-tested) ──────────────────────────────────────────────
 
-// Local part can't span URL syntax, so "…?email=eq.a@b.org" masks just the address.
 // Short words a message really contains, as opposed to minified names.
 const WORDS = new Set(["a", "an", "as", "at", "be", "by", "do", "id", "if", "in", "is", "it", "no", "of", "on", "or", "to", "up"]);
 const minified = (name: string) => /^[A-Za-z_$][\w$]?$/.test(name) && !WORDS.has(name.toLowerCase());
@@ -131,17 +130,18 @@ const release = (v: unknown): string => {
 export async function parseCrash(b: Record<string, unknown>, userAgent: string): Promise<CrashRow | string> {
   const kind = str(b.kind, 20);
   if (!KINDS.has(kind)) return "Invalid kind";
-  const message = scrub(str(b.message, 500));
+  // Scrub before cutting: a cut can leave half an address the pattern misses.
+  const message = scrub(str(b.message, 2000)).slice(0, 500);
   const name = str(b.name, 100) || "Error";
   if (!message && !b.stack) return "Empty report";
-  const stack = scrub(str(b.stack, 4000));
+  const stack = scrub(str(b.stack, 8000)).slice(0, 4000);
   return {
     fingerprint: await fingerprint(name, message, stack),
     kind,
     name,
     message,
     stack,
-    component_stack: scrub(str(b.componentStack, 2000)),
+    component_stack: scrub(str(b.componentStack, 4000)).slice(0, 2000),
     path: normalizePath(str(b.path, 500) || "/"),
     release: release(b.release),
     user_agent: userAgent.slice(0, 300),

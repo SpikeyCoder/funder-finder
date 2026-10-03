@@ -41,7 +41,9 @@ const FETCH_TIMEOUT_MS = 7000;
 
 // Search SLA: a check fails if it doesn't return 200 with at least one
 // result within SLA_MS (every query below has matches). The 3 s anon
-// timeout makes anything near it a near-miss.
+// timeout makes anything near it a near-miss. Each check is a whole
+// request, as a visitor makes it: this project's Edge Functions boot per
+// request, so boot time is part of what visitors wait for (~0.2 s).
 export const SLA_MS = 2000;
 const SLA_CHECK_TIMEOUT_MS = 5000;
 export const SLA_BREACHES_PER_HOUR = 2;
@@ -313,15 +315,6 @@ async function restCount(path: string): Promise<number> {
 type Summary = Record<string, number | string>;
 
 async function sweepSla(summary: Summary): Promise<void> {
-  // Untimed first request: wakes search-organizations if it has gone cold
-  // since the last sweep, so its boot time doesn't count against the SLA
-  // (visitors on a busy site rarely meet a cold function).
-  await fetch(`${SUPABASE_URL}/functions/v1/search-organizations`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` },
-    body: JSON.stringify({ query: "%%", limit: 1 }),
-    signal: AbortSignal.timeout(SLA_CHECK_TIMEOUT_MS),
-  }).then((r) => r.body?.cancel()).catch(() => {});
   const checks: SlaCheck[] = [];
   for (const q of SLA_QUERIES) checks.push(await runSlaCheck(q)); // one at a time, like visitors
   const res = await rest("monitor_sla_checks", {
@@ -428,10 +421,11 @@ if (import.meta.main) {
     // Without Trello only the SLA checks run: claiming crashes and alerts for
     // cards that can't be opened would use up their retries.
     const summary: Summary = {};
-    const parts = trelloConfigured()
+    const trello = trelloConfigured();
+    const parts = trello
       ? [["sla", sweepSla], ["crashes", sweepCrashes], ["vitals", sweepVitals]] as const
       : [["sla", sweepSla]] as const;
-    if (!trelloConfigured()) {
+    if (!trello) {
       console.error("monitor-sweep: TRELLO_API_KEY / TRELLO_TOKEN / TRELLO_LIST_ID unset; no cards opened");
       summary.trello = "unconfigured";
     }
