@@ -1,7 +1,6 @@
 // Run: deno test supabase/functions/process-organization-requests/
 import { assertEquals } from "jsr:@std/assert@1";
 import {
-  cronAuthorized,
   type IrsOrg,
   type Outcome,
   normalizeName,
@@ -12,6 +11,7 @@ import {
   reviewReason,
 } from "./index.ts";
 import { padEin } from "../_shared/ein.ts";
+import { cronAuthorized } from "../_shared/cron_auth.ts";
 
 const org = (name: string, state: string | null = "WA", ein = "123456789"): IrsOrg =>
   ({ ein, name, city: "Seattle", state, ntee_code: "B90" });

@@ -439,7 +439,9 @@ if (import.meta.main) {
     if (!cronAuthorized(req, Deno.env.get("CRON_SECRET") || "")) return json(401, { error: "Unauthorized" });
     if (!SUPABASE_URL || !SERVICE_KEY || !ANON_KEY) return json(500, { error: "Server config missing" });
 
-    // Each part runs even if another fails; failures are logged and reported.
+    // The parts run concurrently (they share no rows), so slow searches don't
+    // hold up carding; each runs even if another fails, and failures are
+    // logged and reported.
     // Without Trello only the SLA checks run (and are recorded): claiming
     // crashes and alerts for cards that can't be opened would use up their
     // retries.
@@ -452,14 +454,14 @@ if (import.meta.main) {
       console.error("monitor-sweep: TRELLO_API_KEY / TRELLO_TOKEN / TRELLO_LIST_ID unset; no cards opened");
       summary.trello = "unconfigured";
     }
-    for (const [name, part] of parts) {
+    await Promise.all(parts.map(async ([name, part]) => {
       try {
         await part(summary);
       } catch (err) {
         console.error(`monitor-sweep ${name} failed:`, err);
         summary[`${name}_error`] = String(err).slice(0, 200);
       }
-    }
+    }));
     const failed = Object.keys(summary).some((k) => k.endsWith("_error"));
     return json(failed ? 500 : 200, summary);
   });

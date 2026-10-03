@@ -1,5 +1,6 @@
 import { assert, assertEquals, assertNotEquals } from "jsr:@std/assert@1";
-import { fingerprint, fingerprintSource, normalizeMessage, normalizePath, parseCrash, parseVitals, readLimited, scrub } from "./index.ts";
+import { fingerprint, fingerprintSource, normalizeMessage, parseCrash, parseVitals, readLimited } from "./index.ts";
+import { normalizePath, scrub } from "../_shared/monitor_scrub.ts";
 
 Deno.test("scrub masks emails and drops query strings", () => {
   assertEquals(
@@ -178,4 +179,12 @@ Deno.test("an address cut by the length limit is still masked (scrub before cut)
   if (typeof row === "string") throw new Error(row);
   assert(!row.message.includes("jane"));
   assertEquals(row.message.length, 500);
+});
+
+Deno.test("fingerprint takes the file from the top frame, not a URL in Chrome's message line", () => {
+  const msg = "Failed to load https://fundermatch.org/assets/Foo-AbC12345.js";
+  const chrome = `TypeError: ${msg}\n    at load (https://fundermatch.org/assets/Search-Xy_9-abc.js:1:2)`;
+  const firefox = "load@https://fundermatch.org/assets/Search-Xy_9-abc.js:1:2";
+  assertEquals(fingerprintSource("TypeError", msg, chrome), fingerprintSource("TypeError", msg, firefox));
+  assertEquals(fingerprintSource("TypeError", msg, chrome).split("|")[2], "/assets/Search.js");
 });

@@ -17,10 +17,8 @@ import type { Metric } from 'web-vitals';
 import { currentBuild, isChunkLoadError } from './chunkReload';
 // Shared with the monitor-report Edge Function, so both scrub the same way.
 import { normalizePath, scrub } from '../../supabase/functions/_shared/monitor_scrub.ts';
+import { SUPABASE_URL } from './supabaseProject';
 
-export { normalizePath, scrub };
-
-const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const ENDPOINT = `${SUPABASE_URL}/functions/v1/monitor-report`;
 
 // One page load can't send more than this many crash reports (a render loop
@@ -175,17 +173,27 @@ export function installMonitoring(): void {
 
   // Core Web Vitals, sent whenever the page is hidden, and again on a later
   // hide if a value changed (INP and CLS keep growing while the page is
-  // open); the server keeps the latest per metric id. Each change is
-  // recorded with the route it happened on: with reportAllChanges,
-  // web-vitals calls back as an LCP candidate paints, a new worst interaction
-  // (INP) finishes or a layout shift (CLS) happens, so the path then is where
-  // the slow thing was, not where the visitor is when the tab is hidden.
-  // web-vitals also reports on hide, listening on window in the capture
-  // phase, so final values land before the flush below (on document) runs.
+  // open); the server keeps the latest per metric id. web-vitals also
+  // reports on hide, listening on window in the capture phase, so final
+  // values land before the flush below (on document) runs.
+  //
+  // Which page a value belongs to: LCP to the page that loaded (the URL
+  // first requested, before any redirect, or the one restored from the
+  // back/forward cache), since it measures that load. INP and CLS to the
+  // route at the time: with reportAllChanges, web-vitals calls back as a new
+  // worst interaction finishes or a layout shift happens, so that's where
+  // the slow thing was, not where the visitor is when the tab is hidden. (A
+  // click that navigates counts against the page it opens, whose render is
+  // what made it slow.)
+  let loadedPath = normalizePath(window.location.pathname);
+  window.addEventListener('pageshow', (e) => {
+    if (e.persisted) loadedPath = normalizePath(window.location.pathname);
+  });
   const pending = new Map<string, { m: Metric; path: string }>();
   const sentValues = new Map<string, number>();
   const record = (m: Metric) => {
-    if (sentValues.get(m.id) !== m.value) pending.set(m.id, { m, path: normalizePath(window.location.pathname) });
+    if (sentValues.get(m.id) === m.value) return;
+    pending.set(m.id, { m, path: m.name === 'LCP' ? loadedPath : normalizePath(window.location.pathname) });
   };
   // Loaded once the browser is idle (at most a second in), so its chunk
   // doesn't compete with the first page's; its observers read buffered

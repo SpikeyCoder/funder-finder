@@ -146,11 +146,21 @@ test('a corrupt stored value is treated as empty, not as a crash', () => {
 test('onReloadPageFor: only the page our reload loaded, for the same failure', () => {
   assert.equal(reloadOnceForChunkError(LINK), 'reloading');
   takeReloadMarker(); // the reloaded page starts
-  assert.equal(onReloadPageFor(LINK), true);
   assert.equal(reloadOnceForChunkError(LINK), 'already-reloaded');
   // A different failure on that page isn't the one we reloaded for.
   assert.equal(onReloadPageFor(fetchFail('Other-1.js')), false);
+  assert.equal(onReloadPageFor(LINK), true);
+  // Once: the same key failing again later in the tab is a separate blip.
+  assert.equal(onReloadPageFor(LINK), false);
   takeReloadMarker(); // any later page load (a manual Reload, say)
+  assert.equal(onReloadPageFor(LINK), false);
+});
+
+test('the reload marker expires a minute after startup', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  assert.equal(reloadOnceForChunkError(LINK), 'reloading');
+  takeReloadMarker();
+  t.mock.timers.tick(61_000);
   assert.equal(onReloadPageFor(LINK), false);
 });
 

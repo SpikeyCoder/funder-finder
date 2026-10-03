@@ -51,6 +51,9 @@ const MAX_REMEMBERED = 50;
 // reload loads takes it at startup (takeReloadMarker), so no later page
 // load, a manual Reload included, sees it.
 const PENDING_RELOAD_KEY = 'ff_chunk_pending_reload';
+// How long after startup a chunk failure still counts as the reload's
+// (the route's chunks load as the page first renders).
+const RELOAD_MARKER_MS = 60_000;
 let reloadedFor: string | null = null;
 
 export function reloadKey(error: unknown, pathname: string, build: string): string {
@@ -118,11 +121,15 @@ export function takeReloadMarker(): void {
   } catch {
     reloadedFor = null;
   }
+  if (reloadedFor !== null) setTimeout(() => (reloadedFor = null), RELOAD_MARKER_MS);
 }
 
-// Whether this page is the one our automatic reload for this error loaded,
-// so the same failure here means the reload didn't help. A later, separate
-// failure in the tab, or one after another full page load, isn't.
+// Whether this failure is the one our automatic reload was for, on the page
+// that reload loaded, as it first rendered: then the reload didn't help.
+// Answers true once; a later, separate failure in the tab (minutes on, or
+// after another full page load) isn't the reload's.
 export function onReloadPageFor(error: unknown): boolean {
-  return reloadedFor !== null && reloadedFor === reloadKey(error, window.location.pathname, currentBuild());
+  if (reloadedFor === null || reloadedFor !== reloadKey(error, window.location.pathname, currentBuild())) return false;
+  reloadedFor = null;
+  return true;
 }

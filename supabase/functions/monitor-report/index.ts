@@ -25,8 +25,6 @@ import { corsHeaders } from "../_shared/cors.ts";
 // The browser scrubs with the same module; redone here because reports are untrusted.
 import { normalizePath, scrub } from "../_shared/monitor_scrub.ts";
 
-export { normalizePath, scrub };
-
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
@@ -122,9 +120,12 @@ export function normalizeMessage(message: string): string {
  */
 export function fingerprintSource(name: string, message: string, stack: string): string {
   const msg = normalizeMessage(message);
-  // V8 "at fn (url:1:2)", Firefox/Safari "fn@url:1:2".
+  // V8 "at fn (url:1:2)", Firefox/Safari "fn@url:1:2". Frames only: V8's
+  // stack starts with "Name: message", and a URL in the message isn't where
+  // it was thrown.
   let file = "";
   for (const line of stack.split("\n")) {
+    if (!/^\s*at\s|@/.test(line)) continue;
     const m = line.match(/(?:https?:\/\/[^/\s)]+)?(\/[^\s():?#]+\.(?:js|mjs|cjs|ts|tsx))(?::\d+)?/);
     if (m) {
       // Vite's hashes are exactly 8 base64url characters, so they can contain

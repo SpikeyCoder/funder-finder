@@ -20,16 +20,17 @@ const transpile = (path) =>
 const webVitals = pathToFileURL(new URL('../node_modules/web-vitals/dist/web-vitals.js', import.meta.url).pathname).href;
 writeFileSync(join(dir, 'chunkReload.mjs'), transpile('src/lib/chunkReload'));
 writeFileSync(join(dir, 'monitor_scrub.mjs'), transpile('supabase/functions/_shared/monitor_scrub'));
+writeFileSync(join(dir, 'supabaseProject.mjs'), transpile('src/lib/supabaseProject'));
 writeFileSync(
   join(dir, 'monitoring.mjs'),
   transpile('src/lib/monitoring')
     .replace(/from ['"]\.\/chunkReload['"]/, "from './chunkReload.mjs'")
+    .replace(/from ['"]\.\/supabaseProject['"]/, "from './supabaseProject.mjs'")
     .replace(/from ['"][./]+supabase\/functions\/_shared\/monitor_scrub\.ts['"]/, "from './monitor_scrub.mjs'")
     .replace(/from ['"]web-vitals['"]/, `from '${webVitals}'`),
 );
-const { scrub, normalizePath, isNoise, describe, buildCrashReport } = await import(
-  pathToFileURL(join(dir, 'monitoring.mjs')).href
-);
+const { isNoise, describe, buildCrashReport } = await import(pathToFileURL(join(dir, 'monitoring.mjs')).href);
+const { scrub, normalizePath, ROUTES } = await import(pathToFileURL(join(dir, 'monitor_scrub.mjs')).href);
 
 test('scrub masks email addresses and strips query strings and fragments', () => {
   assert.equal(
@@ -49,7 +50,6 @@ test('normalizePath never lets a share token through', () => {
 });
 
 test("the route list matches App.tsx's routes", async () => {
-  const { ROUTES } = await import(pathToFileURL(join(dir, 'monitor_scrub.mjs')).href);
   const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
   const routes = [...app.matchAll(/path="([^"*]+)"/g)].map((m) => m[1].replace(/:\w+/g, ':id'));
   assert.deepEqual([...new Set(routes)].sort(), [...ROUTES].sort());
