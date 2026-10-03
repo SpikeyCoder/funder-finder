@@ -405,6 +405,11 @@ export async function sweepCrashes(summary: Summary, deadline: number): Promise<
   const select = "&order=card_attempts.asc,occurrences.desc,first_seen.asc" +
     "&select=fingerprint,kind,name,message,stack,component_stack,path,release,user_agent,occurrences,first_seen,last_seen,card_attempts,card_attempted_at,previous_card_url";
   const uncarded = "monitor_crashes?trello_card_url=is.null&card_uncertain_at=is.null";
+  // Waiting for the daily budget: not tried in the last day (nor the last
+  // hour), and, past MAX_CARD_TRIES, not in the last week. Also what the
+  // overflow card counts.
+  const freshFilter = `${uncarded}&or=(card_attempts.lt.${MAX_CARD_TRIES},card_counted_at.lt.${iso(now - WEEK_MS)})` +
+    `&and=(or(card_counted_at.is.null,card_counted_at.lt.${iso(now - DAY_MS)}),or(card_attempted_at.is.null,card_attempted_at.lt.${iso(now - RETRY_AFTER_MS)}))`;
   const [triedToday, retries, fresh] = await Promise.all([
     // Every crash whose card was tried in the last day counts against the
     // daily cap, opened or not: a Trello timeout may still have opened it.
@@ -414,14 +419,8 @@ export async function sweepCrashes(summary: Summary, deadline: number): Promise<
       `${uncarded}&card_attempts=lt.${MAX_CARD_ATTEMPTS}&card_attempted_at=lt.${iso(now - RETRY_AFTER_MS)}&card_counted_at=gte.${iso(now - DAY_MS)}` +
         `${select}&limit=${MAX_CRASH_CARDS}`,
     ),
-    // Not tried in the last day: each uses the daily budget.
-    restJson<CrashRow[]>(
-      // (And not tried in the last hour: one retried late in its day waits
-      // its hour like any retry.)
-      `${uncarded}&or=(card_attempts.lt.${MAX_CARD_TRIES},card_counted_at.lt.${iso(now - WEEK_MS)})` +
-        `&and=(or(card_counted_at.is.null,card_counted_at.lt.${iso(now - DAY_MS)}),or(card_attempted_at.is.null,card_attempted_at.lt.${iso(now - RETRY_AFTER_MS)}))` +
-        `${select}&limit=${MAX_CRASH_CARDS}`,
-    ),
+    // Waiting for the daily budget: each uses a slot.
+    restJson<CrashRow[]>(`${freshFilter}${select}&limit=${MAX_CRASH_CARDS}`),
   ]);
   const dayLeft = MAX_CRASH_CARDS_PER_DAY - triedToday;
   const freshPicked = new Set(fresh.slice(0, Math.max(0, dayLeft)));
@@ -474,9 +473,7 @@ export async function sweepCrashes(summary: Summary, deadline: number): Promise<
     "monitor_alerts?alert_key=eq.crash:overflow&select=alert_key,last_carded_at,trello_card_url",
   ))[0] ?? null;
   if (!alertDue(overflow, DAY_MS)) return;
-  const waiting = await restCount(
-    `monitor_crashes?trello_card_url=is.null&card_uncertain_at=is.null&or=(card_counted_at.is.null,card_counted_at.lt.${iso(now - DAY_MS)})`,
-  );
+  const waiting = await restCount(freshFilter);
   summary.crashes_waiting = waiting;
   if (waiting > 0) {
     const url = await openAlertCard("crash:overflow", DAY_MS, crashOverflowCard(waiting), overflow);

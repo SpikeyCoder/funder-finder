@@ -209,3 +209,10 @@ test('a marker is only taken by a load of the same page (not a duplicated tab el
   takeReloadMarker();
   assert.equal(onReloadPageFor(fetchFail('Shared-1.js')), false);
 });
+
+test('a trailing-slash redirect on reload is the same page', () => {
+  assert.equal(reloadOnceForChunkError(LINK), 'reloading'); // on /results
+  window.location.pathname = '/results/';
+  takeReloadMarker();
+  assert.equal(onReloadPageFor(LINK), true);
+});

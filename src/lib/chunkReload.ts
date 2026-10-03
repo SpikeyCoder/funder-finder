@@ -62,10 +62,13 @@ const MARKER_FRESH_MS = 120_000;
 let reloadedFor: string | null = null;
 let reloadedForUntil = 0;
 
+// "/search" and "/search/" are one page (the host may redirect between them).
+const samePath = (pathname: string) => pathname.replace(/(.)\/+$/, '$1');
+
 export function reloadKey(error: unknown, pathname: string, build: string): string {
   const message = String((error as { message?: unknown } | null)?.message ?? '');
   const chunk = FETCH_FAILURE.test(message) ? message.match(/[\w.-]+\.(?:js|css)\b/) : null;
-  return chunk ? `chunk:${chunk[0]}@${build}` : `path:${pathname}@${build}`;
+  return chunk ? `chunk:${chunk[0]}@${build}` : `path:${samePath(pathname)}@${build}`;
 }
 
 // The hashed entry chunk this page is running (index-AbC123.js), which
@@ -92,8 +95,9 @@ export type ChunkReloadResult = 'reloading' | 'already-reloaded' | 'unavailable'
 // Reloading pulls a fresh index.html plus valid chunks and almost always
 // recovers. Returns 'reloading' if a reload was started. Otherwise the caller
 // should show a manual "Reload" screen: 'already-reloaded' means we reloaded
-// for this chunk/path before and it didn't help (worth reporting), and
-// 'unavailable' that sessionStorage is: without it there's no way to remember
+// for this chunk/path before (whether that's worth reporting is
+// onReloadPageFor's call), and 'unavailable' that sessionStorage is: without
+// it there's no way to remember
 // that we already reloaded, so we don't auto-reload at all rather than risk
 // a loop.
 export function reloadOnceForChunkError(error: unknown): ChunkReloadResult {
@@ -128,7 +132,7 @@ export function takeReloadMarker(): void {
     const marker = JSON.parse(sessionStorage.getItem(PENDING_RELOAD_KEY) || 'null') as { key?: unknown; path?: unknown; at?: unknown } | null;
     sessionStorage.removeItem(PENDING_RELOAD_KEY);
     const age = typeof marker?.at === 'number' ? Date.now() - marker.at : NaN;
-    const samePage = marker?.path === window.location.pathname;
+    const samePage = typeof marker?.path === 'string' && samePath(marker.path) === samePath(window.location.pathname);
     if (typeof marker?.key === 'string' && samePage && age >= 0 && age < MARKER_FRESH_MS) reloadedFor = marker.key;
   } catch {
     // Unreadable or corrupt: not a reload.

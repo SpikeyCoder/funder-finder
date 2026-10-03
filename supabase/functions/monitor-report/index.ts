@@ -90,7 +90,9 @@ function quoted(q: string, inner: string): string {
   if (!/^[A-Za-z_$][\w$.-]{0,39}$/.test(inner)) return "<str>";
   // A long token with digits in it is an id ('abcdef1234', 'a1b2c3d4…').
   if (inner.length >= 8 && /\d/.test(inner) && !inner.includes(".")) return "<str>";
-  if (!inner.includes(".")) return q + inner + q;
+  // A quoted minified name ("of 'e'", "'Xt' is undefined") is renamed by
+  // every build.
+  if (!inner.includes(".")) return minified(inner) ? q + "<id>" + q : q + inner + q;
   // A dotted path starts with a variable, which minifying renames (even to
   // a word like 'a'); the property names after it keep their names.
   const [first, ...props] = inner.split(".");

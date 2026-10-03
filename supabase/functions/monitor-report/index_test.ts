@@ -310,3 +310,12 @@ Deno.test("parseVitals passes each metric's seq through, and checks it", () => {
   assertEquals(parseVitals({ metrics: [{ ...base, seq: -1 }] }), "Invalid seq");
   assertEquals(parseVitals({ metrics: [{ ...base, seq: 1.5 }] }), "Invalid seq");
 });
+
+Deno.test("a quoted minified name is a name", () => {
+  assertEquals(
+    normalizeMessage("Cannot destructure property 'data' of 'e' as it is undefined."),
+    normalizeMessage("Cannot destructure property 'data' of 'Qr' as it is undefined."),
+  );
+  assertEquals(normalizeMessage("Xt is not a function. (In 'Xt(e)', 'Xt' is undefined)"), normalizeMessage("Ab is not a function. (In 'Ab(e)', 'Ab' is undefined)"));
+  assertEquals(normalizeMessage("Cannot read properties of undefined (reading 'name')"), "Cannot read properties of undefined (reading 'name')");
+});

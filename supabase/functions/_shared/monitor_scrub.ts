@@ -30,9 +30,6 @@ export function scrub(text: string): string {
     .replace(EMAIL, "[email]");
 }
 
-// The app's routes (src/App.tsx; tests/monitoring.test.mjs checks they match).
-// ':id' marks a parameter. /shared/:id is a share link whose id is a secret
-// token: it must never be stored or shown.
 /**
  * A stack frame line, ending in a line number: V8 "    at fn (url:1:2)"
  * (indented, unlike a line of a multi-line message that starts "at …");
@@ -52,6 +49,9 @@ export function errorTypeName(name: unknown): string {
   return typeof name === "string" && /^[A-Za-z_$][\w$]{0,60}(?:Error|Exception)$|^NonError$/.test(name) ? name : "Error";
 }
 
+// The app's routes (src/App.tsx; tests/monitoring.test.mjs checks they match).
+// ':id' marks a parameter. /shared/:id is a share link whose id is a secret
+// token: it must never be stored or shown.
 export const ROUTES = [
   "/", "/applications", "/browse", "/contact", "/dashboard", "/funder/:id", "/grant-writer", "/import",
   "/login", "/mission", "/onboarding/first-project", "/onboarding/matches", "/onboarding/profile",
