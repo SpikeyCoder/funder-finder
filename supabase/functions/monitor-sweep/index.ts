@@ -1,7 +1,8 @@
 /**
  * monitor-sweep — Supabase Edge Function (scheduled)
  *
- * FM-2026-10-03-02. Every 15 minutes (pg_cron → invoke_monitor_sweep(), see
+ * FM-2026-10-03-02. Every 15 minutes, at :06/:21/:36/:51 (pg_cron →
+ * invoke_monitor_sweep(), see
  * migration 20261003140000) it:
  *
  *   1. times live searches through search-organizations, as a visitor would
@@ -324,7 +325,7 @@ async function restCount(path: string): Promise<number> {
 
 type Summary = Record<string, number | string>;
 
-async function sweepSla(summary: Summary): Promise<void> {
+async function sweepSla(summary: Summary, trello: boolean): Promise<void> {
   const checks: SlaCheck[] = [];
   for (const q of SLA_QUERIES) checks.push(await runSlaCheck(q)); // one at a time, like visitors
   const res = await rest("monitor_sla_checks", {
@@ -340,11 +341,14 @@ async function sweepSla(summary: Summary): Promise<void> {
     `monitor_sla_checks?checked_at=gte.${encodeURIComponent(since)}&order=checked_at.asc&select=check_name,ok,status,ms,detail,checked_at`,
   );
   if (!slaBreached(hour)) return;
+  summary.sla_breached = "yes";
+  // Without Trello, don't claim the alert for a card that can't be opened.
+  if (!trello) return;
   const url = await openAlertCard("sla:search", SLA_COOLDOWN_MS, slaCard(hour));
   if (url) summary.sla_card = url;
 }
 
-async function sweepCrashes(summary: Summary): Promise<void> {
+async function sweepCrashes(summary: Summary, _trello: boolean): Promise<void> {
   const now = Date.now();
   const iso = (ms: number) => encodeURIComponent(new Date(ms).toISOString());
   const cardedToday = await restCount(
@@ -391,7 +395,7 @@ async function sweepCrashes(summary: Summary): Promise<void> {
   }
 }
 
-async function sweepVitals(summary: Summary): Promise<void> {
+async function sweepVitals(summary: Summary, _trello: boolean): Promise<void> {
   const breaches = await restJson<VitalsBreach[]>("rpc/monitor_vitals_breaches", {
     method: "POST",
     body: JSON.stringify({ p_min_samples: VITALS_MIN_SAMPLES }),
@@ -402,14 +406,15 @@ async function sweepVitals(summary: Summary): Promise<void> {
     (await restJson<AlertRow[]>("monitor_alerts?alert_key=like.vitals:*&select=alert_key,last_carded_at,trello_card_url"))
       .map((a) => [a.alert_key, a]),
   );
+  // Cards actually opened (a claim whose card failed has no URL), as for crashes.
   const dayAgo = Date.now() - DAY_MS;
-  const cardedToday = [...alerts.values()].filter((a) => Date.parse(a.last_carded_at) >= dayAgo).length;
+  const cardedToday = [...alerts.values()]
+    .filter((a) => a.trello_card_url !== null && Date.parse(a.last_carded_at) >= dayAgo).length;
   let budget = Math.min(MAX_VITALS_CARDS, MAX_VITALS_CARDS_PER_DAY - cardedToday);
   let carded = 0;
   for (const b of breaches) {
     if (budget <= 0) break;
     const key = `vitals:${b.metric}:${b.path}`;
-    if (!alertDue(alerts.get(key), VITALS_COOLDOWN_MS)) continue;
     if (await openAlertCard(key, VITALS_COOLDOWN_MS, vitalsCard(b), alerts.get(key) ?? null)) {
       carded++;
       budget--;
@@ -441,7 +446,7 @@ if (import.meta.main) {
     }
     for (const [name, part] of parts) {
       try {
-        await part(summary);
+        await part(summary, trello);
       } catch (err) {
         console.error(`monitor-sweep ${name} failed:`, err);
         summary[`${name}_error`] = String(err).slice(0, 200);

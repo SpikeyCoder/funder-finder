@@ -62,13 +62,13 @@ export function isNoise(error: unknown, message: string, stack: string, chunkGav
   if (isChunkLoadError(error)) return !chunkGaveUp;
   if (/^Script error\.?$/i.test(message.trim())) return true;
   if (/ResizeObserver loop/i.test(message)) return true;
+  if (/(?:chrome|moz|safari(?:-web)?)-extension:\/\//i.test(stack)) return true;
   // Lost connections and cancelled requests, in each browser's wording: the
   // network, not our code. Unless the error screen showed: a page that breaks
   // when a request fails is a bug worth a card.
   if (screenShown) return false;
   if (/^(?:TypeError: )?(?:Failed to fetch|Load failed|NetworkError when attempting to fetch resource\.?|Network request failed)$/i.test(message.trim())) return true;
-  if ((error as { name?: unknown } | null)?.name === 'AbortError') return true;
-  return /(?:chrome|moz|safari(?:-web)?)-extension:\/\//i.test(stack);
+  return (error as { name?: unknown } | null)?.name === 'AbortError';
 }
 
 /** Name, message and stack of anything that can be thrown. */
@@ -175,15 +175,19 @@ export function installMonitoring(): void {
   const record = (m: Metric) => {
     if (sentValues.get(m.id) !== m.value) pending.set(m.id, m);
   };
-  // Loaded after first render, off the critical path; its observers read
-  // buffered entries, so nothing measured before it loads is lost.
-  void import('web-vitals')
-    .then(({ onLCP, onINP, onCLS }) => {
-      onLCP(record);
-      onINP(record);
-      onCLS(record);
-    })
-    .catch(() => {});
+  // Loaded once the browser is idle, so its chunk doesn't compete with the
+  // first page's; its observers read buffered entries, so nothing measured
+  // before it loads is lost.
+  const load = () =>
+    void import('web-vitals')
+      .then(({ onLCP, onINP, onCLS }) => {
+        onLCP(record);
+        onINP(record);
+        onCLS(record);
+      })
+      .catch(() => {});
+  if ('requestIdleCallback' in window) window.requestIdleCallback(load, { timeout: 5000 });
+  else setTimeout(load, 2000);
   // LCP describes the page load, so it keeps the landing page's path; INP
   // and CLS accumulate across client-side navigations, so they take the
   // path the visitor is on when they're reported.

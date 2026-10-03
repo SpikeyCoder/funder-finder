@@ -218,8 +218,10 @@ SELECT cron.schedule(
 -- ── The sweep ───────────────────────────────────────────────────────────────
 -- Called by pg_cron through pg_net, authenticated with CRON_SECRET from Vault,
 -- exactly like invoke_organization_request_processor (20261002140000). A
--- no-op until both Vault secrets exist. At :09, :24, :39, :54: clear of the
--- 15-minute and hourly jobs and of prewarm-search-indexes (:02, :07, …).
+-- no-op until both Vault secrets exist. At :06, :21, :36, :51: clear of the
+-- 15-minute and hourly jobs, and 4 minutes after a prewarm-search-indexes
+-- run (:02, :07, …), when its caches are coldest, so the SLA checks see
+-- what visitors see at the worst point rather than the best.
 
 CREATE OR REPLACE FUNCTION public.invoke_monitor_sweep()
 RETURNS void
@@ -250,6 +252,6 @@ REVOKE EXECUTE ON FUNCTION public.invoke_monitor_sweep() FROM PUBLIC, anon, auth
 
 SELECT cron.schedule(
   'monitor-sweep',
-  '9-59/15 * * * *',
+  '6-59/15 * * * *',
   $$SELECT public.invoke_monitor_sweep()$$
 );

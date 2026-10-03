@@ -87,6 +87,10 @@ test('network failures and aborts are noise, in each browser\'s wording', () => 
   // But a request failure that brought up the error screen is a bug.
   assert.equal(buildCrashReport('boundary', new TypeError('Failed to fetch'), '/search', 'b').message, 'Failed to fetch');
   assert.equal(buildCrashReport('rejection', new TypeError('Failed to fetch'), '/search', 'b'), null);
+  // An extension's error is noise even when it reaches the error screen.
+  const ext = new TypeError('boom');
+  ext.stack = 'TypeError: boom\n    at x (chrome-extension://abc/content.js:1:1)';
+  assert.equal(buildCrashReport('boundary', ext, '/', 'b'), null);
 });
 
 test('chunk-load failures are noise unless the automatic reload already failed', () => {
