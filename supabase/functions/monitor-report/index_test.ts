@@ -48,8 +48,8 @@ Deno.test("fingerprint survives renamed minified functions and hashes containing
   assertEquals(await fingerprint("Error", "x", a), await fingerprint("Error", "x", b));
   assert(fingerprintSource("Error", "x", a).endsWith("|/assets/LoginPage.js"));
   // A dashed module name keeps its name, loses only the hash.
-  assert(fingerprintSource("Error", "x", "at f (https://x/assets/chunk-reload-AbC12345.js:1:1)").endsWith("|/assets/chunk-reload.js"));
-  assert(fingerprintSource("Error", "x", "at f (https://x/assets/ab-cd-AbC12345.js:1:1)").endsWith("|/assets/ab-cd.js"));
+  assert(fingerprintSource("Error", "x", "    at f (https://x/assets/chunk-reload-AbC12345.js:1:1)").endsWith("|/assets/chunk-reload.js"));
+  assert(fingerprintSource("Error", "x", "    at f (https://x/assets/ab-cd-AbC12345.js:1:1)").endsWith("|/assets/ab-cd.js"));
 });
 
 Deno.test("message normalisation keeps the meaning, drops values and minified names", () => {
@@ -284,4 +284,15 @@ Deno.test("HTTP statuses: kept right after an HTTP-ish word, not elsewhere", () 
   assert(normalizeMessage("Assistant returned 401") !== normalizeMessage("Assistant returned 503"));
   assertEquals(normalizeMessage("Funder 452 not found"), normalizeMessage("Funder 517 not found"));
   assertEquals(normalizeMessage("Error 401 Unauthorized"), "Error 401 Unauthorized");
+});
+
+Deno.test("a multi-line message's \"at …\" line isn't a stack frame", async () => {
+  const message = "Import failed\nat row 12: Jane Doe, phone 5551234";
+  const row = await parseCrash({
+    kind: "error", name: "Error", message,
+    stack: `Error: ${message}\n    at f (https://fundermatch.org/assets/a.js:1:2)`,
+  }, "");
+  if (typeof row === "string") throw new Error(row);
+  assertEquals(row.stack, "    at f (https://fundermatch.org/assets/a.js:1:2)");
+  assertEquals(normalizeMessage("I can't do that"), "I can't do that");
 });

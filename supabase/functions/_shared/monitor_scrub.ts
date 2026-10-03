@@ -33,12 +33,13 @@ export function scrub(text: string): string {
 // ':id' marks a parameter. /shared/:id is a share link whose id is a secret
 // token: it must never be stored or shown.
 /**
- * A stack frame line: V8 "    at fn (url:1:2)"; Firefox/Safari "fn@url:1:2"
- * (no spaces before the @, unlike a message that mentions "@scope/pkg",
- * except Safari's "global code@…" and the like). Not V8's first line,
- * "Name: message".
+ * A stack frame line, ending in a line number: V8 "    at fn (url:1:2)"
+ * (indented, unlike a line of a multi-line message that starts "at …");
+ * Firefox/Safari "fn@url:1:2" (no spaces before the @, unlike a message that
+ * mentions "@scope/pkg", except Safari's "global code@…" and the like).
+ * Not V8's first line, "Name: message".
  */
-export const FRAME = /^\s*at\s|^(?:[^\s@]*|(?:global|module|eval) code)@\S/;
+export const FRAME = /^(?:\s+at\s.*|(?:[^\s@]*|(?:global|module|eval) code)@\S.*):\d+(?::\d+)?\)?$/;
 
 /**
  * An error's name as reported, if it looks like an error type (TypeError,

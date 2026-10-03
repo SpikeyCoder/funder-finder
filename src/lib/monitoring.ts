@@ -202,7 +202,7 @@ export function installMonitoring(): void {
     // `throw undefined`, `throw null`, `throw 0`: nothing to go on, as for
     // an empty rejection.
     if (!m || (!m[1] && /^(?:undefined|null|-?\d*)$/.test(m[2].trim()))) return;
-    reportCrash('error', { name: m[1] || 'Error', message: m[2], stack: `at ${event.filename}:${event.lineno}` });
+    reportCrash('error', { name: m[1] || 'Error', message: m[2], stack: `    at ${event.filename}:${event.lineno}:${event.colno}` });
   });
   window.addEventListener('unhandledrejection', (event) => reportCrash('rejection', event.reason));
 

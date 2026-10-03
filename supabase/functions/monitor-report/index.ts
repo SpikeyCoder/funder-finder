@@ -67,7 +67,7 @@ export interface VitalRow {
 
 // Short words a message really contains, as opposed to minified names.
 const WORDS = new Set([
-  "a", "am", "an", "as", "at", "be", "by", "do", "go", "he", "id", "if", "in", "is", "it", "me", "my", "no", "of", "ok", "on",
+  "a", "am", "an", "as", "at", "be", "by", "do", "go", "he", "i", "id", "if", "in", "is", "it", "me", "my", "no", "of", "ok", "on",
   "or", "so", "to", "up", "us", "we",
   // Units.
   "gb", "kb", "mb", "ms", "px",

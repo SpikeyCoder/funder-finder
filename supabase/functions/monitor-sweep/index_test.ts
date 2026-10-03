@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "jsr:@std/assert@1";
-import { alertDue, TIMEOUT_PLACEHOLDER, cardUrl, crashCard, crashOverflowCard, pickCrashes, slaBreached, slaCard, vitalsCard } from "./index.ts";
+import { alertDue, cardUrl, crashCard, crashOverflowCard, slaBreached, slaCard, vitalsCard } from "./index.ts";
 
 const crash = {
   fingerprint: "f".repeat(64),
@@ -109,19 +109,3 @@ Deno.test("a regression's card links the earlier one", () => {
   assert(!crashCard(crash).desc.includes("earlier card"));
 });
 
-Deno.test("pickCrashes: retries within the day use no daily budget; 5 calls a run", () => {
-  const now = Date.parse("2026-10-03T12:00:00Z");
-  const fresh = (n: string) => ({ n, card_attempted_at: null });
-  const retry = (n: string) => ({ n, card_attempted_at: "2026-10-03T10:00:00Z" }); // tried 2 h ago
-  const old = (n: string) => ({ n, card_attempted_at: "2026-10-01T10:00:00Z" }); // tried 2 days ago: counts anew
-  const names = (xs: { n: string }[]) => xs.map((x) => x.n).join(",");
-  assertEquals(names(pickCrashes([retry("a"), fresh("b"), fresh("c"), old("d")], 1, now)), "a,b");
-  assertEquals(names(pickCrashes([fresh("b"), retry("a")], 0, now)), "a");
-  assertEquals(pickCrashes(Array.from({ length: 9 }, (_, i) => fresh(String(i))), 10, now).length, 5);
-});
-
-Deno.test("the timeout placeholder matches what record_client_crash looks for", () => {
-  // supabase/migrations/20261003140000: trello_card_url LIKE '(Trello timed out%'
-  assert(TIMEOUT_PLACEHOLDER.startsWith("(Trello timed out"));
-  assertEquals(cardUrl("timeout"), TIMEOUT_PLACEHOLDER);
-});
