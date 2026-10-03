@@ -34,7 +34,11 @@ Free and in-house (FM-2026-10-03-02; migration `20261003140000`):
 - **Crashes.** The browser reports the error screen, uncaught errors and
   unhandled promise rejections to the `monitor-report` Edge Function, which
   groups them by fingerprint. Every 15 minutes `monitor-sweep` opens a
-  Trello card for each new kind of crash (at most 5 per run).
+  Trello card for each new kind of crash, most frequent first: at most 5
+  per run and 10 per 24 h. Past that, one summary card a day says how many
+  kinds are waiting (they're carded as the limit allows; query
+  `monitor_crashes where trello_card_url is null`). A kind that comes back
+  after 7 quiet days gets a new card linking the earlier one.
 - **Page speed.** Each page view's Core Web Vitals (LCP, INP, CLS, via
   `web-vitals`) are recorded. A page whose 75th-percentile value over 24 h is
   "poor", across at least 20 page views, gets a card (at most weekly per page

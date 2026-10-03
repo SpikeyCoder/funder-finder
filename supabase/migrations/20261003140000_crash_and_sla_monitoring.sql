@@ -166,16 +166,18 @@ LANGUAGE sql
 STABLE
 SET search_path = ''
 AS $$
-  SELECT v.metric, v.path, count(*) AS samples,
-         percentile_cont(0.75) WITHIN GROUP (ORDER BY v.value) AS p75,
-         avg((v.rating = 'poor')::int)::double precision AS poor_share
-    FROM public.monitor_vitals v
-   WHERE v.created_at >= now() - interval '24 hours'
-   GROUP BY v.metric, v.path
-  HAVING count(*) >= p_min_samples
-     AND percentile_cont(0.75) WITHIN GROUP (ORDER BY v.value) >
-         CASE v.metric WHEN 'LCP' THEN 4000 WHEN 'INP' THEN 500 ELSE 0.25 END
-   ORDER BY count(*) DESC;
+  SELECT g.metric, g.path, g.samples, g.p75, g.poor_share
+    FROM (
+      SELECT v.metric, v.path, count(*) AS samples,
+             percentile_cont(0.75) WITHIN GROUP (ORDER BY v.value) AS p75,
+             avg((v.rating = 'poor')::int)::double precision AS poor_share
+        FROM public.monitor_vitals v
+       WHERE v.created_at >= now() - interval '24 hours'
+       GROUP BY v.metric, v.path
+      HAVING count(*) >= p_min_samples
+    ) g
+   WHERE g.p75 > CASE g.metric WHEN 'LCP' THEN 4000 WHEN 'INP' THEN 500 ELSE 0.25 END
+   ORDER BY g.samples DESC;
 $$;
 
 REVOKE EXECUTE ON FUNCTION public.monitor_vitals_breaches(integer) FROM PUBLIC, anon, authenticated;
