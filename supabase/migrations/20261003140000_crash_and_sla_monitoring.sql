@@ -118,17 +118,20 @@ RETURNS void
 LANGUAGE sql
 SET search_path = ''
 AS $$
+  -- A regression first starts over as if new (count 0, no card; the upsert
+  -- below then counts it), so the 7-day rule lives in one place.
+  UPDATE public.monitor_crashes
+     SET occurrences = 0, first_seen = now(), kind = p_kind,
+         trello_card_url = NULL, card_attempted_at = NULL, card_attempts = 0
+   WHERE fingerprint = p_fingerprint AND last_seen < now() - interval '7 days';
+
   INSERT INTO public.monitor_crashes AS c
     (fingerprint, kind, name, message, stack, component_stack, path, release, user_agent)
   VALUES
     (p_fingerprint, p_kind, p_name, p_message, p_stack, p_component_stack, p_path, p_release, p_user_agent)
   ON CONFLICT (fingerprint) DO UPDATE
-    SET occurrences = CASE WHEN c.last_seen < now() - interval '7 days' THEN 1 ELSE c.occurrences + 1 END,
-        first_seen = CASE WHEN c.last_seen < now() - interval '7 days' THEN now() ELSE c.first_seen END,
-        trello_card_url = CASE WHEN c.last_seen < now() - interval '7 days' THEN NULL ELSE c.trello_card_url END,
-        card_attempted_at = CASE WHEN c.last_seen < now() - interval '7 days' THEN NULL ELSE c.card_attempted_at END,
-        card_attempts = CASE WHEN c.last_seen < now() - interval '7 days' THEN 0 ELSE c.card_attempts END,
-        kind = CASE WHEN c.last_seen < now() - interval '7 days' OR EXCLUDED.kind = 'boundary' THEN EXCLUDED.kind ELSE c.kind END,
+    SET occurrences = c.occurrences + 1,
+        kind = CASE WHEN EXCLUDED.kind = 'boundary' THEN 'boundary' ELSE c.kind END,
         last_seen = now(),
         message = EXCLUDED.message,
         stack = EXCLUDED.stack,

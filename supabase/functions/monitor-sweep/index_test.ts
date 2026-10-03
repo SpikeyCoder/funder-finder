@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "jsr:@std/assert@1";
-import { alertDue, crashCard, crashOverflowCard, slaBreached, slaCard, vitalsCard } from "./index.ts";
+import { alertDue, cardUrl, crashCard, crashOverflowCard, slaBreached, slaCard, vitalsCard } from "./index.ts";
 import { cronAuthorized } from "../_shared/cron_auth.ts";
 
 const crash = {
@@ -49,6 +49,13 @@ Deno.test("alerts: due when new, after the quiet period, or an hour after a clai
 Deno.test("an SLA check with no results counts as failed (checked in runSlaCheck's detail)", () => {
   // slaBreached only counts ok=false; runSlaCheck sets ok=false for an empty result.
   assertEquals(slaBreached([{ ok: false }, { ok: false }]), true);
+});
+
+Deno.test("a Trello timeout is recorded (no duplicate card); failures and no config aren't", () => {
+  assertEquals(cardUrl("https://trello.com/c/x"), "https://trello.com/c/x");
+  assert(cardUrl("timeout")!.includes("timed out"));
+  assertEquals(cardUrl(null), null);
+  assertEquals(cardUrl("unconfigured"), null);
 });
 
 Deno.test("overflow card says how many crashes wait", () => {

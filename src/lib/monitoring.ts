@@ -13,7 +13,7 @@
 // Privacy: no user id, IP or query string is sent; paths are reduced to the
 // app's route (ids and share tokens become :id). Email addresses in error
 // text are masked here and again on the server.
-import { onCLS, onINP, onLCP, type Metric } from 'web-vitals';
+import type { Metric } from 'web-vitals';
 import { currentBuild, isChunkLoadError } from './chunkReload';
 // Shared with the monitor-report Edge Function, so both scrub the same way.
 import { normalizePath, scrub } from '../../supabase/functions/_shared/monitor_scrub.ts';
@@ -58,12 +58,14 @@ export interface VitalsReport {
  * chunk-load failures (ErrorBoundary reloads for those; see chunkReload.ts)
  * unless the reload already happened and didn't help (`chunkGaveUp`).
  */
-export function isNoise(error: unknown, message: string, stack: string, chunkGaveUp = false): boolean {
+export function isNoise(error: unknown, message: string, stack: string, chunkGaveUp = false, screenShown = false): boolean {
   if (isChunkLoadError(error)) return !chunkGaveUp;
   if (/^Script error\.?$/i.test(message.trim())) return true;
   if (/ResizeObserver loop/i.test(message)) return true;
   // Lost connections and cancelled requests, in each browser's wording: the
-  // network, not our code.
+  // network, not our code. Unless the error screen showed: a page that breaks
+  // when a request fails is a bug worth a card.
+  if (screenShown) return false;
   if (/^(?:TypeError: )?(?:Failed to fetch|Load failed|NetworkError when attempting to fetch resource\.?|Network request failed)$/i.test(message.trim())) return true;
   if ((error as { name?: unknown } | null)?.name === 'AbortError') return true;
   return /(?:chrome|moz|safari(?:-web)?)-extension:\/\//i.test(stack);
@@ -98,11 +100,11 @@ export function buildCrashReport(
   chunkGaveUp = false,
 ): CrashReport | null {
   const { name, message, stack } = describe(error);
-  if (isNoise(error, message, stack, chunkGaveUp)) return null;
+  if (isNoise(error, message, stack, chunkGaveUp, kind === 'boundary')) return null;
   return {
     type: 'crash',
     kind,
-    name: name.slice(0, 100),
+    name: scrub(name).slice(0, 100),
     message: scrub(message).slice(0, 500),
     stack: scrub(stack).slice(0, 4000),
     componentStack: scrub(componentStack).slice(0, 2000),
@@ -165,16 +167,23 @@ export function installMonitoring(): void {
   // Core Web Vitals, sent whenever the page is hidden: web-vitals reports a
   // metric's value then, and again on a later hide if it changed (INP and CLS
   // keep growing while the page is open). Only changed values are sent; the
-  // server keeps the latest per metric id. web-vitals' listeners are
-  // registered first, so they run before the flush below.
+  // server keeps the latest per metric id. web-vitals listens on window in
+  // the capture phase, so it reports before the flush below (on document)
+  // runs, whenever it was loaded.
   const pending = new Map<string, Metric>();
   const sentValues = new Map<string, number>();
   const record = (m: Metric) => {
     if (sentValues.get(m.id) !== m.value) pending.set(m.id, m);
   };
-  onLCP(record);
-  onINP(record);
-  onCLS(record);
+  // Loaded after first render, off the critical path; its observers read
+  // buffered entries, so nothing measured before it loads is lost.
+  void import('web-vitals')
+    .then(({ onLCP, onINP, onCLS }) => {
+      onLCP(record);
+      onINP(record);
+      onCLS(record);
+    })
+    .catch(() => {});
   // LCP describes the page load, so it keeps the landing page's path; INP
   // and CLS accumulate across client-side navigations, so they take the
   // path the visitor is on when they're reported.

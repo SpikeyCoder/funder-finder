@@ -84,6 +84,9 @@ test('network failures and aborts are noise, in each browser\'s wording', () => 
   }
   assert.equal(isNoise(new DOMException('The user aborted a request.', 'AbortError'), 'The user aborted a request.', ''), true);
   assert.equal(isNoise(new TypeError('Failed to fetch funders: 500'), 'Failed to fetch funders: 500', ''), false);
+  // But a request failure that brought up the error screen is a bug.
+  assert.equal(buildCrashReport('boundary', new TypeError('Failed to fetch'), '/search', 'b').message, 'Failed to fetch');
+  assert.equal(buildCrashReport('rejection', new TypeError('Failed to fetch'), '/search', 'b'), null);
 });
 
 test('chunk-load failures are noise unless the automatic reload already failed', () => {
@@ -100,6 +103,12 @@ test('describe handles errors, error-like objects, strings and odd values', () =
   circular.self = circular;
   assert.equal(describe(circular).name, 'NonError'); // no throw
   assert.equal(describe(undefined).message, 'undefined');
+});
+
+test('the error name is scrubbed too', () => {
+  const err = new Error('x');
+  err.name = 'LookupError(jane@example.org)';
+  assert.equal(buildCrashReport('error', err, '/', 'b').name, 'LookupError([email])');
 });
 
 test('buildCrashReport caps sizes and scrubs every text field', () => {

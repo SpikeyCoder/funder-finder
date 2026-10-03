@@ -74,42 +74,42 @@ test('reload key: the failing chunk when named, else the page path', () => {
 });
 
 test('one reload per key for the life of the tab — no loop however slow', () => {
-  assert.equal(reloadOnceForChunkError(LINK), true);
-  assert.equal(reloadOnceForChunkError(LINK), false);
-  assert.equal(reloadOnceForChunkError(LINK), false);
+  assert.equal(reloadOnceForChunkError(LINK), 'reloading');
+  assert.equal(reloadOnceForChunkError(LINK), 'already-reloaded');
+  assert.equal(reloadOnceForChunkError(LINK), 'already-reloaded');
   assert.equal(reloads, 1);
 });
 
 test('a chunk that keeps failing gets one reload, not one per page using it', () => {
   window.location.pathname = '/funder/1';
-  assert.equal(reloadOnceForChunkError(fetchFail('FunderDetail-Ab1.js')), true);
+  assert.equal(reloadOnceForChunkError(fetchFail('FunderDetail-Ab1.js')), 'reloading');
   window.location.pathname = '/funder/2';
-  assert.equal(reloadOnceForChunkError(fetchFail('FunderDetail-Ab1.js')), false);
+  assert.equal(reloadOnceForChunkError(fetchFail('FunderDetail-Ab1.js')), 'already-reloaded');
   assert.equal(reloads, 1);
 });
 
 test('a later deploy auto-recovers, even for a chunk whose hash is unchanged', () => {
-  assert.equal(reloadOnceForChunkError(fetchFail('Vendor-Same.js')), true);
-  assert.equal(reloadOnceForChunkError(fetchFail('Vendor-Same.js')), false); // same build: no loop
+  assert.equal(reloadOnceForChunkError(fetchFail('Vendor-Same.js')), 'reloading');
+  assert.equal(reloadOnceForChunkError(fetchFail('Vendor-Same.js')), 'already-reloaded'); // same build: no loop
   setBuild('index-Build2.js');
-  assert.equal(reloadOnceForChunkError(fetchFail('Vendor-Same.js')), true);
+  assert.equal(reloadOnceForChunkError(fetchFail('Vendor-Same.js')), 'reloading');
   assert.equal(reloads, 2);
 });
 
 test('different pages keyed by path each get their own reload; Back does not re-arm', () => {
-  assert.equal(reloadOnceForChunkError(LINK), true);
+  assert.equal(reloadOnceForChunkError(LINK), 'reloading');
   window.location.pathname = '/reports';
-  assert.equal(reloadOnceForChunkError(LINK), true);
+  assert.equal(reloadOnceForChunkError(LINK), 'reloading');
   window.location.pathname = '/results';
-  assert.equal(reloadOnceForChunkError(LINK), false);
+  assert.equal(reloadOnceForChunkError(LINK), 'already-reloaded');
   assert.equal(reloads, 2);
 });
 
 test('Safari (path-keyed) failures auto-recover again after a new deploy', () => {
-  assert.equal(reloadOnceForChunkError(LINK), true);
-  assert.equal(reloadOnceForChunkError(LINK), false); // same build: no loop
+  assert.equal(reloadOnceForChunkError(LINK), 'reloading');
+  assert.equal(reloadOnceForChunkError(LINK), 'already-reloaded'); // same build: no loop
   setBuild('index-Build2.js'); // a deploy later
-  assert.equal(reloadOnceForChunkError(LINK), true);
+  assert.equal(reloadOnceForChunkError(LINK), 'reloading');
   assert.equal(reloads, 2);
 });
 
@@ -118,7 +118,7 @@ test('a storage read error means no reload and keeps the history', () => {
   const before = store.get('ff_chunk_reloads');
   const getItem = sessionStorage.getItem;
   sessionStorage.getItem = () => { throw new DOMException('flaky', 'SecurityError'); };
-  assert.equal(reloadOnceForChunkError(fetchFail('B-2.js')), false);
+  assert.equal(reloadOnceForChunkError(fetchFail('B-2.js')), 'unavailable');
   sessionStorage.getItem = getItem;
   assert.equal(store.get('ff_chunk_reloads'), before);
 });
@@ -130,14 +130,14 @@ test('remembers a bounded number of keys', () => {
 
 test('never auto-reloads when sessionStorage is blocked', () => {
   installGlobals({ blocked: true });
-  assert.equal(reloadOnceForChunkError(LINK), false);
+  assert.equal(reloadOnceForChunkError(LINK), 'unavailable');
   assert.equal(reloads, 0);
 });
 
 test('a corrupt stored value is treated as empty, not as a crash', () => {
   store.set('ff_chunk_reloads', '{not json');
-  assert.equal(reloadOnceForChunkError(LINK), true);
+  assert.equal(reloadOnceForChunkError(LINK), 'reloading');
   store.set('ff_chunk_reloads', '{"a":1}'); // old object format
   window.location.pathname = '/other';
-  assert.equal(reloadOnceForChunkError(LINK), true);
+  assert.equal(reloadOnceForChunkError(LINK), 'reloading');
 });

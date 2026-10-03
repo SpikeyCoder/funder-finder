@@ -1,6 +1,6 @@
 import { Component, ReactNode } from 'react';
 import { AlertCircle } from 'lucide-react';
-import { alreadyReloadedFor, isChunkLoadError, reloadOnceForChunkError } from '../lib/chunkReload';
+import { isChunkLoadError, reloadOnceForChunkError } from '../lib/chunkReload';
 import { reportCrash } from '../lib/monitoring';
 
 interface Props {
@@ -51,14 +51,15 @@ export default class ErrorBoundary extends Component<Props, State> {
     // we've already tried, render() shows a manual Reload with the details.
     // The "Reloading…" screen keeps a Reload button, so if reload() is ever a
     // no-op (e.g. a sandboxed webview) nobody is stranded.
-    if (isChunkLoadError(error) && reloadOnceForChunkError(error)) {
+    const reload = isChunkLoadError(error) ? reloadOnceForChunkError(error) : null;
+    if (reload === 'reloading') {
       this.setState({ reloading: true });
       return;
     }
     // Whatever screen is shown now (FM-2026-10-03-02). A chunk error is
     // reported only if the automatic reload happened and didn't help; not if
     // storage is blocked and no reload was tried (a stale deploy, not a bug).
-    reportCrash('boundary', error, errorInfo.componentStack ?? '', isChunkLoadError(error) && alreadyReloadedFor(error));
+    reportCrash('boundary', error, errorInfo.componentStack ?? '', reload === 'already-reloaded');
   }
 
   render() {

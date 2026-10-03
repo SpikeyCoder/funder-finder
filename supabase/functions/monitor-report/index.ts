@@ -64,6 +64,10 @@ export interface VitalRow {
 // Short words a message really contains, as opposed to minified names.
 const WORDS = new Set(["a", "an", "as", "at", "be", "by", "do", "id", "if", "in", "is", "it", "no", "of", "on", "or", "to", "up"]);
 const minified = (name: string) => /^[A-Za-z_$][\w$]?$/.test(name) && !WORDS.has(name.toLowerCase());
+// A short word followed by member access or a call, or the subject of the
+// message ("a is not a function"), is a name, not a word.
+const usedAsName = (next: string | undefined, atStart: boolean, rest: string) =>
+  /^[.([]/.test(next ?? "") || (atStart && /^ is\b/.test(rest));
 
 // A quoted part of a message: kept if it's a short identifier or dotted
 // path ("reading 'name'" and "reading 'map'" are different bugs), with
@@ -85,10 +89,16 @@ export function normalizeMessage(message: string): string {
   return message
     .replace(/https?:\/\/\S+/g, "<url>")
     .replace(/(["'`])(.*?)\1/g, (_m, q, inner) => quoted(q, inner))
-    // Unquoted too: Firefox says "t.current is null".
-    .replace(/(^|[^\w$'"`<])([A-Za-z_$][\w$]?)(?=[^\w$'"`>]|$)/g, (m, pre, tok) => (minified(tok) ? `${pre}<id>` : m))
+    // Unquoted too: Firefox says "t.current is null". A short word is a name
+    // where it's used as one ("a is not a function", "in.x is null").
+    .replace(/(^|[^\w$'"`<])([A-Za-z_$][\w$]?)(?=([^\w$'"`>]|$))/g, (m, pre, tok, next, offset, all) =>
+      minified(tok) || (/^[A-Za-z_$][\w$]?$/.test(tok) && usedAsName(next, offset === 0 && pre === "", all.slice(offset + m.length)))
+        ? `${pre}<id>`
+        : m)
     .replace(/\b0x[0-9a-f]+\b/gi, "<n>")
-    .replace(/\d+/g, "<n>")
+    // Numbered error codes stay: React's "Minified React error #418" and
+    // "#310" are different bugs.
+    .replace(/(?<![#\d])\d+/g, "<n>")
     .trim();
 }
 
@@ -132,9 +142,10 @@ export async function parseCrash(b: Record<string, unknown>, userAgent: string):
   if (!KINDS.has(kind)) return "Invalid kind";
   // Scrub before cutting: a cut can leave half an address the pattern misses.
   const message = scrub(str(b.message, 2000)).slice(0, 500);
-  const name = str(b.name, 100) || "Error";
-  if (!message && !b.stack) return "Empty report";
+  const name = scrub(str(b.name, 200)).slice(0, 100) || "Error";
   const stack = scrub(str(b.stack, 8000)).slice(0, 4000);
+  // The validated values: a non-string stack is no stack.
+  if (!message && !stack) return "Empty report";
   return {
     fingerprint: await fingerprint(name, message, stack),
     kind,

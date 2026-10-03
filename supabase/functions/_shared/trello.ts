@@ -1,9 +1,8 @@
 // Opens a card on the bug-triage list report-bug uses (TRELLO_API_KEY,
 // TRELLO_TOKEN, TRELLO_LIST_ID). Returns the card's URL, null if Trello
-// failed (worth retrying), or "unconfigured" if the secrets aren't set.
-// On a timeout the card may or may not exist; that returns a placeholder
-// rather than null, so callers record it and don't open a duplicate (the
-// timeout is logged, and the underlying row is still in the database).
+// failed (worth retrying), "unconfigured" if the secrets aren't set, or
+// "timeout" if Trello didn't answer in time: the card may or may not exist,
+// so the caller decides whether a duplicate or a missing card is worse.
 
 export function trelloConfigured(): boolean {
   return !!(Deno.env.get("TRELLO_API_KEY") && Deno.env.get("TRELLO_TOKEN") && Deno.env.get("TRELLO_LIST_ID"));
@@ -12,7 +11,7 @@ export function trelloConfigured(): boolean {
 export async function createTrelloCard(
   card: { name: string; desc: string },
   timeoutMs = 7000,
-): Promise<string | null | "unconfigured"> {
+): Promise<string | null | "unconfigured" | "timeout"> {
   const key = Deno.env.get("TRELLO_API_KEY");
   const token = Deno.env.get("TRELLO_TOKEN");
   const idList = Deno.env.get("TRELLO_LIST_ID");
@@ -44,7 +43,7 @@ export async function createTrelloCard(
   } catch (err) {
     if ((err as { name?: string })?.name === "TimeoutError") {
       console.error(`Trello timed out after ${timeoutMs} ms; the card may exist: ${card.name}`);
-      return "(Trello timed out; the card may exist, check the board)";
+      return "timeout";
     }
     console.error("Trello card failed:", err);
     return null;

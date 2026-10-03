@@ -381,7 +381,9 @@ export function reviewCardFor(row: QueueRow, reason: string, candidates: IrsOrg[
 // to retry; false is a Trello error worth retrying.
 async function createReviewCard(card: { name: string; desc: string }): Promise<boolean | "unconfigured"> {
   const url = await createTrelloCard(card, FETCH_TIMEOUT_MS);
-  return url === "unconfigured" ? url : url !== null;
+  // A timeout counts as a failure (retried), as before: a request nobody
+  // is asked to review is worse than a duplicate card.
+  return url === "unconfigured" ? url : url !== null && url !== "timeout";
 }
 
 // ── Handler ─────────────────────────────────────────────────────────────────

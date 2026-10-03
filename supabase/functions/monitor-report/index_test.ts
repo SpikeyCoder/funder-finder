@@ -65,6 +65,14 @@ Deno.test("message normalisation keeps the meaning, drops values and minified na
     normalizeMessage("undefined is not an object (evaluating 't.current.focus')"),
   );
   assertEquals(normalizeMessage("t.current is null"), "<id>.current is null");
+  // Minified names that are also short words.
+  assertEquals(normalizeMessage("a is not a function"), normalizeMessage("e is not a function"));
+  assertEquals(normalizeMessage("in.x is null"), normalizeMessage("t.x is null"));
+  assertEquals(normalizeMessage("No organizations found"), "No organizations found");
+  // React's numbered production errors are different bugs.
+  const react = (n: number) => `Minified React error #${n}; visit https://react.dev/errors/${n} for the full message`;
+  assertNotEquals(normalizeMessage(react(418)), normalizeMessage(react(310)));
+  assertEquals(normalizeMessage(react(418)), "Minified React error #418; visit <url> for the full message");
 });
 
 Deno.test("fingerprint separates different errors and frames", async () => {
@@ -83,6 +91,10 @@ Deno.test("fingerprint reads Safari/Firefox frames", () => {
 Deno.test("parseCrash validates and scrubs", async () => {
   assertEquals(await parseCrash({ kind: "nope", message: "x" }, ""), "Invalid kind");
   assertEquals(await parseCrash({ kind: "error" }, ""), "Empty report");
+  assertEquals(await parseCrash({ kind: "error", message: "", stack: 1 }, ""), "Empty report");
+  const named = await parseCrash({ kind: "error", name: "jane@example.org", message: "x" }, "");
+  if (typeof named === "string") throw new Error(named);
+  assertEquals(named.name, "[email]");
   const row = await parseCrash({
     kind: "boundary",
     name: "TypeError",

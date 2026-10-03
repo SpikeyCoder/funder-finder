@@ -276,10 +276,20 @@ async function openAlertCard(
   if (claim.status === 409) return null; // another run inserted it first
   if (!claim.ok) throw new Error(`REST monitor_alerts claim ${claim.status}: ${await claim.text()}`);
   if (((await claim.json()) as unknown[]).length !== 1) return null; // another run updated it first
-  const url = await createTrelloCard(card);
-  if (!url || url === "unconfigured") return null;
+  const url = cardUrl(await createTrelloCard(card));
+  if (!url) return null;
   await recordCard(`monitor_alerts?alert_key=eq.${encodeURIComponent(key)}`, url, key);
   return url;
+}
+
+/**
+ * The URL to record for a card, or null if none was opened. A timeout is
+ * recorded as a placeholder (the card may exist): for alerts a duplicate is
+ * worse than a missed card, since the crash or breach stays in the tables.
+ */
+export function cardUrl(result: string | null | "unconfigured" | "timeout"): string | null {
+  if (result === "timeout") return "(Trello timed out; the card may exist, check the board)";
+  return result && result !== "unconfigured" ? result : null;
 }
 
 /**
@@ -363,10 +373,10 @@ async function sweepCrashes(summary: Summary): Promise<void> {
     );
     if (!claim.ok) throw new Error(`REST monitor_crashes claim ${claim.status}: ${await claim.text()}`);
     if (((await claim.json()) as unknown[]).length !== 1) continue;
-    const url = await createTrelloCard(crashCard(c));
+    const url = cardUrl(await createTrelloCard(crashCard(c)));
     // Trello rejected or failed this one: it's retried later and doesn't
     // hold up the rest.
-    if (!url || url === "unconfigured") continue;
+    if (!url) continue;
     await recordCard(`monitor_crashes?fingerprint=eq.${c.fingerprint}`, url, `crash ${c.fingerprint}`);
     carded++;
   }

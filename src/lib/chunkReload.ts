@@ -73,35 +73,25 @@ function readReloaded(): string[] {
   }
 }
 
-/**
- * Whether this tab already reloaded automatically for this error, i.e. the
- * reload happened and didn't help. False if storage is unavailable (then no
- * reload was ever attempted).
- */
-export function alreadyReloadedFor(error: unknown): boolean {
-  try {
-    return readReloaded().includes(reloadKey(error, window.location.pathname, currentBuild()));
-  } catch {
-    return false;
-  }
-}
+export type ChunkReloadResult = 'reloading' | 'already-reloaded' | 'unavailable';
 
 // Reloading pulls a fresh index.html plus valid chunks and almost always
-// recovers. Returns true if a reload was started; false if we already reloaded
-// for this chunk/path, or sessionStorage is unavailable — the caller should
-// then show a manual "Reload" screen. Without storage there's no way to
-// remember that we already reloaded, so we don't auto-reload at all rather
-// than risk a loop.
-export function reloadOnceForChunkError(error: unknown): boolean {
+// recovers. Returns 'reloading' if a reload was started. Otherwise the caller
+// should show a manual "Reload" screen: 'already-reloaded' means we reloaded
+// for this chunk/path before and it didn't help (worth reporting), and
+// 'unavailable' that sessionStorage is: without it there's no way to remember
+// that we already reloaded, so we don't auto-reload at all rather than risk
+// a loop.
+export function reloadOnceForChunkError(error: unknown): ChunkReloadResult {
   const key = reloadKey(error, window.location.pathname, currentBuild());
   try {
     // A read error propagates to the catch below (no reload).
     const seen = readReloaded();
-    if (seen.includes(key)) return false;
+    if (seen.includes(key)) return 'already-reloaded';
     sessionStorage.setItem(CHUNK_RELOAD_KEY, JSON.stringify([...seen, key].slice(-MAX_REMEMBERED)));
   } catch {
-    return false;
+    return 'unavailable';
   }
   window.location.reload();
-  return true;
+  return 'reloading';
 }
