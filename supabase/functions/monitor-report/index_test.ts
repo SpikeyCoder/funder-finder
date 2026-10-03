@@ -215,3 +215,16 @@ Deno.test("fingerprint ignores an @ in Chrome's message line", () => {
   assertEquals(fingerprintSource("TypeError", msg, "Xt@https://fundermatch.org/assets/Search-BrsvDQt6.js:1:2").split("|")[2], "/assets/Search.js");
   assertEquals(fingerprintSource("TypeError", msg, "@https://fundermatch.org/assets/Search-BrsvDQt6.js:1:2").split("|")[2], "/assets/Search.js");
 });
+
+Deno.test("parseCrash stores the message without its values and the stack as frames", async () => {
+  const message = 'invalid input syntax for type uuid: "Jane Smith EIN 12-3456789"';
+  const row = await parseCrash({
+    kind: "rejection",
+    name: "PostgrestError",
+    message,
+    stack: `PostgrestError: ${message}\n    at f (https://fundermatch.org/assets/a-AbC12345.js:1:2)\nglobal code@https://fundermatch.org/assets/b.js:3:4`,
+  }, "");
+  if (typeof row === "string") throw new Error(row);
+  assertEquals(row.message, "invalid input syntax for type uuid: <str>");
+  assertEquals(row.stack, "    at f (https://fundermatch.org/assets/a-AbC12345.js:1:2)\nglobal code@https://fundermatch.org/assets/b.js:3:4");
+});

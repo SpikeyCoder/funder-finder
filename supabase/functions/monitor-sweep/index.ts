@@ -98,12 +98,12 @@ export const code = (s: string) => "`" + s.replace(/[`\n\r]/g, " ") + "`";
 
 export function crashCard(c: CrashRow): { name: string; desc: string } {
   // The title is plain text but still reporter-supplied: no URLs, and
-  // anything domain-like defanged ("evil[.]com"), so a forged report can't
-  // put a convincing link on the board while "e.info is not a function"
-  // stays readable.
+  // anything that could be a hostname defanged ("evil[.]ai", whatever the
+  // TLD), so a forged report can't put a convincing link on the board,
+  // while "e[.]info is not a function" stays readable.
   const title = `${c.name}: ${c.message}`
     .replace(/(?:https?:\/\/|www\.)\S+/gi, "<url>")
-    .replace(/\.(com|org|net|io|dev|app|co|us|uk|info|biz|example)\b/gi, "[.]$1")
+    .replace(/([\w-])\.(?=[a-z][a-z0-9-]*\b)/gi, "$1[.]")
     .replace(/\s+/g, " ")
     .slice(0, 120);
   return {
@@ -125,15 +125,13 @@ export function crashCard(c: CrashRow): { name: string; desc: string } {
   };
 }
 
-// Failures in at least two sweep runs (15 minutes apart), not just one: a
-// cold boot slows every check in its run, so one slow run is a blip, while
-// an outage is caught by the second run.
+// Failures in at least two sweep runs, not just one: a cold boot slows
+// every check in its run, so one slow run is a blip, while an outage is
+// caught by the second run. A run's checks are inserted together, so they
+// share checked_at.
 export function slaBreached(checks: Pick<SlaCheck, "ok" | "checked_at">[]): boolean {
   const failed = checks.filter((c) => !c.ok);
-  const runs = new Set(failed.map((c, i) => {
-    const t = Date.parse(c.checked_at ?? "");
-    return Number.isNaN(t) ? `#${i}` : Math.floor(t / (5 * 60 * 1000));
-  }));
+  const runs = new Set(failed.map((c, i) => c.checked_at ?? `#${i}`));
   return failed.length >= SLA_BREACHES_PER_HOUR && runs.size >= 2;
 }
 
@@ -305,6 +303,7 @@ async function openAlertCard(
  * worse than a missed card, since the crash or breach stays in the tables.
  */
 export function cardUrl(result: string | null | "unconfigured" | "timeout"): string | null {
+  // (Crash cards handle a timeout themselves; see sweepCrashes.)
   if (result === "timeout") return "(Trello timed out; the card may exist, check the board)";
   return result && result !== "unconfigured" ? result : null;
 }
@@ -393,9 +392,12 @@ async function sweepCrashes(summary: Summary): Promise<void> {
     );
     if (!claim.ok) throw new Error(`REST monitor_crashes claim ${claim.status}: ${await claim.text()}`);
     if (((await claim.json()) as unknown[]).length !== 1) continue;
-    const url = cardUrl(await createTrelloCard(crashCard(c)));
-    // Trello rejected or failed this one: it's retried later and doesn't
-    // hold up the rest.
+    const result = await createTrelloCard(crashCard(c));
+    // Trello rejected, failed or timed out: retried later (the claim counts
+    // as an attempt), without holding up the rest. Unlike an alert, a timeout
+    // isn't recorded as carded: a crash that keeps happening must reach the
+    // board, and a rare duplicate card is the lesser cost.
+    const url = result === "timeout" ? null : cardUrl(result);
     if (!url) continue;
     await recordCard(`monitor_crashes?fingerprint=eq.${c.fingerprint}`, url, `crash ${c.fingerprint}`);
     carded++;

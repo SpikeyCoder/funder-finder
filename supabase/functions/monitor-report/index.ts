@@ -130,14 +130,11 @@ export function normalizeMessage(message: string): string {
  */
 export function fingerprintSource(name: string, message: string, stack: string): string {
   const msg = normalizeMessage(message);
-  // V8 "at fn (url:1:2)", Firefox/Safari "fn@url:1:2". Frames only: V8's
-  // stack starts with "Name: message", and a URL in the message isn't where
-  // it was thrown.
+  // Frames only: V8's stack starts with "Name: message", and a URL in the
+  // message isn't where it was thrown.
   let file = "";
   for (const line of stack.split("\n")) {
-    // V8 frames start with "at"; Firefox/Safari frames are "fn@url" (no
-    // spaces before the @, unlike a message that mentions "@scope/pkg").
-    if (!/^\s*at\s|^[^\s@]*@\S/.test(line)) continue;
+    if (!FRAME.test(line)) continue;
     const m = line.match(/(?:https?:\/\/[^/\s)]+)?(\/[^\s():?#]+\.(?:js|mjs|cjs|ts|tsx))(?::\d+)?/);
     if (m) {
       // Vite's hashes are exactly 8 base64url characters, so they can contain
@@ -150,6 +147,11 @@ export function fingerprintSource(name: string, message: string, stack: string):
   }
   return `${name}|${msg}|${file}`;
 }
+
+// A stack frame line: V8 "    at fn (url:1:2)"; Firefox/Safari "fn@url:1:2"
+// (no spaces before the @, unlike a message that mentions "@scope/pkg",
+// except Safari's "global code@…" and the like).
+const FRAME = /^\s*at\s|^(?:[^\s@]*|(?:global|module|eval) code)@\S/;
 
 export async function fingerprint(name: string, message: string, stack: string): Promise<string> {
   const data = new TextEncoder().encode(fingerprintSource(name, message, stack));
@@ -177,8 +179,11 @@ export async function parseCrash(b: Record<string, unknown>, userAgent: string):
     fingerprint: await fingerprint(name, message, stack),
     kind,
     name,
-    message,
-    stack,
+    // Stored without its values (quoted strings, numbers, ids, URLs), which
+    // can echo what a visitor typed or a response held; the stack keeps
+    // only its frames, since V8's starts with the message.
+    message: normalizeMessage(message),
+    stack: stack.split("\n").filter((l) => FRAME.test(l)).join("\n"),
     component_stack: scrub(str(b.componentStack, 4000)).slice(0, 2000),
     path: normalizePath(str(b.path, 500) || "/"),
     release: release(b.release),

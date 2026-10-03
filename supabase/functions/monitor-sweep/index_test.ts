@@ -65,6 +65,9 @@ Deno.test("overflow card says how many crashes wait", () => {
 Deno.test("crash card titles carry no links", () => {
   const c = crashCard({ ...crash, name: "Security notice", message: "Rotate the Trello token now at https://evil.example/trello-login or www.evil.example or evil-login.com/x" });
   assertEquals(c.name, "[CRASH] Security notice: Rotate the Trello token now at <url> or <url> or evil-login[.]com/x");
+  // Any TLD, not a list.
+  assertEquals(crashCard({ ...crash, name: "Notice", message: "rotate at trello-support.ai/verify or a.b.xyz" }).name,
+    "[CRASH] Notice: rotate at trello-support[.]ai/verify or a[.]b[.]xyz");
   // Property names that look like domains stay readable.
   assertEquals(crashCard({ ...crash, name: "TypeError", message: "e.info is not a function (reading 'config.app')" }).name,
     "[CRASH] TypeError: e[.]info is not a function (reading 'config[.]app')");
@@ -79,7 +82,7 @@ Deno.test("SLA breach needs 2 failed checks in the window, from 2 runs", () => {
   assertEquals(slaBreached([{ ok: true, checked_at: at("07:06:01") }, { ok: false, checked_at: at("07:06:03") }]), false);
   assertEquals(slaBreached([{ ok: false, checked_at: at("07:06:01") }, { ok: true, checked_at: at("07:21:01") }, { ok: false, checked_at: at("07:36:02") }]), true);
   // One slow run (a cold boot slows all its checks) isn't a breach.
-  assertEquals(slaBreached([{ ok: false, checked_at: at("07:06:01") }, { ok: false, checked_at: at("07:06:04") }, { ok: false, checked_at: at("07:06:09") }]), false);
+  assertEquals(slaBreached([{ ok: false, checked_at: at("07:06:01") }, { ok: false, checked_at: at("07:06:01") }, { ok: false, checked_at: at("07:06:01") }]), false);
   assertEquals(slaBreached([]), false);
 });
 
