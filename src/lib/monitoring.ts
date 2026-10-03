@@ -142,24 +142,34 @@ function enabled(): boolean {
 
 // text/plain keeps this a CORS "simple" request (no preflight), so it can be
 // sent with keepalive while the page unloads.
-// Resolves to false if the report is worth sending again (no response, a
-// rate limit or a server error), true otherwise; never rejects. A 400 or
-// 413 would fail again, so it isn't retried.
-function send(payload: CrashReport | VitalsReport): Promise<boolean> {
+// Resolves to 'failed' (no response, or a server error: worth sending
+// again), 'rate-limited' (back off), or 'done' (delivered, or a 400 or 413
+// that would fail again); never rejects.
+type SendResult = 'done' | 'rate-limited' | 'failed';
+
+function send(payload: CrashReport | VitalsReport): Promise<SendResult> {
   try {
     return fetch(ENDPOINT, {
       method: 'POST',
       keepalive: true,
       headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify(payload),
-    }).then((res) => res.status !== 429 && res.status < 500, () => false);
+    }).then(
+      (res): SendResult => (res.status === 429 ? 'rate-limited' : res.status >= 500 ? 'failed' : 'done'),
+      (): SendResult => 'failed',
+    );
   } catch {
     // Reporting must never break the page.
-    return Promise.resolve(false);
+    return Promise.resolve('failed');
   }
 }
 
 const sentCrashes = new Set<string>();
+// Crashes already sent again once after a failed send: not again.
+const resentCrashes = new Set<string>();
+// Raw errors already seen, so a crash thrown every frame skips the
+// scrubbing below after the first time.
+const seenRaw = new Set<string>();
 // Reports sent from the current route (ids aside: /funder/1 and /funder/2
 // are one route); navigating to another route starts over.
 let pageReports = { path: '', count: 0 };
@@ -171,17 +181,24 @@ export function reportCrash(kind: CrashKind, error: unknown, componentStack = ''
     const route = normalizePath(path);
     if (pageReports.path !== route) pageReports = { path: route, count: 0 };
     if (pageReports.count >= MAX_CRASHES_PER_PAGE) return;
+    const raw = describe(error);
+    const rawKey = `${route}|${kind}|${raw.name}|${raw.message.slice(0, 200)}|${raw.stack.split('\n', 3).join('|').slice(0, 400)}`;
+    if (seenRaw.has(rawKey)) return;
+    if (seenRaw.size < 200) seenRaw.add(rawKey);
     const report = buildCrashReport(kind, error, path, currentBuild(), componentStack, chunkGaveUp);
     if (!report) return;
     const key = `${report.name}|${report.message}|${report.stack.split('\n', 3).join('|')}`;
     if (sentCrashes.has(key)) return;
     sentCrashes.add(key);
     pageReports.count++;
-    void send(report).then((delivered) => {
-      // Not delivered (offline, rate-limited, server error): the next time
-      // it happens may get through, and it doesn't use up the route's cap.
-      if (delivered) return;
+    void send(report).then((result) => {
+      // Lost (offline, server error): the next time it happens it's sent
+      // once more, without using up the route's cap. Not when rate-limited:
+      // that means back off.
+      if (result !== 'failed' || resentCrashes.has(key)) return;
+      resentCrashes.add(key);
       sentCrashes.delete(key);
+      seenRaw.delete(rawKey);
       if (pageReports.path === route) pageReports.count--;
     });
   } catch {
@@ -255,8 +272,8 @@ export function installMonitoring(): void {
         type: 'vitals',
         release: currentBuild().slice(0, 100),
         metrics: batch.map(({ m, path }) => ({ id: m.id, name: m.name, value: m.value, rating: m.rating, path })),
-      }).then((delivered) => {
-        if (delivered) return;
+      }).then((result) => {
+        if (result === 'done') return;
         // Not delivered (offline, over the keepalive budget, rate-limited):
         // send these again on the next hide, unless newer values came in.
         for (const entry of batch) {
