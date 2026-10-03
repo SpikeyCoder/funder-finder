@@ -112,3 +112,8 @@ Deno.test("cron auth fails closed and accepts both header forms", () => {
   assertEquals(cronAuthorized(req({ "x-cron-secret": "nope" }), "s3cret"), false);
   assertEquals(cronAuthorized(req({}), "s3cret"), false);
 });
+
+Deno.test("a regression's card links the earlier one", () => {
+  assert(crashCard({ ...crash, previous_card_url: "https://trello.com/c/old" }).desc.includes("earlier card: https://trello.com/c/old"));
+  assert(!crashCard(crash).desc.includes("earlier card"));
+});

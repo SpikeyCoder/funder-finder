@@ -156,12 +156,27 @@ test('onReloadPageFor: only the page our reload loaded, for the same failure', (
   assert.equal(onReloadPageFor(LINK), false);
 });
 
-test('the reload marker expires a minute after startup', (t) => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
+test('the reload marker expires a minute after startup', () => {
+  const realNow = performance.now.bind(performance);
+  let offset = 0;
+  performance.now = () => realNow() + offset;
+  try {
+    assert.equal(reloadOnceForChunkError(LINK), 'reloading');
+    takeReloadMarker();
+    offset = 61_000;
+    assert.equal(onReloadPageFor(LINK), false);
+  } finally {
+    performance.now = realNow;
+  }
+});
+
+test('a stale marker (its reload never happened) is ignored by a later load', () => {
   assert.equal(reloadOnceForChunkError(LINK), 'reloading');
-  takeReloadMarker();
-  t.mock.timers.tick(61_000);
+  const marker = JSON.parse(store.get('ff_chunk_pending_reload'));
+  store.set('ff_chunk_pending_reload', JSON.stringify({ ...marker, at: marker.at - 5 * 60_000 }));
+  takeReloadMarker(); // e.g. a manual Reload minutes later
   assert.equal(onReloadPageFor(LINK), false);
+  assert.equal(store.has('ff_chunk_pending_reload'), false);
 });
 
 test('onReloadPageFor is false without a recorded reload or storage', () => {

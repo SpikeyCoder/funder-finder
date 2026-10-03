@@ -54,7 +54,11 @@ const PENDING_RELOAD_KEY = 'ff_chunk_pending_reload';
 // How long after startup a chunk failure still counts as the reload's
 // (the route's chunks load as the page first renders).
 const RELOAD_MARKER_MS = 60_000;
+// A marker older than this wasn't followed by its reload (reload() did
+// nothing, or the navigation was abandoned), so a later load ignores it.
+const MARKER_FRESH_MS = 30_000;
 let reloadedFor: string | null = null;
+let reloadedForUntil = 0;
 
 export function reloadKey(error: unknown, pathname: string, build: string): string {
   const message = String((error as { message?: unknown } | null)?.message ?? '');
@@ -98,7 +102,7 @@ export function reloadOnceForChunkError(error: unknown): ChunkReloadResult {
     if (seen.includes(key)) return 'already-reloaded';
     // The marker first: if recording the key then fails, we don't reload,
     // and the key isn't recorded as reloaded-for either.
-    sessionStorage.setItem(PENDING_RELOAD_KEY, key);
+    sessionStorage.setItem(PENDING_RELOAD_KEY, JSON.stringify({ key, at: Date.now() }));
     try {
       sessionStorage.setItem(CHUNK_RELOAD_KEY, JSON.stringify([...seen, key].slice(-MAX_REMEMBERED)));
     } catch (err) {
@@ -115,13 +119,16 @@ export function reloadOnceForChunkError(error: unknown): ChunkReloadResult {
 // Call once at startup, before anything renders: notes whether this page
 // load is an automatic reload, and for which key.
 export function takeReloadMarker(): void {
+  reloadedFor = null;
   try {
-    reloadedFor = sessionStorage.getItem(PENDING_RELOAD_KEY);
+    const marker = JSON.parse(sessionStorage.getItem(PENDING_RELOAD_KEY) || 'null') as { key?: unknown; at?: unknown } | null;
     sessionStorage.removeItem(PENDING_RELOAD_KEY);
+    const age = typeof marker?.at === 'number' ? Date.now() - marker.at : NaN;
+    if (typeof marker?.key === 'string' && age >= 0 && age < MARKER_FRESH_MS) reloadedFor = marker.key;
   } catch {
-    reloadedFor = null;
+    // Unreadable or corrupt: not a reload.
   }
-  if (reloadedFor !== null) setTimeout(() => (reloadedFor = null), RELOAD_MARKER_MS);
+  reloadedForUntil = performance.now() + RELOAD_MARKER_MS;
 }
 
 // Whether this failure is the one our automatic reload was for, on the page
@@ -129,7 +136,8 @@ export function takeReloadMarker(): void {
 // Answers true once; a later, separate failure in the tab (minutes on, or
 // after another full page load) isn't the reload's.
 export function onReloadPageFor(error: unknown): boolean {
-  if (reloadedFor === null || reloadedFor !== reloadKey(error, window.location.pathname, currentBuild())) return false;
+  if (reloadedFor === null || performance.now() > reloadedForUntil) return false;
+  if (reloadedFor !== reloadKey(error, window.location.pathname, currentBuild())) return false;
   reloadedFor = null;
   return true;
 }

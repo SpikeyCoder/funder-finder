@@ -22,7 +22,7 @@
 -- Only the public Edge Function writes reports, and only the sweep opens
 -- cards, so flooding the endpoint can't flood Trello: at most 10 crash cards
 -- a day plus one summary, and 5 page-speed cards, whatever is reported. Reports are rate-limited per
--- IP in the function (crashes 30/h, vitals 120/h).
+-- IP in the function (crashes 30/h, vitals 600/h).
 --
 -- Access: RLS on, no policies, no grants to anon/authenticated; only the
 -- service role (the two Edge Functions) touches these tables.
@@ -53,7 +53,10 @@ CREATE TABLE IF NOT EXISTS public.monitor_crashes (
   -- can't both open one; a failed card is retried an hour later, and after
   -- 3 failures once a day.
   card_attempted_at timestamptz,
-  card_attempts    integer NOT NULL DEFAULT 0
+  card_attempts    integer NOT NULL DEFAULT 0,
+  -- A regression's earlier card, which may still be open: the new card
+  -- links it so the two can be merged.
+  previous_card_url text
 );
 
 CREATE INDEX IF NOT EXISTS monitor_crashes_uncarded
@@ -124,6 +127,7 @@ AS $$
   -- below then counts it), so the 7-day rule lives in one place.
   UPDATE public.monitor_crashes
      SET occurrences = 0, first_seen = now(), kind = p_kind,
+         previous_card_url = trello_card_url,
          trello_card_url = NULL, card_attempted_at = NULL, card_attempts = 0
    WHERE fingerprint = p_fingerprint AND last_seen < now() - interval '7 days'
      AND trello_card_url IS NOT NULL AND card_attempted_at < now() - interval '7 days';

@@ -47,7 +47,8 @@ const FETCH_TIMEOUT_MS = 7000;
 // request, so boot time is part of what visitors wait for (~0.2 s).
 export const SLA_MS = 2000;
 const SLA_CHECK_TIMEOUT_MS = 5000;
-export const SLA_BREACHES_PER_HOUR = 2;
+// How many of the last hour's sweep runs must have a failed check.
+export const SLA_FAILING_RUNS = 2;
 // A common word, a multi-word name, and a dashed EIN (different code paths).
 const SLA_QUERIES = ["foundation", "community foundation", "01-0224898"];
 const SLA_COOLDOWN_MS = 24 * 60 * 60 * 1000;
@@ -70,6 +71,7 @@ export interface CrashRow {
   first_seen: string;
   last_seen: string;
   card_attempts: number;
+  previous_card_url?: string | null;
 }
 
 export interface SlaCheck {
@@ -112,6 +114,7 @@ export function crashCard(c: CrashRow): { name: string; desc: string } {
       `Reported automatically by the browser (${c.kind === "boundary" ? "error screen shown" : c.kind === "rejection" ? "unhandled promise rejection" : "uncaught error"}).`,
       "",
       `**Occurrences:** ${c.occurrences} (first ${c.first_seen}, last ${c.last_seen})`,
+      c.previous_card_url ? `**Came back** after 7+ quiet days; earlier card: ${c.previous_card_url}` : "",
       `**Page:** ${code(c.path)}`,
       `**Build:** ${c.release ? code(c.release) : "unknown"}`,
       `**Browser (latest):** ${c.user_agent ? code(c.user_agent) : "unknown"}`,
@@ -132,7 +135,7 @@ export function crashCard(c: CrashRow): { name: string; desc: string } {
 export function slaBreached(checks: Pick<SlaCheck, "ok" | "checked_at">[]): boolean {
   const failed = checks.filter((c) => !c.ok);
   const runs = new Set(failed.map((c, i) => c.checked_at ?? `#${i}`));
-  return failed.length >= SLA_BREACHES_PER_HOUR && runs.size >= 2;
+  return runs.size >= SLA_FAILING_RUNS;
 }
 
 export function slaCard(checks: SlaCheck[]): { name: string; desc: string } {
@@ -377,7 +380,7 @@ async function sweepCrashes(summary: Summary): Promise<void> {
     "monitor_crashes?trello_card_url=is.null" +
       `&or=(card_attempted_at.is.null,and(card_attempts.lt.${MAX_CARD_ATTEMPTS},card_attempted_at.lt.${iso(now - RETRY_AFTER_MS)}),card_attempted_at.lt.${iso(now - DAY_MS)})` +
       `&order=occurrences.desc,first_seen.asc&limit=${budget}` +
-      "&select=fingerprint,kind,name,message,stack,component_stack,path,release,user_agent,occurrences,first_seen,last_seen,card_attempts",
+      "&select=fingerprint,kind,name,message,stack,component_stack,path,release,user_agent,occurrences,first_seen,last_seen,card_attempts,previous_card_url",
   );
   let carded = 0;
   for (const c of due) {
