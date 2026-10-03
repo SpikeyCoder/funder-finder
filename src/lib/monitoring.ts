@@ -21,8 +21,9 @@ import { SUPABASE_URL } from './supabaseProject';
 
 const ENDPOINT = `${SUPABASE_URL}/functions/v1/monitor-report`;
 
-// One page load can't send more than this many crash reports (a render loop
-// would otherwise send one per frame), and the same crash is sent once.
+// One page (route) can't send more than this many crash reports (a render
+// loop would otherwise send one per frame); the same crash is sent once a
+// tab.
 const MAX_CRASHES_PER_PAGE = 5;
 
 export type CrashKind = 'boundary' | 'error' | 'rejection';
@@ -159,15 +160,21 @@ function send(payload: CrashReport | VitalsReport): Promise<boolean> {
 }
 
 const sentCrashes = new Set<string>();
+// Reports sent from the current route; a client-side navigation starts over.
+let pageReports = { path: '', count: 0 };
 
 export function reportCrash(kind: CrashKind, error: unknown, componentStack = '', chunkGaveUp = false): void {
-  if (!enabled() || sentCrashes.size >= MAX_CRASHES_PER_PAGE) return;
+  if (!enabled()) return;
   try {
-    const report = buildCrashReport(kind, error, window.location.pathname, currentBuild(), componentStack, chunkGaveUp);
+    const path = window.location.pathname;
+    if (pageReports.path !== path) pageReports = { path, count: 0 };
+    if (pageReports.count >= MAX_CRASHES_PER_PAGE) return;
+    const report = buildCrashReport(kind, error, path, currentBuild(), componentStack, chunkGaveUp);
     if (!report) return;
     const key = `${report.name}|${report.message}|${report.stack.split('\n', 3).join('|')}`;
     if (sentCrashes.has(key)) return;
     sentCrashes.add(key);
+    pageReports.count++;
     void send(report);
   } catch {
     // Reporting must never break the page.
@@ -186,10 +193,11 @@ export function installMonitoring(): void {
     // No error object (thrown from another realm, or a non-Error): parse the
     // event's message, which browsers prefix ("Uncaught TypeError: …"), so it
     // fingerprints the same as when the object is there.
-    const m = /^(?:Uncaught )?(?:(\w*Error): )?(.*)$/s.exec(event.message || '');
-    // `throw undefined` / `throw null`: nothing to go on, as for an empty
-    // rejection.
-    if (!m || !m[2] || (!m[1] && /^(?:undefined|null)$/.test(m[2]))) return;
+    // ("Uncaught …" in Chrome and Safari, "uncaught exception: …" in Firefox.)
+    const m = /^(?:uncaught (?:exception: )?)?(?:(\w*Error): )?(.*)$/is.exec(event.message || '');
+    // `throw undefined`, `throw null`, `throw 0`: nothing to go on, as for
+    // an empty rejection.
+    if (!m || (!m[1] && /^(?:undefined|null|-?\d*)$/.test(m[2].trim()))) return;
     reportCrash('error', { name: m[1] || 'Error', message: m[2], stack: `at ${event.filename}:${event.lineno}` });
   });
   window.addEventListener('unhandledrejection', (event) => reportCrash('rejection', event.reason));

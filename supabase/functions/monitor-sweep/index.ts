@@ -301,15 +301,16 @@ async function openAlertCard(
   return url;
 }
 
+// Recorded for a card whose Trello call timed out. record_client_crash
+// recognizes it by its start ('(Trello timed out%').
+export const TIMEOUT_PLACEHOLDER = "(Trello timed out; the card may exist, check the board)";
+
 /**
  * A card's URL to record, or null if none was opened (it's retried). A
  * timeout means the card may exist, so a placeholder is recorded rather than
  * risk a duplicate (a crash's is cleared if the crash comes back a day
  * later; see record_client_crash).
  */
-// Starts with "(": record_client_crash recognizes it by that.
-export const TIMEOUT_PLACEHOLDER = "(Trello timed out; the card may exist, check the board)";
-
 export function cardUrl(result: string | null | "unconfigured" | "timeout"): string | null {
   if (result === "timeout") return TIMEOUT_PLACEHOLDER;
   return result && result !== "unconfigured" ? result : null;
@@ -373,6 +374,9 @@ async function sweepSla(summary: Summary, trello: boolean): Promise<void> {
   if (url) summary.sla_card = url;
 }
 
+const triedWithinDay = (c: Pick<CrashRow, "card_attempted_at">, now: number) =>
+  c.card_attempted_at !== null && now - Date.parse(c.card_attempted_at) < DAY_MS;
+
 /**
  * Which due crashes to try this run: at most MAX_CRASH_CARDS Trello calls,
  * and at most `dayLeft` crashes not already tried in the last 24 h. A retry
@@ -385,8 +389,7 @@ export function pickCrashes<T extends Pick<CrashRow, "card_attempted_at">>(due: 
   let fresh = 0;
   for (const c of due) {
     if (picked.length >= MAX_CRASH_CARDS) break;
-    const triedToday = c.card_attempted_at !== null && now - Date.parse(c.card_attempted_at) < DAY_MS;
-    if (!triedToday) {
+    if (!triedWithinDay(c, now)) {
       if (fresh >= dayLeft) continue;
       fresh++;
     }
@@ -439,7 +442,7 @@ async function sweepCrashes(summary: Summary): Promise<void> {
     );
     if (!claim.ok) throw new Error(`REST monitor_crashes claim ${claim.status}: ${await claim.text()}`);
     if (((await claim.json()) as unknown[]).length !== 1) continue;
-    if (c.card_attempted_at === null || now - Date.parse(c.card_attempted_at) >= DAY_MS) freshTried++;
+    if (!triedWithinDay(c, now)) freshTried++;
     // A timeout records a placeholder: the card may exist. If the crash
     // happens again a day later, record_client_crash clears the placeholder
     // so it's carded again, rather than risk a duplicate for one that didn't.

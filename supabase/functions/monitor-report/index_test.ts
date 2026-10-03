@@ -263,6 +263,8 @@ Deno.test("only the token itself is taken out of a JSON parse error", () => {
 
 Deno.test("4xx and 5xx codes stay in any wording; a data object's name isn't a type", async () => {
   assertEquals(normalizeMessage("Request failed: 404"), "Request failed: 404");
+  assertEquals(normalizeMessage("Could not load funder 452"), normalizeMessage("Could not load funder 517"));
+  assertEquals(normalizeMessage("Response 502 from search"), "Response 502 from search");
   assert(normalizeMessage("Error 401 Unauthorized") !== normalizeMessage("Error 503 Service Unavailable"));
   assertEquals(normalizeMessage("Expected 200 rows"), "Expected <n> rows");
   assertEquals(normalizeMessage("took 1.5 ms"), "took <n>.<n> ms");
@@ -272,4 +274,8 @@ Deno.test("4xx and 5xx codes stay in any wording; a data object's name isn't a t
   const typed = await parseCrash({ kind: "rejection", name: "PostgrestError", message: "x" }, "");
   if (typeof typed === "string") throw new Error(typed);
   assertEquals(typed.name, "PostgrestError");
+});
+
+Deno.test("a report with no message and no stack frames is empty", async () => {
+  assertEquals(await parseCrash({ kind: "error", message: "", stack: "garbage" }, ""), "Empty report");
 });

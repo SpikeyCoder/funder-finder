@@ -130,13 +130,19 @@ export function normalizeMessage(message: string): string {
         : m)
     .replace(/\b0x[0-9a-f]+\b/gi, "<n>")
     // Numbered error codes stay: React's "Minified React error #418" and
-    // "#310" are different bugs, and so are "… 401" and "… 500": any 4xx or
-    // 5xx, and other 3-digit codes after "status", "code" or "HTTP".
-    .replace(/(?<![#\d])\d+/g, (d, offset: number, all: string) =>
-      /^[45]\d\d$/.test(d) ||
-        (/^[1-5]\d\d$/.test(d) && /(?:status|code|http)\W*$/i.test(all.slice(Math.max(0, offset - 16), offset)))
-        ? d
-        : "<n>")
+    // "#310" are different bugs, and so are HTTP statuses: a 3-digit code
+    // after "status", "code" or "HTTP", or a 4xx/5xx after "error",
+    // "failed" or "response", or before a reason ("401 Unauthorized"). Not
+    // any number in that range: "funder 452" and "funder 517" are one bug.
+    .replace(/(?<![#\d])\d+/g, (d, offset: number, all: string) => {
+      const before = all.slice(Math.max(0, offset - 16), offset);
+      const after = all.slice(offset + d.length, offset + d.length + 24);
+      const status = /^[1-5]\d\d$/.test(d) && /(?:status|code|http)\W*$/i.test(before);
+      const httpError = /^[45]\d\d$/.test(d) &&
+        (/(?:error|fail(?:ed|ure)?|response)\W*$/i.test(before) ||
+          /^\W*(?:bad|unauthori[sz]ed|forbidden|not found|conflict|gone|too many|unprocessable|internal|not implemented|bad gateway|service|gateway)\b/i.test(after));
+      return status || httpError ? d : "<n>";
+    })
     .trim();
 }
 
@@ -189,8 +195,10 @@ export async function parseCrash(b: Record<string, unknown>, userAgent: string):
   const name = errorTypeName(str(b.name, 100));
   const stack = scrub(str(b.stack, 8000)).slice(0, 4000);
   // The validated values: a non-string stack is no stack.
-  if (!message && !stack) return "Empty report";
   const normalized = normalizeMessage(message);
+  const frames = stack.split("\n").filter((l) => FRAME.test(l)).join("\n");
+  // What would be stored: no message and no frames is nothing to card.
+  if (!normalized && !frames) return "Empty report";
   return {
     fingerprint: await fingerprint(name, message, stack, normalized),
     kind,
@@ -200,7 +208,7 @@ export async function parseCrash(b: Record<string, unknown>, userAgent: string):
     // a response held; the stack keeps only its frames, since V8's starts
     // with the message.
     message: normalized,
-    stack: stack.split("\n").filter((l) => FRAME.test(l)).join("\n"),
+    stack: frames,
     component_stack: scrub(str(b.componentStack, 4000)).slice(0, 2000),
     path: normalizePath(str(b.path, 500) || "/"),
     release: release(b.release),
