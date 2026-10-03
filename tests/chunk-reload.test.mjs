@@ -216,3 +216,11 @@ test('a trailing-slash redirect on reload is the same page', () => {
   takeReloadMarker();
   assert.equal(onReloadPageFor(LINK), true);
 });
+
+test('two reloads started in one load are both recognized on the reloaded page', () => {
+  assert.equal(reloadOnceForChunkError(fetchFail('A-1.js')), 'reloading');
+  assert.equal(reloadOnceForChunkError(fetchFail('B-1.js')), 'reloading');
+  takeReloadMarker();
+  assert.equal(onReloadPageFor(fetchFail('A-1.js')), true);
+  assert.equal(onReloadPageFor(fetchFail('B-1.js')), true);
+});

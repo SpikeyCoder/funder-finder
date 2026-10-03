@@ -326,3 +326,10 @@ Deno.test("quoted dotted or hyphenated values are values; code paths stay", () =
   assertEquals(normalizeMessage("(evaluating 'n.current.focus')"), "(evaluating '<id>.current.focus')");
   assertEquals(normalizeMessage("(evaluating 'window.gtag.push')"), "(evaluating 'window.gtag.push')");
 });
+
+Deno.test("unquoted tokens are values", () => {
+  assertEquals(normalizeMessage("Invalid token: AbcdEfghIjklMnop_qrstuVWX"), "Invalid token: <tok>");
+  assertEquals(normalizeMessage("Invalid token: Zx9Yw8Vu7Ts6Rq5Po4Nm"), "Invalid token: <tok>");
+  // Ordinary long words and code names stay.
+  assertEquals(normalizeMessage("ResizeObserverEntry is undefined"), "ResizeObserverEntry is undefined");
+});

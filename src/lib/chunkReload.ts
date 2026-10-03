@@ -59,7 +59,9 @@ const RELOAD_MARKER_MS = 60_000;
 // Generous: on a slow connection the reloaded page can take a while to
 // download before it starts.
 const MARKER_FRESH_MS = 120_000;
-let reloadedFor: string | null = null;
+// The keys the automatic reload that loaded this page was for (two
+// boundaries can each start one for a different chunk in the same load).
+let reloadedFor = new Set<string>();
 let reloadedForUntil = 0;
 
 // "/search" and "/search/" are one page (the host may redirect between them).
@@ -109,12 +111,17 @@ export function reloadOnceForChunkError(error: unknown): ChunkReloadResult {
     // The marker first: if recording the key then fails, we don't reload,
     // and the key isn't recorded as reloaded-for either.
     // (With the path: a duplicated tab copies sessionStorage, and its first
-    // page isn't this reload's unless it's the same page.)
-    sessionStorage.setItem(PENDING_RELOAD_KEY, JSON.stringify({ key, path: window.location.pathname, at: Date.now() }));
+    // page isn't this reload's unless it's the same page.) Added to a marker
+    // this page already wrote, since one reload can be for several keys.
+    const previous = sessionStorage.getItem(PENDING_RELOAD_KEY);
+    const pending = readMarker(previous);
+    const keys = pending && pending.path === window.location.pathname ? [...pending.keys, key] : [key];
+    sessionStorage.setItem(PENDING_RELOAD_KEY, JSON.stringify({ keys, path: window.location.pathname, at: Date.now() }));
     try {
       sessionStorage.setItem(CHUNK_RELOAD_KEY, JSON.stringify([...seen, key].slice(-MAX_REMEMBERED)));
     } catch (err) {
-      sessionStorage.removeItem(PENDING_RELOAD_KEY);
+      if (previous === null) sessionStorage.removeItem(PENDING_RELOAD_KEY);
+      else sessionStorage.setItem(PENDING_RELOAD_KEY, previous);
       throw err;
     }
   } catch {
@@ -127,17 +134,28 @@ export function reloadOnceForChunkError(error: unknown): ChunkReloadResult {
 // Call once at startup, before anything renders: notes whether this page
 // load is an automatic reload, and for which key.
 export function takeReloadMarker(): void {
-  reloadedFor = null;
+  reloadedFor = new Set();
   try {
-    const marker = JSON.parse(sessionStorage.getItem(PENDING_RELOAD_KEY) || 'null') as { key?: unknown; path?: unknown; at?: unknown } | null;
+    const marker = readMarker(sessionStorage.getItem(PENDING_RELOAD_KEY));
     sessionStorage.removeItem(PENDING_RELOAD_KEY);
-    const age = typeof marker?.at === 'number' ? Date.now() - marker.at : NaN;
-    const samePage = typeof marker?.path === 'string' && samePath(marker.path) === samePath(window.location.pathname);
-    if (typeof marker?.key === 'string' && samePage && age >= 0 && age < MARKER_FRESH_MS) reloadedFor = marker.key;
+    const age = marker ? Date.now() - marker.at : NaN;
+    const samePage = marker !== null && samePath(marker.path) === samePath(window.location.pathname);
+    if (marker && samePage && age >= 0 && age < MARKER_FRESH_MS) reloadedFor = new Set(marker.keys);
   } catch {
     // Unreadable or corrupt: not a reload.
   }
   reloadedForUntil = performance.now() + RELOAD_MARKER_MS;
+}
+
+// A stored reload marker, or null if there's none or it's malformed.
+function readMarker(raw: string | null): { keys: string[]; path: string; at: number } | null {
+  try {
+    const m = JSON.parse(raw || 'null') as { keys?: unknown; path?: unknown; at?: unknown } | null;
+    if (!m || !Array.isArray(m.keys) || typeof m.path !== 'string' || typeof m.at !== 'number') return null;
+    return { keys: m.keys.filter((k): k is string => typeof k === 'string'), path: m.path, at: m.at };
+  } catch {
+    return null;
+  }
 }
 
 // Whether this failure is the one our automatic reload was for, on the page
@@ -145,8 +163,9 @@ export function takeReloadMarker(): void {
 // Answers true once; a later, separate failure in the tab (minutes on, or
 // after another full page load) isn't the reload's.
 export function onReloadPageFor(error: unknown): boolean {
-  if (reloadedFor === null || performance.now() > reloadedForUntil) return false;
-  if (reloadedFor !== reloadKey(error, window.location.pathname, currentBuild())) return false;
-  reloadedFor = null;
+  if (performance.now() > reloadedForUntil) return false;
+  const key = reloadKey(error, window.location.pathname, currentBuild());
+  if (!reloadedFor.has(key)) return false;
+  reloadedFor.delete(key);
   return true;
 }

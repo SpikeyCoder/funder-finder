@@ -114,6 +114,9 @@ function quoted(q: string, inner: string): string {
 export function normalizeMessage(message: string): string {
   return message
     .replace(/https?:\/\/\S+/g, "<url>")
+    // Tokens (base64url, nanoid, API keys): 16+ characters mixing upper and
+    // lower case with a digit, '_' or '-'. Values, and often secrets.
+    .replace(/(?<![\w-])(?=[\w-]*[a-z])(?=[\w-]*[A-Z])(?=[\w-]*[\d_-])[\w-]{16,}(?![\w-])/g, "<tok>")
     // Ids: UUIDs and other hex runs with both digits and letters.
     .replace(/\b(?=[\da-f-]*\d)(?=[\da-f-]*[a-f])[\da-f]+(?:-[\da-f]+)*\b/gi, (m) => (m.replace(/-/g, "").length >= 8 ? "<hex>" : m))
     // What a JSON parse choked on is the response, not the bug: "Unexpected
