@@ -38,6 +38,13 @@ const RETRY_AFTER_MS = 60 * 60 * 1000;
 // After this many failed attempts a crash is retried daily instead.
 const MAX_CARD_ATTEMPTS = 3;
 const DAY_MS = 24 * 60 * 60 * 1000;
+// No new card is started after this long into a run: a card takes up to
+// ~30 s (Trello's timeout, then recording its URL with retries), and the
+// Edge Function is stopped at 150 s, which could leave a card opened but
+// unrecorded (then opened again an hour later).
+const RUN_CARD_DEADLINE_MS = 90_000;
+let runStartedAt = Date.now();
+const timeLeft = () => Date.now() - runStartedAt < RUN_CARD_DEADLINE_MS;
 const FETCH_TIMEOUT_MS = 7000;
 
 // Search SLA: a check fails if it doesn't return 200 with at least one
@@ -431,6 +438,7 @@ async function sweepCrashes(summary: Summary): Promise<void> {
   let carded = 0;
   let freshTried = 0;
   for (const c of picked) {
+    if (!timeLeft()) break;
     // Claim it (counts as an attempt) only if no other run has meanwhile.
     const claim = await rest(
       `monitor_crashes?fingerprint=eq.${c.fingerprint}&trello_card_url=is.null&card_attempts=eq.${c.card_attempts}&select=fingerprint`,
@@ -495,6 +503,7 @@ async function sweepVitals(summary: Summary): Promise<void> {
     .slice(0, Math.max(0, budget));
   let carded = 0;
   for (const { b, key } of due) {
+    if (!timeLeft()) break;
     if (await openAlertCard(key, VITALS_COOLDOWN_MS, vitalsCard(b), alerts.get(key) ?? null)) carded++;
   }
   summary.vitals_cards = carded;
@@ -502,6 +511,7 @@ async function sweepVitals(summary: Summary): Promise<void> {
 
 if (import.meta.main) {
   Deno.serve(async (req: Request) => {
+    runStartedAt = Date.now();
     const json = (status: number, body: unknown) =>
       new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 

@@ -175,7 +175,11 @@ export function reportCrash(kind: CrashKind, error: unknown, componentStack = ''
     if (sentCrashes.has(key)) return;
     sentCrashes.add(key);
     pageReports.count++;
-    void send(report);
+    void send(report).then((delivered) => {
+      // Not delivered (offline, rate-limited, server error): the next time
+      // it happens may get through.
+      if (!delivered) sentCrashes.delete(key);
+    });
   } catch {
     // Reporting must never break the page.
   }

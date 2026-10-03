@@ -279,3 +279,9 @@ Deno.test("4xx and 5xx codes stay in any wording; a data object's name isn't a t
 Deno.test("a report with no message and no stack frames is empty", async () => {
   assertEquals(await parseCrash({ kind: "error", message: "", stack: "garbage" }, ""), "Empty report");
 });
+
+Deno.test("HTTP statuses: kept right after an HTTP-ish word, not elsewhere", () => {
+  assert(normalizeMessage("Assistant returned 401") !== normalizeMessage("Assistant returned 503"));
+  assertEquals(normalizeMessage("Funder 452 not found"), normalizeMessage("Funder 517 not found"));
+  assertEquals(normalizeMessage("Error 401 Unauthorized"), "Error 401 Unauthorized");
+});

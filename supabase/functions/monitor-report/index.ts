@@ -131,18 +131,14 @@ export function normalizeMessage(message: string): string {
     .replace(/\b0x[0-9a-f]+\b/gi, "<n>")
     // Numbered error codes stay: React's "Minified React error #418" and
     // "#310" are different bugs, and so are HTTP statuses: a 3-digit code
-    // after "status", "code" or "HTTP", or a 4xx/5xx after "error",
-    // "failed" or "response", or before a reason ("401 Unauthorized"). Not
-    // any number in that range: "funder 452" and "funder 517" are one bug.
-    .replace(/(?<![#\d])\d+/g, (d, offset: number, all: string) => {
-      const before = all.slice(Math.max(0, offset - 16), offset);
-      const after = all.slice(offset + d.length, offset + d.length + 24);
-      const status = /^[1-5]\d\d$/.test(d) && /(?:status|code|http)\W*$/i.test(before);
-      const httpError = /^[45]\d\d$/.test(d) &&
-        (/(?:error|fail(?:ed|ure)?|response)\W*$/i.test(before) ||
-          /^\W*(?:bad|unauthori[sz]ed|forbidden|not found|conflict|gone|too many|unprocessable|internal|not implemented|bad gateway|service|gateway)\b/i.test(after));
-      return status || httpError ? d : "<n>";
-    })
+    // right after an HTTP-ish word ("status code 401", "returned 503",
+    // "Request failed: 404", "Error 500"). Not any number in that range:
+    // "funder 452" and "funder 517" are one bug.
+    .replace(/(?<![#\d])\d+/g, (d, offset: number, all: string) =>
+      /^[1-5]\d\d$/.test(d) &&
+        /(?:status|code|http|error|fail(?:ed|ure)?|response|returned|responded|got)\W{0,3}$/i.test(all.slice(Math.max(0, offset - 16), offset))
+        ? d
+        : "<n>")
     .trim();
 }
 
@@ -342,8 +338,10 @@ if (import.meta.main) {
       const rows = parseVitals(body);
       if (typeof rows === "string") return reply(400, rows);
       if (rows.length === 0) return reply(204);
-      // A changed value for a metric id replaces the earlier one.
-      write = () => rest("monitor_vitals?on_conflict=metric_id", rows, "resolution=merge-duplicates,return=minimal");
+      // A changed value for a metric id replaces the earlier one, and dates
+      // the row to now: a tab open for days still counts in the 24 h window.
+      const now = new Date().toISOString();
+      write = () => rest("monitor_vitals?on_conflict=metric_id", rows.map((r) => ({ ...r, created_at: now })), "resolution=merge-duplicates,return=minimal");
     }
 
     if (!SUPABASE_URL || !SERVICE_KEY) {

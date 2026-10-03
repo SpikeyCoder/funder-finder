@@ -69,6 +69,7 @@ CREATE INDEX IF NOT EXISTS monitor_crashes_attempted
 -- One row per metric per page view: the browser re-sends a metric whenever
 -- its value changes (INP and CLS keep growing while the page is open), keyed
 -- by web-vitals' own per-page-view id, and the row keeps the latest value.
+-- created_at is when it was last reported.
 CREATE TABLE IF NOT EXISTS public.monitor_vitals (
   metric_id   text PRIMARY KEY,
   metric      text NOT NULL CHECK (metric IN ('LCP', 'INP', 'CLS')),
