@@ -319,3 +319,10 @@ Deno.test("a quoted minified name is a name", () => {
   assertEquals(normalizeMessage("Xt is not a function. (In 'Xt(e)', 'Xt' is undefined)"), normalizeMessage("Ab is not a function. (In 'Ab(e)', 'Ab' is undefined)"));
   assertEquals(normalizeMessage("Cannot read properties of undefined (reading 'name')"), "Cannot read properties of undefined (reading 'name')");
 });
+
+Deno.test("quoted dotted or hyphenated values are values; code paths stay", () => {
+  assertEquals(normalizeMessage("No account found for 'jane.doe'"), "No account found for <str>");
+  assertEquals(normalizeMessage("Project name 'my-secret-project' already exists"), "Project name <str> already exists");
+  assertEquals(normalizeMessage("(evaluating 'n.current.focus')"), "(evaluating '<id>.current.focus')");
+  assertEquals(normalizeMessage("(evaluating 'window.gtag.push')"), "(evaluating 'window.gtag.push')");
+});

@@ -191,7 +191,8 @@ export function reportCrash(kind: CrashKind, error: unknown, componentStack = ''
     const raw = describe(error);
     const rawKey = `${route}|${kind}|${raw.name}|${raw.message.slice(0, 200)}|${raw.stack.split('\n', 3).join('|').slice(0, 400)}`;
     if (seenRaw.has(rawKey)) return;
-    if (seenRaw.size < 200) seenRaw.add(rawKey);
+    if (seenRaw.size >= 200) seenRaw.clear(); // bounded; starts over when full
+    seenRaw.add(rawKey);
     const report = buildCrashReport(kind, error, path, build(), componentStack, chunkGaveUp, raw);
     if (!report) return;
     // Once a tab per crash, plus once more if it later brings up the error

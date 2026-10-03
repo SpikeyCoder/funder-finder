@@ -81,13 +81,18 @@ const minified = (name: string) => /^[A-Za-z_$][\w$]?$/.test(name) && !WORDS.has
 const usedAsName = (next: string | undefined, rest: string) =>
   /^[.([]/.test(next ?? "") || /^ is\b/.test(rest);
 
-// A quoted part of a message: kept if it's a short identifier or dotted
-// path ("reading 'name'" and "reading 'map'" are different bugs), with
-// minified segments of a dotted path replaced (Safari quotes whole
-// expressions: 'n.current.focus'); anything else is a value.
+// Globals a quoted code path can start with (Safari quotes whole
+// expressions: 'window.foo.bar').
+const GLOBALS = new Set(["window", "document", "navigator", "location", "globalThis", "self", "this", "Math", "JSON", "Object", "Array", "Promise", "React"]);
+
+// A quoted part of a message: kept if it's code, a single identifier
+// ("reading 'name'" and "reading 'map'" are different bugs) or a code path
+// (one starting with a minified variable, which becomes <id>: Safari's
+// 'n.current.focus'; or with a global). Anything else is a value: a dotted
+// or hyphenated one could be a username or a project name ('jane.doe').
 function quoted(q: string, inner: string): string {
   if (inner === "<id>") return q + inner + q; // already replaced
-  if (!/^[A-Za-z_$][\w$.-]{0,39}$/.test(inner)) return "<str>";
+  if (!/^[A-Za-z_$][\w$.]{0,39}$/.test(inner)) return "<str>";
   // A long token with digits in it is an id ('abcdef1234', 'a1b2c3d4…').
   if (inner.length >= 8 && /\d/.test(inner) && !inner.includes(".")) return "<str>";
   // A quoted minified name ("of 'e'", "'Xt' is undefined") is renamed by
@@ -96,7 +101,8 @@ function quoted(q: string, inner: string): string {
   // A dotted path starts with a variable, which minifying renames (even to
   // a word like 'a'); the property names after it keep their names.
   const [first, ...props] = inner.split(".");
-  return q + [/^[A-Za-z_$][\w$]?$/.test(first) ? "<id>" : first, ...props].join(".") + q;
+  if (/^[A-Za-z_$][\w$]?$/.test(first)) return q + ["<id>", ...props].join(".") + q;
+  return GLOBALS.has(first) ? q + inner + q : "<str>";
 }
 
 /**
