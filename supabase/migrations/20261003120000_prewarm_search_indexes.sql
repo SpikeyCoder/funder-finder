@@ -14,6 +14,9 @@
 -- of shared_buffers, and a read from the page cache is a memory copy, not a
 -- disk read. Each run touches every page, so they stay recently used in the
 -- page cache; a run reads from disk only what was evicted since the last one.
+-- ('prefetch' would be cheaper per run, but posix_fadvise(WILLNEED) on pages
+-- that are already cached doesn't mark them used, so it would only reload
+-- them after eviction, up to 5 minutes late, rather than keep them cached.)
 -- The run's duration in cron.job_run_details (end_time - start_time) shows
 -- whether it had to: ~45 ms when cached, ~0.85 s when half was cold (measured
 -- on production).
@@ -43,11 +46,14 @@
 --
 -- Locks: a run holds AccessShareLock on these indexes until it returns. That
 -- conflicts only with DDL on these tables, not with the batch loads'
--- INSERT/UPDATE.
+-- INSERT/UPDATE; DDL waits at most one run (under a second, measured).
 --
 -- The job adds 288 rows a day to cron.job_run_details, which nothing purges;
 -- a daily job keeps 30 days of this job's history. Other jobs' history (the
 -- purge-* jobs' run history is retention evidence) is left alone.
+--
+-- cron.schedule() updates a job of the same name in place (pg_cron >= 1.3;
+-- production has 1.6.4), so re-running this keeps each job's jobid.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- Its functions are owned by supabase_admin, which grants EXECUTE to PUBLIC
@@ -116,14 +122,6 @@ $$;
 
 REVOKE EXECUTE ON FUNCTION public.prewarm_search_indexes() FROM PUBLIC, anon, authenticated;
 
-DO $$
-DECLARE
-  v_job_id bigint;
-BEGIN
-  SELECT jobid INTO v_job_id FROM cron.job WHERE jobname = 'prewarm-search-indexes';
-  IF v_job_id IS NOT NULL THEN PERFORM cron.unschedule(v_job_id); END IF;
-END $$;
-
 SELECT cron.schedule(
   'prewarm-search-indexes',
   '*/5 * * * *',
@@ -131,10 +129,12 @@ SELECT cron.schedule(
 );
 
 -- ── This job's run history ──────────────────────────────────────────────────
--- 30 days is enough to see how recent runs went. A run interrupted by a
--- restart may have no timestamps at all (marked failed before it started);
--- such a row carries nothing but "server restarted" and goes at the next
--- purge. Logs its row count, like the other purge_* functions.
+-- 30 days is enough to see how recent runs went. Matched by the job's
+-- command, not its jobid, so history from an earlier jobid (the job
+-- unscheduled and scheduled again) is purged too. A run cut off by a restart
+-- before it started has no timestamps and isn't aged out: it's the record of
+-- the restart, and there's at most one per restart. Logs its row count, like
+-- the other purge_* functions.
 -- Daily at 10:40 UTC, after the other 10:xx purge jobs.
 
 CREATE OR REPLACE FUNCTION public.purge_prewarm_run_details()
@@ -145,12 +145,9 @@ AS $$
 DECLARE
   v_deleted integer;
 BEGIN
-  DELETE FROM cron.job_run_details d
-   USING cron.job j
-   WHERE j.jobid = d.jobid
-     AND j.jobname = 'prewarm-search-indexes'
-     AND (coalesce(d.end_time, d.start_time) < now() - interval '30 days'
-          OR (d.start_time IS NULL AND d.end_time IS NULL AND d.status = 'failed'));
+  DELETE FROM cron.job_run_details
+   WHERE command = 'SELECT public.prewarm_search_indexes()'
+     AND coalesce(end_time, start_time) < now() - interval '30 days';
   GET DIAGNOSTICS v_deleted = ROW_COUNT;
   RAISE LOG 'purge_prewarm_run_details: deleted % rows', v_deleted;
   RETURN v_deleted;
@@ -158,14 +155,6 @@ END;
 $$;
 
 REVOKE EXECUTE ON FUNCTION public.purge_prewarm_run_details() FROM PUBLIC, anon, authenticated;
-
-DO $$
-DECLARE
-  v_job_id bigint;
-BEGIN
-  SELECT jobid INTO v_job_id FROM cron.job WHERE jobname = 'purge-prewarm-run-details';
-  IF v_job_id IS NOT NULL THEN PERFORM cron.unschedule(v_job_id); END IF;
-END $$;
 
 SELECT cron.schedule(
   'purge-prewarm-run-details',
