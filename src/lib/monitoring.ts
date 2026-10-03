@@ -65,7 +65,9 @@ export function isNoise(error: unknown, message: string, stack: string, chunkGav
   // network, not our code. Unless the error screen showed: a page that breaks
   // when a request fails is a bug worth a card.
   if (screenShown) return false;
-  if (/^(?:TypeError: )?(?:Failed to fetch|Load failed|NetworkError when attempting to fetch resource\.?|Network request failed)$/i.test(message.trim())) return true;
+  // Some versions add the host: "Failed to fetch (api.example.org)". And
+  // supabase-js wraps a failed Edge Function request in its own wording.
+  if (/^(?:TypeError: )?(?:(?:Failed to fetch|Load failed)(?: \([^)]*\))?|NetworkError when attempting to fetch resource\.?|Network request failed|Failed to send a request to the Edge Function)$/i.test(message.trim())) return true;
   return (error as { name?: unknown } | null)?.name === 'AbortError';
 }
 

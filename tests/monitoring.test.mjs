@@ -93,7 +93,7 @@ test('noise: extensions, opaque cross-origin errors, ResizeObserver', () => {
 });
 
 test('network failures and aborts are noise, in each browser\'s wording', () => {
-  for (const msg of ['Failed to fetch', 'Load failed', 'NetworkError when attempting to fetch resource.', 'TypeError: Failed to fetch']) {
+  for (const msg of ['Failed to fetch', 'Load failed', 'NetworkError when attempting to fetch resource.', 'TypeError: Failed to fetch', 'Failed to fetch (tgtotjvdubhjxzybmdex.supabase.co)', 'Failed to send a request to the Edge Function']) {
     assert.equal(isNoise(new TypeError(msg), msg, ''), true, msg);
   }
   assert.equal(isNoise(new DOMException('The user aborted a request.', 'AbortError'), 'The user aborted a request.', ''), true);

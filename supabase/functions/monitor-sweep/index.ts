@@ -97,11 +97,13 @@ const fence = (s: string) => "```\n" + s.replace(/```/g, "ˋˋˋ") + "\n```";
 export const code = (s: string) => "`" + s.replace(/[`\n\r]/g, " ") + "`";
 
 export function crashCard(c: CrashRow): { name: string; desc: string } {
-  // The title is plain text but still reporter-supplied: no URLs or domains
-  // in it, so a forged report can't put a convincing link on the board.
+  // The title is plain text but still reporter-supplied: no URLs, and
+  // anything domain-like defanged ("evil[.]com"), so a forged report can't
+  // put a convincing link on the board while "e.info is not a function"
+  // stays readable.
   const title = `${c.name}: ${c.message}`
     .replace(/(?:https?:\/\/|www\.)\S+/gi, "<url>")
-    .replace(/\b[\w-]+(?:\.[\w-]+)*\.(?:com|org|net|io|dev|app|co|us|uk|info|biz|example)\b\S*/gi, "<url>")
+    .replace(/\.(com|org|net|io|dev|app|co|us|uk|info|biz|example)\b/gi, "[.]$1")
     .replace(/\s+/g, " ")
     .slice(0, 120);
   return {
@@ -123,8 +125,16 @@ export function crashCard(c: CrashRow): { name: string; desc: string } {
   };
 }
 
-export function slaBreached(checks: Pick<SlaCheck, "ok">[]): boolean {
-  return checks.filter((c) => !c.ok).length >= SLA_BREACHES_PER_HOUR;
+// Failures in at least two sweep runs (15 minutes apart), not just one: a
+// cold boot slows every check in its run, so one slow run is a blip, while
+// an outage is caught by the second run.
+export function slaBreached(checks: Pick<SlaCheck, "ok" | "checked_at">[]): boolean {
+  const failed = checks.filter((c) => !c.ok);
+  const runs = new Set(failed.map((c, i) => {
+    const t = Date.parse(c.checked_at ?? "");
+    return Number.isNaN(t) ? `#${i}` : Math.floor(t / (5 * 60 * 1000));
+  }));
+  return failed.length >= SLA_BREACHES_PER_HOUR && runs.size >= 2;
 }
 
 export function slaCard(checks: SlaCheck[]): { name: string; desc: string } {

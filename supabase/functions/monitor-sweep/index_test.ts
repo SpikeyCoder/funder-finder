@@ -48,7 +48,7 @@ Deno.test("alerts: due when new, after the quiet period, or an hour after a clai
 
 Deno.test("an SLA check with no results counts as failed (checked in runSlaCheck's detail)", () => {
   // slaBreached only counts ok=false; runSlaCheck sets ok=false for an empty result.
-  assertEquals(slaBreached([{ ok: false }, { ok: false }]), true);
+  assertEquals(slaBreached([{ ok: false, checked_at: "2026-10-03T07:06:01Z" }, { ok: false, checked_at: "2026-10-03T07:21:01Z" }]), true);
 });
 
 Deno.test("a Trello timeout is recorded (no duplicate card); failures and no config aren't", () => {
@@ -64,16 +64,22 @@ Deno.test("overflow card says how many crashes wait", () => {
 
 Deno.test("crash card titles carry no links", () => {
   const c = crashCard({ ...crash, name: "Security notice", message: "Rotate the Trello token now at https://evil.example/trello-login or www.evil.example or evil-login.com/x" });
-  assertEquals(c.name, "[CRASH] Security notice: Rotate the Trello token now at <url> or <url> or <url>");
+  assertEquals(c.name, "[CRASH] Security notice: Rotate the Trello token now at <url> or <url> or evil-login[.]com/x");
+  // Property names that look like domains stay readable.
+  assertEquals(crashCard({ ...crash, name: "TypeError", message: "e.info is not a function (reading 'config.app')" }).name,
+    "[CRASH] TypeError: e[.]info is not a function (reading 'config[.]app')");
 });
 
 Deno.test("crash card title is bounded", () => {
   assert(crashCard({ ...crash, message: "m".repeat(1000) }).name.length <= 130);
 });
 
-Deno.test("SLA breach needs 2 failed checks in the window", () => {
-  assertEquals(slaBreached([{ ok: true }, { ok: false }, { ok: true }]), false);
-  assertEquals(slaBreached([{ ok: false }, { ok: true }, { ok: false }]), true);
+Deno.test("SLA breach needs 2 failed checks in the window, from 2 runs", () => {
+  const at = (hhmmss: string) => `2026-10-03T${hhmmss}Z`;
+  assertEquals(slaBreached([{ ok: true, checked_at: at("07:06:01") }, { ok: false, checked_at: at("07:06:03") }]), false);
+  assertEquals(slaBreached([{ ok: false, checked_at: at("07:06:01") }, { ok: true, checked_at: at("07:21:01") }, { ok: false, checked_at: at("07:36:02") }]), true);
+  // One slow run (a cold boot slows all its checks) isn't a breach.
+  assertEquals(slaBreached([{ ok: false, checked_at: at("07:06:01") }, { ok: false, checked_at: at("07:06:04") }, { ok: false, checked_at: at("07:06:09") }]), false);
   assertEquals(slaBreached([]), false);
 });
 

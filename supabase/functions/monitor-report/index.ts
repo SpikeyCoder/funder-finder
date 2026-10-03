@@ -79,6 +79,8 @@ const usedAsName = (next: string | undefined, atStart: boolean, rest: string) =>
 function quoted(q: string, inner: string): string {
   if (inner === "<id>") return q + inner + q; // already replaced
   if (!/^[A-Za-z_$][\w$.-]{0,39}$/.test(inner)) return "<str>";
+  // A long token with digits in it is an id ('abcdef1234', 'a1b2c3d4…').
+  if (inner.length >= 8 && /\d/.test(inner) && !inner.includes(".")) return "<str>";
   if (!inner.includes(".")) return q + inner + q;
   return q + inner.split(".").map((seg) => (minified(seg) ? "<id>" : seg)).join(".") + q;
 }
@@ -92,12 +94,20 @@ function quoted(q: string, inner: string): string {
 export function normalizeMessage(message: string): string {
   return message
     .replace(/https?:\/\/\S+/g, "<url>")
+    // Ids: UUIDs and other hex runs with both digits and letters.
+    .replace(/\b(?=[\da-f-]*\d)(?=[\da-f-]*[a-f])[\da-f]+(?:-[\da-f]+)*\b/gi, (m) => (m.replace(/-/g, "").length >= 8 ? "<hex>" : m))
+    // What a JSON parse choked on is the response, not the bug: "Unexpected
+    // token 'N', "Not Found" is not valid JSON" and "… '<', "<!DOCTYPE"…"
+    // are the same missing res.ok check.
+    .replace(/\b(Unexpected (?:token|identifier|character))\s+(?:(["'`]).*?\2|[^\s,]+)/gi, "$1 <tok>")
     // A variable named in a TDZ error is a minified name, quoted or not:
     // "Cannot access 'Xt' before initialization" (Chrome), "can't access
     // lexical declaration 'Xt' before initialization" (Firefox).
     .replace(/(access (?:lexical declaration )?)(["'`])[A-Za-z_$][\w$]?\2/gi, "$1$2<id>$2")
     // A quote right after a letter is an apostrophe ("can't"), not a quote.
     .replace(/(?<![A-Za-z])(["'`])(.*?)\1/g, (_m, q, inner) => quoted(q, inner))
+    // Chrome marks a cut-off quoted excerpt: "Internal S"...
+    .replace(/<str>\.\.\./g, "<str>")
     // Unquoted too: Firefox says "t.current is null". A short word is a name
     // where it's used as one ("a is not a function", "in.x is null").
     .replace(/(^|[^\w$'"`<])([A-Za-z_$][\w$]?)(?=([^\w$'"`>]|$))/g, (m, pre, tok, next, offset, all) =>

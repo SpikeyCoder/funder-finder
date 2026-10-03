@@ -188,3 +188,22 @@ Deno.test("fingerprint takes the file from the top frame, not a URL in Chrome's 
   assertEquals(fingerprintSource("TypeError", msg, chrome), fingerprintSource("TypeError", msg, firefox));
   assertEquals(fingerprintSource("TypeError", msg, chrome).split("|")[2], "/assets/Search.js");
 });
+
+Deno.test("normalizeMessage folds ids and JSON-parse details into one kind", () => {
+  assertEquals(
+    normalizeMessage("Project not found: a3f2c9b1-1111-4c2d-9e8f-0123456789ab"),
+    normalizeMessage("Project not found: b7e1d2c3-2222-4d3e-8f9a-abcdef012345"),
+  );
+  assertEquals(normalizeMessage("No row 'abcdef1234'"), normalizeMessage("No row 'fedcba4321'"));
+  assertEquals(normalizeMessage("No row 'abcdef1234'"), "No row <str>");
+  // Ordinary words with hex letters stay.
+  assertEquals(normalizeMessage("cafe failed"), "cafe failed");
+  const json = [
+    `Unexpected token 'N', "Not Found" is not valid JSON`,
+    `Unexpected token 'I', "Internal S"... is not valid JSON`,
+    `Unexpected token '<', "<!DOCTYPE "... is not valid JSON`,
+  ].map(normalizeMessage);
+  assertEquals(new Set(json).size, 1);
+  assertEquals(json[0], "Unexpected token <tok>, <str> is not valid JSON");
+  assertEquals(normalizeMessage(`JSON Parse error: Unexpected identifier "Not"`), "JSON Parse error: Unexpected identifier <tok>");
+});
