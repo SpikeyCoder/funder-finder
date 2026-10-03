@@ -16,7 +16,7 @@
 import { onCLS, onINP, onLCP, type Metric } from 'web-vitals';
 import { currentBuild, isChunkLoadError } from './chunkReload';
 // Shared with the monitor-report Edge Function, so both scrub the same way.
-import { FRAME, normalizePath, scrub } from '../../supabase/functions/_shared/monitor_scrub.ts';
+import { FRAME, errorTypeName, normalizePath, scrub } from '../../supabase/functions/_shared/monitor_scrub.ts';
 import { SUPABASE_URL } from './supabaseProject';
 
 const ENDPOINT = `${SUPABASE_URL}/functions/v1/monitor-report`;
@@ -84,7 +84,7 @@ export function describe(error: unknown): { name: string; message: string; stack
   if (error && typeof error === 'object') {
     const e = error as { name?: unknown; message?: unknown; stack?: unknown };
     if (typeof e.message === 'string') {
-      return { name: typeof e.name === 'string' ? e.name : 'Error', message: e.message, stack: typeof e.stack === 'string' ? e.stack : '' };
+      return { name: errorTypeName(e.name), message: e.message, stack: typeof e.stack === 'string' ? e.stack : '' };
     }
   }
   // Anything else: a thrown string is a message; for other values only their

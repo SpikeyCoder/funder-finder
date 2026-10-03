@@ -396,22 +396,26 @@ export function pickCrashes<T extends Pick<CrashRow, "card_attempted_at">>(due: 
 async function sweepCrashes(summary: Summary): Promise<void> {
   const now = Date.now();
   const iso = (ms: number) => encodeURIComponent(new Date(ms).toISOString());
-  // Every crash whose card was tried in the last day counts, opened or not:
-  // a Trello timeout may still have opened its card.
-  const triedToday = await restCount(`monitor_crashes?card_attempted_at=gte.${iso(now - DAY_MS)}`);
-  const dayLeft = MAX_CRASH_CARDS_PER_DAY - triedToday;
   // Due: no card yet, and never claimed, or last claimed over an hour ago
   // (over a day ago after MAX_CARD_ATTEMPTS failures or a timeout: a long
   // Trello outage delays a card, it never loses one). Retries of crashes
   // tried in the last day are fetched apart and go first: they need no
   // daily budget, so fresh ones waiting for it mustn't crowd them out.
-  const select = "&order=occurrences.desc,first_seen.asc" +
+  // Fewest tries first, so a crash whose card Trello keeps rejecting falls
+  // behind new ones instead of taking a daily slot every day.
+  const select = "&order=card_attempts.asc,occurrences.desc,first_seen.asc" +
     "&select=fingerprint,kind,name,message,stack,component_stack,path,release,user_agent,occurrences,first_seen,last_seen,card_attempts,card_attempted_at,previous_card_url";
-  const retries = await restJson<CrashRow[]>(
-    "monitor_crashes?trello_card_url=is.null" +
-      `&card_attempts=lt.${MAX_CARD_ATTEMPTS}&card_attempted_at=lt.${iso(now - RETRY_AFTER_MS)}&card_attempted_at=gte.${iso(now - DAY_MS)}` +
-      `${select}&limit=${MAX_CRASH_CARDS}`,
-  );
+  const [triedToday, retries] = await Promise.all([
+    // Every crash whose card was tried in the last day counts against the
+    // daily cap, opened or not: a Trello timeout may still have opened it.
+    restCount(`monitor_crashes?card_attempted_at=gte.${iso(now - DAY_MS)}`),
+    restJson<CrashRow[]>(
+      "monitor_crashes?trello_card_url=is.null" +
+        `&card_attempts=lt.${MAX_CARD_ATTEMPTS}&card_attempted_at=lt.${iso(now - RETRY_AFTER_MS)}&card_attempted_at=gte.${iso(now - DAY_MS)}` +
+        `${select}&limit=${MAX_CRASH_CARDS}`,
+    ),
+  ]);
+  const dayLeft = MAX_CRASH_CARDS_PER_DAY - triedToday;
   const fresh = dayLeft <= 0 ? [] : await restJson<CrashRow[]>(
     "monitor_crashes?trello_card_url=is.null" +
       `&or=(card_attempted_at.is.null,card_attempted_at.lt.${iso(now - DAY_MS)})` +

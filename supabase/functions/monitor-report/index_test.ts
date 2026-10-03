@@ -104,7 +104,7 @@ Deno.test("parseCrash validates and scrubs", async () => {
   assertEquals(await parseCrash({ kind: "error", message: "", stack: 1 }, ""), "Empty report");
   const named = await parseCrash({ kind: "error", name: "jane@example.org", message: "x" }, "");
   if (typeof named === "string") throw new Error(named);
-  assertEquals(named.name, "[email]");
+  assertEquals(named.name, "Error"); // not an error type name, so not kept
   const row = await parseCrash({
     kind: "boundary",
     name: "TypeError",
@@ -259,4 +259,17 @@ Deno.test("only the token itself is taken out of a JSON parse error", () => {
   );
   assertEquals(normalizeMessage("Unexpected token < in JSON at position 0"), "Unexpected token <tok> in JSON at position <n>");
   assertEquals(normalizeMessage("Unexpected token o in JSON at position 1"), "Unexpected token <tok> in JSON at position <n>");
+});
+
+Deno.test("4xx and 5xx codes stay in any wording; a data object's name isn't a type", async () => {
+  assertEquals(normalizeMessage("Request failed: 404"), "Request failed: 404");
+  assert(normalizeMessage("Error 401 Unauthorized") !== normalizeMessage("Error 503 Service Unavailable"));
+  assertEquals(normalizeMessage("Expected 200 rows"), "Expected <n> rows");
+  assertEquals(normalizeMessage("took 1.5 ms"), "took <n>.<n> ms");
+  const row = await parseCrash({ kind: "rejection", name: "Jane Doe", message: "x" }, "");
+  if (typeof row === "string") throw new Error(row);
+  assertEquals(row.name, "Error");
+  const typed = await parseCrash({ kind: "rejection", name: "PostgrestError", message: "x" }, "");
+  if (typeof typed === "string") throw new Error(typed);
+  assertEquals(typed.name, "PostgrestError");
 });

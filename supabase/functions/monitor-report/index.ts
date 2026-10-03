@@ -23,7 +23,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { ipRateLimit } from "../_shared/rate_limit.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 // The browser scrubs with the same module; redone here because reports are untrusted.
-import { FRAME, normalizePath, scrub } from "../_shared/monitor_scrub.ts";
+import { errorTypeName, FRAME, normalizePath, scrub } from "../_shared/monitor_scrub.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -130,9 +130,13 @@ export function normalizeMessage(message: string): string {
         : m)
     .replace(/\b0x[0-9a-f]+\b/gi, "<n>")
     // Numbered error codes stay: React's "Minified React error #418" and
-    // "#310" are different bugs, and so are "status code 401" and "… 500".
+    // "#310" are different bugs, and so are "… 401" and "… 500": any 4xx or
+    // 5xx, and other 3-digit codes after "status", "code" or "HTTP".
     .replace(/(?<![#\d])\d+/g, (d, offset: number, all: string) =>
-      /^[1-5]\d\d$/.test(d) && /(?:status|code|http)\W*$/i.test(all.slice(Math.max(0, offset - 16), offset)) ? d : "<n>")
+      /^[45]\d\d$/.test(d) ||
+        (/^[1-5]\d\d$/.test(d) && /(?:status|code|http)\W*$/i.test(all.slice(Math.max(0, offset - 16), offset)))
+        ? d
+        : "<n>")
     .trim();
 }
 
@@ -181,7 +185,8 @@ export async function parseCrash(b: Record<string, unknown>, userAgent: string):
   if (!KINDS.has(kind)) return "Invalid kind";
   // Scrub before cutting: a cut can leave half an address the pattern misses.
   const message = scrub(str(b.message, 2000)).slice(0, 500);
-  const name = scrub(str(b.name, 200)).slice(0, 100) || "Error";
+  // A type name only: a data object's `name` field is data (see errorTypeName).
+  const name = errorTypeName(str(b.name, 100));
   const stack = scrub(str(b.stack, 8000)).slice(0, 4000);
   // The validated values: a non-string stack is no stack.
   if (!message && !stack) return "Empty report";

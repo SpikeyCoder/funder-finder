@@ -37,6 +37,16 @@ export function scrub(text: string): string {
  */
 export const FRAME = /^\s*at\s|^(?:[^\s@]*|(?:global|module|eval) code)@\S/;
 
+/**
+ * An error's name as reported, if it looks like an error type (TypeError,
+ * PostgrestError, ChunkLoadError, NonError…); otherwise "Error". A thrown
+ * or rejected data object's `name` field (a person's name, say) is data,
+ * not a type.
+ */
+export function errorTypeName(name: unknown): string {
+  return typeof name === "string" && /^[A-Za-z_$][\w$]{0,60}(?:Error|Exception)$|^NonError$/.test(name) ? name : "Error";
+}
+
 export const ROUTES = [
   "/", "/applications", "/browse", "/contact", "/dashboard", "/funder/:id", "/grant-writer", "/import",
   "/login", "/mission", "/onboarding/first-project", "/onboarding/matches", "/onboarding/profile",

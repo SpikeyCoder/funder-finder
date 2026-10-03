@@ -128,6 +128,8 @@ test('chunk-load failures are noise unless the automatic reload already failed',
 test('describe handles errors, error-like objects, strings and odd values', () => {
   assert.deepEqual(describe('boom'), { name: 'NonError', message: 'boom', stack: '' });
   assert.equal(describe({ name: 'AbortError', message: 'aborted' }).name, 'AbortError');
+  // A data object's name field isn't an error type.
+  assert.equal(describe({ name: 'Jane Doe', message: 'hi' }).name, 'Error');
   // Only the shape of a non-Error value, never its contents.
   assert.equal(describe({ profile: { name: 'Jane Doe', phone: '555-0100' } }).message, 'object with keys profile');
   assert.equal(describe([1, 2]).message, 'array with keys 0, 1');
