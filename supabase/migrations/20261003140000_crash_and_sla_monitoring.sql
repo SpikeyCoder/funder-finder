@@ -108,10 +108,10 @@ REVOKE ALL ON public.monitor_crashes, public.monitor_vitals, public.monitor_sla_
 -- One row per fingerprint: a repeat bumps the count and keeps the latest
 -- occurrence's details (its release and browser are the most useful). The
 -- kind becomes 'boundary' once any occurrence showed the error screen, so
--- the card says the worst way it was seen. A crash that comes back after
--- 7 quiet days (and 7 days after its last card attempt, so one that waited
--- for its first card isn't re-carded) counts as a regression: it starts
--- over and gets a new card.
+-- the card says the worst way it was seen. A carded crash that comes back
+-- after 7 quiet days (and 7 days after its card) counts as a regression: it
+-- starts over and gets a new card. One still waiting for its card keeps its
+-- count and its place in the queue.
 
 CREATE OR REPLACE FUNCTION public.record_client_crash(
   p_fingerprint text, p_kind text, p_name text, p_message text, p_stack text,
@@ -126,7 +126,7 @@ AS $$
      SET occurrences = 0, first_seen = now(), kind = p_kind,
          trello_card_url = NULL, card_attempted_at = NULL, card_attempts = 0
    WHERE fingerprint = p_fingerprint AND last_seen < now() - interval '7 days'
-     AND (card_attempted_at IS NULL OR card_attempted_at < now() - interval '7 days');
+     AND trello_card_url IS NOT NULL AND card_attempted_at < now() - interval '7 days';
 
   INSERT INTO public.monitor_crashes AS c
     (fingerprint, kind, name, message, stack, component_stack, path, release, user_agent)

@@ -47,6 +47,10 @@ export function isChunkLoadError(error: unknown): boolean {
 // build part of every key changes, so the next failure auto-recovers again.
 const CHUNK_RELOAD_KEY = 'ff_chunk_reloads';
 const MAX_REMEMBERED = 50;
+// The last automatic reload: its key and when it started.
+const LAST_RELOAD_KEY = 'ff_chunk_last_reload';
+// A page whose load started this soon after the reload is the reload's page.
+const RELOAD_PAGE_WINDOW_MS = 15_000;
 
 export function reloadKey(error: unknown, pathname: string, build: string): string {
   const message = String((error as { message?: unknown } | null)?.message ?? '');
@@ -89,9 +93,27 @@ export function reloadOnceForChunkError(error: unknown): ChunkReloadResult {
     const seen = readReloaded();
     if (seen.includes(key)) return 'already-reloaded';
     sessionStorage.setItem(CHUNK_RELOAD_KEY, JSON.stringify([...seen, key].slice(-MAX_REMEMBERED)));
+    sessionStorage.setItem(LAST_RELOAD_KEY, JSON.stringify({ key, at: Date.now() }));
   } catch {
     return 'unavailable';
   }
   window.location.reload();
   return 'reloading';
+}
+
+// Whether this page is the one our automatic reload for this error loaded,
+// so the same failure here means the reload didn't help. Judged by when this
+// page's load started (not how long it has run, which depends on the device
+// and network): within seconds of the reload, for the same key. A later,
+// separate failure in the tab, or one after another full navigation, isn't.
+export function onReloadPageFor(error: unknown): boolean {
+  try {
+    const last = JSON.parse(sessionStorage.getItem(LAST_RELOAD_KEY) || 'null') as { key?: string; at?: number } | null;
+    if (!last || typeof last.at !== 'number') return false;
+    if (last.key !== reloadKey(error, window.location.pathname, currentBuild())) return false;
+    const sinceReload = performance.timeOrigin - last.at;
+    return sinceReload >= 0 && sinceReload < RELOAD_PAGE_WINDOW_MS;
+  } catch {
+    return false;
+  }
 }

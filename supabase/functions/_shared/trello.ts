@@ -4,8 +4,15 @@
 // "timeout" if Trello didn't answer in time: the card may or may not exist,
 // so the caller decides whether a duplicate or a missing card is worse.
 
+function trelloCredentials(): { key: string; token: string; idList: string } | null {
+  const key = Deno.env.get("TRELLO_API_KEY");
+  const token = Deno.env.get("TRELLO_TOKEN");
+  const idList = Deno.env.get("TRELLO_LIST_ID");
+  return key && token && idList ? { key, token, idList } : null;
+}
+
 export function trelloConfigured(): boolean {
-  return !!(Deno.env.get("TRELLO_API_KEY") && Deno.env.get("TRELLO_TOKEN") && Deno.env.get("TRELLO_LIST_ID"));
+  return trelloCredentials() !== null;
 }
 
 export async function createTrelloCard(
@@ -14,13 +21,12 @@ export async function createTrelloCard(
   // Called with what went wrong when the result is null or "timeout".
   onFailure: (detail: string) => void = () => {},
 ): Promise<string | null | "unconfigured" | "timeout"> {
-  const key = Deno.env.get("TRELLO_API_KEY");
-  const token = Deno.env.get("TRELLO_TOKEN");
-  const idList = Deno.env.get("TRELLO_LIST_ID");
-  if (!key || !token || !idList) return "unconfigured";
+  const creds = trelloCredentials();
+  if (!creds) return "unconfigured";
+  const { key, token, idList } = creds;
   // Card fields go in the body, not the URL: a long stack would push the URL
-  // past what Trello accepts (414).
-  const auth = new URLSearchParams({ key, token });
+  // past what Trello accepts (414). The credentials go in a header, so the
+  // URL in a network error (which callers log and store) holds no secrets.
   const fields = new URLSearchParams({
     idList,
     name: card.name.slice(0, 200),
@@ -29,9 +35,12 @@ export async function createTrelloCard(
     pos: "top",
   });
   try {
-    const res = await fetch(`https://api.trello.com/1/cards?${auth}`, {
+    const res = await fetch("https://api.trello.com/1/cards", {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization: `OAuth oauth_consumer_key="${key}", oauth_token="${token}"`,
+      },
       body: fields,
       signal: AbortSignal.timeout(timeoutMs),
     });

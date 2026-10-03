@@ -10,7 +10,7 @@ const source = readFileSync(new URL('../src/lib/chunkReload.ts', import.meta.url
 const { outputText } = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 },
 });
-const { isChunkLoadError, reloadKey, reloadOnceForChunkError } = await import(
+const { isChunkLoadError, onReloadPageFor, reloadKey, reloadOnceForChunkError } = await import(
   `data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`
 );
 
@@ -140,4 +140,32 @@ test('a corrupt stored value is treated as empty, not as a crash', () => {
   store.set('ff_chunk_reloads', '{"a":1}'); // old object format
   window.location.pathname = '/other';
   assert.equal(reloadOnceForChunkError(LINK), 'reloading');
+});
+
+test('onReloadPageFor: only the page our reload loaded, for the same failure', () => {
+  const realPerformance = globalThis.performance;
+  const pageStartedAt = (ms) => Object.defineProperty(globalThis, 'performance', { value: { timeOrigin: ms }, configurable: true });
+  try {
+    const before = Date.now();
+    assert.equal(reloadOnceForChunkError(LINK), 'reloading');
+    // The reloaded page started loading a moment later: same failure there.
+    pageStartedAt(before + 300);
+    assert.equal(onReloadPageFor(LINK), true);
+    // A different failure on that page isn't the one we reloaded for.
+    assert.equal(onReloadPageFor(fetchFail('Other-1.js')), false);
+    // A page loaded a minute later (a later navigation in the tab) isn't the reload's.
+    pageStartedAt(before + 60_000);
+    assert.equal(onReloadPageFor(LINK), false);
+    // Nor the page that started the reload.
+    pageStartedAt(before - 5_000);
+    assert.equal(onReloadPageFor(LINK), false);
+  } finally {
+    Object.defineProperty(globalThis, 'performance', { value: realPerformance, configurable: true });
+  }
+});
+
+test('onReloadPageFor is false without a recorded reload or storage', () => {
+  assert.equal(onReloadPageFor(LINK), false);
+  installGlobals({ blocked: true });
+  assert.equal(onReloadPageFor(LINK), false);
 });

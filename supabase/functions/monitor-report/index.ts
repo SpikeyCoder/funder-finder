@@ -169,7 +169,9 @@ export async function parseCrash(b: Record<string, unknown>, userAgent: string):
 
 /** A vitals report as rows (possibly none), or an error message. */
 export function parseVitals(b: Record<string, unknown>): VitalRow[] | string {
-  if (!Array.isArray(b.metrics) || b.metrics.length > 3) return "Invalid metrics";
+  // Up to two of each metric: after a back/forward-cache restore, one batch
+  // can hold an older page view's metric and the new view's (different ids).
+  if (!Array.isArray(b.metrics) || b.metrics.length > 6) return "Invalid metrics";
   const path = normalizePath(str(b.path, 500) || "/");
   const rows: VitalRow[] = [];
   const seen = new Set<string>();
@@ -180,12 +182,13 @@ export function parseVitals(b: Record<string, unknown>): VitalRow[] | string {
     // web-vitals ids look like "v5-1696300000000-1234567890123".
     const id = str(m?.id, 80);
     if (!/^v\d+-[\w.-]{6,}$/.test(id)) return "Invalid id";
-    if (!Object.hasOwn(VITAL_LIMITS, metric) || seen.has(metric)) return "Invalid metric";
+    if (seen.has(id)) return "Invalid id";
+    if (!Object.hasOwn(VITAL_LIMITS, metric)) return "Invalid metric";
     if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > VITAL_LIMITS[metric]) {
       return "Invalid value";
     }
     if (!RATINGS.has(rating)) return "Invalid rating";
-    seen.add(metric);
+    seen.add(id);
     // Per metric (INP/CLS can belong to a later page than LCP); the report's
     // path for older clients.
     const mPath = typeof m?.path === "string" ? normalizePath(str(m.path, 500)) : path;

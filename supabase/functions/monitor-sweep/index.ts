@@ -367,7 +367,7 @@ async function sweepCrashes(summary: Summary): Promise<void> {
   const due = budget <= 0 ? [] : await restJson<CrashRow[]>(
     "monitor_crashes?trello_card_url=is.null" +
       `&or=(card_attempted_at.is.null,and(card_attempts.lt.${MAX_CARD_ATTEMPTS},card_attempted_at.lt.${iso(now - RETRY_AFTER_MS)}),card_attempted_at.lt.${iso(now - DAY_MS)})` +
-      `&order=occurrences.desc,first_seen.asc&limit=${MAX_CRASH_CARDS}` +
+      `&order=occurrences.desc,first_seen.asc&limit=${budget}` +
       "&select=fingerprint,kind,name,message,stack,component_stack,path,release,user_agent,occurrences,first_seen,last_seen,card_attempts",
   );
   let carded = 0;
@@ -439,15 +439,15 @@ if (import.meta.main) {
     if (!SUPABASE_URL || !SERVICE_KEY || !ANON_KEY) return json(500, { error: "Server config missing" });
 
     // Each part runs even if another fails; failures are logged and reported.
-    // Without Trello only the SLA checks run: claiming crashes and alerts for
-    // cards that can't be opened would use up their retries.
+    // Without Trello only the SLA checks run (and are recorded): claiming
+    // crashes and alerts for cards that can't be opened would use up their
+    // retries.
     const summary: Summary = {};
     const trello = trelloConfigured();
-    // Crashes and vitals only open cards, so they run only with Trello; the
-    // SLA checks are recorded either way.
     const parts: [string, (s: Summary) => Promise<void>][] = [["sla", (s) => sweepSla(s, trello)]];
-    if (trello) parts.push(["crashes", sweepCrashes], ["vitals", sweepVitals]);
-    if (!trello) {
+    if (trello) {
+      parts.push(["crashes", sweepCrashes], ["vitals", sweepVitals]);
+    } else {
       console.error("monitor-sweep: TRELLO_API_KEY / TRELLO_TOKEN / TRELLO_LIST_ID unset; no cards opened");
       summary.trello = "unconfigured";
     }
