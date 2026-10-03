@@ -71,6 +71,7 @@ export interface CrashRow {
   first_seen: string;
   last_seen: string;
   card_attempts: number;
+  card_attempted_at: string | null;
   previous_card_url?: string | null;
 }
 
@@ -367,25 +368,49 @@ async function sweepSla(summary: Summary, trello: boolean): Promise<void> {
   if (url) summary.sla_card = url;
 }
 
+/**
+ * Which due crashes to try this run: at most MAX_CRASH_CARDS Trello calls,
+ * and at most `dayLeft` crashes not already tried in the last 24 h. A retry
+ * of one tried in that window (its last try failed) uses no daily budget:
+ * it's already counted, and a crash is counted once however often it's
+ * tried (a timed-out try, which may have opened its card, is retried only
+ * after a day, so it can't open a second card in the same 24 h).
+ */
+export function pickCrashes<T extends Pick<CrashRow, "card_attempted_at">>(due: T[], dayLeft: number, now = Date.now()): T[] {
+  const picked: T[] = [];
+  let fresh = 0;
+  for (const c of due) {
+    if (picked.length >= MAX_CRASH_CARDS) break;
+    const triedToday = c.card_attempted_at !== null && now - Date.parse(c.card_attempted_at) < DAY_MS;
+    if (!triedToday) {
+      if (fresh >= dayLeft) continue;
+      fresh++;
+    }
+    picked.push(c);
+  }
+  return picked;
+}
+
 async function sweepCrashes(summary: Summary): Promise<void> {
   const now = Date.now();
   const iso = (ms: number) => encodeURIComponent(new Date(ms).toISOString());
-  // Every crash whose card was attempted in the last day counts, opened or
-  // not: a Trello timeout may still have opened its card, so counting only
-  // recorded ones would let a slow Trello flood the board.
-  const cardedToday = await restCount(`monitor_crashes?card_attempted_at=gte.${iso(now - DAY_MS)}`);
+  // Every crash whose card was tried in the last day counts, opened or not:
+  // a Trello timeout may still have opened its card.
+  const triedToday = await restCount(`monitor_crashes?card_attempted_at=gte.${iso(now - DAY_MS)}`);
+  const dayLeft = MAX_CRASH_CARDS_PER_DAY - triedToday;
   // Due: no card yet, and never claimed, or last claimed over an hour ago
-  // (over a day ago after MAX_CARD_ATTEMPTS failures: a long Trello outage
-  // delays a card, it never loses one).
-  const budget = Math.min(MAX_CRASH_CARDS, MAX_CRASH_CARDS_PER_DAY - cardedToday);
-  const due = budget <= 0 ? [] : await restJson<CrashRow[]>(
+  // (over a day ago after MAX_CARD_ATTEMPTS failures or a timeout: a long
+  // Trello outage delays a card, it never loses one). More than one run's
+  // worth, since some may wait for the daily budget while retries go ahead.
+  const due = await restJson<CrashRow[]>(
     "monitor_crashes?trello_card_url=is.null" +
       `&or=(card_attempted_at.is.null,and(card_attempts.lt.${MAX_CARD_ATTEMPTS},card_attempted_at.lt.${iso(now - RETRY_AFTER_MS)}),card_attempted_at.lt.${iso(now - DAY_MS)})` +
-      `&order=occurrences.desc,first_seen.asc&limit=${budget}` +
-      "&select=fingerprint,kind,name,message,stack,component_stack,path,release,user_agent,occurrences,first_seen,last_seen,card_attempts,previous_card_url",
+      `&order=occurrences.desc,first_seen.asc&limit=${MAX_CRASH_CARDS * 4}` +
+      "&select=fingerprint,kind,name,message,stack,component_stack,path,release,user_agent,occurrences,first_seen,last_seen,card_attempts,card_attempted_at,previous_card_url",
   );
+  const picked = pickCrashes(due, dayLeft, now);
   let carded = 0;
-  for (const c of due) {
+  for (const c of picked) {
     // Claim it (counts as an attempt) only if no other run has meanwhile.
     const claim = await rest(
       `monitor_crashes?fingerprint=eq.${c.fingerprint}&trello_card_url=is.null&card_attempts=eq.${c.card_attempts}&select=fingerprint`,
@@ -397,15 +422,29 @@ async function sweepCrashes(summary: Summary): Promise<void> {
     );
     if (!claim.ok) throw new Error(`REST monitor_crashes claim ${claim.status}: ${await claim.text()}`);
     if (((await claim.json()) as unknown[]).length !== 1) continue;
-    const url = cardUrl(await createTrelloCard(crashCard(c)), false);
-    // Trello rejected, failed or timed out: retried later (the claim counts
-    // as an attempt), without holding up the rest.
+    const result = await createTrelloCard(crashCard(c));
+    if (result === "timeout") {
+      // The card may exist: no fast retries, only the daily one, so it
+      // can't open a second card within the day. (Not recorded as carded:
+      // a crash that keeps happening must reach the board, and a rare
+      // duplicate card a day later is the lesser cost.)
+      const res = await rest(`monitor_crashes?fingerprint=eq.${c.fingerprint}&trello_card_url=is.null`, {
+        method: "PATCH",
+        body: JSON.stringify({ card_attempts: Math.max(c.card_attempts + 1, MAX_CARD_ATTEMPTS) }),
+      });
+      if (!res.ok) console.error(`monitor-sweep: marking crash ${c.fingerprint} timed out failed:`, res.status, await res.text());
+      continue;
+    }
+    const url = cardUrl(result, false);
+    // Trello rejected or failed: retried in an hour (the claim counts as an
+    // attempt), without holding up the rest.
     if (!url) continue;
     await recordCard(`monitor_crashes?fingerprint=eq.${c.fingerprint}`, url, `crash ${c.fingerprint}`);
     carded++;
   }
   summary.crash_cards = carded;
-  if (cardedToday + carded < MAX_CRASH_CARDS_PER_DAY) return;
+  const freshTried = picked.filter((c) => c.card_attempted_at === null || now - Date.parse(c.card_attempted_at) >= DAY_MS).length;
+  if (triedToday + freshTried < MAX_CRASH_CARDS_PER_DAY) return;
   // The daily limit is reached: say (once a day) how many kinds wait.
   const waiting = await restCount("monitor_crashes?trello_card_url=is.null");
   summary.crashes_waiting = waiting;

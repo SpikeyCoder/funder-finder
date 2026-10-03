@@ -204,32 +204,42 @@ export async function parseCrash(b: Record<string, unknown>, userAgent: string):
   };
 }
 
-/** A vitals report as rows (possibly none), or an error message. */
+/**
+ * A vitals report as rows (possibly none), or an error message. A bad
+ * metric is skipped, not the batch: one out-of-range value (a very slow
+ * load) mustn't lose the good ones with it. All bad is an error.
+ */
 export function parseVitals(b: Record<string, unknown>): VitalRow[] | string {
   // Up to two of each metric: after a back/forward-cache restore, one batch
   // can hold an older page view's metric and the new view's (different ids).
   if (!Array.isArray(b.metrics) || b.metrics.length > 6) return "Invalid metrics";
   const rows: VitalRow[] = [];
   const seen = new Set<string>();
+  let error = "";
   for (const m of b.metrics as Record<string, unknown>[]) {
-    const metric = str(m?.name, 10);
-    const value = m?.value;
-    const rating = str(m?.rating, 20);
-    // web-vitals ids look like "v5-1696300000000-1234567890123".
-    const id = str(m?.id, 80);
-    if (!/^v\d+-[\w.-]{6,}$/.test(id)) return "Invalid id";
-    if (seen.has(id)) return "Invalid id";
-    if (!Object.hasOwn(VITAL_LIMITS, metric)) return "Invalid metric";
-    if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > VITAL_LIMITS[metric]) {
-      return "Invalid value";
-    }
-    if (!RATINGS.has(rating)) return "Invalid rating";
-    seen.add(id);
-    // Per metric: INP and CLS can belong to a later page than LCP.
-    if (typeof m?.path !== "string") return "Invalid path";
-    rows.push({ metric_id: id, metric, value, rating, path: normalizePath(str(m.path, 500)), release: release(b.release) });
+    const row = parseVital(m, seen, release(b.release));
+    if (typeof row === "string") error ||= row;
+    else rows.push(row);
   }
-  return rows;
+  return rows.length === 0 && error ? error : rows;
+}
+
+function parseVital(m: Record<string, unknown>, seen: Set<string>, rel: string): VitalRow | string {
+  const metric = str(m?.name, 10);
+  const value = m?.value;
+  const rating = str(m?.rating, 20);
+  // web-vitals ids look like "v5-1696300000000-1234567890123".
+  const id = str(m?.id, 80);
+  if (!/^v\d+-[\w.-]{6,}$/.test(id) || seen.has(id)) return "Invalid id";
+  if (!Object.hasOwn(VITAL_LIMITS, metric)) return "Invalid metric";
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > VITAL_LIMITS[metric]) {
+    return "Invalid value";
+  }
+  if (!RATINGS.has(rating)) return "Invalid rating";
+  // Per metric: INP and CLS can belong to a later page than LCP.
+  if (typeof m?.path !== "string") return "Invalid path";
+  seen.add(id);
+  return { metric_id: id, metric, value, rating, path: normalizePath(str(m.path, 500)), release: rel };
 }
 
 /** The body as text, or null if it's over `max` bytes (stops reading there). */

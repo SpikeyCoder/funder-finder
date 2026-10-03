@@ -141,7 +141,11 @@ Deno.test("parseVitals accepts the three metrics within range only", () => {
   const twoViews = parseVitals({ metrics: [m("CLS", 0.1), m("CLS", 0.2, "good", 2)] });
   if (typeof twoViews === "string") throw new Error(twoViews);
   assertEquals(twoViews.length, 2);
-  assertEquals(parseVitals({ metrics: [m("LCP", 1), m("LCP", 2)] }), "Invalid id");
+  // The same id twice: the first is kept. A bad metric is skipped, not the batch.
+  assertEquals((parseVitals({ metrics: [m("LCP", 1), m("LCP", 2)] }) as unknown[]).length, 1);
+  const mixed = parseVitals({ metrics: [m("LCP", 700_000), m("CLS", 0.1, "good", 2)] });
+  if (typeof mixed === "string") throw new Error(mixed);
+  assertEquals(mixed.map((r) => r.metric), ["CLS"]);
   assertEquals(parseVitals({ metrics: Array.from({ length: 7 }, (_, i) => m("CLS", 0.1, "good", i + 1)) }), "Invalid metrics");
   assertEquals(parseVitals({ metrics: [{ name: "LCP", value: 1, rating: "good" }] }), "Invalid id");
   assertEquals(parseVitals({ metrics: [{ ...m("LCP", 1), id: "x'; drop" }] }), "Invalid id");

@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "jsr:@std/assert@1";
-import { alertDue, cardUrl, crashCard, crashOverflowCard, slaBreached, slaCard, vitalsCard } from "./index.ts";
+import { alertDue, cardUrl, crashCard, crashOverflowCard, pickCrashes, slaBreached, slaCard, vitalsCard } from "./index.ts";
 import { cronAuthorized } from "../_shared/cron_auth.ts";
 
 const crash = {
@@ -16,6 +16,7 @@ const crash = {
   first_seen: "2026-10-03T07:00:00Z",
   last_seen: "2026-10-03T07:10:00Z",
   card_attempts: 0,
+  card_attempted_at: null,
 };
 
 Deno.test("crash card names the error and counts occurrences", () => {
@@ -117,4 +118,15 @@ Deno.test("cron auth fails closed and accepts both header forms", () => {
 Deno.test("a regression's card links the earlier one", () => {
   assert(crashCard({ ...crash, previous_card_url: "https://trello.com/c/old" }).desc.includes("earlier card: https://trello.com/c/old"));
   assert(!crashCard(crash).desc.includes("earlier card"));
+});
+
+Deno.test("pickCrashes: retries within the day use no daily budget; 5 calls a run", () => {
+  const now = Date.parse("2026-10-03T12:00:00Z");
+  const fresh = (n: string) => ({ n, card_attempted_at: null });
+  const retry = (n: string) => ({ n, card_attempted_at: "2026-10-03T10:00:00Z" }); // tried 2 h ago
+  const old = (n: string) => ({ n, card_attempted_at: "2026-10-01T10:00:00Z" }); // tried 2 days ago: counts anew
+  const names = (xs: { n: string }[]) => xs.map((x) => x.n).join(",");
+  assertEquals(names(pickCrashes([retry("a"), fresh("b"), fresh("c"), old("d")], 1, now)), "a,b");
+  assertEquals(names(pickCrashes([fresh("b"), retry("a")], 0, now)), "a");
+  assertEquals(pickCrashes(Array.from({ length: 9 }, (_, i) => fresh(String(i))), 10, now).length, 5);
 });
