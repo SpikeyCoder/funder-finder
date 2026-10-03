@@ -8,8 +8,9 @@
 --                                 └─ also times live searches ──▶ monitor_sla_checks
 --
 -- The sweep opens a card for:
---   * each new crash fingerprint (most frequent first, at most 5 per run; the
---     rest wait for the next run), with its stack and how often it happened;
+--   * each new crash fingerprint (most frequent first, at most 5 per run and
+--     10 per 24 h; past that, one summary card a day says how many wait),
+--     with its stack and how often it happened;
 --   * a page whose 75th-percentile LCP, INP or CLS over the last 24 h is
 --     "poor" by web-vitals' thresholds, with at least 20 page views (once per
 --     page and metric per 7 days);
@@ -17,8 +18,9 @@
 --     failed or took over 2 s (once per 24 h).
 --
 -- Only the public Edge Function writes reports, and only the sweep opens
--- cards, so flooding the endpoint can't flood Trello: at most 5 crash cards
--- per run. Reports are rate-limited per IP in the function.
+-- cards, so flooding the endpoint can't flood Trello: at most 10 crash cards
+-- a day plus one summary, whatever is reported. Reports are rate-limited per
+-- IP in the function (crashes 10/h, vitals 120/h).
 --
 -- Access: RLS on, no policies, no grants to anon/authenticated; only the
 -- service role (the two Edge Functions) touches these tables.
@@ -45,14 +47,22 @@ CREATE TABLE IF NOT EXISTS public.monitor_crashes (
   first_seen       timestamptz NOT NULL DEFAULT now(),
   last_seen        timestamptz NOT NULL DEFAULT now(),
   trello_card_url  text,
-  carded_at        timestamptz
+  -- The sweep claims a crash before opening its card, so overlapping runs
+  -- and a failed write can't open two; a failed card is retried an hour
+  -- later, at most 3 times.
+  card_attempted_at timestamptz,
+  card_attempts    integer NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS monitor_crashes_uncarded
   ON public.monitor_crashes (occurrences DESC) WHERE trello_card_url IS NULL;
 
+-- One row per metric per page view: the browser re-sends a metric whenever
+-- its value changes (INP and CLS keep growing while the page is open), keyed
+-- by web-vitals' own per-page-view id, and the row keeps the latest value.
 CREATE TABLE IF NOT EXISTS public.monitor_vitals (
   id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  metric_id   text NOT NULL UNIQUE,
   metric      text NOT NULL CHECK (metric IN ('LCP', 'INP', 'CLS')),
   value       double precision NOT NULL,
   rating      text NOT NULL CHECK (rating IN ('good', 'needs-improvement', 'poor')),
@@ -75,8 +85,10 @@ CREATE TABLE IF NOT EXISTS public.monitor_sla_checks (
 
 CREATE INDEX IF NOT EXISTS monitor_sla_checks_checked ON public.monitor_sla_checks (checked_at);
 
--- One row per alert that opened a card, so the same alert isn't re-carded
--- inside its quiet period.
+-- One row per alert, claimed (last_carded_at = now, no URL yet) before its
+-- card is opened, so the same alert isn't re-carded inside its quiet period
+-- even if recording the card fails; a claim with no card is retried after
+-- an hour.
 CREATE TABLE IF NOT EXISTS public.monitor_alerts (
   alert_key        text PRIMARY KEY,           -- e.g. 'vitals:LCP:/search', 'sla:search'
   last_carded_at   timestamptz NOT NULL,

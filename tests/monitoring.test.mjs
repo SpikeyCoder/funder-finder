@@ -36,6 +36,20 @@ test('scrub masks email addresses and strips query strings and fragments', () =>
   );
 });
 
+test('normalizePath never lets a share token through', () => {
+  assert.equal(normalizePath('/shared/9f3a1c0e5b7d4a2f8e6c1b0a9d8e7f6a'), '/shared/:id');
+  assert.equal(normalizePath('/shared/short'), '/shared/:id');
+  assert.equal(normalizePath('/projects/new/chat'), '/projects/new/chat');
+  assert.equal(normalizePath('/projects/abc/tracker'), '/projects/:id/tracker');
+  assert.equal(normalizePath('/onboarding/first-project'), '/onboarding/first-project');
+});
+
+test('scrub handles relative URLs and percent-encoded addresses', () => {
+  assert.equal(scrub('GET /rest/v1/x?select=*&email=eq.a failed'), 'GET /rest/v1/x failed');
+  assert.equal(scrub('no user a%40b.org'), 'no user [email]');
+  assert.equal(scrub('Why? Because.'), 'Why? Because.');
+});
+
 test('normalizePath turns ids into :id so one route is one key', () => {
   assert.equal(normalizePath('/recipient/2da01037-c1bc-4106-8c21-40008ead6ca7'), '/recipient/:id');
   assert.equal(normalizePath('/funder/010224898'), '/funder/:id');

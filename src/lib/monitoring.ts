@@ -39,34 +39,50 @@ export interface VitalsReport {
   type: 'vitals';
   path: string;
   release: string;
-  metrics: { name: string; value: number; rating: string }[];
+  // `id` is web-vitals' per-page-view id: the server keeps one row per id.
+  metrics: { id: string; name: string; value: number; rating: string }[];
 }
 
 // ── Pure helpers (unit-tested) ──────────────────────────────────────────────
 
 // Local part can't span URL syntax, so "…?email=eq.a@b.org" masks just the address.
-const EMAIL = /[^\s@<>"'()/:?=&#]+@[^\s@<>"'()/?=&#]+\.[a-z]{2,}/gi;
+const EMAIL = /[^\s@<>"'()/:?=&#%]+(?:@|%40)[^\s@<>"'()/?=&#%]+\.[a-z]{2,}/gi;
 
-/** Mask email addresses and drop query strings and fragments from URLs. */
+/**
+ * Mask email addresses (plain or percent-encoded) and drop query strings:
+ * from absolute URLs (with fragments), and from anything else followed by
+ * `?key=`, such as a relative URL.
+ */
 export function scrub(text: string): string {
   // Query strings first: they're where addresses most often hide in URLs.
   return text
     .replace(/(https?:\/\/[^\s?#)"']*)[?#][^\s)"']*/gi, '$1')
+    .replace(/\?(?=[\w.%-]+=)[^\s)"']*/g, '')
     .replace(EMAIL, '[email]');
 }
 
+// The app's routes with a parameter in the second segment (App.tsx).
+// /shared/:token's token is a secret: it must never be stored or shown.
+const PARAM_AFTER = new Set(['funder', 'recipient', 'shared', 'projects']);
+
 /**
- * Collapse ids in a path so one route is one key: /recipient/<uuid> and
- * /funder/123456789 become /recipient/:id and /funder/:id.
+ * Replace ids and tokens in a path so one route is one key and nothing
+ * secret leaves the page: /shared/<token>, /recipient/<uuid> and
+ * /projects/<id>/tracker become /shared/:id, /recipient/:id and
+ * /projects/:id/tracker. Unknown paths still lose anything id-like.
  */
 export function normalizePath(pathname: string): string {
-  const path = pathname
-    .split('/')
-    .map((seg) =>
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(seg) || /^\d[\d-]{3,}$/.test(seg)
-        ? ':id'
-        : seg,
-    )
+  const segs = pathname.split(/[?#]/)[0].split('/');
+  const path = segs
+    .map((seg, i) => {
+      if (!seg) return seg;
+      if (i === 2 && PARAM_AFTER.has(segs[1]) && !(segs[1] === 'projects' && seg === 'new')) return ':id';
+      const idLike =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(seg) ||
+        /^\d[\d-]{3,}$/.test(seg) ||
+        (seg.length >= 16 && /\d/.test(seg));
+      return idLike ? ':id' : seg;
+    })
     .join('/');
   return (path.length > 1 ? path.replace(/\/+$/, '') : path).slice(0, 200) || '/';
 }
@@ -177,25 +193,31 @@ export function installMonitoring(): void {
   });
   window.addEventListener('unhandledrejection', (event) => reportCrash('rejection', event.reason));
 
-  // Core Web Vitals, one report per page view, sent when the page is hidden
-  // (web-vitals finalises LCP, CLS and INP then; its listeners are registered
-  // first, so they run before the flush below).
-  const metrics = new Map<string, Metric>();
-  const record = (m: Metric) => metrics.set(m.name, m);
+  // Core Web Vitals, sent whenever the page is hidden: web-vitals reports a
+  // metric's value then, and again on a later hide if it changed (INP and CLS
+  // keep growing while the page is open). Only changed values are sent; the
+  // server keeps the latest per metric id. web-vitals' listeners are
+  // registered first, so they run before the flush below.
+  const pending = new Map<string, Metric>();
+  const sentValues = new Map<string, number>();
+  const record = (m: Metric) => {
+    if (sentValues.get(m.id) !== m.value) pending.set(m.id, m);
+  };
   onLCP(record);
   onINP(record);
   onCLS(record);
   // SPA navigations keep the first page's path: vitals describe the page load.
   const path = normalizePath(window.location.pathname);
-  let flushed = false;
   const flush = () => {
-    if (flushed || metrics.size === 0) return;
-    flushed = true;
+    if (pending.size === 0) return;
+    const metrics = [...pending.values()];
+    pending.clear();
+    for (const m of metrics) sentValues.set(m.id, m.value);
     send({
       type: 'vitals',
       path,
       release: currentBuild().slice(0, 100),
-      metrics: [...metrics.values()].map((m) => ({ name: m.name, value: m.value, rating: m.rating })),
+      metrics: metrics.map((m) => ({ id: m.id, name: m.name, value: m.value, rating: m.rating })),
     });
   };
   document.addEventListener('visibilitychange', () => {

@@ -8,6 +8,15 @@ Deno.test("scrub masks emails and drops query strings", () => {
   );
 });
 
+Deno.test("normalizePath hides share tokens and route ids", () => {
+  assertEquals(normalizePath("/shared/9f3a1c0e5b7d4a2f8e6c1b0a9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e"), "/shared/:id");
+  assertEquals(normalizePath("/shared/abc"), "/shared/:id");
+  assertEquals(normalizePath("/projects/42/tracker"), "/projects/:id/tracker");
+  assertEquals(normalizePath("/projects/new/chat"), "/projects/new/chat");
+  assertEquals(normalizePath("/unknown/a1b2c3d4e5f6g7h8i9"), "/unknown/:id");
+  assertEquals(normalizePath("/onboarding/first-project"), "/onboarding/first-project");
+});
+
 Deno.test("normalizePath collapses ids and drops query strings", () => {
   assertEquals(normalizePath("/recipient/2da01037-c1bc-4106-8c21-40008ead6ca7?x=1"), "/recipient/:id");
   assertEquals(normalizePath("/funder/010224898/"), "/funder/:id");
@@ -26,18 +35,27 @@ Deno.test("fingerprint ignores build hashes, line numbers and values in the mess
     await fingerprint("TypeError", msg(1), STACK_A),
     await fingerprint("TypeError", msg(2), STACK_B),
   );
-  assert(fingerprintSource("TypeError", msg(1), STACK_A).endsWith("at Xt (/assets/OrgSearch.js)"));
+  assert(fingerprintSource("TypeError", msg(1), STACK_A).endsWith("|/assets/OrgSearch.js"));
+});
+
+Deno.test("fingerprint survives renamed minified functions and hashes containing - or _", async () => {
+  const a = "Error: x\n    at Xt (https://fundermatch.org/assets/LoginPage-DK1D-7OR.js:3:9)";
+  const b = "Error: x\n    at Qa (https://fundermatch.org/assets/LoginPage-a_b9Zk2Q.js:7:1)";
+  assertEquals(await fingerprint("Error", "x", a), await fingerprint("Error", "x", b));
+  assert(fingerprintSource("Error", "x", a).endsWith("|/assets/LoginPage.js"));
+  // A dashed module name keeps its name, loses only the hash.
+  assert(fingerprintSource("Error", "x", "at f (https://x/assets/chunk-reload-AbC12345.js:1:1)").endsWith("|/assets/chunk-reload.js"));
 });
 
 Deno.test("fingerprint separates different errors and frames", async () => {
   const a = await fingerprint("TypeError", "x is undefined", STACK_A);
   assertNotEquals(a, await fingerprint("RangeError", "x is undefined", STACK_A));
   assertNotEquals(a, await fingerprint("TypeError", "y is undefined", STACK_A));
-  assertNotEquals(a, await fingerprint("TypeError", "x is undefined", STACK_A.replace("at Xt", "at Yt")));
+  assertNotEquals(a, await fingerprint("TypeError", "x is undefined", STACK_A.replace("OrgSearch-", "FunderPage-")));
 });
 
 Deno.test("fingerprint reads Safari/Firefox frames", () => {
-  assert(fingerprintSource("Error", "boom", "Xt@https://fundermatch.org/assets/index-AbC123xy.js:3:20").endsWith("Xt@/assets/index.js"));
+  assert(fingerprintSource("Error", "boom", "Xt@https://fundermatch.org/assets/index-AbC123xy.js:3:20").endsWith("|/assets/index.js"));
 });
 
 Deno.test("parseCrash validates and scrubs", async () => {
@@ -63,19 +81,29 @@ Deno.test("parseCrash validates and scrubs", async () => {
 });
 
 Deno.test("parseVitals accepts the three metrics within range only", () => {
+  const id = (n: number) => `v5-1696300000000-${n}234567890123`;
+  const m = (name: string, value: number, rating = "good", i = 1) => ({ id: id(i), name, value, rating });
   const ok = parseVitals({
     path: "/search/",
     release: "index-a.js",
-    metrics: [{ name: "LCP", value: 2500, rating: "good" }, { name: "CLS", value: 0.3, rating: "poor" }],
+    metrics: [m("LCP", 2500), m("CLS", 0.3, "poor", 2)],
   });
   if (typeof ok === "string") throw new Error(ok);
-  assertEquals(ok.map((r) => [r.metric, r.path]), [["LCP", "/search"], ["CLS", "/search"]]);
-  assertEquals(parseVitals({ metrics: [{ name: "FID", value: 1, rating: "good" }] }), "Invalid metric");
-  assertEquals(parseVitals({ metrics: [{ name: "LCP", value: -1, rating: "good" }] }), "Invalid value");
-  assertEquals(parseVitals({ metrics: [{ name: "LCP", value: Infinity, rating: "good" }] }), "Invalid value");
-  assertEquals(parseVitals({ metrics: [{ name: "LCP", value: 1, rating: "bad" }] }), "Invalid rating");
-  assertEquals(parseVitals({ metrics: [{ name: "LCP", value: 1, rating: "good" }, { name: "LCP", value: 2, rating: "good" }] }), "Invalid metric");
+  assertEquals(ok.map((r) => [r.metric_id, r.metric, r.path]), [[id(1), "LCP", "/search"], [id(2), "CLS", "/search"]]);
+  assertEquals(parseVitals({ metrics: [m("FID", 1)] }), "Invalid metric");
+  assertEquals(parseVitals({ metrics: [m("LCP", -1)] }), "Invalid value");
+  assertEquals(parseVitals({ metrics: [m("LCP", Infinity)] }), "Invalid value");
+  assertEquals(parseVitals({ metrics: [m("LCP", 1, "bad")] }), "Invalid rating");
+  assertEquals(parseVitals({ metrics: [m("LCP", 1), m("LCP", 2, "good", 2)] }), "Invalid metric");
+  assertEquals(parseVitals({ metrics: [{ name: "LCP", value: 1, rating: "good" }] }), "Invalid id");
+  assertEquals(parseVitals({ metrics: [{ ...m("LCP", 1), id: "x'; drop" }] }), "Invalid id");
   assertEquals(parseVitals({ metrics: "x" }), "Invalid metrics");
+});
+
+Deno.test("scrub strips relative query strings and masks percent-encoded addresses", () => {
+  assertEquals(scrub("Request /search?q=acme+grants failed"), "Request /search failed");
+  assertEquals(scrub("user jane%40example.org not found"), "user [email] not found");
+  assertEquals(scrub("Did you mean x? Try again"), "Did you mean x? Try again");
 });
 
 Deno.test("scrub strips a query string that holds an address, and masks a bare one", () => {

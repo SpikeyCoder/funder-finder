@@ -9,9 +9,10 @@
  * visitors too. The body is JSON sent as text/plain, so the browser can send
  * it as a CORS simple request with keepalive while the page unloads.
  *
- * Abuse: reports are validated, capped in size and rate-limited per IP; this
- * function never calls Trello, and the sweep opens at most 5 crash cards per
- * run, so flooding it can't flood the board.
+ * Abuse: reports are validated, capped in size and rate-limited per IP
+ * (crashes and vitals separately, so page views can't use up the budget for
+ * crashes). This function never calls Trello, and the sweep opens at most 10
+ * crash cards a day plus one summary, so flooding it can't flood the board.
  *
  * Privacy: no user id or IP is stored. Paths lose ids and query strings, and
  * email addresses in error text are masked (again; the browser does it too).
@@ -24,8 +25,9 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
 const MAX_BODY_BYTES = 16 * 1024;
-// A page load sends one vitals report and at most 5 crash reports.
-const RATE_LIMIT = 30;
+// A page load sends at most 5 crash reports, and a vitals report each time
+// it's hidden with a changed value.
+const RATE_LIMITS = { crash: 10, vitals: 120 } as const;
 const RATE_WINDOW_MS = 60 * 60 * 1000;
 
 const VITAL_LIMITS: Record<string, number> = { LCP: 600_000, INP: 600_000, CLS: 100 };
@@ -45,6 +47,7 @@ export interface CrashRow {
 }
 
 export interface VitalRow {
+  metric_id: string;
   metric: string;
   value: number;
   rating: string;
@@ -55,33 +58,40 @@ export interface VitalRow {
 // ── Pure helpers (unit-tested) ──────────────────────────────────────────────
 
 // Local part can't span URL syntax, so "…?email=eq.a@b.org" masks just the address.
-const EMAIL = /[^\s@<>"'()/:?=&#]+@[^\s@<>"'()/?=&#]+\.[a-z]{2,}/gi;
+// Same as src/lib/monitoring.ts (reports are untrusted, so it's redone here).
+const EMAIL = /[^\s@<>"'()/:?=&#%]+(?:@|%40)[^\s@<>"'()/?=&#%]+\.[a-z]{2,}/gi;
 
 export function scrub(text: string): string {
   // Query strings first: they're where addresses most often hide in URLs.
   return text
     .replace(/(https?:\/\/[^\s?#)"']*)[?#][^\s)"']*/gi, "$1")
+    .replace(/\?(?=[\w.%-]+=)[^\s)"']*/g, "")
     .replace(EMAIL, "[email]");
 }
 
-/** Same as the browser's normalizePath: ids become :id, no query string. */
+const PARAM_AFTER = new Set(["funder", "recipient", "shared", "projects"]);
+
+/** Same as the browser's normalizePath: ids and tokens become :id, no query string. */
 export function normalizePath(path: string): string {
-  const bare = path.split(/[?#]/)[0];
-  const norm = bare
-    .split("/")
-    .map((seg) =>
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(seg) || /^\d[\d-]{3,}$/.test(seg)
-        ? ":id"
-        : seg
-    )
+  const segs = path.split(/[?#]/)[0].split("/");
+  const norm = segs
+    .map((seg, i) => {
+      if (!seg) return seg;
+      if (i === 2 && PARAM_AFTER.has(segs[1]) && !(segs[1] === "projects" && seg === "new")) return ":id";
+      const idLike = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(seg) ||
+        /^\d[\d-]{3,}$/.test(seg) ||
+        (seg.length >= 16 && /\d/.test(seg));
+      return idLike ? ":id" : seg;
+    })
     .join("/");
   return (norm.length > 1 ? norm.replace(/\/+$/, "") : norm).slice(0, 200) || "/";
 }
 
 /**
  * The parts of a crash that identify its kind across occurrences and
- * deploys: the error name, the message with values taken out, and the top
- * stack frame without line numbers or the build hash in chunk names.
+ * deploys: the error name, the message with values taken out, and the file
+ * of the top stack frame that has one, without its build hash. Not the
+ * function name or line: minifying renames and moves those on every build.
  */
 export function fingerprintSource(name: string, message: string, stack: string): string {
   const msg = message
@@ -90,16 +100,18 @@ export function fingerprintSource(name: string, message: string, stack: string):
     .replace(/\b0x[0-9a-f]+\b/gi, "<n>")
     .replace(/\d+/g, "<n>")
     .trim();
-  const frame = stack
-    .split("\n")
-    .map((l) => l.trim())
-    // V8 "at fn (url:1:2)", Firefox/Safari "fn@url:1:2"; skip the message line.
-    .find((l) => /^at\s/.test(l) || /@\S+:\d+/.test(l)) ?? "";
-  const top = frame
-    .replace(/https?:\/\/[^/\s)]+/g, "")            // origin
-    .replace(/-[A-Za-z0-9_]{6,12}(\.(?:js|mjs|css))/g, "$1") // index-BrsvDQt6.js → index.js
-    .replace(/:\d+(?::\d+)?/g, "");                 // :line:col
-  return `${name}|${msg}|${top}`;
+  // V8 "at fn (url:1:2)", Firefox/Safari "fn@url:1:2".
+  let file = "";
+  for (const line of stack.split("\n")) {
+    const m = line.match(/(?:https?:\/\/[^/\s)]+)?(\/[^\s():?#]+\.(?:js|mjs|cjs|ts|tsx))(?::\d+)?/);
+    if (m) {
+      // Vite's hashes are base64url, so they can contain - and _:
+      // OrgSearch-BrsvDQt6.js, LoginPage-DK1D-7OR.js → OrgSearch.js, LoginPage.js.
+      file = m[1].replace(/-[\w-]{6,12}(\.(?:js|mjs|cjs))$/, "$1");
+      break;
+    }
+  }
+  return `${name}|${msg}|${file}`;
 }
 
 export async function fingerprint(name: string, message: string, stack: string): Promise<string> {
@@ -145,27 +157,30 @@ export function parseVitals(b: Record<string, unknown>): VitalRow[] | string {
     const metric = str(m?.name, 10);
     const value = m?.value;
     const rating = str(m?.rating, 20);
+    // web-vitals ids look like "v5-1696300000000-1234567890123".
+    const id = str(m?.id, 80);
+    if (!/^v\d+-[\w.-]{6,}$/.test(id)) return "Invalid id";
     if (!(metric in VITAL_LIMITS) || seen.has(metric)) return "Invalid metric";
     if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > VITAL_LIMITS[metric]) {
       return "Invalid value";
     }
     if (!RATINGS.has(rating)) return "Invalid rating";
     seen.add(metric);
-    rows.push({ metric, value, rating, path, release: release(b.release) });
+    rows.push({ metric_id: id, metric, value, rating, path, release: release(b.release) });
   }
   return rows;
 }
 
 // ── Handler ─────────────────────────────────────────────────────────────────
 
-function rest(path: string, body: unknown): Promise<Response> {
+function rest(path: string, body: unknown, prefer = "return=minimal"): Promise<Response> {
   return fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
     method: "POST",
     headers: {
       apikey: SERVICE_KEY,
       Authorization: `Bearer ${SERVICE_KEY}`,
       "Content-Type": "application/json",
-      Prefer: "return=minimal",
+      Prefer: prefer,
     },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(5000),
@@ -204,15 +219,17 @@ if (import.meta.main) {
       const rows = parseVitals(body);
       if (typeof rows === "string") return reply(400, rows);
       if (rows.length === 0) return reply(204);
-      write = () => rest("monitor_vitals", rows);
+      // A changed value for a metric id replaces the earlier one.
+      write = () => rest("monitor_vitals?on_conflict=metric_id", rows, "resolution=merge-duplicates,return=minimal");
     } else {
       return reply(400, "Invalid type");
     }
 
     // Only valid reports count against the limit.
+    const kind = body.type as keyof typeof RATE_LIMITS;
     const limited = await ipRateLimit(req, {
-      namespace: "monitor-report",
-      limit: RATE_LIMIT,
+      namespace: `monitor-report:${kind}`,
+      limit: RATE_LIMITS[kind],
       windowMs: RATE_WINDOW_MS,
       extraHeaders: headers,
     });

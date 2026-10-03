@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "jsr:@std/assert@1";
-import { crashCard, slaBreached, slaCard, vitalsCard } from "./index.ts";
+import { alertDue, crashCard, crashOverflowCard, slaBreached, slaCard, vitalsCard } from "./index.ts";
 import { cronAuthorized } from "../_shared/cron_auth.ts";
 
 const crash = {
@@ -15,6 +15,7 @@ const crash = {
   occurrences: 7,
   first_seen: "2026-10-03T07:00:00Z",
   last_seen: "2026-10-03T07:10:00Z",
+  card_attempts: 0,
 };
 
 Deno.test("crash card names the error and counts occurrences", () => {
@@ -26,6 +27,27 @@ Deno.test("crash card names the error and counts occurrences", () => {
   // Reported text can't close the code fence it's shown in.
   assertEquals(c.desc.match(/```/g)!.length % 2, 0);
   assert(!c.desc.includes("```injected```"));
+});
+
+Deno.test("reported fields can't add links or formatting to a card", () => {
+  const c = crashCard({ ...crash, user_agent: "[Fix: see logs](https://evil.example/login)\n**urgent**", path: "/x`)[a](b)" });
+  assert(c.desc.includes("**Browser (latest):** `[Fix: see logs](https://evil.example/login) **urgent**`"));
+  assert(c.desc.includes("**Page:** `/x )[a](b)`"));
+  assert(vitalsCard({ metric: "LCP", path: "/[a](https://evil)", samples: 20, p75: 5000, poor_share: 0.5 }).desc.includes("`/[a](https://evil)`"));
+});
+
+Deno.test("alerts: due when new, after the quiet period, or an hour after a claim that got no card", () => {
+  const now = Date.parse("2026-10-03T12:00:00Z");
+  const day = 24 * 60 * 60 * 1000;
+  assertEquals(alertDue(undefined, day, now), true);
+  assertEquals(alertDue({ last_carded_at: "2026-10-03T06:00:00Z", trello_card_url: "u" }, day, now), false);
+  assertEquals(alertDue({ last_carded_at: "2026-10-02T11:00:00Z", trello_card_url: "u" }, day, now), true);
+  assertEquals(alertDue({ last_carded_at: "2026-10-03T11:30:00Z", trello_card_url: null }, day, now), false);
+  assertEquals(alertDue({ last_carded_at: "2026-10-03T10:30:00Z", trello_card_url: null }, day, now), true);
+});
+
+Deno.test("overflow card says how many crashes wait", () => {
+  assertEquals(crashOverflowCard(37).name, "[CRASH] 37 more new kinds of crash waiting (daily card limit reached)");
 });
 
 Deno.test("crash card title is bounded", () => {

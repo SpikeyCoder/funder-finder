@@ -2,6 +2,10 @@
 // TRELLO_TOKEN, TRELLO_LIST_ID). Returns the card's URL, null if Trello
 // failed (worth retrying), or "unconfigured" if the secrets aren't set.
 
+export function trelloConfigured(): boolean {
+  return !!(Deno.env.get("TRELLO_API_KEY") && Deno.env.get("TRELLO_TOKEN") && Deno.env.get("TRELLO_LIST_ID"));
+}
+
 export async function createTrelloCard(
   card: { name: string; desc: string },
   timeoutMs = 7000,
@@ -10,9 +14,10 @@ export async function createTrelloCard(
   const token = Deno.env.get("TRELLO_TOKEN");
   const idList = Deno.env.get("TRELLO_LIST_ID");
   if (!key || !token || !idList) return "unconfigured";
-  const params = new URLSearchParams({
-    key,
-    token,
+  // Card fields go in the body, not the URL: a long stack would push the URL
+  // past what Trello accepts (414).
+  const auth = new URLSearchParams({ key, token });
+  const fields = new URLSearchParams({
     idList,
     name: card.name.slice(0, 200),
     // Trello's limit is 16,384 characters.
@@ -20,8 +25,10 @@ export async function createTrelloCard(
     pos: "top",
   });
   try {
-    const res = await fetch(`https://api.trello.com/1/cards?${params}`, {
+    const res = await fetch(`https://api.trello.com/1/cards?${auth}`, {
       method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: fields,
       signal: AbortSignal.timeout(timeoutMs),
     });
     if (!res.ok) {
