@@ -12,15 +12,18 @@
 const EMAIL = /[^\s@<>"'()/:?=&#]{1,64}(?:@|%40)[^\s@<>"'()/?=&#%]{1,253}\.[a-z]{2,24}/gi;
 
 /**
- * Mask email addresses (plain or percent-encoded) and share-link tokens,
- * and drop query strings: from absolute URLs (with fragments), and from
- * anything else followed by `?key=`, such as a relative URL.
+ * Mask email addresses (plain or percent-encoded), share-link tokens and
+ * JWTs, and drop query strings: from absolute URLs (with fragments), and
+ * from anything else followed by `?key=` or `#key=`, such as a relative URL
+ * (an auth redirect's `#access_token=…`).
  */
 export function scrub(text: string): string {
   // Query strings first: they're where addresses most often hide in URLs.
   return text
     .replace(/(https?:\/\/[^\s?#)"']*)[?#][^\s)"']*/gi, "$1")
-    .replace(/\?(?=[\w.%-]+=)[^\s)"']*/g, "")
+    .replace(/[?#](?=[\w.%-]+=)[^\s)"']*/g, "")
+    // JWTs (Supabase access tokens) wherever they appear.
+    .replace(/\beyJ[\w-]{5,}\.[\w-]{5,}\.[\w-]*/g, "[jwt]")
     // A share link's token is a secret, wherever the link appears.
     .replace(/\/shared\/[^\s/?#)"'`]+/gi, "/shared/:id")
     .replace(EMAIL, "[email]");

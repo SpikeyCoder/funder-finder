@@ -61,6 +61,12 @@ test('scrub handles relative URLs and percent-encoded addresses', () => {
   assert.equal(scrub('Why? Because.'), 'Why? Because.');
 });
 
+test('scrub drops auth fragments and JWTs', () => {
+  assert.equal(scrub('Failed to navigate to /dashboard#access_token=eyJabc.def&refresh_token=xyz'), 'Failed to navigate to /dashboard');
+  assert.equal(scrub('bad token eyJhbGciOi.eyJzdWIiOi.sig-part_1 here'), 'bad token [jwt] here');
+  assert.equal(scrub('see #section 2'), 'see #section 2');
+});
+
 test('scrub masks share-link tokens anywhere in the text', () => {
   assert.equal(
     scrub('GET https://fundermatch.org/shared/9f3a1c0e5b7d failed; see /shared/abc123/view'),

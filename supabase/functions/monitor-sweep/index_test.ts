@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "jsr:@std/assert@1";
-import { alertDue, cardUrl, crashCard, crashOverflowCard, pickCrashes, slaBreached, slaCard, vitalsCard } from "./index.ts";
+import { alertDue, TIMEOUT_PLACEHOLDER, cardUrl, crashCard, crashOverflowCard, pickCrashes, slaBreached, slaCard, vitalsCard } from "./index.ts";
 
 const crash = {
   fingerprint: "f".repeat(64),
@@ -118,4 +118,10 @@ Deno.test("pickCrashes: retries within the day use no daily budget; 5 calls a ru
   assertEquals(names(pickCrashes([retry("a"), fresh("b"), fresh("c"), old("d")], 1, now)), "a,b");
   assertEquals(names(pickCrashes([fresh("b"), retry("a")], 0, now)), "a");
   assertEquals(pickCrashes(Array.from({ length: 9 }, (_, i) => fresh(String(i))), 10, now).length, 5);
+});
+
+Deno.test("the timeout placeholder matches what record_client_crash looks for", () => {
+  // supabase/migrations/20261003140000: trello_card_url LIKE '(Trello timed out%'
+  assert(TIMEOUT_PLACEHOLDER.startsWith("(Trello timed out"));
+  assertEquals(cardUrl("timeout"), TIMEOUT_PLACEHOLDER);
 });

@@ -59,8 +59,9 @@ CREATE TABLE IF NOT EXISTS public.monitor_crashes (
   previous_card_url text
 );
 
+-- The sweep's order for uncarded crashes: fewest tries, most frequent.
 CREATE INDEX IF NOT EXISTS monitor_crashes_uncarded
-  ON public.monitor_crashes (occurrences DESC) WHERE trello_card_url IS NULL;
+  ON public.monitor_crashes (card_attempts, occurrences DESC, first_seen) WHERE trello_card_url IS NULL;
 -- The sweep's daily card count (cards tried in the last 24 h).
 CREATE INDEX IF NOT EXISTS monitor_crashes_attempted
   ON public.monitor_crashes (card_attempted_at) WHERE card_attempted_at IS NOT NULL;
@@ -116,7 +117,8 @@ REVOKE ALL ON public.monitor_crashes, public.monitor_vitals, public.monitor_sla_
 -- the card says the worst way it was seen. A carded crash that comes back
 -- after 7 quiet days (and 7 days after its card) counts as a regression: it
 -- starts over and gets a new card. One still waiting for its card keeps its
--- count and its place in the queue.
+-- count and its place in the queue. One whose card timed out (it may or may
+-- not exist) is carded again if it happens again a day later.
 
 CREATE OR REPLACE FUNCTION public.record_client_crash(
   p_fingerprint text, p_kind text, p_name text, p_message text, p_stack text,
@@ -125,6 +127,14 @@ RETURNS void
 LANGUAGE sql
 SET search_path = ''
 AS $$
+  -- A card whose Trello call timed out has a placeholder for a URL (it may
+  -- or may not exist). If the crash happens again a day later, it's due
+  -- for a card again: a crash that keeps happening must reach the board.
+  UPDATE public.monitor_crashes
+     SET trello_card_url = NULL
+   WHERE fingerprint = p_fingerprint AND trello_card_url LIKE '(Trello timed out%'
+     AND card_attempted_at < now() - interval '1 day';
+
   -- A regression first starts over as if new (count 0, no card; the upsert
   -- below then counts it), so the 7-day rule lives in one place.
   UPDATE public.monitor_crashes
