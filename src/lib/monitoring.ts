@@ -187,10 +187,13 @@ export function reportCrash(kind: CrashKind, error: unknown, componentStack = ''
     if (seenRaw.size < 200) seenRaw.add(rawKey);
     const report = buildCrashReport(kind, error, path, currentBuild(), componentStack, chunkGaveUp);
     if (!report) return;
-    const key = `${report.name}|${report.message}|${report.stack.split('\n', 3).join('|')}`;
+    // Once a tab per crash, plus once more if it later brings up the error
+    // screen, so the server learns it did (the card says so).
+    const key = `${kind === 'boundary' ? 'boundary|' : ''}${report.name}|${report.message}|${report.stack.split('\n', 3).join('|')}`;
     if (sentCrashes.has(key)) return;
     sentCrashes.add(key);
-    pageReports.count++;
+    const counter = pageReports;
+    counter.count++;
     void send(report).then((result) => {
       // Lost (offline, server error): the next time it happens it's sent
       // once more, without using up the route's cap. Not when rate-limited:
@@ -199,7 +202,7 @@ export function reportCrash(kind: CrashKind, error: unknown, componentStack = ''
       resentCrashes.add(key);
       sentCrashes.delete(key);
       seenRaw.delete(rawKey);
-      if (pageReports.path === route) pageReports.count--;
+      if (pageReports === counter) counter.count--;
     });
   } catch {
     // Reporting must never break the page.
@@ -244,6 +247,17 @@ export function installMonitoring(): void {
   // 5 s long), and its value changes when the current window becomes the
   // worst, so the route then is that window's.
   let loadedPath = normalizePath(window.location.pathname);
+  // The current route, recomputed only when the pathname changes (CLS and
+  // INP call back often).
+  let lastPathname = '';
+  let lastRoute = '';
+  const currentRoute = () => {
+    if (window.location.pathname !== lastPathname) {
+      lastPathname = window.location.pathname;
+      lastRoute = normalizePath(lastPathname);
+    }
+    return lastRoute;
+  };
   window.addEventListener('pageshow', (e) => {
     if (e.persisted) loadedPath = normalizePath(window.location.pathname);
   });
@@ -254,7 +268,7 @@ export function installMonitoring(): void {
   const sentValues = new Map<string, number>();
   const record = (m: Metric) => {
     if (sentValues.get(m.id) === m.value) return;
-    const path = m.name === 'LCP' ? loadedPath : normalizePath(window.location.pathname);
+    const path = m.name === 'LCP' ? loadedPath : currentRoute();
     pending.set(m.id, { id: m.id, name: m.name, value: m.value, rating: m.rating, path });
   };
   // Part of the entry bundle (about 2 KB), not loaded later: a visitor who

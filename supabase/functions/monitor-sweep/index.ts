@@ -410,7 +410,11 @@ export async function sweepCrashes(summary: Summary, deadline: number): Promise<
     ),
     // Not tried in the last day: each uses the daily budget.
     restJson<CrashRow[]>(
-      `${uncarded}&card_attempts=lt.${MAX_CARD_TRIES}&or=(card_counted_at.is.null,card_counted_at.lt.${iso(now - DAY_MS)})${select}&limit=${MAX_CRASH_CARDS}`,
+      // (And not tried in the last hour: one retried late in its day waits
+      // its hour like any retry.)
+      `${uncarded}&card_attempts=lt.${MAX_CARD_TRIES}` +
+        `&and=(or(card_counted_at.is.null,card_counted_at.lt.${iso(now - DAY_MS)}),or(card_attempted_at.is.null,card_attempted_at.lt.${iso(now - RETRY_AFTER_MS)}))` +
+        `${select}&limit=${MAX_CRASH_CARDS}`,
     ),
   ]);
   const dayLeft = MAX_CRASH_CARDS_PER_DAY - triedToday;

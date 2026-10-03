@@ -327,7 +327,7 @@ if (import.meta.main) {
     } catch {
       return reply(400, "Invalid JSON");
     }
-    if (body.type !== sniffed) return reply(400, "Invalid type");
+    if (!sniffed || body.type !== sniffed) return reply(400, "Invalid type");
     const kind = sniffed;
 
     let write: () => Promise<Response>;
