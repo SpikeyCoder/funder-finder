@@ -60,7 +60,12 @@ export function isNoise(error: unknown, message: string, stack: string, chunkGav
   if (error === undefined || error === null) return !screenShown;
   if (/^Script error\.?$/i.test(message.trim())) return true;
   if (/ResizeObserver loop/i.test(message)) return true;
-  if (/(?:chrome|moz|safari(?:-web)?)-extension:\/\//i.test(stack)) return true;
+  // Thrown from an extension: its top frame (the first with a URL) is the
+  // extension's. Not just any frame: an extension that wraps fetch or
+  // addEventListener appears below our own frames in real app crashes.
+  // (A frame line, as the server reads them: V8's "at …", or "fn@url".)
+  const topFrame = stack.split('\n').find((line) => /^\s*at\s|^(?:[^\s@]*|(?:global|module|eval) code)@\S/.test(line) && /\w+:\/\//.test(line)) ?? '';
+  if (/(?:chrome|moz|safari(?:-web)?)-extension:\/\//i.test(topFrame)) return true;
   // Lost connections and cancelled requests, in each browser's wording: the
   // network, not our code. Unless the error screen showed: a page that breaks
   // when a request fails is a bug worth a card.
@@ -201,24 +206,18 @@ export function installMonitoring(): void {
   // worst interaction finishes or a layout shift happens, so that's where
   // the slow thing was, not where the visitor is when the tab is hidden. (A
   // click that navigates counts against the page it opens, whose render is
-  // what made it slow.) CLS adds shifts up, so it goes to the route of the
-  // change that added the most, not whichever added the last bit.
+  // what made it slow.) CLS is the worst session window of shifts (at most
+  // 5 s long), and its value changes when the current window becomes the
+  // worst, so the route then is that window's.
   let loadedPath = normalizePath(window.location.pathname);
   window.addEventListener('pageshow', (e) => {
     if (e.persisted) loadedPath = normalizePath(window.location.pathname);
   });
   const pending = new Map<string, { m: Metric; path: string }>();
   const sentValues = new Map<string, number>();
-  const largestShift = new Map<string, { delta: number; path: string }>();
   const record = (m: Metric) => {
     if (sentValues.get(m.id) === m.value) return;
-    let path = m.name === 'LCP' ? loadedPath : normalizePath(window.location.pathname);
-    if (m.name === 'CLS') {
-      const largest = largestShift.get(m.id);
-      if (largest && largest.delta >= m.delta) path = largest.path;
-      else largestShift.set(m.id, { delta: m.delta, path });
-    }
-    pending.set(m.id, { m, path });
+    pending.set(m.id, { m, path: m.name === 'LCP' ? loadedPath : normalizePath(window.location.pathname) });
   };
   // Loaded once the browser is idle (at most a second in), so its chunk
   // doesn't compete with the first page's; its observers read buffered

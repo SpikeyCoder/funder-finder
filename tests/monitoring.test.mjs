@@ -87,6 +87,12 @@ test('normalizePath turns ids into :id so one route is one key', () => {
 
 test('noise: extensions, opaque cross-origin errors, ResizeObserver', () => {
   assert.equal(isNoise(new Error('x'), 'x', 'at f (chrome-extension://abc/content.js:1:1)'), true);
+  // Our crash with an extension's wrapper further down the stack is ours.
+  const ours = 'TypeError: x\n    at submit (https://fundermatch.org/assets/a.js:1:1)\n    at w (chrome-extension://abc/inject.js:1:1)';
+  assert.equal(isNoise(new TypeError('x'), 'x', ours), false);
+  // A URL in V8's message line isn't a frame; Firefox-style frames count.
+  assert.equal(isNoise(new Error('y'), 'y', 'Error: see chrome-extension://abc/x\n    at f (https://fundermatch.org/assets/a.js:1:1)'), false);
+  assert.equal(isNoise(new Error('y'), 'y', 'f@moz-extension://abc/content.js:1:1'), true);
   assert.equal(isNoise(null, 'Script error.', ''), true);
   assert.equal(isNoise(null, 'ResizeObserver loop completed with undelivered notifications.', ''), true);
   assert.equal(isNoise(new TypeError('x is undefined'), 'x is undefined', 'at f (https://fundermatch.org/assets/a.js:1:1)'), false);

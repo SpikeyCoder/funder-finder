@@ -55,7 +55,6 @@ Deno.test("an SLA check with no results counts as failed (checked in runSlaCheck
 Deno.test("a Trello timeout is recorded (no duplicate card); failures and no config aren't", () => {
   assertEquals(cardUrl("https://trello.com/c/x"), "https://trello.com/c/x");
   assert(cardUrl("timeout")!.includes("timed out"));
-  assertEquals(cardUrl("timeout", false), null); // crash cards retry instead
   assertEquals(cardUrl(null), null);
   assertEquals(cardUrl("unconfigured"), null);
 });
