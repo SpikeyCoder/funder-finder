@@ -50,8 +50,27 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const query = typeof body?.query === 'string' ? body.query.trim() : '';
-    const limit = typeof body?.limit === 'number' ? Math.min(Math.max(body.limit, 1), 50) : 15;
+    // No organization name is longer; the RPC applies the same cap. Cut by
+    // code point so an emoji at the boundary isn't split into a lone surrogate
+    // (after cheap code-unit cuts, so a huge body isn't scanned or split up;
+    // 1000 units always hold more than 200 code points, so that cut can't
+    // leave a half pair in the result). Whitespace runs are collapsed before
+    // the 1000-unit cut, as the RPC does, so ordinary padding can't push real
+    // words past it.
+    const query = typeof body?.query === 'string'
+      ? [
+        ...body.query
+          .slice(0, 4000)
+          // The 4000-unit cut can leave half an emoji; drop any lone surrogate
+          // before whitespace collapse could pull it within the first 200.
+          .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 1000),
+      ].slice(0, 200).join('')
+      : '';
+    // p_limit is an integer: a fractional limit would make PostgREST reject the call.
+    const limit = Number.isFinite(body?.limit) ? Math.min(Math.max(Math.trunc(body.limit), 1), 50) : 15;
 
     if (!query || query.length < 2) {
       return new Response(
@@ -71,29 +90,44 @@ Deno.serve(async (req) => {
       body: JSON.stringify({ p_query: query, p_limit: limit }),
     });
 
+    const searchFailed = () => new Response(
+      JSON.stringify({ results: [], error: 'Search failed' }),
+      { status: 502, headers: { ...headers, 'Content-Type': 'application/json' } },
+    );
+
     if (!rpcRes.ok) {
       const errBody = await rpcRes.text();
       console.error('search_organizations RPC error:', errBody);
-      return new Response(
-        JSON.stringify({ results: [], error: 'Search failed' }),
-        { status: 502, headers: { ...headers, 'Content-Type': 'application/json' } },
-      );
+      return searchFailed();
     }
 
-    const rows = await rpcRes.json();
+    const text = await rpcRes.text();
+    let rows: unknown = null;
+    try {
+      rows = JSON.parse(text);
+    } catch {
+      // Logged below with the raw body.
+    }
+
+    // A 200 that isn't a row array (or isn't JSON) is a failure, not "no
+    // matches" — report it so the client shows its error state instead of an
+    // empty result.
+    if (!Array.isArray(rows)) {
+      console.error('search_organizations RPC returned a non-array body:', text.slice(0, 300));
+      return searchFailed();
+    }
 
     // Map RPC results to the OrgSearchResult shape the frontend expects
-    const results = Array.isArray(rows)
-      ? rows.map((r: Record<string, unknown>) => ({
-          id: r.id ?? r.ein ?? '',
-          ein: r.ein ?? null,
-          name: r.name ?? '',
-          state: r.state ?? null,
-          entity_type: r.entity_type ?? 'funder',
-          grant_count: Number(r.grant_count ?? 0),
-          total_funding: Number(r.total_funding ?? 0),
-        }))
-      : [];
+    // (A malformed element is skipped rather than throwing a 500.)
+    const results = rows.filter((r) => r !== null && typeof r === 'object').map((r: Record<string, unknown>) => ({
+      id: r.id ?? r.ein ?? '',
+      ein: r.ein ?? null,
+      name: r.name ?? '',
+      state: r.state ?? null,
+      entity_type: r.entity_type ?? 'funder',
+      grant_count: Number(r.grant_count ?? 0),
+      total_funding: Number(r.total_funding ?? 0),
+    }));
 
     return new Response(JSON.stringify({ results }), {
       headers: { ...headers, 'Content-Type': 'application/json' },
