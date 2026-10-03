@@ -56,3 +56,6 @@ supabase/.temp
 # Compiled vite config (build artifact of vite.config.ts)
 vite.config.js
 vite.config.d.ts
+
+# Local Deno runs (Edge Function tests) create this; the functions pin their imports.
+deno.lock

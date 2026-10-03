@@ -30,3 +30,12 @@ jobs:
         # visible content (h1, meta, canonical, OG, JSON-LD, body copy).
         # Pure Node + jsdom — no headless browser needed in CI.
         run: npm test
+      - name: Edge Function unit tests (Deno)
+        # The crash/SLA monitoring functions and the shared helpers they use.
+        # Deno from its official npm package, at a pinned version.
+        run: >-
+          npx --yes deno@2.9.6 test --no-lock --node-modules-dir=none --allow-env
+          supabase/functions/monitor-report supabase/functions/monitor-sweep
+          supabase/functions/process-organization-requests supabase/functions/request-organization
+          supabase/functions/_shared/cron_auth_test.ts supabase/functions/_shared/trello_test.ts
+          supabase/functions/_shared/rest_test.ts

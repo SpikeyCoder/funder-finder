@@ -1,6 +1,7 @@
 import { Component, ReactNode } from 'react';
 import { AlertCircle } from 'lucide-react';
-import { isChunkLoadError, reloadOnceForChunkError } from '../lib/chunkReload';
+import { isChunkLoadError, onReloadPageFor, reloadOnceForChunkError } from '../lib/chunkReload';
+import { reportCrash } from '../lib/monitoring';
 
 interface Props {
   children: ReactNode;
@@ -50,9 +51,18 @@ export default class ErrorBoundary extends Component<Props, State> {
     // we've already tried, render() shows a manual Reload with the details.
     // The "Reloading…" screen keeps a Reload button, so if reload() is ever a
     // no-op (e.g. a sandboxed webview) nobody is stranded.
-    if (isChunkLoadError(error) && reloadOnceForChunkError(error)) {
+    const chunk = isChunkLoadError(error);
+    const reload = chunk ? reloadOnceForChunkError(error) : null;
+    if (reload === 'reloading') {
       this.setState({ reloading: true });
+      return;
     }
+    // Whatever screen is shown now (FM-2026-10-03-02). A chunk error is
+    // reported only if the automatic reload didn't help: this is the page
+    // that reload loaded, and it failed the same way. Not if storage is
+    // blocked and no reload was tried, and not a later, separate blip in the
+    // same tab: both are stale deploys or the network, not bugs.
+    reportCrash('boundary', error, errorInfo.componentStack ?? '', chunk && onReloadPageFor(error));
   }
 
   render() {
@@ -85,6 +95,9 @@ export default class ErrorBoundary extends Component<Props, State> {
             <button
               // Just reload: clearing the error first would re-render the
               // failed subtree and throw (and log) again before navigating.
+              // (A plain reload keeps the automatic reload's marker, so if
+              // the visitor taps this while it's under way and the page
+              // fails the same way, that's still reported.)
               onClick={() => window.location.reload()}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
             >

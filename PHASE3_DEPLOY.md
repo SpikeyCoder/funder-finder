@@ -111,17 +111,27 @@ Without this, notifications will log to console instead of sending email.
 
 In the Supabase dashboard, go to Database → Extensions → enable `pg_cron`, then:
 
+`process-notifications`, `send-reminders` and `check-deadlines` only accept
+calls that present `CRON_SECRET` (the Edge Function secret, also stored in
+Vault as `cron_secret`); with it unset, every call is refused, and a call with
+only a service-role bearer is refused too. pg_net sends no JWT, so deploy each
+one you schedule with `--no-verify-jwt` (as `process-notifications` is above),
+or the gateway rejects the call first. Schedule them the way
+`invoke_organization_request_processor()` does, with the project URL and the
+secret both read from Vault, so a branch or staging database calls its own
+functions, for example:
+
 ```sql
 SELECT cron.schedule(
   'process-notifications',
   '0 8 * * *',  -- Daily at 8 AM UTC
   $$SELECT net.http_post(
-    'https://tgtotjvdubhjxzybmdex.supabase.co/functions/v1/process-notifications',
-    '{"action": "all"}'::jsonb,
-    '{}'::jsonb,
+    url := (SELECT rtrim(decrypted_secret, '/') FROM vault.decrypted_secrets WHERE name = 'project_url')
+             || '/functions/v1/process-notifications',
+    body := '{"action": "all"}'::jsonb,
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
-      'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key')
+      'X-Cron-Secret', (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'cron_secret')
     )
   )$$
 );

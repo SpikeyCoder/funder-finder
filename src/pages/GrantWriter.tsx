@@ -11,9 +11,10 @@ import { friendlyError } from '../lib/friendlyErrors';
 import { useAuth } from '../contexts/AuthContext';
 import { formatGrantRange, formatTotalGiving } from '../utils/matching';
 import NavBar from '../components/NavBar';
+import { SUPABASE_URL } from '../lib/supabaseProject';
 
 const GRANT_WRITER_URL =
-  'https://tgtotjvdubhjxzybmdex.supabase.co/functions/v1/grant-writer';
+  `${SUPABASE_URL}/functions/v1/grant-writer`;
 
 const ACCEPTED_TYPES = [
   'application/pdf',

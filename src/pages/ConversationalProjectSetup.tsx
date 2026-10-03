@@ -23,8 +23,8 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
+import { SUPABASE_URL } from '../lib/supabaseProject';
 
-const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const ASSISTANT_URL = `${SUPABASE_URL}/functions/v1/project-assistant`;
 const MATCH_FUNDERS_URL = `${SUPABASE_URL}/functions/v1/match-funders`;
 

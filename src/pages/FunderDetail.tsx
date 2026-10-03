@@ -10,8 +10,7 @@ import LoginModal from '../components/LoginModal';
 import { GivingTrendsChart, GeoBarChart, GeoHeatMap, StatCard, InsightsSkeleton, fmtDollar } from '../components/InsightCharts';
 import Footer from '../components/Footer';
 import NavBar from '../components/NavBar';
-
-const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
+import { SUPABASE_URL } from '../lib/supabaseProject';
 
 /** Classify giving trend as increasing / stable / decreasing (FEAT-006) */
 function classifyTrend(yearTrend: { year: number; totalAmount: number }[]): { label: string; color: string } | null {

@@ -5,8 +5,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
 import type { PortfolioMetrics, PortfolioGrant } from '../types';
+import { SUPABASE_URL } from '../lib/supabaseProject';
 
-const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const PORTFOLIO_URL = `${SUPABASE_URL}/functions/v1/portfolio`;
 
 function fmtCurrency(amount: number | null | undefined): string {

@@ -7,8 +7,8 @@
  */
 
 import { getEdgeFunctionHeaders } from './supabase';
+import { SUPABASE_URL } from './supabaseProject';
 
-const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const ADVISOR_URL = `${SUPABASE_URL}/functions/v1/onboarding-advisor`;
 
 export interface AdvisorMessage {

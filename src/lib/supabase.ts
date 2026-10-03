@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-
-const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
+import { SUPABASE_URL } from './supabaseProject';
 
 // Custom domain used only for OAuth branding (browser redirects).
 // API calls still go through the default Supabase domain for reliability.

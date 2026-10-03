@@ -20,9 +20,10 @@
  * must not become "Students Feeding Oahu Foundation".
  *
  * Invoked every 15 minutes by pg_cron via public.invoke_organization_request_
- * processor(). Requires CRON_SECRET (X-Cron-Secret or `Bearer cron:<secret>`),
- * and unlike send-reminders it fails CLOSED when CRON_SECRET is unset: this
- * function writes to recipient_organizations and sends email.
+ * processor(). Requires CRON_SECRET (X-Cron-Secret or `Bearer cron:<secret>`)
+ * and, like every cron-only function (_shared/cron_auth.ts), fails CLOSED
+ * when CRON_SECRET is unset: this function writes to recipient_organizations
+ * and sends email.
  *
  * Deploy with `--no-verify-jwt`, like send-reminders / process-notifications:
  * pg_net sends no JWT, so the gateway would reject every call otherwise. The
@@ -34,9 +35,10 @@
  */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { einVariants, padEin } from "../_shared/ein.ts";
+import { cronAuthorized } from "../_shared/cron_auth.ts";
+import { createTrelloCard } from "../_shared/trello.ts";
+import { rest, restConfigured, restJson } from "../_shared/rest.ts";
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
-const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") || "";
 
 const PROPUBLICA = "https://projects.propublica.org/nonprofits/api/v2";
@@ -117,25 +119,6 @@ export function pickExactMatch(query: string, state: string | null, results: Irs
 }
 
 // ── IO ──────────────────────────────────────────────────────────────────────
-
-function rest(path: string, init: RequestInit = {}): Promise<Response> {
-  return fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    ...init,
-    headers: {
-      apikey: SERVICE_KEY,
-      Authorization: `Bearer ${SERVICE_KEY}`,
-      "Content-Type": "application/json",
-      ...(init.headers || {}),
-    },
-  });
-}
-
-async function restJson<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await rest(path, init);
-  if (!res.ok) throw new Error(`REST ${path.split("?")[0]} ${res.status}: ${await res.text()}`);
-  return await res.json() as T;
-}
 
 async function propublica(path: string): Promise<Record<string, unknown> | null> {
   const res = await fetch(`${PROPUBLICA}${path}`, {
@@ -374,38 +357,17 @@ export function reviewCardFor(row: QueueRow, reason: string, candidates: IrsOrg[
 // Reuses report-bug's Trello list so requests land where bug reports are
 // triaged. Best-effort: a missing config or Trello error doesn't fail the row.
 // "unconfigured" (no TRELLO_* secrets) is a deployment state, not a failure
-// to retry; false is a Trello error worth retrying.
-async function createReviewCard(card: { name: string; desc: string }): Promise<boolean | "unconfigured"> {
-  const key = Deno.env.get("TRELLO_API_KEY");
-  const token = Deno.env.get("TRELLO_TOKEN");
-  const idList = Deno.env.get("TRELLO_LIST_ID");
-  if (!key || !token || !idList) return "unconfigured";
-  const params = new URLSearchParams({ key, token, idList, name: card.name, desc: card.desc, pos: "top" });
-  const res = await fetch(`https://api.trello.com/1/cards?${params}`, {
-    method: "POST",
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-  });
-  if (!res.ok) console.error("Trello card failed:", res.status, await res.text());
-  return res.ok;
+// to retry; { error } is a Trello error worth retrying, with what went wrong.
+async function createReviewCard(card: { name: string; desc: string }): Promise<true | "unconfigured" | { error: string }> {
+  let detail = "Trello failing";
+  const url = await createTrelloCard(card, FETCH_TIMEOUT_MS, (d) => (detail = d));
+  if (url === "unconfigured") return url;
+  // A timeout counts as a failure (retried), as before: a request nobody
+  // is asked to review is worse than a duplicate card.
+  return url !== null && url !== "timeout" ? true : { error: detail };
 }
 
 // ── Handler ─────────────────────────────────────────────────────────────────
-
-function constantTimeEqual(a: string, b: string): boolean {
-  let diff = a.length ^ b.length;
-  for (let i = 0; i < Math.max(a.length, b.length); i++) {
-    diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
-  }
-  return diff === 0;
-}
-
-export function cronAuthorized(req: Request, expected: string): boolean {
-  if (!expected) return false; // fail closed
-  const header = req.headers.get("x-cron-secret") || "";
-  if (header && constantTimeEqual(header, expected)) return true;
-  const auth = req.headers.get("authorization") || "";
-  return auth.startsWith("Bearer cron:") && constantTimeEqual(auth.slice("Bearer cron:".length).trim(), expected);
-}
 
 async function notifyFailure(row: QueueRow, now: string): Promise<void> {
   if (!row.requester_email || !RESEND_API_KEY) return;
@@ -532,8 +494,8 @@ async function processRow(row: QueueRow, run: RunState): Promise<string> {
           // table) but don't tell the requester someone is reviewing it.
           console.error(`organization request ${row.id} needs review but TRELLO_* is unset; no card, no email`);
           reviewable = false;
-        } else if (!carded) {
-          throw new Error("review card could not be created (Trello failing)");
+        } else if (carded !== true) {
+          throw new Error(`review card could not be created (${carded.error})`);
         } else {
           run.cardKeys.add(key);
         }
@@ -614,7 +576,7 @@ if (import.meta.main) {
 
     if (req.method !== "POST") return json(405, { error: "Method not allowed" });
     if (!cronAuthorized(req, Deno.env.get("CRON_SECRET") || "")) return json(401, { error: "Unauthorized" });
-    if (!SUPABASE_URL || !SERVICE_KEY) return json(500, { error: "Server config missing" });
+    if (!restConfigured()) return json(500, { error: "Server config missing" });
 
     try {
       const rows = await restJson<QueueRow[]>(

@@ -2,8 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Bug, Loader2, Camera, CheckCircle, AlertCircle, Lightbulb } from 'lucide-react';
 import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
-
-const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
+import { SUPABASE_URL } from '../lib/supabaseProject';
 
 interface CapturedError {
   message: string;

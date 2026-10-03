@@ -13,8 +13,8 @@ import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import { friendlyError } from '../lib/friendlyErrors';
 import LoginModal from '../components/LoginModal';
 import NavBar from '../components/NavBar';
+import { SUPABASE_URL } from '../lib/supabaseProject';
 
-const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const TRACKED_GRANTS_URL = `${SUPABASE_URL}/functions/v1/tracked-grants`;
 
 // ── Status config ──────────────────────────────────────────────────────────────
