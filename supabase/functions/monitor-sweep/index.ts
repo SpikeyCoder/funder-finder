@@ -13,7 +13,9 @@
  *      MAX_CRASH_CARDS_PER_DAY per 24 h, then one summary card a day saying
  *      how many wait (so a flood of fake reports can't flood the board);
  *   3. opens a card for each page whose 75th-percentile LCP/INP/CLS over the
- *      last 24 h is "poor" (at most once per page and metric per 7 days).
+ *      last 24 h is "poor" (at most once per page and metric per 7 days, 2
+ *      per run and 5 per 24 h; reported paths are mapped onto the app's
+ *      routes, so made-up paths can't multiply them).
  *
  * Cards go to report-bug's Trello list. Requires CRON_SECRET and fails
  * closed; deploy with --no-verify-jwt (pg_net sends no JWT), like
@@ -36,8 +38,9 @@ const MAX_CARD_ATTEMPTS = 3;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 7000;
 
-// Search SLA: a check fails if it doesn't return 200 with a results array
-// within SLA_MS. The 3 s anon timeout makes anything near it a near-miss.
+// Search SLA: a check fails if it doesn't return 200 with at least one
+// result within SLA_MS (every query below has matches). The 3 s anon
+// timeout makes anything near it a near-miss.
 export const SLA_MS = 2000;
 const SLA_CHECK_TIMEOUT_MS = 5000;
 export const SLA_BREACHES_PER_HOUR = 2;
@@ -46,6 +49,8 @@ const SLA_QUERIES = ["foundation", "community foundation", "01-0224898"];
 const SLA_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const VITALS_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 const VITALS_MIN_SAMPLES = 20;
+const MAX_VITALS_CARDS = 2;
+export const MAX_VITALS_CARDS_PER_DAY = 5;
 
 export interface CrashRow {
   fingerprint: string;
@@ -209,12 +214,13 @@ async function runSlaCheck(query: string): Promise<SlaCheck> {
       results = (JSON.parse(text) as { results?: unknown }).results;
     } catch { /* not JSON */ }
     const valid = res.status === 200 && Array.isArray(results);
+    const found = valid && (results as unknown[]).length > 0;
     return {
       check_name: query,
-      ok: valid && ms <= SLA_MS,
+      ok: found && ms <= SLA_MS,
       status: res.status,
       ms,
-      detail: valid ? (ms > SLA_MS ? `slow (> ${SLA_MS} ms)` : null) : text.slice(0, 200),
+      detail: !valid ? text.slice(0, 200) : !found ? "no results" : ms > SLA_MS ? `slow (> ${SLA_MS} ms)` : null,
     };
   } catch (err) {
     return { check_name: query, ok: false, status: null, ms: Date.now() - t0, detail: String(err).slice(0, 200) };
@@ -252,13 +258,30 @@ async function openAlertCard(key: string, cooldownMs: number, card: { name: stri
   if (!claim.ok) throw new Error(`REST monitor_alerts claim ${claim.status}: ${await claim.text()}`);
   const url = await createTrelloCard(card);
   if (!url || url === "unconfigured") return null; // claim stays; retried after RETRY_AFTER_MS
-  const done = await rest(`monitor_alerts?alert_key=eq.${encodeURIComponent(key)}`, {
-    method: "PATCH",
-    headers: { Prefer: "return=minimal" },
-    body: JSON.stringify({ trello_card_url: url }),
-  });
-  if (!done.ok) console.error(`monitor-sweep: opened ${url} for ${key} but could not record it:`, done.status, await done.text());
+  await recordCard(`monitor_alerts?alert_key=eq.${encodeURIComponent(key)}`, url, key);
   return url;
+}
+
+/**
+ * Record an opened card's URL, retrying twice: until it's recorded, the
+ * claim alone holds a retry off for RETRY_AFTER_MS, after which a second
+ * card could be opened. Logged if it still fails.
+ */
+async function recordCard(target: string, url: string, what: string): Promise<void> {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await rest(target, {
+        method: "PATCH",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify({ trello_card_url: url }),
+      });
+      if (res.ok) return;
+      console.error(`monitor-sweep: recording ${url} for ${what} failed (attempt ${attempt}):`, res.status, await res.text());
+    } catch (err) {
+      console.error(`monitor-sweep: recording ${url} for ${what} failed (attempt ${attempt}):`, err);
+    }
+    await new Promise((r) => setTimeout(r, 500 * attempt));
+  }
 }
 
 type Summary = Record<string, number | string>;
@@ -315,14 +338,7 @@ async function sweepCrashes(summary: Summary): Promise<void> {
     // Trello rejected or failed this one: it's retried after an hour (up to
     // MAX_CARD_ATTEMPTS times), and doesn't hold up the rest.
     if (!url || url === "unconfigured") continue;
-    const done = await rest(`monitor_crashes?fingerprint=eq.${c.fingerprint}`, {
-      method: "PATCH",
-      headers: { Prefer: "return=minimal" },
-      body: JSON.stringify({ trello_card_url: url }),
-    });
-    if (!done.ok) {
-      console.error(`monitor-sweep: opened ${url} for crash ${c.fingerprint} but could not record it:`, done.status, await done.text());
-    }
+    await recordCard(`monitor_crashes?fingerprint=eq.${c.fingerprint}`, url, `crash ${c.fingerprint}`);
     carded++;
   }
   summary.crash_cards = carded;
@@ -339,9 +355,18 @@ async function sweepVitals(summary: Summary): Promise<void> {
     method: "POST",
     body: JSON.stringify({ p_min_samples: VITALS_MIN_SAMPLES }),
   });
+  const dayAgo = new Date(Date.now() - DAY_MS).toISOString();
+  const cardedToday = (await restJson<unknown[]>(
+    `monitor_alerts?alert_key=like.vitals:*&last_carded_at=gte.${encodeURIComponent(dayAgo)}&select=alert_key`,
+  )).length;
+  let budget = Math.min(MAX_VITALS_CARDS, MAX_VITALS_CARDS_PER_DAY - cardedToday);
   let carded = 0;
   for (const b of breaches) {
-    if (await openAlertCard(`vitals:${b.metric}:${b.path}`, VITALS_COOLDOWN_MS, vitalsCard(b))) carded++;
+    if (budget <= 0) break;
+    if (await openAlertCard(`vitals:${b.metric}:${b.path}`, VITALS_COOLDOWN_MS, vitalsCard(b))) {
+      carded++;
+      budget--;
+    }
   }
   summary.vitals_cards = carded;
 }

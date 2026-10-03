@@ -61,6 +61,20 @@ export function currentBuild(): string {
   return src.split('/').pop() || 'dev';
 }
 
+/**
+ * Whether this tab already reloaded automatically for this error, i.e. the
+ * reload happened and didn't help. False if storage is unavailable (then no
+ * reload was ever attempted).
+ */
+export function alreadyReloadedFor(error: unknown): boolean {
+  try {
+    const seen = JSON.parse(sessionStorage.getItem(CHUNK_RELOAD_KEY) || '[]');
+    return Array.isArray(seen) && seen.includes(reloadKey(error, window.location.pathname, currentBuild()));
+  } catch {
+    return false;
+  }
+}
+
 // Reloading pulls a fresh index.html plus valid chunks and almost always
 // recovers. Returns true if a reload was started; false if we already reloaded
 // for this chunk/path, or sessionStorage is unavailable — the caller should

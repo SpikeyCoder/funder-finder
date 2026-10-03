@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertNotEquals } from "jsr:@std/assert@1";
-import { fingerprint, fingerprintSource, normalizePath, parseCrash, parseVitals, scrub } from "./index.ts";
+import { fingerprint, fingerprintSource, normalizeMessage, normalizePath, parseCrash, parseVitals, readLimited, scrub } from "./index.ts";
 
 Deno.test("scrub masks emails and drops query strings", () => {
   assertEquals(
@@ -13,7 +13,8 @@ Deno.test("normalizePath hides share tokens and route ids", () => {
   assertEquals(normalizePath("/shared/abc"), "/shared/:id");
   assertEquals(normalizePath("/projects/42/tracker"), "/projects/:id/tracker");
   assertEquals(normalizePath("/projects/new/chat"), "/projects/new/chat");
-  assertEquals(normalizePath("/unknown/a1b2c3d4e5f6g7h8i9"), "/unknown/:id");
+  assertEquals(normalizePath("/unknown/a1b2c3d4e5f6g7h8i9"), "(other)");
+  assertEquals(normalizePath("/made-up-path-1"), "(other)");
   assertEquals(normalizePath("/onboarding/first-project"), "/onboarding/first-project");
 });
 
@@ -47,10 +48,23 @@ Deno.test("fingerprint survives renamed minified functions and hashes containing
   assert(fingerprintSource("Error", "x", "at f (https://x/assets/chunk-reload-AbC12345.js:1:1)").endsWith("|/assets/chunk-reload.js"));
 });
 
+Deno.test("message normalisation keeps the meaning, drops values and minified names", () => {
+  assertEquals(
+    normalizeMessage("Cannot read properties of undefined (reading 'name')"),
+    "Cannot read properties of undefined (reading 'name')",
+  );
+  assertEquals(normalizeMessage("Xt is not a function"), normalizeMessage("Qa is not a function"));
+  assertEquals(normalizeMessage("e is undefined"), "<id> is undefined");
+  assertEquals(normalizeMessage('No funder "Ford Foundation 2024" found'), "No funder <str> found");
+  assertEquals(normalizeMessage("Request 42 failed at https://x/y"), "Request <n> failed at <url>");
+});
+
 Deno.test("fingerprint separates different errors and frames", async () => {
+  const read = (p: string) => `Cannot read properties of undefined (reading '${p}')`;
+  assertNotEquals(await fingerprint("TypeError", read("name"), STACK_A), await fingerprint("TypeError", read("map"), STACK_A));
   const a = await fingerprint("TypeError", "x is undefined", STACK_A);
   assertNotEquals(a, await fingerprint("RangeError", "x is undefined", STACK_A));
-  assertNotEquals(a, await fingerprint("TypeError", "y is undefined", STACK_A));
+  assertNotEquals(a, await fingerprint("TypeError", "x is null", STACK_A));
   assertNotEquals(a, await fingerprint("TypeError", "x is undefined", STACK_A.replace("OrgSearch-", "FunderPage-")));
 });
 
@@ -97,7 +111,15 @@ Deno.test("parseVitals accepts the three metrics within range only", () => {
   assertEquals(parseVitals({ metrics: [m("LCP", 1), m("LCP", 2, "good", 2)] }), "Invalid metric");
   assertEquals(parseVitals({ metrics: [{ name: "LCP", value: 1, rating: "good" }] }), "Invalid id");
   assertEquals(parseVitals({ metrics: [{ ...m("LCP", 1), id: "x'; drop" }] }), "Invalid id");
+  assertEquals(parseVitals({ metrics: [m("toString", 1)] }), "Invalid metric");
   assertEquals(parseVitals({ metrics: "x" }), "Invalid metrics");
+});
+
+Deno.test("readLimited stops at the byte limit, not the character count", async () => {
+  const body = (s: string) => new Request("http://x", { method: "POST", body: s });
+  assertEquals(await readLimited(body("hello"), 16), "hello");
+  assertEquals(await readLimited(body("é".repeat(10)), 16), null); // 20 bytes
+  assertEquals(await readLimited(new Request("http://x", { method: "POST", body: "x", headers: { "content-length": "99999" } }), 16), null);
 });
 
 Deno.test("scrub strips relative query strings and masks percent-encoded addresses", () => {

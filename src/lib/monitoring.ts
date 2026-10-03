@@ -10,10 +10,15 @@
 // Everything here is best-effort: reporting never throws, never blocks the
 // page, and is off in development.
 //
-// Privacy: no user id, IP or query string is sent. Email addresses in error
+// Privacy: no user id, IP or query string is sent; paths are reduced to the
+// app's route (ids and share tokens become :id). Email addresses in error
 // text are masked here and again on the server.
 import { onCLS, onINP, onLCP, type Metric } from 'web-vitals';
 import { currentBuild, isChunkLoadError } from './chunkReload';
+// Shared with the monitor-report Edge Function, so both scrub the same way.
+import { normalizePath, scrub } from '../../supabase/functions/_shared/monitor_scrub.ts';
+
+export { normalizePath, scrub };
 
 const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const ENDPOINT = `${SUPABASE_URL}/functions/v1/monitor-report`;
@@ -44,48 +49,6 @@ export interface VitalsReport {
 }
 
 // ── Pure helpers (unit-tested) ──────────────────────────────────────────────
-
-// Local part can't span URL syntax, so "…?email=eq.a@b.org" masks just the address.
-const EMAIL = /[^\s@<>"'()/:?=&#%]+(?:@|%40)[^\s@<>"'()/?=&#%]+\.[a-z]{2,}/gi;
-
-/**
- * Mask email addresses (plain or percent-encoded) and drop query strings:
- * from absolute URLs (with fragments), and from anything else followed by
- * `?key=`, such as a relative URL.
- */
-export function scrub(text: string): string {
-  // Query strings first: they're where addresses most often hide in URLs.
-  return text
-    .replace(/(https?:\/\/[^\s?#)"']*)[?#][^\s)"']*/gi, '$1')
-    .replace(/\?(?=[\w.%-]+=)[^\s)"']*/g, '')
-    .replace(EMAIL, '[email]');
-}
-
-// The app's routes with a parameter in the second segment (App.tsx).
-// /shared/:token's token is a secret: it must never be stored or shown.
-const PARAM_AFTER = new Set(['funder', 'recipient', 'shared', 'projects']);
-
-/**
- * Replace ids and tokens in a path so one route is one key and nothing
- * secret leaves the page: /shared/<token>, /recipient/<uuid> and
- * /projects/<id>/tracker become /shared/:id, /recipient/:id and
- * /projects/:id/tracker. Unknown paths still lose anything id-like.
- */
-export function normalizePath(pathname: string): string {
-  const segs = pathname.split(/[?#]/)[0].split('/');
-  const path = segs
-    .map((seg, i) => {
-      if (!seg) return seg;
-      if (i === 2 && PARAM_AFTER.has(segs[1]) && !(segs[1] === 'projects' && seg === 'new')) return ':id';
-      const idLike =
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(seg) ||
-        /^\d[\d-]{3,}$/.test(seg) ||
-        (seg.length >= 16 && /\d/.test(seg));
-      return idLike ? ':id' : seg;
-    })
-    .join('/');
-  return (path.length > 1 ? path.replace(/\/+$/, '') : path).slice(0, 200) || '/';
-}
 
 /**
  * Errors that aren't ours to fix: browser extensions, the opaque

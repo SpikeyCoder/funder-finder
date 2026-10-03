@@ -13,13 +13,14 @@
 --     with its stack and how often it happened;
 --   * a page whose 75th-percentile LCP, INP or CLS over the last 24 h is
 --     "poor" by web-vitals' thresholds, with at least 20 page views (once per
---     page and metric per 7 days);
+--     page and metric per 7 days; at most 5 a day). Paths are the app's
+--     routes (anything else is "(other)"), so made-up paths add nothing;
 --   * search breaching its SLA: 2 or more of the last hour's synthetic checks
 --     failed or took over 2 s (once per 24 h).
 --
 -- Only the public Edge Function writes reports, and only the sweep opens
 -- cards, so flooding the endpoint can't flood Trello: at most 10 crash cards
--- a day plus one summary, whatever is reported. Reports are rate-limited per
+-- a day plus one summary, and 5 page-speed cards, whatever is reported. Reports are rate-limited per
 -- IP in the function (crashes 10/h, vitals 120/h).
 --
 -- Access: RLS on, no policies, no grants to anon/authenticated; only the
@@ -86,9 +87,9 @@ CREATE TABLE IF NOT EXISTS public.monitor_sla_checks (
 CREATE INDEX IF NOT EXISTS monitor_sla_checks_checked ON public.monitor_sla_checks (checked_at);
 
 -- One row per alert, claimed (last_carded_at = now, no URL yet) before its
--- card is opened, so the same alert isn't re-carded inside its quiet period
--- even if recording the card fails; a claim with no card is retried after
--- an hour.
+-- card is opened, so overlapping runs can't both open it. A claim with no
+-- card is retried after an hour; recording an opened card's URL is retried
+-- too, and only if that keeps failing could a second card open.
 CREATE TABLE IF NOT EXISTS public.monitor_alerts (
   alert_key        text PRIMARY KEY,           -- e.g. 'vitals:LCP:/search', 'sla:search'
   last_carded_at   timestamptz NOT NULL,

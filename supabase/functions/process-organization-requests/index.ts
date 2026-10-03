@@ -34,6 +34,10 @@
  */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { einVariants, padEin } from "../_shared/ein.ts";
+import { cronAuthorized } from "../_shared/cron_auth.ts";
+import { createTrelloCard } from "../_shared/trello.ts";
+
+export { cronAuthorized };
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -376,36 +380,11 @@ export function reviewCardFor(row: QueueRow, reason: string, candidates: IrsOrg[
 // "unconfigured" (no TRELLO_* secrets) is a deployment state, not a failure
 // to retry; false is a Trello error worth retrying.
 async function createReviewCard(card: { name: string; desc: string }): Promise<boolean | "unconfigured"> {
-  const key = Deno.env.get("TRELLO_API_KEY");
-  const token = Deno.env.get("TRELLO_TOKEN");
-  const idList = Deno.env.get("TRELLO_LIST_ID");
-  if (!key || !token || !idList) return "unconfigured";
-  const params = new URLSearchParams({ key, token, idList, name: card.name, desc: card.desc, pos: "top" });
-  const res = await fetch(`https://api.trello.com/1/cards?${params}`, {
-    method: "POST",
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-  });
-  if (!res.ok) console.error("Trello card failed:", res.status, await res.text());
-  return res.ok;
+  const url = await createTrelloCard(card, FETCH_TIMEOUT_MS);
+  return url === "unconfigured" ? url : url !== null;
 }
 
 // ── Handler ─────────────────────────────────────────────────────────────────
-
-function constantTimeEqual(a: string, b: string): boolean {
-  let diff = a.length ^ b.length;
-  for (let i = 0; i < Math.max(a.length, b.length); i++) {
-    diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
-  }
-  return diff === 0;
-}
-
-export function cronAuthorized(req: Request, expected: string): boolean {
-  if (!expected) return false; // fail closed
-  const header = req.headers.get("x-cron-secret") || "";
-  if (header && constantTimeEqual(header, expected)) return true;
-  const auth = req.headers.get("authorization") || "";
-  return auth.startsWith("Bearer cron:") && constantTimeEqual(auth.slice("Bearer cron:".length).trim(), expected);
-}
 
 async function notifyFailure(row: QueueRow, now: string): Promise<void> {
   if (!row.requester_email || !RESEND_API_KEY) return;

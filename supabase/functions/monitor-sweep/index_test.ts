@@ -46,6 +46,11 @@ Deno.test("alerts: due when new, after the quiet period, or an hour after a clai
   assertEquals(alertDue({ last_carded_at: "2026-10-03T10:30:00Z", trello_card_url: null }, day, now), true);
 });
 
+Deno.test("an SLA check with no results counts as failed (checked in runSlaCheck's detail)", () => {
+  // slaBreached only counts ok=false; runSlaCheck sets ok=false for an empty result.
+  assertEquals(slaBreached([{ ok: false }, { ok: false }]), true);
+});
+
 Deno.test("overflow card says how many crashes wait", () => {
   assertEquals(crashOverflowCard(37).name, "[CRASH] 37 more new kinds of crash waiting (daily card limit reached)");
 });

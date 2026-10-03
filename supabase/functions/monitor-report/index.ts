@@ -20,6 +20,10 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { ipRateLimit } from "../_shared/rate_limit.ts";
 import { corsHeaders } from "../_shared/cors.ts";
+// The browser scrubs with the same module; redone here because reports are untrusted.
+import { normalizePath, scrub } from "../_shared/monitor_scrub.ts";
+
+export { normalizePath, scrub };
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -58,48 +62,34 @@ export interface VitalRow {
 // ── Pure helpers (unit-tested) ──────────────────────────────────────────────
 
 // Local part can't span URL syntax, so "…?email=eq.a@b.org" masks just the address.
-// Same as src/lib/monitoring.ts (reports are untrusted, so it's redone here).
-const EMAIL = /[^\s@<>"'()/:?=&#%]+(?:@|%40)[^\s@<>"'()/?=&#%]+\.[a-z]{2,}/gi;
+// Short words a message really contains, as opposed to minified names.
+const WORDS = new Set(["a", "an", "as", "at", "be", "by", "do", "id", "if", "in", "is", "it", "no", "of", "on", "or", "to", "up"]);
 
-export function scrub(text: string): string {
-  // Query strings first: they're where addresses most often hide in URLs.
-  return text
-    .replace(/(https?:\/\/[^\s?#)"']*)[?#][^\s)"']*/gi, "$1")
-    .replace(/\?(?=[\w.%-]+=)[^\s)"']*/g, "")
-    .replace(EMAIL, "[email]");
-}
-
-const PARAM_AFTER = new Set(["funder", "recipient", "shared", "projects"]);
-
-/** Same as the browser's normalizePath: ids and tokens become :id, no query string. */
-export function normalizePath(path: string): string {
-  const segs = path.split(/[?#]/)[0].split("/");
-  const norm = segs
-    .map((seg, i) => {
-      if (!seg) return seg;
-      if (i === 2 && PARAM_AFTER.has(segs[1]) && !(segs[1] === "projects" && seg === "new")) return ":id";
-      const idLike = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(seg) ||
-        /^\d[\d-]{3,}$/.test(seg) ||
-        (seg.length >= 16 && /\d/.test(seg));
-      return idLike ? ":id" : seg;
-    })
-    .join("/");
-  return (norm.length > 1 ? norm.replace(/\/+$/, "") : norm).slice(0, 200) || "/";
+/**
+ * A message with its values taken out but its meaning kept: URLs and long
+ * or value-like quoted strings go; short identifier-like quoted strings
+ * stay ("reading 'name'" and "reading 'map'" are different bugs); one- and
+ * two-letter names, which are what minifying produces ("Xt is not a
+ * function"), become <id>; numbers become <n>.
+ */
+export function normalizeMessage(message: string): string {
+  return message
+    .replace(/https?:\/\/\S+/g, "<url>")
+    .replace(/(["'`])(.*?)\1/g, (m, _q, inner) => (/^[A-Za-z_$][\w$.-]{0,39}$/.test(inner) ? m : "<str>"))
+    .replace(/(^|[^\w$'"`<])([A-Za-z_$][\w$]?)(?=[^\w$'"`>]|$)/g, (m, pre, tok) => (WORDS.has(tok.toLowerCase()) ? m : `${pre}<id>`))
+    .replace(/\b0x[0-9a-f]+\b/gi, "<n>")
+    .replace(/\d+/g, "<n>")
+    .trim();
 }
 
 /**
  * The parts of a crash that identify its kind across occurrences and
- * deploys: the error name, the message with values taken out, and the file
- * of the top stack frame that has one, without its build hash. Not the
- * function name or line: minifying renames and moves those on every build.
+ * deploys: the error name, the normalized message, and the file of the top
+ * stack frame that has one, without its build hash. Not the function name
+ * or line: minifying renames and moves those on every build.
  */
 export function fingerprintSource(name: string, message: string, stack: string): string {
-  const msg = message
-    .replace(/https?:\/\/\S+/g, "<url>")
-    .replace(/(["'`]).*?\1/g, "<str>")
-    .replace(/\b0x[0-9a-f]+\b/gi, "<n>")
-    .replace(/\d+/g, "<n>")
-    .trim();
+  const msg = normalizeMessage(message);
   // V8 "at fn (url:1:2)", Firefox/Safari "fn@url:1:2".
   let file = "";
   for (const line of stack.split("\n")) {
@@ -160,7 +150,7 @@ export function parseVitals(b: Record<string, unknown>): VitalRow[] | string {
     // web-vitals ids look like "v5-1696300000000-1234567890123".
     const id = str(m?.id, 80);
     if (!/^v\d+-[\w.-]{6,}$/.test(id)) return "Invalid id";
-    if (!(metric in VITAL_LIMITS) || seen.has(metric)) return "Invalid metric";
+    if (!Object.hasOwn(VITAL_LIMITS, metric) || seen.has(metric)) return "Invalid metric";
     if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > VITAL_LIMITS[metric]) {
       return "Invalid value";
     }
@@ -169,6 +159,32 @@ export function parseVitals(b: Record<string, unknown>): VitalRow[] | string {
     rows.push({ metric_id: id, metric, value, rating, path, release: release(b.release) });
   }
   return rows;
+}
+
+/** The body as text, or null if it's over `max` bytes (stops reading there). */
+export async function readLimited(req: Request, max: number): Promise<string | null> {
+  if (Number(req.headers.get("content-length") ?? 0) > max) return null;
+  if (!req.body) return "";
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(size);
+  let at = 0;
+  for (const c of chunks) {
+    bytes.set(c, at);
+    at += c.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
 }
 
 // ── Handler ─────────────────────────────────────────────────────────────────
@@ -199,8 +215,8 @@ if (import.meta.main) {
     if (req.method === "OPTIONS") return new Response("ok", { headers });
     if (req.method !== "POST") return reply(405, "Method not allowed");
 
-    const text = await req.text();
-    if (text.length > MAX_BODY_BYTES) return reply(413, "Report too large");
+    const text = await readLimited(req, MAX_BODY_BYTES);
+    if (text === null) return reply(413, "Report too large");
     let body: Record<string, unknown>;
     try {
       const parsed = JSON.parse(text);

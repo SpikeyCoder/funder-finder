@@ -35,8 +35,9 @@ export async function createTrelloCard(
       console.error("Trello card failed:", res.status, await res.text());
       return null;
     }
-    const body = await res.json() as { shortUrl?: string; url?: string };
-    return body.shortUrl || body.url || "";
+    const body = await res.json().catch(() => ({})) as { shortUrl?: string; url?: string };
+    // Never "": the card exists, and callers record that it does.
+    return body.shortUrl || body.url || "(card opened; Trello returned no URL)";
   } catch (err) {
     console.error("Trello card failed:", err);
     return null;

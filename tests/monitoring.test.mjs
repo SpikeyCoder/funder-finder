@@ -13,16 +13,18 @@ import ts from 'typescript';
 // Transpile monitoring.ts and its local import into a temp dir, pointing the
 // bare 'web-vitals' import at the installed package.
 const dir = mkdtempSync(join(tmpdir(), 'monitoring-test-'));
-const transpile = (file) =>
-  ts.transpileModule(readFileSync(new URL(`../src/lib/${file}.ts`, import.meta.url), 'utf8'), {
+const transpile = (path) =>
+  ts.transpileModule(readFileSync(new URL(`../${path}.ts`, import.meta.url), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 },
   }).outputText;
 const webVitals = pathToFileURL(new URL('../node_modules/web-vitals/dist/web-vitals.js', import.meta.url).pathname).href;
-writeFileSync(join(dir, 'chunkReload.mjs'), transpile('chunkReload'));
+writeFileSync(join(dir, 'chunkReload.mjs'), transpile('src/lib/chunkReload'));
+writeFileSync(join(dir, 'monitor_scrub.mjs'), transpile('supabase/functions/_shared/monitor_scrub'));
 writeFileSync(
   join(dir, 'monitoring.mjs'),
-  transpile('monitoring')
+  transpile('src/lib/monitoring')
     .replace(/from ['"]\.\/chunkReload['"]/, "from './chunkReload.mjs'")
+    .replace(/from ['"][./]+supabase\/functions\/_shared\/monitor_scrub\.ts['"]/, "from './monitor_scrub.mjs'")
     .replace(/from ['"]web-vitals['"]/, `from '${webVitals}'`),
 );
 const { scrub, normalizePath, isNoise, describe, buildCrashReport } = await import(
@@ -42,6 +44,14 @@ test('normalizePath never lets a share token through', () => {
   assert.equal(normalizePath('/projects/new/chat'), '/projects/new/chat');
   assert.equal(normalizePath('/projects/abc/tracker'), '/projects/:id/tracker');
   assert.equal(normalizePath('/onboarding/first-project'), '/onboarding/first-project');
+  assert.equal(normalizePath('/not-a-route/abc'), '(other)');
+});
+
+test("the route list matches App.tsx's routes", async () => {
+  const { ROUTES } = await import(pathToFileURL(join(dir, 'monitor_scrub.mjs')).href);
+  const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
+  const routes = [...app.matchAll(/path="([^"*]+)"/g)].map((m) => m[1].replace(/:\w+/g, ':id'));
+  assert.deepEqual([...new Set(routes)].sort(), [...ROUTES].sort());
 });
 
 test('scrub handles relative URLs and percent-encoded addresses', () => {
@@ -57,6 +67,7 @@ test('normalizePath turns ids into :id so one route is one key', () => {
   assert.equal(normalizePath('/search/'), '/search');
   assert.equal(normalizePath('/'), '/');
   assert.equal(normalizePath('/projects/2026'), '/projects/:id');
+  assert.equal(normalizePath('/search?q=x'), '/search');
 });
 
 test('noise: extensions, opaque cross-origin errors, ResizeObserver', () => {
