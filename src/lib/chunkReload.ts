@@ -56,7 +56,7 @@ export function reloadKey(error: unknown, pathname: string, build: string): stri
 
 // The hashed entry chunk this page is running (index-AbC123.js), which
 // changes with every deploy.
-function currentBuild(): string {
+export function currentBuild(): string {
   const src = document.querySelector<HTMLScriptElement>('script[type="module"][src*="/assets/"]')?.src ?? '';
   return src.split('/').pop() || 'dev';
 }

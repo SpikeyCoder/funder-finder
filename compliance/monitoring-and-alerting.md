@@ -27,6 +27,25 @@ The Supabase dashboard provides edge function logs for fundermatch.org
 with status codes, execution times, and error detail. Logs are retained
 for 24 hours.
 
+## 2a. Crash, page-speed and search SLA alerting (fundermatch.org)
+
+Free and in-house (FM-2026-10-03-02; migration `20261003140000`):
+
+- **Crashes.** The browser reports the error screen, uncaught errors and
+  unhandled promise rejections to the `monitor-report` Edge Function, which
+  groups them by fingerprint. Every 15 minutes `monitor-sweep` opens a
+  Trello card for each new kind of crash (at most 5 per run).
+- **Page speed.** Each page view's Core Web Vitals (LCP, INP, CLS, via
+  `web-vitals`) are recorded. A page whose 75th-percentile value over 24 h is
+  "poor", across at least 20 page views, gets a card (at most weekly per page
+  and metric).
+- **Search SLA.** `monitor-sweep` times three searches through the public
+  search endpoint every 15 minutes. Two or more checks in an hour that fail or
+  take over 2 s open a card (at most daily).
+
+Cards go to the same Trello list as user bug reports. No user id or IP is
+stored; see `retention-and-deletion.md` for what is kept and for how long.
+
 ## 3. Application logs (website-auditor.io)
 
 website-auditor.io runs on Google Cloud Run, which captures stdout/stderr
@@ -55,6 +74,7 @@ for traffic and usage monitoring.
 | Email (Mailgun) | Site returns non-200 on 5-min health check | `kevin@kevinarmstrong.io` |
 | Email (Mailgun) | Site recovers to 200 | `kevin@kevinarmstrong.io` |
 | Trello bug card | User-reported issue | HoldCo bug board |
+| Trello bug card | New kind of browser crash; poor Core Web Vitals on a page; search SLA breach (§2a) | HoldCo bug board |
 
 ## TSC mapping
 

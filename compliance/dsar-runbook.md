@@ -63,6 +63,7 @@ their own DSAR endpoint.
 | `portfolio_items` | App | `user_id` | User's portfolio entries. |
 | `access_log` | Telemetry | `user_id` (nullable) | 12-month retention; purged daily by `purge_expired_access_log()`. |
 | `search_signal_events` | Telemetry | `user_id` (nullable) | 24-month retention; purged daily. |
+| `monitor_crashes`, `monitor_vitals` | Telemetry | none | No user id, IP or email (addresses in error text are masked), so no row can be tied to a requester. 90/30-day retention; purged daily. |
 | Supabase Storage `user-uploads/` | Document | path prefix `${user_id}/` | User-supplied reference docs. |
 
 Cross-table joins use `user_id` as the canonical key; the `auth.users.id`

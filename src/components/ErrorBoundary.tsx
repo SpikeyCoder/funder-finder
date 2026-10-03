@@ -1,6 +1,7 @@
 import { Component, ReactNode } from 'react';
 import { AlertCircle } from 'lucide-react';
 import { isChunkLoadError, reloadOnceForChunkError } from '../lib/chunkReload';
+import { reportCrash } from '../lib/monitoring';
 
 interface Props {
   children: ReactNode;
@@ -52,7 +53,11 @@ export default class ErrorBoundary extends Component<Props, State> {
     // no-op (e.g. a sandboxed webview) nobody is stranded.
     if (isChunkLoadError(error) && reloadOnceForChunkError(error)) {
       this.setState({ reloading: true });
+      return;
     }
+    // Whatever screen is shown now (FM-2026-10-03-02). A chunk error gets
+    // here only if the automatic reload already happened and didn't help.
+    reportCrash('boundary', error, errorInfo.componentStack ?? '', true);
   }
 
   render() {

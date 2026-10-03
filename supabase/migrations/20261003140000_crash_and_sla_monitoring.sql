@@ -1,0 +1,226 @@
+-- FM-2026-10-03-02: crashes and slow pages open Trello cards automatically.
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Free, in-house replacement for a hosted crash reporter (Sentry's free plan
+-- has no webhooks, so it can't open a card).
+--
+--   browser ──monitor-report──▶ monitor_crashes / monitor_vitals
+--   pg_cron every 15 min ──▶ monitor-sweep ──▶ Trello (report-bug's list)
+--                                 └─ also times live searches ──▶ monitor_sla_checks
+--
+-- The sweep opens a card for:
+--   * each new crash fingerprint (most frequent first, at most 5 per run; the
+--     rest wait for the next run), with its stack and how often it happened;
+--   * a page whose 75th-percentile LCP, INP or CLS over the last 24 h is
+--     "poor" by web-vitals' thresholds, with at least 20 page views (once per
+--     page and metric per 7 days);
+--   * search breaching its SLA: 2 or more of the last hour's synthetic checks
+--     failed or took over 2 s (once per 24 h).
+--
+-- Only the public Edge Function writes reports, and only the sweep opens
+-- cards, so flooding the endpoint can't flood Trello: at most 5 crash cards
+-- per run. Reports are rate-limited per IP in the function.
+--
+-- Access: RLS on, no policies, no grants to anon/authenticated; only the
+-- service role (the two Edge Functions) touches these tables.
+--
+-- Retention (compliance/retention-and-deletion.md): crash kinds unseen for
+-- 90 days, vitals and SLA checks after 30 days, alert markers after 90 days,
+-- and this sweep job's own run history after 30 days. Daily at 10:45 UTC.
+-- Nothing here identifies a person: no user id, no IP; paths have ids and
+-- query strings removed; email addresses in error text are masked.
+-- Rollback: supabase/rollbacks/20261003140000_crash_and_sla_monitoring.down.sql
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS public.monitor_crashes (
+  fingerprint      text PRIMARY KEY,           -- sha-256 hex, computed by monitor-report
+  kind             text NOT NULL CHECK (kind IN ('boundary', 'error', 'rejection')),
+  name             text NOT NULL,
+  message          text NOT NULL,
+  stack            text NOT NULL DEFAULT '',
+  component_stack  text NOT NULL DEFAULT '',
+  path             text NOT NULL,              -- of the latest occurrence
+  release          text NOT NULL DEFAULT '',   -- entry chunk of the latest occurrence
+  user_agent       text NOT NULL DEFAULT '',   -- of the latest occurrence
+  occurrences      integer NOT NULL DEFAULT 1,
+  first_seen       timestamptz NOT NULL DEFAULT now(),
+  last_seen        timestamptz NOT NULL DEFAULT now(),
+  trello_card_url  text,
+  carded_at        timestamptz
+);
+
+CREATE INDEX IF NOT EXISTS monitor_crashes_uncarded
+  ON public.monitor_crashes (occurrences DESC) WHERE trello_card_url IS NULL;
+
+CREATE TABLE IF NOT EXISTS public.monitor_vitals (
+  id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  metric      text NOT NULL CHECK (metric IN ('LCP', 'INP', 'CLS')),
+  value       double precision NOT NULL,
+  rating      text NOT NULL CHECK (rating IN ('good', 'needs-improvement', 'poor')),
+  path        text NOT NULL,
+  release     text NOT NULL DEFAULT '',
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS monitor_vitals_created ON public.monitor_vitals (created_at);
+
+CREATE TABLE IF NOT EXISTS public.monitor_sla_checks (
+  id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  check_name  text NOT NULL,
+  ok          boolean NOT NULL,                -- 200 with a valid body, within the SLA
+  status      integer,                         -- HTTP status; NULL on timeout/network error
+  ms          integer NOT NULL,
+  detail      text,
+  checked_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS monitor_sla_checks_checked ON public.monitor_sla_checks (checked_at);
+
+-- One row per alert that opened a card, so the same alert isn't re-carded
+-- inside its quiet period.
+CREATE TABLE IF NOT EXISTS public.monitor_alerts (
+  alert_key        text PRIMARY KEY,           -- e.g. 'vitals:LCP:/search', 'sla:search'
+  last_carded_at   timestamptz NOT NULL,
+  trello_card_url  text
+);
+
+ALTER TABLE public.monitor_crashes    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.monitor_vitals     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.monitor_sla_checks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.monitor_alerts     ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.monitor_crashes, public.monitor_vitals, public.monitor_sla_checks, public.monitor_alerts
+  FROM anon, authenticated;
+
+-- ── Recording a crash ───────────────────────────────────────────────────────
+-- One row per fingerprint: a repeat bumps the count and keeps the latest
+-- occurrence's details (its release and browser are the most useful).
+
+CREATE OR REPLACE FUNCTION public.record_client_crash(
+  p_fingerprint text, p_kind text, p_name text, p_message text, p_stack text,
+  p_component_stack text, p_path text, p_release text, p_user_agent text)
+RETURNS void
+LANGUAGE sql
+SET search_path = ''
+AS $$
+  INSERT INTO public.monitor_crashes AS c
+    (fingerprint, kind, name, message, stack, component_stack, path, release, user_agent)
+  VALUES
+    (p_fingerprint, p_kind, p_name, p_message, p_stack, p_component_stack, p_path, p_release, p_user_agent)
+  ON CONFLICT (fingerprint) DO UPDATE
+    SET occurrences = c.occurrences + 1,
+        last_seen = now(),
+        message = EXCLUDED.message,
+        stack = EXCLUDED.stack,
+        component_stack = EXCLUDED.component_stack,
+        path = EXCLUDED.path,
+        release = EXCLUDED.release,
+        user_agent = EXCLUDED.user_agent;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.record_client_crash(text, text, text, text, text, text, text, text, text)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.record_client_crash(text, text, text, text, text, text, text, text, text)
+  TO service_role;
+
+-- ── Slow pages ──────────────────────────────────────────────────────────────
+-- Pages whose 75th-percentile value over the last 24 h is "poor" (the
+-- threshold Core Web Vitals use), with enough page views to mean something.
+-- Thresholds are web-vitals' own: LCP > 4000 ms, INP > 500 ms, CLS > 0.25.
+
+CREATE OR REPLACE FUNCTION public.monitor_vitals_breaches(p_min_samples integer DEFAULT 20)
+RETURNS TABLE (metric text, path text, samples bigint, p75 double precision, poor_share double precision)
+LANGUAGE sql
+STABLE
+SET search_path = ''
+AS $$
+  SELECT v.metric, v.path, count(*) AS samples,
+         percentile_cont(0.75) WITHIN GROUP (ORDER BY v.value) AS p75,
+         avg((v.rating = 'poor')::int)::double precision AS poor_share
+    FROM public.monitor_vitals v
+   WHERE v.created_at >= now() - interval '24 hours'
+   GROUP BY v.metric, v.path
+  HAVING count(*) >= p_min_samples
+     AND percentile_cont(0.75) WITHIN GROUP (ORDER BY v.value) >
+         CASE v.metric WHEN 'LCP' THEN 4000 WHEN 'INP' THEN 500 ELSE 0.25 END
+   ORDER BY count(*) DESC;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.monitor_vitals_breaches(integer) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.monitor_vitals_breaches(integer) TO service_role;
+
+-- ── Retention ───────────────────────────────────────────────────────────────
+
+CREATE OR REPLACE FUNCTION public.purge_monitoring()
+RETURNS integer
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+DECLARE
+  v_deleted integer := 0;
+  v_n integer;
+BEGIN
+  DELETE FROM public.monitor_crashes WHERE last_seen < now() - interval '90 days';
+  GET DIAGNOSTICS v_n = ROW_COUNT; v_deleted := v_deleted + v_n;
+  DELETE FROM public.monitor_vitals WHERE created_at < now() - interval '30 days';
+  GET DIAGNOSTICS v_n = ROW_COUNT; v_deleted := v_deleted + v_n;
+  DELETE FROM public.monitor_sla_checks WHERE checked_at < now() - interval '30 days';
+  GET DIAGNOSTICS v_n = ROW_COUNT; v_deleted := v_deleted + v_n;
+  DELETE FROM public.monitor_alerts WHERE last_carded_at < now() - interval '90 days';
+  GET DIAGNOSTICS v_n = ROW_COUNT; v_deleted := v_deleted + v_n;
+  -- The 15-minute sweep's own run history (96 rows a day), matched by its
+  -- jobid or its command as purge_prewarm_run_details does.
+  DELETE FROM cron.job_run_details
+   WHERE (jobid IN (SELECT jobid FROM cron.job WHERE jobname = 'monitor-sweep')
+          OR command = 'SELECT public.invoke_monitor_sweep()')
+     AND coalesce(end_time, start_time) < now() - interval '30 days';
+  GET DIAGNOSTICS v_n = ROW_COUNT; v_deleted := v_deleted + v_n;
+  RAISE LOG 'purge_monitoring: deleted % rows', v_deleted;
+  RETURN v_deleted;
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.purge_monitoring() FROM PUBLIC, anon, authenticated;
+
+SELECT cron.schedule(
+  'purge-monitoring',
+  '45 10 * * *',
+  $$SELECT public.purge_monitoring()$$
+);
+
+-- ── The sweep ───────────────────────────────────────────────────────────────
+-- Called by pg_cron through pg_net, authenticated with CRON_SECRET from Vault,
+-- exactly like invoke_organization_request_processor (20261002140000). A
+-- no-op until both Vault secrets exist. At :09, :24, :39, :54: clear of the
+-- 15-minute and hourly jobs and of prewarm-search-indexes (:02, :07, …).
+
+CREATE OR REPLACE FUNCTION public.invoke_monitor_sweep()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  v_secret text;
+  v_url text;
+BEGIN
+  SELECT decrypted_secret INTO v_secret FROM vault.decrypted_secrets WHERE name = 'cron_secret' LIMIT 1;
+  SELECT rtrim(decrypted_secret, '/') INTO v_url FROM vault.decrypted_secrets WHERE name = 'project_url' LIMIT 1;
+  IF v_secret IS NULL OR v_url IS NULL THEN
+    RAISE NOTICE 'invoke_monitor_sweep: vault secrets cron_secret / project_url are not set; skipping';
+    RETURN;
+  END IF;
+  PERFORM net.http_post(
+    url     := v_url || '/functions/v1/monitor-sweep',
+    body    := '{}'::jsonb,
+    headers := jsonb_build_object('Content-Type', 'application/json', 'X-Cron-Secret', v_secret),
+    timeout_milliseconds := 120000
+  );
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.invoke_monitor_sweep() FROM PUBLIC, anon, authenticated;
+
+SELECT cron.schedule(
+  'monitor-sweep',
+  '9-59/15 * * * *',
+  $$SELECT public.invoke_monitor_sweep()$$
+);
