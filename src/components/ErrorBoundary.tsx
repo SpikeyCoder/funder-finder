@@ -57,9 +57,12 @@ export default class ErrorBoundary extends Component<Props, State> {
       return;
     }
     // Whatever screen is shown now (FM-2026-10-03-02). A chunk error is
-    // reported only if the automatic reload happened and didn't help; not if
-    // storage is blocked and no reload was tried (a stale deploy, not a bug).
-    reportCrash('boundary', error, errorInfo.componentStack ?? '', reload === 'already-reloaded');
+    // reported only if the automatic reload didn't help: we already reloaded
+    // for it and this page is under a minute old (the reload's page). Not if
+    // storage is blocked and no reload was tried, and not a later, separate
+    // blip in the same tab: both are stale deploys or the network, not bugs.
+    const reloadDidntHelp = reload === 'already-reloaded' && performance.now() < 60_000;
+    reportCrash('boundary', error, errorInfo.componentStack ?? '', reloadDidntHelp);
   }
 
   render() {

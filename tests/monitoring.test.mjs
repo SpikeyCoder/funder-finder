@@ -61,6 +61,20 @@ test('scrub handles relative URLs and percent-encoded addresses', () => {
   assert.equal(scrub('Why? Because.'), 'Why? Because.');
 });
 
+test('scrub masks share-link tokens anywhere in the text', () => {
+  assert.equal(
+    scrub('GET https://fundermatch.org/shared/9f3a1c0e5b7d failed; see /shared/abc123/view'),
+    'GET https://fundermatch.org/shared/:id failed; see /shared/:id/view',
+  );
+});
+
+test('scrub stays fast on long input with no address in it', () => {
+  const start = performance.now();
+  scrub('a'.repeat(5000) + '@' + 'b'.repeat(5000));
+  scrub('@'.repeat(1) + 'x.'.repeat(5000));
+  assert.ok(performance.now() - start < 200, `took ${performance.now() - start} ms`);
+});
+
 test('normalizePath turns ids into :id so one route is one key', () => {
   assert.equal(normalizePath('/recipient/2da01037-c1bc-4106-8c21-40008ead6ca7'), '/recipient/:id');
   assert.equal(normalizePath('/funder/010224898'), '/funder/:id');

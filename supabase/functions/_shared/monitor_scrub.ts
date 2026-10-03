@@ -7,18 +7,22 @@
 
 // Local part can't span URL syntax, so "…?email=eq.a@b.org" masks just the
 // address; '%' is allowed in it so percent-encoded '+' and '.' are covered.
-const EMAIL = /[^\s@<>"'()/:?=&#]+(?:@|%40)[^\s@<>"'()/?=&#%]+\.[a-z]{2,}/gi;
+// Bounded (RFC 5321's 64 and 253) so a long string with no address can't
+// make it backtrack quadratically.
+const EMAIL = /[^\s@<>"'()/:?=&#]{1,64}(?:@|%40)[^\s@<>"'()/?=&#%]{1,253}\.[a-z]{2,24}/gi;
 
 /**
- * Mask email addresses (plain or percent-encoded) and drop query strings:
- * from absolute URLs (with fragments), and from anything else followed by
- * `?key=`, such as a relative URL.
+ * Mask email addresses (plain or percent-encoded) and share-link tokens,
+ * and drop query strings: from absolute URLs (with fragments), and from
+ * anything else followed by `?key=`, such as a relative URL.
  */
 export function scrub(text: string): string {
   // Query strings first: they're where addresses most often hide in URLs.
   return text
     .replace(/(https?:\/\/[^\s?#)"']*)[?#][^\s)"']*/gi, "$1")
     .replace(/\?(?=[\w.%-]+=)[^\s)"']*/g, "")
+    // A share link's token is a secret, wherever the link appears.
+    .replace(/\/shared\/[^\s/?#)"'`]+/gi, "/shared/:id")
     .replace(EMAIL, "[email]");
 }
 

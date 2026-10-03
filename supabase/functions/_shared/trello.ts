@@ -11,6 +11,8 @@ export function trelloConfigured(): boolean {
 export async function createTrelloCard(
   card: { name: string; desc: string },
   timeoutMs = 7000,
+  // Called with what went wrong when the result is null or "timeout".
+  onFailure: (detail: string) => void = () => {},
 ): Promise<string | null | "unconfigured" | "timeout"> {
   const key = Deno.env.get("TRELLO_API_KEY");
   const token = Deno.env.get("TRELLO_TOKEN");
@@ -34,7 +36,11 @@ export async function createTrelloCard(
       signal: AbortSignal.timeout(timeoutMs),
     });
     if (!res.ok) {
-      console.error("Trello card failed:", res.status, await res.text());
+      // Trello answered: no card. Reading its error body can't turn this
+      // into a "timeout" (which would mean the card may exist).
+      const detail = `Trello ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`;
+      console.error("Trello card failed:", detail);
+      onFailure(detail);
       return null;
     }
     const body = await res.json().catch(() => ({})) as { shortUrl?: string; url?: string };
@@ -43,9 +49,11 @@ export async function createTrelloCard(
   } catch (err) {
     if ((err as { name?: string })?.name === "TimeoutError") {
       console.error(`Trello timed out after ${timeoutMs} ms; the card may exist: ${card.name}`);
+      onFailure(`Trello timed out after ${timeoutMs} ms`);
       return "timeout";
     }
     console.error("Trello card failed:", err);
+    onFailure(`Trello request failed: ${String(err).slice(0, 200)}`);
     return null;
   }
 }

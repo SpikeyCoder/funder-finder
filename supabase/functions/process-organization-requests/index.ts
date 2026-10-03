@@ -378,12 +378,14 @@ export function reviewCardFor(row: QueueRow, reason: string, candidates: IrsOrg[
 // Reuses report-bug's Trello list so requests land where bug reports are
 // triaged. Best-effort: a missing config or Trello error doesn't fail the row.
 // "unconfigured" (no TRELLO_* secrets) is a deployment state, not a failure
-// to retry; false is a Trello error worth retrying.
-async function createReviewCard(card: { name: string; desc: string }): Promise<boolean | "unconfigured"> {
-  const url = await createTrelloCard(card, FETCH_TIMEOUT_MS);
+// to retry; { error } is a Trello error worth retrying, with what went wrong.
+async function createReviewCard(card: { name: string; desc: string }): Promise<true | "unconfigured" | { error: string }> {
+  let detail = "Trello failing";
+  const url = await createTrelloCard(card, FETCH_TIMEOUT_MS, (d) => (detail = d));
+  if (url === "unconfigured") return url;
   // A timeout counts as a failure (retried), as before: a request nobody
   // is asked to review is worse than a duplicate card.
-  return url === "unconfigured" ? url : url !== null && url !== "timeout";
+  return url !== null && url !== "timeout" ? true : { error: detail };
 }
 
 // ── Handler ─────────────────────────────────────────────────────────────────
@@ -513,8 +515,8 @@ async function processRow(row: QueueRow, run: RunState): Promise<string> {
           // table) but don't tell the requester someone is reviewing it.
           console.error(`organization request ${row.id} needs review but TRELLO_* is unset; no card, no email`);
           reviewable = false;
-        } else if (!carded) {
-          throw new Error("review card could not be created (Trello failing)");
+        } else if (carded !== true) {
+          throw new Error(`review card could not be created (${carded.error})`);
         } else {
           run.cardKeys.add(key);
         }

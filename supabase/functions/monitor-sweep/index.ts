@@ -354,7 +354,7 @@ async function sweepSla(summary: Summary, trello: boolean): Promise<void> {
   if (url) summary.sla_card = url;
 }
 
-async function sweepCrashes(summary: Summary, _trello: boolean): Promise<void> {
+async function sweepCrashes(summary: Summary): Promise<void> {
   const now = Date.now();
   const iso = (ms: number) => encodeURIComponent(new Date(ms).toISOString());
   const cardedToday = await restCount(
@@ -371,7 +371,7 @@ async function sweepCrashes(summary: Summary, _trello: boolean): Promise<void> {
       "&select=fingerprint,kind,name,message,stack,component_stack,path,release,user_agent,occurrences,first_seen,last_seen,card_attempts",
   );
   let carded = 0;
-  for (const c of due.slice(0, Math.max(0, budget))) {
+  for (const c of due) {
     // Claim it (counts as an attempt) only if no other run has meanwhile.
     const claim = await rest(
       `monitor_crashes?fingerprint=eq.${c.fingerprint}&trello_card_url=is.null&card_attempts=eq.${c.card_attempts}&select=fingerprint`,
@@ -401,7 +401,7 @@ async function sweepCrashes(summary: Summary, _trello: boolean): Promise<void> {
   }
 }
 
-async function sweepVitals(summary: Summary, _trello: boolean): Promise<void> {
+async function sweepVitals(summary: Summary): Promise<void> {
   const breaches = await restJson<VitalsBreach[]>("rpc/monitor_vitals_breaches", {
     method: "POST",
     body: JSON.stringify({ p_min_samples: VITALS_MIN_SAMPLES }),
@@ -443,16 +443,17 @@ if (import.meta.main) {
     // cards that can't be opened would use up their retries.
     const summary: Summary = {};
     const trello = trelloConfigured();
-    const parts = trello
-      ? [["sla", sweepSla], ["crashes", sweepCrashes], ["vitals", sweepVitals]] as const
-      : [["sla", sweepSla]] as const;
+    // Crashes and vitals only open cards, so they run only with Trello; the
+    // SLA checks are recorded either way.
+    const parts: [string, (s: Summary) => Promise<void>][] = [["sla", (s) => sweepSla(s, trello)]];
+    if (trello) parts.push(["crashes", sweepCrashes], ["vitals", sweepVitals]);
     if (!trello) {
       console.error("monitor-sweep: TRELLO_API_KEY / TRELLO_TOKEN / TRELLO_LIST_ID unset; no cards opened");
       summary.trello = "unconfigured";
     }
     for (const [name, part] of parts) {
       try {
-        await part(summary, trello);
+        await part(summary);
       } catch (err) {
         console.error(`monitor-sweep ${name} failed:`, err);
         summary[`${name}_error`] = String(err).slice(0, 200);

@@ -158,9 +158,13 @@ export function installMonitoring(): void {
   installed = true;
 
   window.addEventListener('error', (event) => {
-    // Resource load failures (an <img> 404) reach here with no error object.
-    if (!event.error && !event.message) return;
-    reportCrash('error', event.error ?? { name: 'Error', message: event.message, stack: `at ${event.filename}:${event.lineno}` });
+    if (event.error) return reportCrash('error', event.error);
+    // No error object (thrown from another realm, or a non-Error): parse the
+    // event's message, which browsers prefix ("Uncaught TypeError: …"), so it
+    // fingerprints the same as when the object is there.
+    const m = /^(?:Uncaught )?(?:(\w*Error): )?(.*)$/s.exec(event.message || '');
+    if (!m || !m[2]) return;
+    reportCrash('error', { name: m[1] || 'Error', message: m[2], stack: `at ${event.filename}:${event.lineno}` });
   });
   window.addEventListener('unhandledrejection', (event) => reportCrash('rejection', event.reason));
 

@@ -259,23 +259,11 @@ if (import.meta.main) {
       return reply(400, "Invalid JSON");
     }
 
-    let write: () => Promise<Response>;
-    if (body.type === "crash") {
-      const row = await parseCrash(body, req.headers.get("user-agent") ?? "");
-      if (typeof row === "string") return reply(400, row);
-      write = () => rest("rpc/record_client_crash", Object.fromEntries(Object.entries(row).map(([k, v]) => [`p_${k}`, v])));
-    } else if (body.type === "vitals") {
-      const rows = parseVitals(body);
-      if (typeof rows === "string") return reply(400, rows);
-      if (rows.length === 0) return reply(204);
-      // A changed value for a metric id replaces the earlier one.
-      write = () => rest("monitor_vitals?on_conflict=metric_id", rows, "resolution=merge-duplicates,return=minimal");
-    } else {
-      return reply(400, "Invalid type");
-    }
-
-    // Only valid reports count against the limit.
-    const kind = body.type as keyof typeof RATE_LIMITS;
+    if (body.type !== "crash" && body.type !== "vitals") return reply(400, "Invalid type");
+    // Rate-limit before the parsing, scrubbing and hashing below, so the
+    // limit caps each caller's CPU as well as their writes. (A malformed
+    // report counts too: only well-formed JSON of a known type gets here.)
+    const kind = body.type;
     const limited = await ipRateLimit(req, {
       namespace: `monitor-report:${kind}`,
       limit: RATE_LIMITS[kind],
@@ -283,6 +271,19 @@ if (import.meta.main) {
       extraHeaders: headers,
     });
     if (!limited.allow && limited.response) return limited.response;
+
+    let write: () => Promise<Response>;
+    if (kind === "crash") {
+      const row = await parseCrash(body, req.headers.get("user-agent") ?? "");
+      if (typeof row === "string") return reply(400, row);
+      write = () => rest("rpc/record_client_crash", Object.fromEntries(Object.entries(row).map(([k, v]) => [`p_${k}`, v])));
+    } else {
+      const rows = parseVitals(body);
+      if (typeof rows === "string") return reply(400, rows);
+      if (rows.length === 0) return reply(204);
+      // A changed value for a metric id replaces the earlier one.
+      write = () => rest("monitor_vitals?on_conflict=metric_id", rows, "resolution=merge-duplicates,return=minimal");
+    }
 
     if (!SUPABASE_URL || !SERVICE_KEY) {
       console.error("monitor-report: SUPABASE_URL / SERVICE_ROLE_KEY unset");
