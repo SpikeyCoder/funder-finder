@@ -10,7 +10,7 @@ const source = readFileSync(new URL('../src/lib/chunkReload.ts', import.meta.url
 const { outputText } = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 },
 });
-const { isChunkLoadError, onReloadPageFor, reloadKey, reloadOnceForChunkError } = await import(
+const { isChunkLoadError, onReloadPageFor, reloadKey, reloadOnceForChunkError, takeReloadMarker } = await import(
   `data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`
 );
 
@@ -31,6 +31,7 @@ function installGlobals({ blocked = false } = {}) {
   globalThis.sessionStorage = {
     getItem: (k) => { throwIfBlocked(); return store.has(k) ? store.get(k) : null; },
     setItem: (k, v) => { throwIfBlocked(); store.set(k, String(v)); },
+    removeItem: (k) => { throwIfBlocked(); store.delete(k); },
   };
   globalThis.window = { location: { pathname: '/results', reload: () => { reloads++; } } };
   setBuild('index-Build1.js');
@@ -143,30 +144,36 @@ test('a corrupt stored value is treated as empty, not as a crash', () => {
 });
 
 test('onReloadPageFor: only the page our reload loaded, for the same failure', () => {
-  const realPerformance = globalThis.performance;
-  // The page started loading at wall time `ms` (Date.now() - performance.now()).
-  const pageStartedAt = (ms) => Object.defineProperty(globalThis, 'performance', { value: { now: () => Date.now() - ms }, configurable: true });
-  try {
-    const before = Date.now();
-    assert.equal(reloadOnceForChunkError(LINK), 'reloading');
-    // The reloaded page started loading a moment later: same failure there.
-    pageStartedAt(before + 300);
-    assert.equal(onReloadPageFor(LINK), true);
-    // A different failure on that page isn't the one we reloaded for.
-    assert.equal(onReloadPageFor(fetchFail('Other-1.js')), false);
-    // A page loaded a minute later (a later navigation in the tab) isn't the reload's.
-    pageStartedAt(before + 60_000);
-    assert.equal(onReloadPageFor(LINK), false);
-    // Nor the page that started the reload.
-    pageStartedAt(before - 5_000);
-    assert.equal(onReloadPageFor(LINK), false);
-  } finally {
-    Object.defineProperty(globalThis, 'performance', { value: realPerformance, configurable: true });
-  }
+  assert.equal(reloadOnceForChunkError(LINK), 'reloading');
+  takeReloadMarker(); // the reloaded page starts
+  assert.equal(onReloadPageFor(LINK), true);
+  assert.equal(reloadOnceForChunkError(LINK), 'already-reloaded');
+  // A different failure on that page isn't the one we reloaded for.
+  assert.equal(onReloadPageFor(fetchFail('Other-1.js')), false);
+  takeReloadMarker(); // any later page load (a manual Reload, say)
+  assert.equal(onReloadPageFor(LINK), false);
 });
 
 test('onReloadPageFor is false without a recorded reload or storage', () => {
+  takeReloadMarker();
   assert.equal(onReloadPageFor(LINK), false);
   installGlobals({ blocked: true });
+  takeReloadMarker();
   assert.equal(onReloadPageFor(LINK), false);
+});
+
+test('if recording the reload fails, nothing is left half-recorded', () => {
+  const setItem = sessionStorage.setItem;
+  sessionStorage.setItem = (k, v) => {
+    if (k === 'ff_chunk_reloads') throw new DOMException('full', 'QuotaExceededError');
+    setItem(k, v);
+  };
+  assert.equal(reloadOnceForChunkError(LINK), 'unavailable');
+  assert.equal(reloads, 0);
+  assert.equal(store.size, 0);
+  sessionStorage.setItem = setItem;
+  takeReloadMarker();
+  assert.equal(onReloadPageFor(LINK), false);
+  // Once storage works again, the reload is still available.
+  assert.equal(reloadOnceForChunkError(LINK), 'reloading');
 });

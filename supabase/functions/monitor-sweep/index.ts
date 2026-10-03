@@ -416,15 +416,16 @@ async function sweepVitals(summary: Summary): Promise<void> {
   const dayAgo = Date.now() - DAY_MS;
   const cardedToday = [...alerts.values()]
     .filter((a) => a.trello_card_url !== null && Date.parse(a.last_carded_at) >= dayAgo).length;
-  let budget = Math.min(MAX_VITALS_CARDS, MAX_VITALS_CARDS_PER_DAY - cardedToday);
+  const budget = Math.min(MAX_VITALS_CARDS, MAX_VITALS_CARDS_PER_DAY - cardedToday);
+  // Each due breach tried uses up the budget, card or not, so a failing
+  // Trello is called at most MAX_VITALS_CARDS times a run, as for crashes.
+  const due = breaches
+    .map((b) => ({ b, key: `vitals:${b.metric}:${b.path}` }))
+    .filter(({ key }) => alertDue(alerts.get(key), VITALS_COOLDOWN_MS))
+    .slice(0, Math.max(0, budget));
   let carded = 0;
-  for (const b of breaches) {
-    if (budget <= 0) break;
-    const key = `vitals:${b.metric}:${b.path}`;
-    if (await openAlertCard(key, VITALS_COOLDOWN_MS, vitalsCard(b), alerts.get(key) ?? null)) {
-      carded++;
-      budget--;
-    }
+  for (const { b, key } of due) {
+    if (await openAlertCard(key, VITALS_COOLDOWN_MS, vitalsCard(b), alerts.get(key) ?? null)) carded++;
   }
   summary.vitals_cards = carded;
 }

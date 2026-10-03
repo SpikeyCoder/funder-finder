@@ -39,7 +39,7 @@ const VITAL_LIMITS: Record<string, number> = { LCP: 600_000, INP: 600_000, CLS: 
 const RATINGS = new Set(["good", "needs-improvement", "poor"]);
 const KINDS = new Set(["boundary", "error", "rejection"]);
 
-export interface CrashRow {
+export interface CrashInsert {
   fingerprint: string;
   kind: string;
   name: string;
@@ -147,7 +147,7 @@ const release = (v: unknown): string => {
 };
 
 /** A crash report as a row, or an error message. */
-export async function parseCrash(b: Record<string, unknown>, userAgent: string): Promise<CrashRow | string> {
+export async function parseCrash(b: Record<string, unknown>, userAgent: string): Promise<CrashInsert | string> {
   const kind = str(b.kind, 20);
   if (!KINDS.has(kind)) return "Invalid kind";
   // Scrub before cutting: a cut can leave half an address the pattern misses.

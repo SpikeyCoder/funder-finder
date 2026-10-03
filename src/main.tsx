@@ -3,8 +3,10 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import ErrorBoundary from './components/ErrorBoundary.tsx'
+import { takeReloadMarker } from './lib/chunkReload.ts'
 import { installMonitoring } from './lib/monitoring.ts'
 
+takeReloadMarker()
 installMonitoring()
 
 createRoot(document.getElementById('root')!).render(
