@@ -160,14 +160,16 @@ function send(payload: CrashReport | VitalsReport): Promise<boolean> {
 }
 
 const sentCrashes = new Set<string>();
-// Reports sent from the current route; a client-side navigation starts over.
+// Reports sent from the current route (ids aside: /funder/1 and /funder/2
+// are one route); navigating to another route starts over.
 let pageReports = { path: '', count: 0 };
 
 export function reportCrash(kind: CrashKind, error: unknown, componentStack = '', chunkGaveUp = false): void {
   if (!enabled()) return;
   try {
     const path = window.location.pathname;
-    if (pageReports.path !== path) pageReports = { path, count: 0 };
+    const route = normalizePath(path);
+    if (pageReports.path !== route) pageReports = { path: route, count: 0 };
     if (pageReports.count >= MAX_CRASHES_PER_PAGE) return;
     const report = buildCrashReport(kind, error, path, currentBuild(), componentStack, chunkGaveUp);
     if (!report) return;

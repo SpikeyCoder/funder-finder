@@ -44,6 +44,8 @@ Deno.test("alerts: due when new, after the quiet period, or an hour after a clai
   assertEquals(alertDue({ last_carded_at: "2026-10-02T11:00:00Z", trello_card_url: "u" }, day, now), true);
   assertEquals(alertDue({ last_carded_at: "2026-10-03T11:30:00Z", trello_card_url: null }, day, now), false);
   assertEquals(alertDue({ last_carded_at: "2026-10-03T10:30:00Z", trello_card_url: null }, day, now), true);
+  // With a day's retry (page-speed cards), a failed card waits a day.
+  assertEquals(alertDue({ last_carded_at: "2026-10-03T10:30:00Z", trello_card_url: null }, 7 * day, now, day), false);
 });
 
 Deno.test("an SLA check with no results counts as failed (checked in runSlaCheck's detail)", () => {

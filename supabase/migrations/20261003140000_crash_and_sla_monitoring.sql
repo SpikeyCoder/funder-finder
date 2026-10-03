@@ -139,7 +139,8 @@ AS $$
   -- crashes, and ones whose card timed out (it may exist).
   UPDATE public.monitor_crashes
      SET occurrences = 0, first_seen = now(), kind = p_kind,
-         previous_card_url = trello_card_url,
+         -- (A timed-out card has no URL: keep the link to the one before.)
+         previous_card_url = coalesce(trello_card_url, previous_card_url),
          trello_card_url = NULL, card_uncertain_at = NULL, card_attempted_at = NULL, card_attempts = 0
    WHERE fingerprint = p_fingerprint AND last_seen < now() - interval '7 days'
      AND (trello_card_url IS NOT NULL OR card_uncertain_at IS NOT NULL)

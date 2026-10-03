@@ -263,10 +263,11 @@ export function alertDue(
   row: Pick<AlertRow, "last_carded_at" | "trello_card_url"> | null | undefined,
   cooldownMs: number,
   now = Date.now(),
+  retryAfterMs = RETRY_AFTER_MS,
 ): boolean {
   if (!row) return true;
   const age = now - Date.parse(row.last_carded_at);
-  return age >= cooldownMs || (row.trello_card_url === null && age >= RETRY_AFTER_MS);
+  return age >= cooldownMs || (row.trello_card_url === null && age >= retryAfterMs);
 }
 
 /**
@@ -469,16 +470,17 @@ async function sweepVitals(summary: Summary, deadline: number): Promise<void> {
     (await restJson<AlertRow[]>("monitor_alerts?alert_key=like.vitals:*&select=alert_key,last_carded_at,trello_card_url"))
       .map((a) => [a.alert_key, a]),
   );
-  // Cards actually opened (a claim whose card failed has no URL), as for crashes.
+  // Every card tried in the last day counts, opened or not, as for crashes;
+  // and a failed one is retried a day later, not hourly (page speed isn't
+  // urgent), so a Trello that keeps rejecting gets at most a few calls a day.
   const dayAgo = Date.now() - DAY_MS;
-  const cardedToday = [...alerts.values()]
-    .filter((a) => a.trello_card_url !== null && Date.parse(a.last_carded_at) >= dayAgo).length;
+  const cardedToday = [...alerts.values()].filter((a) => Date.parse(a.last_carded_at) >= dayAgo).length;
   const budget = Math.min(MAX_VITALS_CARDS, MAX_VITALS_CARDS_PER_DAY - cardedToday);
   // Each due breach tried uses up the budget, card or not, so a failing
   // Trello is called at most MAX_VITALS_CARDS times a run, as for crashes.
   const due = breaches
     .map((b) => ({ b, key: `vitals:${b.metric}:${b.path}` }))
-    .filter(({ key }) => alertDue(alerts.get(key), VITALS_COOLDOWN_MS))
+    .filter(({ key }) => alertDue(alerts.get(key), VITALS_COOLDOWN_MS, Date.now(), DAY_MS))
     .slice(0, Math.max(0, budget));
   let carded = 0;
   for (const { b, key } of due) {
