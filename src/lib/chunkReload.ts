@@ -118,6 +118,17 @@ export function reloadOnceForChunkError(error: unknown): ChunkReloadResult {
   return 'reloading';
 }
 
+// For a reload the visitor asks for: if an automatic reload never happened
+// (reload() did nothing), its marker mustn't make this one look automatic.
+export function reloadManually(): void {
+  try {
+    sessionStorage.removeItem(PENDING_RELOAD_KEY);
+  } catch {
+    // Nothing to clear.
+  }
+  window.location.reload();
+}
+
 // Call once at startup, before anything renders: notes whether this page
 // load is an automatic reload, and for which key.
 export function takeReloadMarker(): void {

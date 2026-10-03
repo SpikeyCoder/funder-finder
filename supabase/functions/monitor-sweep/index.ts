@@ -43,8 +43,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // Edge Function is stopped at 150 s, which could leave a card opened but
 // unrecorded (then opened again an hour later).
 const RUN_CARD_DEADLINE_MS = 90_000;
-let runStartedAt = Date.now();
-const timeLeft = () => Date.now() - runStartedAt < RUN_CARD_DEADLINE_MS;
+
 const FETCH_TIMEOUT_MS = 7000;
 
 // Search SLA: a check fails if it doesn't return 200 with at least one
@@ -377,7 +376,7 @@ async function sweepSla(summary: Summary, trello: boolean): Promise<void> {
   if (url) summary.sla_card = url;
 }
 
-async function sweepCrashes(summary: Summary): Promise<void> {
+async function sweepCrashes(summary: Summary, deadline: number): Promise<void> {
   const now = Date.now();
   const iso = (ms: number) => encodeURIComponent(new Date(ms).toISOString());
   // Due: no card yet, and never claimed, or last claimed over an hour ago
@@ -410,7 +409,7 @@ async function sweepCrashes(summary: Summary): Promise<void> {
   let carded = 0;
   let freshTried = 0;
   for (const c of picked) {
-    if (!timeLeft()) break;
+    if (Date.now() > deadline) break;
     // Claim it (counts as an attempt) only if no other run has meanwhile.
     const claim = await rest(
       `monitor_crashes?fingerprint=eq.${c.fingerprint}&trello_card_url=is.null&card_attempts=eq.${c.card_attempts}&select=fingerprint`,
@@ -459,7 +458,7 @@ async function sweepCrashes(summary: Summary): Promise<void> {
   }
 }
 
-async function sweepVitals(summary: Summary): Promise<void> {
+async function sweepVitals(summary: Summary, deadline: number): Promise<void> {
   const breaches = await restJson<VitalsBreach[]>("rpc/monitor_vitals_breaches", {
     method: "POST",
     body: JSON.stringify({ p_min_samples: VITALS_MIN_SAMPLES }),
@@ -483,7 +482,7 @@ async function sweepVitals(summary: Summary): Promise<void> {
     .slice(0, Math.max(0, budget));
   let carded = 0;
   for (const { b, key } of due) {
-    if (!timeLeft()) break;
+    if (Date.now() > deadline) break;
     if (await openAlertCard(key, VITALS_COOLDOWN_MS, vitalsCard(b), alerts.get(key) ?? null)) carded++;
   }
   summary.vitals_cards = carded;
@@ -491,7 +490,6 @@ async function sweepVitals(summary: Summary): Promise<void> {
 
 if (import.meta.main) {
   Deno.serve(async (req: Request) => {
-    runStartedAt = Date.now();
     const json = (status: number, body: unknown) =>
       new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
@@ -507,9 +505,10 @@ if (import.meta.main) {
     // retries.
     const summary: Summary = {};
     const trello = trelloConfigured();
+    const deadline = Date.now() + RUN_CARD_DEADLINE_MS;
     const parts: [string, (s: Summary) => Promise<void>][] = [["sla", (s) => sweepSla(s, trello)]];
     if (trello) {
-      parts.push(["crashes", sweepCrashes], ["vitals", sweepVitals]);
+      parts.push(["crashes", (s) => sweepCrashes(s, deadline)], ["vitals", (s) => sweepVitals(s, deadline)]);
     } else {
       console.error("monitor-sweep: TRELLO_API_KEY / TRELLO_TOKEN / TRELLO_LIST_ID unset; no cards opened");
       summary.trello = "unconfigured";

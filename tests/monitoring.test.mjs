@@ -61,6 +61,14 @@ test('scrub handles relative URLs and percent-encoded addresses', () => {
   assert.equal(scrub('Why? Because.'), 'Why? Because.');
 });
 
+test('scrub keeps a stack frame\'s line and column after a query string', () => {
+  assert.equal(
+    scrub('    at f (https://maps.googleapis.com/maps/api/js?key=AIza123&libraries=places:123:45)'),
+    '    at f (https://maps.googleapis.com/maps/api/js:123:45)',
+  );
+  assert.equal(scrub('f@https://x.org/a.js?v=2:1:2'), 'f@https://x.org/a.js:1:2');
+});
+
 test('scrub drops auth fragments and JWTs', () => {
   assert.equal(scrub('Failed to navigate to /dashboard#access_token=eyJabc.def&refresh_token=xyz'), 'Failed to navigate to /dashboard');
   assert.equal(scrub('bad token eyJhbGciOi.eyJzdWIiOi.sig-part_1 here'), 'bad token [jwt] here');

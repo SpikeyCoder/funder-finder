@@ -198,10 +198,10 @@ export function installMonitoring(): void {
     // event's message, which browsers prefix ("Uncaught TypeError: …"), so it
     // fingerprints the same as when the object is there.
     // ("Uncaught …" in Chrome and Safari, "uncaught exception: …" in Firefox.)
-    const m = /^(?:uncaught (?:exception: )?)?(?:(\w*Error): )?(.*)$/is.exec(event.message || '');
-    // `throw undefined`, `throw null`, `throw 0`: nothing to go on, as for
-    // an empty rejection.
-    if (!m || (!m[1] && /^(?:undefined|null|-?\d*)$/.test(m[2].trim()))) return;
+    const m = /^(?:uncaught (?:exception: )?)?(?:(\w*(?:Error|Exception)): )?(.*)$/is.exec(event.message || '');
+    // `throw undefined`, `throw null`, `throw false`, `throw 0`: nothing to
+    // go on, as for an empty rejection.
+    if (!m || (!m[1] && /^(?:undefined|null|true|false|NaN|-?Infinity|[-+\d.e]*)$/i.test(m[2].trim()))) return;
     reportCrash('error', { name: m[1] || 'Error', message: m[2], stack: `    at ${event.filename}:${event.lineno}:${event.colno}` });
   });
   window.addEventListener('unhandledrejection', (event) => reportCrash('rejection', event.reason));

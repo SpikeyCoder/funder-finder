@@ -20,7 +20,8 @@ const EMAIL = /[^\s@<>"'()/:?=&#]{1,64}(?:@|%40)[^\s@<>"'()/?=&#%]{1,253}\.[a-z]
 export function scrub(text: string): string {
   // Query strings first: they're where addresses most often hide in URLs.
   return text
-    .replace(/(https?:\/\/[^\s?#)"']*)[?#][^\s)"']*/gi, "$1")
+    // (A stack frame's ":line:col" after the query stays: "…/js?key=x:12:3".)
+    .replace(/(https?:\/\/[^\s?#)"']*)[?#][^\s)"']*?(:\d+(?::\d+)?)?(?=[\s)"']|$)/gi, "$1$2")
     .replace(/[?#](?=[\w.%-]+=)[^\s)"']*/g, "")
     // JWTs (Supabase access tokens) wherever they appear.
     .replace(/\beyJ[\w-]{5,}\.[\w-]{5,}\.[\w-]*/g, "[jwt]")
