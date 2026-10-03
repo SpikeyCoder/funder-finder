@@ -185,10 +185,11 @@ GRANT EXECUTE ON FUNCTION public.record_client_crash(text, text, text, text, tex
 -- threshold Core Web Vitals use), with enough page views to mean something.
 -- Thresholds are web-vitals' own: LCP > 4000 ms, INP > 500 ms, CLS > 0.25.
 
--- Records a vitals report (monitor-report). A metric's value only grows
--- within a page view (LCP's final element, CLS's worst window; INP almost
--- always), so a report that arrives late, after a newer one, doesn't
--- replace the newer value.
+-- Records a vitals report (monitor-report). LCP and CLS only grow within a
+-- page view (the largest paint, the worst window), so for them a report
+-- that arrives late, after a newer one, doesn't replace the newer value.
+-- INP can go down (it's a high percentile of the page's interactions, not
+-- the worst one), so the latest INP report wins.
 CREATE OR REPLACE FUNCTION public.record_vitals(p_rows jsonb)
 RETURNS void
 LANGUAGE sql
@@ -201,7 +202,7 @@ AS $$
   ON CONFLICT (metric_id) DO UPDATE
      SET value = EXCLUDED.value, rating = EXCLUDED.rating, path = EXCLUDED.path,
          release = EXCLUDED.release, created_at = EXCLUDED.created_at
-   WHERE EXCLUDED.value >= v.value;
+   WHERE v.metric = 'INP' OR EXCLUDED.value >= v.value;
 $$;
 
 REVOKE EXECUTE ON FUNCTION public.record_vitals(jsonb) FROM PUBLIC, anon, authenticated;
