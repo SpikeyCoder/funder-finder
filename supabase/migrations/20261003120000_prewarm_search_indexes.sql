@@ -39,14 +39,17 @@
 --   recipient_organizations_pkey       18 MB  joining candidates back
 --   idx_recipient_org_ein              14 MB  EIN search
 -- Not idx_recipient_org_name_trgm (name_normalized), which search doesn't use.
--- An index that no longer exists, or that pg_prewarm fails on, is skipped with
--- a WARNING in the Postgres log (so a rename shows up there instead of
--- silently warming nothing) and the rest are still warmed. If none can be
--- warmed, the run fails, so it shows as failed in cron.job_run_details.
+-- An index that no longer exists, or that pg_prewarm fails on, is skipped and
+-- the rest are still warmed; the run then fails, naming what it skipped, so a
+-- rename shows as a failed run in cron.job_run_details. (What was read stays
+-- cached: page-cache reads aren't undone by the rollback.)
 --
--- Locks: a run holds AccessShareLock on these indexes until it returns. That
--- conflicts only with DDL on these tables, not with the batch loads'
--- INSERT/UPDATE; DDL waits at most one run (under a second, measured).
+-- Locks: a run holds AccessShareLock on the indexes it has read until it
+-- returns. That conflicts only with DDL on these tables, not with the batch
+-- loads' INSERT/UPDATE. A run takes ~45 ms when cached and under a second when
+-- half is cold (measured); a fully cold run after a restart reads ~200 MB and
+-- can take a few seconds. An index whose lock it can't get within 1 s (DDL in
+-- progress) is skipped rather than waited for.
 --
 -- The job adds 288 rows a day to cron.job_run_details, which nothing purges;
 -- a daily job keeps 30 days of this job's history. Other jobs' history (the
@@ -64,7 +67,8 @@
 CREATE EXTENSION IF NOT EXISTS pg_prewarm WITH SCHEMA extensions;
 
 -- Exists in production but wasn't in source control; declared here (a no-op
--- there) like 20261002120000's indexes, since search and this job use it.
+-- there; same definition, checked 2026-10-03) like 20261002120000's indexes,
+-- since search and this job use it.
 CREATE INDEX IF NOT EXISTS idx_recipient_org_ein
   ON public.recipient_organizations (ein) WHERE ein IS NOT NULL;
 
@@ -84,12 +88,13 @@ CREATE OR REPLACE FUNCTION public.prewarm_search_indexes()
 RETURNS bigint
 LANGUAGE plpgsql
 SET search_path = ''
+SET lock_timeout = '1s'
 AS $$
 DECLARE
   v_name text;
   v_rel regclass;
   v_blocks bigint := 0;
-  v_warmed integer := 0;
+  v_skipped text[] := '{}';
 BEGIN
   FOREACH v_name IN ARRAY ARRAY[
     'public.idx_funders_name_trgm',
@@ -103,18 +108,18 @@ BEGIN
   ] LOOP
     v_rel := to_regclass(v_name);
     IF v_rel IS NULL THEN
-      RAISE WARNING 'prewarm_search_indexes: index % does not exist; update this list', v_name;
+      v_skipped := v_skipped || format('%s (does not exist; update this list)', v_name);
       CONTINUE;
     END IF;
     BEGIN
       v_blocks := v_blocks + extensions.pg_prewarm(v_rel, 'read');
-      v_warmed := v_warmed + 1;
     EXCEPTION WHEN OTHERS THEN
-      RAISE WARNING 'prewarm_search_indexes: could not warm %: %', v_name, SQLERRM;
+      v_skipped := v_skipped || format('%s (%s)', v_name, SQLERRM);
     END;
   END LOOP;
-  IF v_warmed = 0 THEN
-    RAISE EXCEPTION 'prewarm_search_indexes: no index could be warmed (see the warnings above)';
+  IF cardinality(v_skipped) > 0 THEN
+    RAISE EXCEPTION 'prewarm_search_indexes: warmed % blocks, skipped: %',
+      v_blocks, array_to_string(v_skipped, '; ');
   END IF;
   RETURN v_blocks;
 END;
@@ -130,8 +135,9 @@ SELECT cron.schedule(
 
 -- ── This job's run history ──────────────────────────────────────────────────
 -- 30 days is enough to see how recent runs went. Matched by the job's
--- command, not its jobid, so history from an earlier jobid (the job
--- unscheduled and scheduled again) is purged too. A run cut off by a restart
+-- current jobid or its command, so history from an earlier jobid (the job
+-- unscheduled and scheduled again) is purged too, and so is history from
+-- before a change to its command. A run cut off by a restart
 -- before it started has no timestamps and isn't aged out: it's the record of
 -- the restart, and there's at most one per restart. Logs its row count, like
 -- the other purge_* functions.
@@ -146,7 +152,8 @@ DECLARE
   v_deleted integer;
 BEGIN
   DELETE FROM cron.job_run_details
-   WHERE command = 'SELECT public.prewarm_search_indexes()'
+   WHERE (jobid IN (SELECT jobid FROM cron.job WHERE jobname = 'prewarm-search-indexes')
+          OR command = 'SELECT public.prewarm_search_indexes()')
      AND coalesce(end_time, start_time) < now() - interval '30 days';
   GET DIAGNOSTICS v_deleted = ROW_COUNT;
   RAISE LOG 'purge_prewarm_run_details: deleted % rows', v_deleted;

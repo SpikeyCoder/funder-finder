@@ -8,6 +8,9 @@
 -- left in place: they existed before the forward migration. The forward
 -- migration's new lower(btrim(name)) indexes are dropped at the end.
 --
+-- If 20261003120000_prewarm_search_indexes is applied, roll it back first (or
+-- remove the two dropped indexes from its list): its job warms them.
+--
 -- Apply manually: psql "$DATABASE_URL" -f supabase/rollbacks/20261002120000_search_organizations_use_trgm_index.down.sql
 
 CREATE OR REPLACE FUNCTION public.search_organizations(p_query text, p_limit integer DEFAULT 15)
