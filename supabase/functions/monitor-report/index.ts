@@ -5,9 +5,11 @@
  * Vitals reports (src/lib/monitoring.ts) and records them; monitor-sweep
  * turns them into Trello cards (see migration 20261003140000).
  *
- * Public (verify_jwt=false) like report-bug: crashes happen to signed-out
- * visitors too. The body is JSON sent as text/plain, so the browser can send
- * it as a CORS simple request with keepalive while the page unloads.
+ * Public like report-bug: crashes happen to signed-out visitors too. Deploy
+ * with `--no-verify-jwt`: the browser sends no key or JWT (the body is JSON
+ * sent as text/plain, so it goes as a CORS simple request with keepalive
+ * while the page unloads), so with JWT verification on, the gateway answers
+ * every report 401 and nothing is recorded, silently.
  *
  * Abuse: reports are validated, capped in size and rate-limited per IP
  * (crashes and vitals separately, so page views can't use up the budget for
@@ -28,7 +30,9 @@ export { normalizePath, scrub };
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
-const MAX_BODY_BYTES = 16 * 1024;
+// The client caps fields by characters (about 6,600 in all); in bytes that
+// can be several times more (3-byte CJK, 6-byte \uXXXX JSON escapes).
+const MAX_BODY_BYTES = 48 * 1024;
 // A page load sends at most 5 crash reports, and a vitals report each time
 // it's hidden with a changed value. Generous enough for an office of
 // visitors behind one IP; the board is protected by the sweep's card caps.

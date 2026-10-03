@@ -57,12 +57,11 @@ export default class ErrorBoundary extends Component<Props, State> {
       return;
     }
     // Whatever screen is shown now (FM-2026-10-03-02). A chunk error is
-    // reported only if the automatic reload didn't help: we already reloaded
-    // for it and this is the page that reload loaded. Not if storage is
+    // reported only if the automatic reload didn't help: this is the page
+    // that reload loaded, and it failed the same way. Not if storage is
     // blocked and no reload was tried, and not a later, separate blip in the
     // same tab: both are stale deploys or the network, not bugs.
-    const reloadDidntHelp = reload === 'already-reloaded' && onReloadPageFor(error);
-    reportCrash('boundary', error, errorInfo.componentStack ?? '', reloadDidntHelp);
+    reportCrash('boundary', error, errorInfo.componentStack ?? '', isChunkLoadError(error) && onReloadPageFor(error));
   }
 
   render() {

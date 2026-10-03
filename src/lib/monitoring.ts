@@ -115,8 +115,13 @@ export function buildCrashReport(
 
 // ── Sending ─────────────────────────────────────────────────────────────────
 
+// Only the live site reports: a production build served anywhere else (a
+// preview deploy, `vite preview`, a QA machine) would put its crashes and
+// timings on the real board and in the real p75s.
+const PRODUCTION_HOST = /^(?:www\.)?fundermatch\.org$/;
+
 function enabled(): boolean {
-  return !import.meta.env.DEV && typeof window !== 'undefined';
+  return !import.meta.env.DEV && typeof window !== 'undefined' && PRODUCTION_HOST.test(window.location.hostname);
 }
 
 // text/plain keeps this a CORS "simple" request (no preflight), so it can be
