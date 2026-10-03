@@ -219,7 +219,8 @@ export async function parseCrash(b: Record<string, unknown>, userAgent: string):
     message: normalized,
     stack: frames,
     component_stack: scrub(str(b.componentStack, 4000)).slice(0, 2000),
-    path: normalizePath(str(b.path, 500) || "/"),
+    // No path: not the home page, just unknown.
+    path: typeof b.path === "string" ? normalizePath(str(b.path, 500)) : "(other)",
     release: release(b.release),
     user_agent: userAgent.slice(0, 300),
   };

@@ -27,11 +27,12 @@ export async function createTrelloCard(
   // Card fields go in the body, not the URL: a long stack would push the URL
   // past what Trello accepts (414). The credentials go in a header, so the
   // URL in a network error (which callers log and store) holds no secrets.
+  // Trello's limit is 16,384 characters for each; a cut is marked.
+  const cut = (s: string, max: number) => (s.length > max ? s.slice(0, max - 1) + "…" : s);
   const fields = new URLSearchParams({
     idList,
-    name: card.name.slice(0, 200),
-    // Trello's limit is 16,384 characters.
-    desc: card.desc.slice(0, 16000),
+    name: cut(card.name, 1000),
+    desc: cut(card.desc, 16000),
     pos: "top",
   });
   try {

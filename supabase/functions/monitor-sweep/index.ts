@@ -154,7 +154,8 @@ export function crashCard(c: CrashRow): { name: string; desc: string } {
 // share checked_at.
 export function slaBreached(checks: Pick<SlaCheck, "ok" | "checked_at">[]): boolean {
   const failed = checks.filter((c) => !c.ok);
-  const runs = new Set(failed.map((c, i) => c.checked_at ?? `#${i}`));
+  // (Checks without a time count as one run: never more runs than proven.)
+  const runs = new Set(failed.map((c) => c.checked_at ?? "?"));
   return runs.size >= SLA_FAILING_RUNS;
 }
 

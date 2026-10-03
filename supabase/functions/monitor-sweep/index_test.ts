@@ -111,3 +111,7 @@ Deno.test("a regression's card links the earlier one", () => {
   assert(!crashCard(crash).desc.includes("earlier card"));
 });
 
+
+Deno.test("SLA checks without a time count as one run", () => {
+  assertEquals(slaBreached([{ ok: false }, { ok: false }, { ok: false }]), false);
+});
