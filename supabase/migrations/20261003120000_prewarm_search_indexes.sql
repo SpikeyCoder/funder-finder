@@ -127,9 +127,10 @@ $$;
 
 REVOKE EXECUTE ON FUNCTION public.prewarm_search_indexes() FROM PUBLIC, anon, authenticated;
 
+-- Offset from :00/:15/:30/:45, when the hourly and 15-minute jobs start.
 SELECT cron.schedule(
   'prewarm-search-indexes',
-  '*/5 * * * *',
+  '2-59/5 * * * *',
   $$SELECT public.prewarm_search_indexes()$$
 );
 
@@ -137,7 +138,8 @@ SELECT cron.schedule(
 -- 30 days is enough to see how recent runs went. Matched by the job's
 -- current jobid or its command, so history from an earlier jobid (the job
 -- unscheduled and scheduled again) is purged too, and so is history from
--- before a change to its command. A run cut off by a restart
+-- before a change to its command (but not both at once: whoever changes both
+-- should purge the old rows). A run cut off by a restart
 -- before it started has no timestamps and isn't aged out: it's the record of
 -- the restart, and there's at most one per restart. Logs its row count, like
 -- the other purge_* functions.

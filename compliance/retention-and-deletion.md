@@ -17,7 +17,7 @@ last-reviewed: 2026-05-04
 | `access_log` (share-link views) | 12 months | `purge_expired_access_log()` via pg_cron (`purge-access-log`, daily 10:15 UTC) |
 | `organization_requests` ("request a missing organization") | `requester_email` cleared 30 days after the request is processed; a request still unprocessed after 30 days is closed (`failed`) and its email cleared; rows deleted after 180 days | `purge_expired_organization_requests()` via pg_cron (`purge-organization-requests`, daily 10:35 UTC) |
 | `rate_limit_hits` (per-IP request counters) | 1 day after the counter's window started | `purge_expired_rate_limit_hits()` via pg_cron (`purge-rate-limit-hits`, daily 10:30 UTC) |
-| `cron.job_run_details` rows for `prewarm-search-indexes` (runs every 5 minutes) | 30 days. Other jobs' run history isn't purged: the `purge-*` jobs' history is retention evidence. | `purge_prewarm_run_details()` via pg_cron (`purge-prewarm-run-details`, daily 10:40 UTC) |
+| `cron.job_run_details` rows for `prewarm-search-indexes` (runs every 5 minutes) | 30 days. A run cut off by a restart before it started has no timestamps and is kept, as the record of the restart (at most one per restart). Other jobs' run history isn't purged: the `purge-*` jobs' history is retention evidence. | `purge_prewarm_run_details()` via pg_cron (`purge-prewarm-run-details`, daily 10:40 UTC) |
 | Uploaded reference docs | 24 months after last reference | Storage policy + Postgres job |
 | Supabase logs / Vercel logs | 30 days (vendor default) | Automatic |
 
