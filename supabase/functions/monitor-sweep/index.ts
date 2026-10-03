@@ -189,7 +189,7 @@ export function crashOverflowCard(waiting: number): { name: string; desc: string
   return {
     name: `[CRASH] ${waiting} more new kinds of crash waiting (daily card limit reached)`,
     desc: [
-      `monitor-sweep opens at most ${MAX_CRASH_CARDS_PER_DAY} crash cards a day, and that many were opened in the last 24 hours. ${waiting} more new kinds of crash are waiting; they're carded as the limit allows, most frequent first.`,
+      `monitor-sweep tries at most ${MAX_CRASH_CARDS_PER_DAY} crash cards a day (a failed or timed-out try counts, since a timed-out card may still have opened), and that many were tried in the last 24 hours. ${waiting} more new kinds of crash are waiting; they're carded as the limit allows, most frequent first.`,
       "",
       "A sudden burst usually means one bad deploy (look at the build on recent [CRASH] cards) or someone sending fake reports to monitor-report (look for many kinds with one occurrence each).",
       "",
@@ -301,13 +301,14 @@ async function openAlertCard(
 }
 
 /**
- * The URL to record for a card, or null if none was opened. A timeout is
- * recorded as a placeholder (the card may exist): for alerts a duplicate is
- * worse than a missed card, since the crash or breach stays in the tables.
+ * The URL to record for a card, or null if none was opened (it's retried).
+ * A timeout means the card may exist: alerts record a placeholder, since a
+ * duplicate is worse than a missed card while the breach stays in the
+ * tables; crash cards retry, since a crash that keeps happening must reach
+ * the board and a rare duplicate is the lesser cost.
  */
-export function cardUrl(result: string | null | "unconfigured" | "timeout"): string | null {
-  // (Crash cards handle a timeout themselves; see sweepCrashes.)
-  if (result === "timeout") return "(Trello timed out; the card may exist, check the board)";
+export function cardUrl(result: string | null | "unconfigured" | "timeout", timeoutIsCarded = true): string | null {
+  if (result === "timeout") return timeoutIsCarded ? "(Trello timed out; the card may exist, check the board)" : null;
   return result && result !== "unconfigured" ? result : null;
 }
 
@@ -396,12 +397,9 @@ async function sweepCrashes(summary: Summary): Promise<void> {
     );
     if (!claim.ok) throw new Error(`REST monitor_crashes claim ${claim.status}: ${await claim.text()}`);
     if (((await claim.json()) as unknown[]).length !== 1) continue;
-    const result = await createTrelloCard(crashCard(c));
+    const url = cardUrl(await createTrelloCard(crashCard(c)), false);
     // Trello rejected, failed or timed out: retried later (the claim counts
-    // as an attempt), without holding up the rest. Unlike an alert, a timeout
-    // isn't recorded as carded: a crash that keeps happening must reach the
-    // board, and a rare duplicate card is the lesser cost.
-    const url = result === "timeout" ? null : cardUrl(result);
+    // as an attempt), without holding up the rest.
     if (!url) continue;
     await recordCard(`monitor_crashes?fingerprint=eq.${c.fingerprint}`, url, `crash ${c.fingerprint}`);
     carded++;

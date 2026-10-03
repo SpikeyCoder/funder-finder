@@ -137,7 +137,9 @@ function enabled(): boolean {
 
 // text/plain keeps this a CORS "simple" request (no preflight), so it can be
 // sent with keepalive while the page unloads.
-// Resolves to whether the report was delivered; never rejects.
+// Resolves to false if the report is worth sending again (no response, a
+// rate limit or a server error), true otherwise; never rejects. A 400 or
+// 413 would fail again, so it isn't retried.
 function send(payload: CrashReport | VitalsReport): Promise<boolean> {
   try {
     return fetch(ENDPOINT, {
@@ -145,7 +147,7 @@ function send(payload: CrashReport | VitalsReport): Promise<boolean> {
       keepalive: true,
       headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify(payload),
-    }).then(() => true, () => false);
+    }).then((res) => res.status !== 429 && res.status < 500, () => false);
   } catch {
     // Reporting must never break the page.
     return Promise.resolve(false);
@@ -237,19 +239,24 @@ export function installMonitoring(): void {
     const metrics = [...pending.values()];
     pending.clear();
     for (const { m } of metrics) sentValues.set(m.id, m.value);
-    void send({
-      type: 'vitals',
-      release: currentBuild().slice(0, 100),
-      metrics: metrics.map(({ m, path }) => ({ id: m.id, name: m.name, value: m.value, rating: m.rating, path })),
-    }).then((delivered) => {
-      if (delivered) return;
-      // Not delivered (offline, or over the keepalive budget): send these
-      // again on the next hide, unless newer values came in meanwhile.
-      for (const entry of metrics) {
-        if (sentValues.get(entry.m.id) === entry.m.value) sentValues.delete(entry.m.id);
-        if (!pending.has(entry.m.id)) pending.set(entry.m.id, entry);
-      }
-    });
+    // At most 6 metrics a report (the server's limit): re-queued ones and a
+    // back/forward-cache restore's new ids can add up to more.
+    for (let i = 0; i < metrics.length; i += 6) {
+      const batch = metrics.slice(i, i + 6);
+      void send({
+        type: 'vitals',
+        release: currentBuild().slice(0, 100),
+        metrics: batch.map(({ m, path }) => ({ id: m.id, name: m.name, value: m.value, rating: m.rating, path })),
+      }).then((delivered) => {
+        if (delivered) return;
+        // Not delivered (offline, over the keepalive budget, rate-limited):
+        // send these again on the next hide, unless newer values came in.
+        for (const entry of batch) {
+          if (sentValues.get(entry.m.id) === entry.m.value) sentValues.delete(entry.m.id);
+          if (!pending.has(entry.m.id)) pending.set(entry.m.id, entry);
+        }
+      });
+    }
   };
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') flush();

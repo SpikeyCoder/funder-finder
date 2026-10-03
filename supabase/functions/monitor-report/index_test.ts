@@ -237,3 +237,13 @@ Deno.test("short words and unhashed file names survive normalizing", () => {
   assertEquals(at("OrgSearch-BrsvDQt6.js"), "/assets/OrgSearch.js");
   assertEquals(at("LoginPage-DK1D-7OR.js"), "/assets/LoginPage.js");
 });
+
+Deno.test("a minified name that is also a word is still a name", () => {
+  assertEquals(
+    normalizeMessage("undefined is not an object (evaluating 'a.map')"),
+    normalizeMessage("undefined is not an object (evaluating 't.map')"),
+  );
+  assertEquals(normalizeMessage(`can't access property "map", a is undefined`), normalizeMessage(`can't access property "map", t is undefined`));
+  // Property names after the variable keep their names.
+  assertEquals(normalizeMessage("(evaluating 'n.id.to')"), "(evaluating '<id>.id.to')");
+});

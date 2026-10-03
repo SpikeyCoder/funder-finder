@@ -73,10 +73,11 @@ const WORDS = new Set([
   "gb", "kb", "mb", "ms", "px",
 ]);
 const minified = (name: string) => /^[A-Za-z_$][\w$]?$/.test(name) && !WORDS.has(name.toLowerCase());
-// A short word followed by member access or a call, or the subject of the
-// message ("a is not a function"), is a name, not a word.
-const usedAsName = (next: string | undefined, atStart: boolean, rest: string) =>
-  /^[.([]/.test(next ?? "") || (atStart && /^ is\b/.test(rest));
+// A short word followed by member access or a call, or the subject of an
+// "is" ("a is not a function", Firefox's "…, a is undefined"), is a name,
+// not a word.
+const usedAsName = (next: string | undefined, rest: string) =>
+  /^[.([]/.test(next ?? "") || /^ is\b/.test(rest);
 
 // A quoted part of a message: kept if it's a short identifier or dotted
 // path ("reading 'name'" and "reading 'map'" are different bugs), with
@@ -88,7 +89,10 @@ function quoted(q: string, inner: string): string {
   // A long token with digits in it is an id ('abcdef1234', 'a1b2c3d4…').
   if (inner.length >= 8 && /\d/.test(inner) && !inner.includes(".")) return "<str>";
   if (!inner.includes(".")) return q + inner + q;
-  return q + inner.split(".").map((seg) => (minified(seg) ? "<id>" : seg)).join(".") + q;
+  // A dotted path starts with a variable, which minifying renames (even to
+  // a word like 'a'); the property names after it keep their names.
+  const [first, ...props] = inner.split(".");
+  return q + [/^[A-Za-z_$][\w$]?$/.test(first) ? "<id>" : first, ...props].join(".") + q;
 }
 
 /**
@@ -115,9 +119,10 @@ export function normalizeMessage(message: string): string {
     // Chrome marks a cut-off quoted excerpt: "Internal S"...
     .replace(/<str>\.\.\./g, "<str>")
     // Unquoted too: Firefox says "t.current is null". A short word is a name
-    // where it's used as one ("a is not a function", "in.x is null").
-    .replace(/(^|[^\w$'"`<])([A-Za-z_$][\w$]?)(?=([^\w$'"`>]|$))/g, (m, pre, tok, next, offset, all) =>
-      minified(tok) || (/^[A-Za-z_$][\w$]?$/.test(tok) && usedAsName(next, offset === 0 && pre === "", all.slice(offset + m.length)))
+    // where it's used as one ("a is not a function", "in.x is null"); one
+    // after a dot is a property, which keeps its name.
+    .replace(/(^|[^\w$'"`<.])([A-Za-z_$][\w$]?)(?=([^\w$'"`>]|$))/g, (m, pre, tok, next, offset, all) =>
+      minified(tok) || (/^[A-Za-z_$][\w$]?$/.test(tok) && usedAsName(next, all.slice(offset + m.length)))
         ? `${pre}<id>`
         : m)
     .replace(/\b0x[0-9a-f]+\b/gi, "<n>")

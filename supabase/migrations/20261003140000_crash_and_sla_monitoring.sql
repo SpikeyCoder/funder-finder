@@ -61,6 +61,9 @@ CREATE TABLE IF NOT EXISTS public.monitor_crashes (
 
 CREATE INDEX IF NOT EXISTS monitor_crashes_uncarded
   ON public.monitor_crashes (occurrences DESC) WHERE trello_card_url IS NULL;
+-- The sweep's daily card count (cards tried in the last 24 h).
+CREATE INDEX IF NOT EXISTS monitor_crashes_attempted
+  ON public.monitor_crashes (card_attempted_at) WHERE card_attempted_at IS NOT NULL;
 
 -- One row per metric per page view: the browser re-sends a metric whenever
 -- its value changes (INP and CLS keep growing while the page is open), keyed
