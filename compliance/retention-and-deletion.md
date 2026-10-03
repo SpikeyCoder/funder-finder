@@ -32,7 +32,7 @@ until the migration shipped. Later migrations added more purge jobs
 SELECT jobname, schedule, command, active
 FROM cron.job
 WHERE jobname LIKE 'purge-%'
-ORDER BY schedule;
+ORDER BY jobname;
 ```
 
 Data subject requests (access / correction / erasure) are handled by

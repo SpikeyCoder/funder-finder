@@ -26,10 +26,12 @@ BEGIN
   SELECT jobid INTO v_purge_id FROM cron.job WHERE jobname = 'purge-prewarm-run-details';
   IF v_job_id IS NOT NULL THEN PERFORM cron.unschedule(v_job_id); END IF;
   IF v_purge_id IS NOT NULL THEN PERFORM cron.unschedule(v_purge_id); END IF;
-  -- Then its run history (matched as the purge does); nothing would purge it
-  -- once the purge job is gone.
+  -- Then both jobs' run history (the prewarm job's matched as the purge does);
+  -- nothing would purge it once the purge job is gone.
   DELETE FROM cron.job_run_details
-   WHERE jobid = v_job_id OR command = 'SELECT public.prewarm_search_indexes()';
+   WHERE jobid IN (v_job_id, v_purge_id)
+      OR command IN ('SELECT public.prewarm_search_indexes()',
+                     'SELECT public.purge_prewarm_run_details()');
 END $$;
 
 DROP FUNCTION IF EXISTS public.prewarm_search_indexes();
