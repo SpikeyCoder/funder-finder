@@ -360,7 +360,7 @@ async function restCount(path: string): Promise<number> {
   return total;
 }
 
-type Summary = Record<string, number | string>;
+export type Summary = Record<string, number | string>;
 
 async function sweepSla(summary: Summary, trello: boolean): Promise<void> {
   const checks: SlaCheck[] = [];
@@ -385,7 +385,7 @@ async function sweepSla(summary: Summary, trello: boolean): Promise<void> {
   if (url) summary.sla_card = url;
 }
 
-async function sweepCrashes(summary: Summary, deadline: number): Promise<void> {
+export async function sweepCrashes(summary: Summary, deadline: number): Promise<void> {
   const now = Date.now();
   const iso = (ms: number) => encodeURIComponent(new Date(ms).toISOString());
   // Due: no card yet, and never claimed, or last claimed over an hour ago

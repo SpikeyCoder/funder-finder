@@ -247,11 +247,15 @@ export function installMonitoring(): void {
   window.addEventListener('pageshow', (e) => {
     if (e.persisted) loadedPath = normalizePath(window.location.pathname);
   });
-  const pending = new Map<string, { m: Metric; path: string }>();
+  // Snapshots, not the Metric objects: web-vitals updates one object in
+  // place, so a report that failed must be compared by the value it sent.
+  type Sample = VitalsReport['metrics'][number];
+  const pending = new Map<string, Sample>();
   const sentValues = new Map<string, number>();
   const record = (m: Metric) => {
     if (sentValues.get(m.id) === m.value) return;
-    pending.set(m.id, { m, path: m.name === 'LCP' ? loadedPath : normalizePath(window.location.pathname) });
+    const path = m.name === 'LCP' ? loadedPath : normalizePath(window.location.pathname);
+    pending.set(m.id, { id: m.id, name: m.name, value: m.value, rating: m.rating, path });
   };
   // Part of the entry bundle (about 2 KB), not loaded later: a visitor who
   // gives up on a slow load before a separate chunk arrived would send no
@@ -263,7 +267,7 @@ export function installMonitoring(): void {
     if (pending.size === 0) return;
     const metrics = [...pending.values()];
     pending.clear();
-    for (const { m } of metrics) sentValues.set(m.id, m.value);
+    for (const s of metrics) sentValues.set(s.id, s.value);
     // At most 6 metrics a report (the server's limit): re-queued ones and a
     // back/forward-cache restore's new ids can add up to more.
     for (let i = 0; i < metrics.length; i += 6) {
@@ -271,14 +275,15 @@ export function installMonitoring(): void {
       void send({
         type: 'vitals',
         release: currentBuild().slice(0, 100),
-        metrics: batch.map(({ m, path }) => ({ id: m.id, name: m.name, value: m.value, rating: m.rating, path })),
+        metrics: batch,
       }).then((result) => {
         if (result === 'done') return;
         // Not delivered (offline, over the keepalive budget, rate-limited):
         // send these again on the next hide, unless newer values came in.
-        for (const entry of batch) {
-          if (sentValues.get(entry.m.id) === entry.m.value) sentValues.delete(entry.m.id);
-          if (!pending.has(entry.m.id)) pending.set(entry.m.id, entry);
+        for (const s of batch) {
+          if (sentValues.get(s.id) !== s.value) continue; // a newer value went since
+          sentValues.delete(s.id);
+          if (!pending.has(s.id)) pending.set(s.id, s);
         }
       });
     }
