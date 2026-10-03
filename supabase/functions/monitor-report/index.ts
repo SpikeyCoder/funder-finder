@@ -134,8 +134,7 @@ export function normalizeMessage(message: string): string {
  * stack frame that has one, without its build hash. Not the function name
  * or line: minifying renames and moves those on every build.
  */
-export function fingerprintSource(name: string, message: string, stack: string): string {
-  const msg = normalizeMessage(message);
+export function fingerprintSource(name: string, message: string, stack: string, msg = normalizeMessage(message)): string {
   // Frames only: V8's stack starts with "Name: message", and a URL in the
   // message isn't where it was thrown.
   let file = "";
@@ -161,8 +160,8 @@ export function fingerprintSource(name: string, message: string, stack: string):
 // except Safari's "global code@…" and the like).
 const FRAME = /^\s*at\s|^(?:[^\s@]*|(?:global|module|eval) code)@\S/;
 
-export async function fingerprint(name: string, message: string, stack: string): Promise<string> {
-  const data = new TextEncoder().encode(fingerprintSource(name, message, stack));
+export async function fingerprint(name: string, message: string, stack: string, msg?: string): Promise<string> {
+  const data = new TextEncoder().encode(fingerprintSource(name, message, stack, msg));
   const hash = await crypto.subtle.digest("SHA-256", data);
   return [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
@@ -183,14 +182,15 @@ export async function parseCrash(b: Record<string, unknown>, userAgent: string):
   const stack = scrub(str(b.stack, 8000)).slice(0, 4000);
   // The validated values: a non-string stack is no stack.
   if (!message && !stack) return "Empty report";
+  const normalized = normalizeMessage(message);
   return {
-    fingerprint: await fingerprint(name, message, stack),
+    fingerprint: await fingerprint(name, message, stack, normalized),
     kind,
     name,
     // Stored without its values (quoted strings, numbers, ids, URLs), which
     // can echo what a visitor typed or a response held; the stack keeps
     // only its frames, since V8's starts with the message.
-    message: normalizeMessage(message),
+    message: normalized,
     stack: stack.split("\n").filter((l) => FRAME.test(l)).join("\n"),
     component_stack: scrub(str(b.componentStack, 4000)).slice(0, 2000),
     path: normalizePath(str(b.path, 500) || "/"),

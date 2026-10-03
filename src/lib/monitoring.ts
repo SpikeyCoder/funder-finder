@@ -56,6 +56,8 @@ export interface VitalsReport {
  */
 export function isNoise(error: unknown, message: string, stack: string, chunkGaveUp = false, screenShown = false): boolean {
   if (isChunkLoadError(error)) return !chunkGaveUp;
+  // `Promise.reject()` with no reason: nothing to say where, or what.
+  if (error === undefined || error === null) return !screenShown;
   if (/^Script error\.?$/i.test(message.trim())) return true;
   if (/ResizeObserver loop/i.test(message)) return true;
   if (/(?:chrome|moz|safari(?:-web)?)-extension:\/\//i.test(stack)) return true;
@@ -63,9 +65,10 @@ export function isNoise(error: unknown, message: string, stack: string, chunkGav
   // network, not our code. Unless the error screen showed: a page that breaks
   // when a request fails is a bug worth a card.
   if (screenShown) return false;
-  // Some versions add the host: "Failed to fetch (api.example.org)". And
-  // supabase-js wraps a failed Edge Function request in its own wording.
-  if (/^(?:TypeError: )?(?:(?:Failed to fetch|Load failed)(?: \([^)]*\))?|NetworkError when attempting to fetch resource\.?|Network request failed|Failed to send a request to the Edge Function)$/i.test(message.trim())) return true;
+  // Some versions add the host: "Failed to fetch (api.example.org)". Safari
+  // also says why ("The network connection was lost."), and supabase-js
+  // wraps a failed Edge Function request in its own wording.
+  if (/^(?:TypeError: )?(?:(?:Failed to fetch|Load failed)(?: \([^)]*\))?|NetworkError when attempting to fetch resource|Network request failed|Failed to send a request to the Edge Function|The network connection was lost|The Internet connection appears to be offline|A server with the specified hostname could not be found|The request timed out|cancelled)\.?$/i.test(message.trim())) return true;
   return (error as { name?: unknown } | null)?.name === 'AbortError';
 }
 
@@ -134,16 +137,18 @@ function enabled(): boolean {
 
 // text/plain keeps this a CORS "simple" request (no preflight), so it can be
 // sent with keepalive while the page unloads.
-function send(payload: CrashReport | VitalsReport): void {
+// Resolves to whether the report was delivered; never rejects.
+function send(payload: CrashReport | VitalsReport): Promise<boolean> {
   try {
-    void fetch(ENDPOINT, {
+    return fetch(ENDPOINT, {
       method: 'POST',
       keepalive: true,
       headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify(payload),
-    }).catch(() => {});
+    }).then(() => true, () => false);
   } catch {
     // Reporting must never break the page.
+    return Promise.resolve(false);
   }
 }
 
@@ -157,7 +162,7 @@ export function reportCrash(kind: CrashKind, error: unknown, componentStack = ''
     const key = `${report.name}|${report.message}|${report.stack.split('\n', 3).join('|')}`;
     if (sentCrashes.has(key)) return;
     sentCrashes.add(key);
-    send(report);
+    void send(report);
   } catch {
     // Reporting must never break the page.
   }
@@ -232,10 +237,18 @@ export function installMonitoring(): void {
     const metrics = [...pending.values()];
     pending.clear();
     for (const { m } of metrics) sentValues.set(m.id, m.value);
-    send({
+    void send({
       type: 'vitals',
       release: currentBuild().slice(0, 100),
       metrics: metrics.map(({ m, path }) => ({ id: m.id, name: m.name, value: m.value, rating: m.rating, path })),
+    }).then((delivered) => {
+      if (delivered) return;
+      // Not delivered (offline, or over the keepalive budget): send these
+      // again on the next hide, unless newer values came in meanwhile.
+      for (const entry of metrics) {
+        if (sentValues.get(entry.m.id) === entry.m.value) sentValues.delete(entry.m.id);
+        if (!pending.has(entry.m.id)) pending.set(entry.m.id, entry);
+      }
     });
   };
   document.addEventListener('visibilitychange', () => {

@@ -369,9 +369,10 @@ async function sweepSla(summary: Summary, trello: boolean): Promise<void> {
 async function sweepCrashes(summary: Summary): Promise<void> {
   const now = Date.now();
   const iso = (ms: number) => encodeURIComponent(new Date(ms).toISOString());
-  const cardedToday = await restCount(
-    `monitor_crashes?trello_card_url=not.is.null&card_attempted_at=gte.${iso(now - DAY_MS)}`,
-  );
+  // Every crash whose card was attempted in the last day counts, opened or
+  // not: a Trello timeout may still have opened its card, so counting only
+  // recorded ones would let a slow Trello flood the board.
+  const cardedToday = await restCount(`monitor_crashes?card_attempted_at=gte.${iso(now - DAY_MS)}`);
   // Due: no card yet, and never claimed, or last claimed over an hour ago
   // (over a day ago after MAX_CARD_ATTEMPTS failures: a long Trello outage
   // delays a card, it never loses one).

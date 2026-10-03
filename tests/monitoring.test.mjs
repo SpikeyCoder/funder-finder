@@ -96,7 +96,13 @@ test('network failures and aborts are noise, in each browser\'s wording', () => 
   for (const msg of ['Failed to fetch', 'Load failed', 'NetworkError when attempting to fetch resource.', 'TypeError: Failed to fetch', 'Failed to fetch (tgtotjvdubhjxzybmdex.supabase.co)', 'Failed to send a request to the Edge Function']) {
     assert.equal(isNoise(new TypeError(msg), msg, ''), true, msg);
   }
+  for (const msg of ['The network connection was lost.', 'The Internet connection appears to be offline.', 'cancelled']) {
+    assert.equal(isNoise(new TypeError(msg), msg, ''), true, msg);
+  }
   assert.equal(isNoise(new DOMException('The user aborted a request.', 'AbortError'), 'The user aborted a request.', ''), true);
+  // An empty rejection says nothing; on the error screen it's still a bug.
+  assert.equal(isNoise(undefined, 'undefined', ''), true);
+  assert.equal(isNoise(undefined, 'undefined', '', false, true), false);
   assert.equal(isNoise(new TypeError('Failed to fetch funders: 500'), 'Failed to fetch funders: 500', ''), false);
   // But a request failure that brought up the error screen is a bug.
   assert.equal(buildCrashReport('boundary', new TypeError('Failed to fetch'), '/search', 'b').message, 'Failed to fetch');
@@ -150,6 +156,8 @@ test('buildCrashReport drops noise and keeps odd throws', () => {
   const chunk = new TypeError('Failed to fetch dynamically imported module: https://x/assets/a-1.js');
   assert.equal(buildCrashReport('boundary', chunk, '/', 'b'), null);
   assert.equal(buildCrashReport('boundary', chunk, '/', 'b', '', true).name, 'TypeError');
-  // `throw null` is still a crash worth knowing about.
-  assert.equal(buildCrashReport('rejection', null, '/', 'b').name, 'NonError');
+  // `throw null` that brought up the error screen is still worth knowing
+  // about; an empty rejection elsewhere says nothing.
+  assert.equal(buildCrashReport('boundary', null, '/', 'b').name, 'NonError');
+  assert.equal(buildCrashReport('rejection', null, '/', 'b'), null);
 });
