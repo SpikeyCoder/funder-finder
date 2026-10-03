@@ -66,8 +66,7 @@ CREATE INDEX IF NOT EXISTS monitor_crashes_uncarded
 -- its value changes (INP and CLS keep growing while the page is open), keyed
 -- by web-vitals' own per-page-view id, and the row keeps the latest value.
 CREATE TABLE IF NOT EXISTS public.monitor_vitals (
-  id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  metric_id   text NOT NULL UNIQUE,
+  metric_id   text PRIMARY KEY,
   metric      text NOT NULL CHECK (metric IN ('LCP', 'INP', 'CLS')),
   value       double precision NOT NULL,
   rating      text NOT NULL CHECK (rating IN ('good', 'needs-improvement', 'poor')),

@@ -40,11 +40,9 @@ export interface CrashReport {
 
 export interface VitalsReport {
   type: 'vitals';
-  path: string;
   release: string;
   // `id` is web-vitals' per-page-view id: the server keeps one row per id.
-  // `path` is per metric: LCP belongs to the page that loaded, INP and CLS
-  // to the page the visitor was on when they were reported.
+  // `path` is per metric (see installMonitoring).
   metrics: { id: string; name: string; value: number; rating: string; path: string }[];
 }
 
@@ -236,7 +234,6 @@ export function installMonitoring(): void {
     for (const { m } of metrics) sentValues.set(m.id, m.value);
     send({
       type: 'vitals',
-      path: normalizePath(window.location.pathname),
       release: currentBuild().slice(0, 100),
       metrics: metrics.map(({ m, path }) => ({ id: m.id, name: m.name, value: m.value, rating: m.rating, path })),
     });

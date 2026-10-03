@@ -66,7 +66,12 @@ export interface VitalRow {
 // ── Pure helpers (unit-tested) ──────────────────────────────────────────────
 
 // Short words a message really contains, as opposed to minified names.
-const WORDS = new Set(["a", "an", "as", "at", "be", "by", "do", "id", "if", "in", "is", "it", "no", "of", "on", "or", "to", "up"]);
+const WORDS = new Set([
+  "a", "am", "an", "as", "at", "be", "by", "do", "go", "he", "id", "if", "in", "is", "it", "me", "my", "no", "of", "ok", "on",
+  "or", "so", "to", "up", "us", "we",
+  // Units.
+  "gb", "kb", "mb", "ms", "px",
+]);
 const minified = (name: string) => /^[A-Za-z_$][\w$]?$/.test(name) && !WORDS.has(name.toLowerCase());
 // A short word followed by member access or a call, or the subject of the
 // message ("a is not a function"), is a name, not a word.
@@ -142,7 +147,9 @@ export function fingerprintSource(name: string, message: string, stack: string):
       // - and _: OrgSearch-BrsvDQt6.js, LoginPage-DK1D-7OR.js → OrgSearch.js,
       // LoginPage.js. Exactly 8, anchored to the end, so a hyphenated name
       // keeps its own parts (ab-cd-AbC12345.js → ab-cd.js).
-      file = m[1].replace(/-[\w-]{8}(\.(?:js|mjs|cjs))$/, "$1");
+      // A hash has an uppercase letter, digit, - or _ in it (all but 0.07%
+      // of them do), which keeps names like use-debounce.js whole.
+      file = m[1].replace(/-(?=[\w-]{0,7}[A-Z\d_-])[\w-]{8}(\.(?:js|mjs|cjs))$/, "$1");
       break;
     }
   }
@@ -197,7 +204,6 @@ export function parseVitals(b: Record<string, unknown>): VitalRow[] | string {
   // Up to two of each metric: after a back/forward-cache restore, one batch
   // can hold an older page view's metric and the new view's (different ids).
   if (!Array.isArray(b.metrics) || b.metrics.length > 6) return "Invalid metrics";
-  const path = normalizePath(str(b.path, 500) || "/");
   const rows: VitalRow[] = [];
   const seen = new Set<string>();
   for (const m of b.metrics as Record<string, unknown>[]) {
@@ -214,10 +220,9 @@ export function parseVitals(b: Record<string, unknown>): VitalRow[] | string {
     }
     if (!RATINGS.has(rating)) return "Invalid rating";
     seen.add(id);
-    // Per metric (INP/CLS can belong to a later page than LCP); the report's
-    // path for older clients.
-    const mPath = typeof m?.path === "string" ? normalizePath(str(m.path, 500)) : path;
-    rows.push({ metric_id: id, metric, value, rating, path: mPath, release: release(b.release) });
+    // Per metric: INP and CLS can belong to a later page than LCP.
+    if (typeof m?.path !== "string") return "Invalid path";
+    rows.push({ metric_id: id, metric, value, rating, path: normalizePath(str(m.path, 500)), release: release(b.release) });
   }
   return rows;
 }

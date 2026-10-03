@@ -126,9 +126,8 @@ Deno.test("parseCrash validates and scrubs", async () => {
 
 Deno.test("parseVitals accepts the three metrics within range only", () => {
   const id = (n: number) => `v5-1696300000000-${n}234567890123`;
-  const m = (name: string, value: number, rating = "good", i = 1) => ({ id: id(i), name, value, rating });
+  const m = (name: string, value: number, rating = "good", i = 1) => ({ id: id(i), name, value, rating, path: "/search/" });
   const ok = parseVitals({
-    path: "/search/",
     release: "index-a.js",
     metrics: [m("LCP", 2500), m("CLS", 0.3, "poor", 2)],
   });
@@ -148,9 +147,10 @@ Deno.test("parseVitals accepts the three metrics within range only", () => {
   assertEquals(parseVitals({ metrics: [{ ...m("LCP", 1), id: "x'; drop" }] }), "Invalid id");
   assertEquals(parseVitals({ metrics: [m("toString", 1)] }), "Invalid metric");
   // Per-metric path wins over the report's (INP/CLS can belong to a later page).
-  const perMetric = parseVitals({ path: "/", metrics: [{ ...m("INP", 900, "poor"), path: "/search?q=x" }, m("LCP", 1000, "good", 2)] });
+  const perMetric = parseVitals({ metrics: [{ ...m("INP", 900, "poor"), path: "/search?q=x" }, { ...m("LCP", 1000, "good", 2), path: "/" }] });
   if (typeof perMetric === "string") throw new Error(perMetric);
   assertEquals(perMetric.map((r) => [r.metric, r.path]), [["INP", "/search"], ["LCP", "/"]]);
+  assertEquals(parseVitals({ metrics: [{ ...m("LCP", 1), path: undefined }] }), "Invalid path");
   assertEquals(parseVitals({ metrics: "x" }), "Invalid metrics");
 });
 
@@ -227,4 +227,13 @@ Deno.test("parseCrash stores the message without its values and the stack as fra
   if (typeof row === "string") throw new Error(row);
   assertEquals(row.message, "invalid input syntax for type uuid: <str>");
   assertEquals(row.stack, "    at f (https://fundermatch.org/assets/a-AbC12345.js:1:2)\nglobal code@https://fundermatch.org/assets/b.js:3:4");
+});
+
+Deno.test("short words and unhashed file names survive normalizing", () => {
+  assertEquals(normalizeMessage("Request timed out after 5000 ms"), "Request timed out after <n> ms");
+  assertEquals(normalizeMessage("Unable to go back"), "Unable to go back");
+  const at = (f: string) => fingerprintSource("Error", "x", `    at f (https://fundermatch.org/assets/${f}:1:2)`).split("|")[2];
+  assertEquals(at("use-debounce.js"), "/assets/use-debounce.js");
+  assertEquals(at("OrgSearch-BrsvDQt6.js"), "/assets/OrgSearch.js");
+  assertEquals(at("LoginPage-DK1D-7OR.js"), "/assets/LoginPage.js");
 });

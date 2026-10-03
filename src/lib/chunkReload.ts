@@ -56,7 +56,9 @@ const PENDING_RELOAD_KEY = 'ff_chunk_pending_reload';
 const RELOAD_MARKER_MS = 60_000;
 // A marker older than this wasn't followed by its reload (reload() did
 // nothing, or the navigation was abandoned), so a later load ignores it.
-const MARKER_FRESH_MS = 30_000;
+// Generous: on a slow connection the reloaded page can take a while to
+// download before it starts.
+const MARKER_FRESH_MS = 120_000;
 let reloadedFor: string | null = null;
 let reloadedForUntil = 0;
 
