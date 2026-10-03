@@ -21,13 +21,11 @@
  */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { ipRateLimit } from "../_shared/rate_limit.ts";
-import { rest } from "../_shared/rest.ts";
+import { rest, restConfigured } from "../_shared/rest.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 // The browser scrubs with the same module; redone here because reports are untrusted.
 import { errorTypeName, FRAME, normalizePath, scrub } from "../_shared/monitor_scrub.ts";
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
-const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
 // The client caps fields by characters (about 6,600 in all); in bytes that
 // can be several times more (3-byte CJK, 6-byte \uXXXX JSON escapes).
@@ -85,6 +83,9 @@ const usedAsName = (next: string | undefined, rest: string) =>
 // Globals a quoted code path can start with (Safari quotes whole
 // expressions: 'window.foo.bar').
 const GLOBALS = new Set(["window", "document", "navigator", "location", "globalThis", "self", "this", "Math", "JSON", "Object", "Array", "Promise", "React"]);
+// Database schemas a quoted table or function name starts with ("relation
+// "public.tracked_grants" does not exist"): different tables, different bugs.
+const SCHEMAS = new Set(["public", "auth", "storage", "extensions", "cron", "vault", "net"]);
 
 // A quoted part of a message: kept if it's code, a single identifier
 // ("reading 'name'" and "reading 'map'" are different bugs) or a code path
@@ -103,7 +104,7 @@ function quoted(q: string, inner: string): string {
   // a word like 'a'); the property names after it keep their names.
   const [first, ...props] = inner.split(".");
   if (/^[A-Za-z_$][\w$]?$/.test(first)) return q + ["<id>", ...props].join(".") + q;
-  return GLOBALS.has(first) ? q + inner + q : "<str>";
+  return GLOBALS.has(first) || SCHEMAS.has(first) ? q + inner + q : "<str>";
 }
 
 /**
@@ -360,7 +361,7 @@ if (import.meta.main) {
       write = () => post("rpc/record_vitals", { p_rows: rows });
     }
 
-    if (!SUPABASE_URL || !SERVICE_KEY) {
+    if (!restConfigured()) {
       console.error("monitor-report: SUPABASE_URL / SERVICE_ROLE_KEY unset");
       return reply(500, "Internal server error");
     }

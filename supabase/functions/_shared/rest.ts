@@ -5,18 +5,23 @@
 
 const DEFAULT_TIMEOUT_MS = 7000;
 
+/** Whether SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are both set. */
+export function restConfigured(): boolean {
+  return !!(Deno.env.get("SUPABASE_URL") && Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
+}
+
 /** A PostgREST request. `init` can override the method, body and headers. */
 export function rest(path: string, init: RequestInit = {}, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<Response> {
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  // Caller headers win, in any form (object, Headers or pairs).
+  const headers = new Headers(init.headers);
+  headers.set("apikey", key);
+  headers.set("Authorization", `Bearer ${key}`);
+  if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   return fetch(`${Deno.env.get("SUPABASE_URL") || ""}/rest/v1/${path}`, {
     signal: AbortSignal.timeout(timeoutMs),
     ...init,
-    headers: {
-      apikey: key,
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-      ...(init.headers || {}),
-    },
+    headers,
   });
 }
 

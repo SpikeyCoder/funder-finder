@@ -111,9 +111,11 @@ Without this, notifications will log to console instead of sending email.
 
 In the Supabase dashboard, go to Database → Extensions → enable `pg_cron`, then:
 
-The function only accepts calls that present `CRON_SECRET` (the Edge Function
-secret, also stored in Vault as `cron_secret`); with it unset, every call is
-refused. Send it the way `invoke_organization_request_processor()` does:
+`process-notifications`, `send-reminders` and `check-deadlines` only accept
+calls that present `CRON_SECRET` (the Edge Function secret, also stored in
+Vault as `cron_secret`); with it unset, every call is refused, and a call with
+only a service-role bearer is refused too. Schedule any of them the way
+`invoke_organization_request_processor()` sends it, for example:
 
 ```sql
 SELECT cron.schedule(

@@ -336,3 +336,8 @@ Deno.test("unquoted tokens are values", () => {
   // Ordinary long words and code names stay.
   assertEquals(normalizeMessage("ResizeObserverEntry is undefined"), "ResizeObserverEntry is undefined");
 });
+
+Deno.test("schema-qualified table names stay: different tables are different bugs", () => {
+  assertEquals(normalizeMessage('relation "public.tracked_grants" does not exist'), 'relation "public.tracked_grants" does not exist');
+  assertEquals(normalizeMessage("No account found for 'jane.doe'"), "No account found for <str>");
+});

@@ -25,10 +25,9 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { cronAuthorized } from "../_shared/cron_auth.ts";
 import { createTrelloCard, trelloConfigured } from "../_shared/trello.ts";
-import { rest, restCount, restJson } from "../_shared/rest.ts";
+import { rest, restConfigured, restCount, restJson } from "../_shared/rest.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
-const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") || "";
 
 const MAX_CRASH_CARDS = 5;
@@ -42,8 +41,8 @@ const RETRY_AFTER_MS = 60 * 60 * 1000;
 // slot every day; but a long outage delays a card, it never loses one.
 const MAX_CARD_ATTEMPTS = 3;
 const MAX_CARD_TRIES = 10;
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
+const WEEK_MS = 7 * DAY_MS;
 // No new card is started after this long into a run: a card takes up to
 // ~37 s (its claim, Trello's timeout, then recording its URL with retries),
 // and pg_net gives up on the run at 120 s (the Edge Function itself at
@@ -64,11 +63,11 @@ const SLA_CHECK_TIMEOUT_MS = 5000;
 export const SLA_FAILING_RUNS = 2;
 // A common word, a multi-word name, and a dashed EIN (different code paths).
 const SLA_QUERIES = ["foundation", "community foundation", "01-0224898"];
-const SLA_COOLDOWN_MS = 24 * 60 * 60 * 1000;
-const VITALS_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+const SLA_COOLDOWN_MS = DAY_MS;
+const VITALS_COOLDOWN_MS = WEEK_MS;
 // A page-speed card that failed is retried a day later, not hourly: it isn't
 // urgent, and a Trello that keeps rejecting gets a few calls a day.
-const VITALS_RETRY_MS = 24 * 60 * 60 * 1000;
+const VITALS_RETRY_MS = DAY_MS;
 const VITALS_MIN_SAMPLES = 20;
 const MAX_VITALS_CARDS = 2;
 export const MAX_VITALS_CARDS_PER_DAY = 5;
@@ -491,7 +490,7 @@ if (import.meta.main) {
 
     if (req.method !== "POST") return json(405, { error: "Method not allowed" });
     if (!cronAuthorized(req, Deno.env.get("CRON_SECRET") || "")) return json(401, { error: "Unauthorized" });
-    if (!SUPABASE_URL || !SERVICE_KEY || !ANON_KEY) return json(500, { error: "Server config missing" });
+    if (!restConfigured() || !ANON_KEY) return json(500, { error: "Server config missing" });
 
     // The SLA checks run first, alone, so the sweep's own queries don't slow
     // what they time; then crashes and vitals together (they share no rows).

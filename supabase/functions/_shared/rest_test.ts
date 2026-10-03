@@ -1,6 +1,6 @@
 // Run: deno test --allow-env supabase/functions/_shared/rest_test.ts
 import { assertEquals, assertRejects } from "jsr:@std/assert@1";
-import { rest, restCount, restJson } from "./rest.ts";
+import { rest, restConfigured, restCount, restJson } from "./rest.ts";
 
 Deno.env.set("SUPABASE_URL", "http://db.test");
 Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "service-test");
@@ -45,6 +45,17 @@ Deno.test("restJson throws with the status; restCount reads Content-Range and fa
   f = stubFetch(() => new Response(null, { status: 200 }));
   try {
     await assertRejects(() => restCount("t"), Error, "count unreadable");
+  } finally {
+    f.restore();
+  }
+});
+
+Deno.test("rest keeps caller headers given as a Headers object; restConfigured reads the env", async () => {
+  const f = stubFetch(() => new Response(null, { status: 204 }));
+  try {
+    await rest("t", { headers: new Headers({ Prefer: "return=representation" }) });
+    assertEquals(new Headers(f.seen[0].init.headers).get("prefer"), "return=representation");
+    assertEquals(restConfigured(), true);
   } finally {
     f.restore();
   }

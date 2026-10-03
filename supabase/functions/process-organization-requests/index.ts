@@ -36,10 +36,8 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { einVariants, padEin } from "../_shared/ein.ts";
 import { cronAuthorized } from "../_shared/cron_auth.ts";
 import { createTrelloCard } from "../_shared/trello.ts";
-import { rest, restJson } from "../_shared/rest.ts";
+import { rest, restConfigured, restJson } from "../_shared/rest.ts";
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
-const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") || "";
 
 const PROPUBLICA = "https://projects.propublica.org/nonprofits/api/v2";
@@ -577,7 +575,7 @@ if (import.meta.main) {
 
     if (req.method !== "POST") return json(405, { error: "Method not allowed" });
     if (!cronAuthorized(req, Deno.env.get("CRON_SECRET") || "")) return json(401, { error: "Unauthorized" });
-    if (!SUPABASE_URL || !SERVICE_KEY) return json(500, { error: "Server config missing" });
+    if (!restConfigured()) return json(500, { error: "Server config missing" });
 
     try {
       const rows = await restJson<QueueRow[]>(
