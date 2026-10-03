@@ -136,3 +136,13 @@ Deno.test("only a fresh pick takes a daily slot (card_counted_at); a retry doesn
     f.restore();
   }
 });
+
+Deno.test("no overflow card is started past the run's deadline", async () => {
+  const f = fake({ triedToday: MAX_CRASH_CARDS_PER_DAY, waiting: 3, retries: [], fresh: [], trello: () => "ok" });
+  try {
+    await sweepCrashes({}, Date.now() - 1);
+    assertEquals(f.cards.length, 0);
+  } finally {
+    f.restore();
+  }
+});

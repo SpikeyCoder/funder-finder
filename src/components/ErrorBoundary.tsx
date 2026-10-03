@@ -51,7 +51,8 @@ export default class ErrorBoundary extends Component<Props, State> {
     // we've already tried, render() shows a manual Reload with the details.
     // The "Reloading…" screen keeps a Reload button, so if reload() is ever a
     // no-op (e.g. a sandboxed webview) nobody is stranded.
-    const reload = isChunkLoadError(error) ? reloadOnceForChunkError(error) : null;
+    const chunk = isChunkLoadError(error);
+    const reload = chunk ? reloadOnceForChunkError(error) : null;
     if (reload === 'reloading') {
       this.setState({ reloading: true });
       return;
@@ -61,7 +62,7 @@ export default class ErrorBoundary extends Component<Props, State> {
     // that reload loaded, and it failed the same way. Not if storage is
     // blocked and no reload was tried, and not a later, separate blip in the
     // same tab: both are stale deploys or the network, not bugs.
-    reportCrash('boundary', error, errorInfo.componentStack ?? '', isChunkLoadError(error) && onReloadPageFor(error));
+    reportCrash('boundary', error, errorInfo.componentStack ?? '', chunk && onReloadPageFor(error));
   }
 
   render() {

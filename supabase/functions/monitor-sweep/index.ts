@@ -465,7 +465,7 @@ export async function sweepCrashes(summary: Summary, deadline: number): Promise<
     carded++;
   }
   summary.crash_cards = carded;
-  if (triedToday + freshTried < MAX_CRASH_CARDS_PER_DAY) return;
+  if (triedToday + freshTried < MAX_CRASH_CARDS_PER_DAY || Date.now() > deadline) return;
   // The daily limit is reached: say (once a day) how many kinds wait for it
   // (not ones tried today and waiting only on a Trello retry).
   const overflow = (await restJson<AlertRow[]>(
