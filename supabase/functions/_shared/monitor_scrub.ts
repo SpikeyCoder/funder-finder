@@ -29,6 +29,14 @@ export function scrub(text: string): string {
 // The app's routes (src/App.tsx; tests/monitoring.test.mjs checks they match).
 // ':id' marks a parameter. /shared/:id is a share link whose id is a secret
 // token: it must never be stored or shown.
+/**
+ * A stack frame line: V8 "    at fn (url:1:2)"; Firefox/Safari "fn@url:1:2"
+ * (no spaces before the @, unlike a message that mentions "@scope/pkg",
+ * except Safari's "global code@…" and the like). Not V8's first line,
+ * "Name: message".
+ */
+export const FRAME = /^\s*at\s|^(?:[^\s@]*|(?:global|module|eval) code)@\S/;
+
 export const ROUTES = [
   "/", "/applications", "/browse", "/contact", "/dashboard", "/funder/:id", "/grant-writer", "/import",
   "/login", "/mission", "/onboarding/first-project", "/onboarding/matches", "/onboarding/profile",

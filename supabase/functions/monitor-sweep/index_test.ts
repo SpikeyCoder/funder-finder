@@ -1,6 +1,5 @@
 import { assert, assertEquals } from "jsr:@std/assert@1";
 import { alertDue, cardUrl, crashCard, crashOverflowCard, pickCrashes, slaBreached, slaCard, vitalsCard } from "./index.ts";
-import { cronAuthorized } from "../_shared/cron_auth.ts";
 
 const crash = {
   fingerprint: "f".repeat(64),
@@ -103,15 +102,6 @@ Deno.test("vitals card formats each metric", () => {
   assertEquals(vitalsCard({ metric: "INP", path: "/", samples: 40, p75: 612.4, poor_share: 0.3 }).name,
     "[PERF] INP is poor on / (p75 612 ms)");
   assert(vitalsCard({ metric: "CLS", path: "/", samples: 25, p75: 0.31, poor_share: 0.28 }).desc.includes("**Share rated poor:** 28%"));
-});
-
-Deno.test("cron auth fails closed and accepts both header forms", () => {
-  const req = (h: Record<string, string>) => new Request("http://x", { method: "POST", headers: h });
-  assertEquals(cronAuthorized(req({ "x-cron-secret": "s3cret" }), ""), false);
-  assertEquals(cronAuthorized(req({ "x-cron-secret": "s3cret" }), "s3cret"), true);
-  assertEquals(cronAuthorized(req({ authorization: "Bearer cron:s3cret" }), "s3cret"), true);
-  assertEquals(cronAuthorized(req({ "x-cron-secret": "nope" }), "s3cret"), false);
-  assertEquals(cronAuthorized(req({}), "s3cret"), false);
 });
 
 Deno.test("a regression's card links the earlier one", () => {

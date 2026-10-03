@@ -338,8 +338,11 @@ async function recordCard(target: string, url: string, what: string): Promise<vo
 async function restCount(path: string): Promise<number> {
   const res = await rest(path, { method: "HEAD", headers: { Prefer: "count=exact" } });
   if (!res.ok) throw new Error(`REST ${path.split("?")[0]} count ${res.status}`);
-  const total = Number(res.headers.get("content-range")?.split("/")[1]);
-  return Number.isFinite(total) ? total : 0;
+  // No readable count is an error, not 0: the daily cap is counted this way,
+  // and reading 0 would lift it.
+  const total = Number(res.headers.get("content-range")?.split("/")[1] ?? NaN);
+  if (!Number.isFinite(total)) throw new Error(`REST ${path.split("?")[0]} count unreadable`);
+  return total;
 }
 
 type Summary = Record<string, number | string>;

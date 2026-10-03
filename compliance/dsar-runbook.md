@@ -63,7 +63,7 @@ their own DSAR endpoint.
 | `portfolio_items` | App | `user_id` | User's portfolio entries. |
 | `access_log` | Telemetry | `user_id` (nullable) | 12-month retention; purged daily by `purge_expired_access_log()`. |
 | `search_signal_events` | Telemetry | `user_id` (nullable) | 24-month retention; purged daily. |
-| `monitor_crashes`, `monitor_vitals` | Telemetry | none | No user id, IP or email. Error text has quoted strings, numbers, ids and URLs removed and addresses masked, but plain words stay: for an ERASURE request, also delete `monitor_crashes` rows whose `message` contains the requester's name. 90/30-day retention; purged daily. |
+| `monitor_crashes`, `monitor_vitals` | Telemetry | none | No user id, IP or email. Error text has numbers, ids, URLs and quoted values removed and addresses masked, but plain words (and a quoted single word) stay: for an ERASURE request, also delete `monitor_crashes` rows whose `message` contains the requester's name. 90/30-day retention; purged daily. |
 | Supabase Storage `user-uploads/` | Document | path prefix `${user_id}/` | User-supplied reference docs. |
 
 Cross-table joins use `user_id` as the canonical key; the `auth.users.id`

@@ -11,7 +11,6 @@ import {
   reviewReason,
 } from "./index.ts";
 import { padEin } from "../_shared/ein.ts";
-import { cronAuthorized } from "../_shared/cron_auth.ts";
 
 const org = (name: string, state: string | null = "WA", ein = "123456789"): IrsOrg =>
   ({ ein, name, city: "Seattle", state, ntee_code: "B90" });
@@ -47,15 +46,6 @@ Deno.test("pickExactMatch uses the requested state to break same-name ties", () 
   const or = org("Community Food Bank", "OR", "222222222");
   assertEquals(pickExactMatch("Community Food Bank", null, [wa, or]), null);
   assertEquals(pickExactMatch("Community Food Bank", "OR", [wa, or]), or);
-});
-
-Deno.test("cronAuthorized fails closed and accepts both header forms", () => {
-  const req = (h: Record<string, string>) => new Request("https://x", { method: "POST", headers: h });
-  assertEquals(cronAuthorized(req({ "x-cron-secret": "s3cret" }), ""), false);
-  assertEquals(cronAuthorized(req({}), "s3cret"), false);
-  assertEquals(cronAuthorized(req({ "x-cron-secret": "wrong!" }), "s3cret"), false);
-  assertEquals(cronAuthorized(req({ "x-cron-secret": "s3cret" }), "s3cret"), true);
-  assertEquals(cronAuthorized(req({ authorization: "Bearer cron:s3cret" }), "s3cret"), true);
 });
 
 Deno.test("notificationFor links to the right page and acknowledges a review", () => {

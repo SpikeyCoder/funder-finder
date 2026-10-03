@@ -23,7 +23,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { ipRateLimit } from "../_shared/rate_limit.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 // The browser scrubs with the same module; redone here because reports are untrusted.
-import { normalizePath, scrub } from "../_shared/monitor_scrub.ts";
+import { FRAME, normalizePath, scrub } from "../_shared/monitor_scrub.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -163,11 +163,6 @@ export function fingerprintSource(name: string, message: string, stack: string, 
   return `${name}|${msg}|${file}`;
 }
 
-// A stack frame line: V8 "    at fn (url:1:2)"; Firefox/Safari "fn@url:1:2"
-// (no spaces before the @, unlike a message that mentions "@scope/pkg",
-// except Safari's "global code@…" and the like).
-const FRAME = /^\s*at\s|^(?:[^\s@]*|(?:global|module|eval) code)@\S/;
-
 export async function fingerprint(name: string, message: string, stack: string, msg?: string): Promise<string> {
   const data = new TextEncoder().encode(fingerprintSource(name, message, stack, msg));
   const hash = await crypto.subtle.digest("SHA-256", data);
@@ -195,9 +190,10 @@ export async function parseCrash(b: Record<string, unknown>, userAgent: string):
     fingerprint: await fingerprint(name, message, stack, normalized),
     kind,
     name,
-    // Stored without its values (quoted strings, numbers, ids, URLs), which
-    // can echo what a visitor typed or a response held; the stack keeps
-    // only its frames, since V8's starts with the message.
+    // Stored without its values (numbers, ids, URLs, quoted strings other
+    // than a single code-like word), which can echo what a visitor typed or
+    // a response held; the stack keeps only its frames, since V8's starts
+    // with the message.
     message: normalized,
     stack: stack.split("\n").filter((l) => FRAME.test(l)).join("\n"),
     component_stack: scrub(str(b.componentStack, 4000)).slice(0, 2000),
@@ -213,8 +209,9 @@ export async function parseCrash(b: Record<string, unknown>, userAgent: string):
  * load) mustn't lose the good ones with it. All bad is an error.
  */
 export function parseVitals(b: Record<string, unknown>): VitalRow[] | string {
-  // Up to two of each metric: after a back/forward-cache restore, one batch
-  // can hold an older page view's metric and the new view's (different ids).
+  // Up to 6: the client splits larger batches. One batch can hold the same
+  // metric twice (an older page view's and, after a back/forward-cache
+  // restore, the new view's, with different ids).
   if (!Array.isArray(b.metrics) || b.metrics.length > 6) return "Invalid metrics";
   const rows: VitalRow[] = [];
   const seen = new Set<string>();
