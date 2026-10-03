@@ -4,6 +4,7 @@ import { Search, Building2, Users, Loader2, SearchX, AlertCircle } from 'lucide-
 import { OrgSearchResult } from '../types';
 import { searchOrganizations } from '../utils/matching';
 import { fmtDollar } from './InsightCharts';
+import OrgRequestForm from './OrgRequestForm';
 
 interface OrgSearchProps {
   autoFocus?: boolean;
@@ -22,6 +23,11 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
   // The query `status` describes, which lags `query` while a search is pending.
   const [searchedQuery, setSearchedQuery] = useState('');
   const [retryNonce, setRetryNonce] = useState(0);
+  // The name the request form was opened for (null = closed). Fixed when it
+  // opens, so a search landing afterwards can't remount it and wipe its input.
+  const [requestName, setRequestName] = useState<string | null>(null);
+  const showRequestForm = requestName !== null;
+  const [requestSubmitted, setRequestSubmitted] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -34,8 +40,11 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
   const trimmedQuery = query.trim();
 
   useEffect(() => {
-    // The highlighted row belongs to the previous results.
+    // The highlighted row and an open request form belong to the previous
+    // results.
     setSelectedIdx(-1);
+    setRequestName(null);
+    setRequestSubmitted(false);
 
     if (trimmedQuery.length < 2) {
       setResults([]);
@@ -103,10 +112,25 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
   const retrying = status === 'error' && loading && searchedQuery === trimmedQuery;
 
   const reopenDropdown = (text = query) => {
+    // With the request form open for this text, clicking back into the box
+    // shouldn't cover the form with the panel it came from. (Typing new text
+    // reopens as usual, and the new search closes the form.)
+    // Once it's submitted, the results are worth reaching again.
+    if (requestName !== null && !requestSubmitted && text.trim() === requestName) return;
     dismissedRef.current = false;
     // Below two characters the effect is about to reset to idle; don't flash
     // the previous panel first.
     if (status !== 'idle' && text.trim().length >= 2) setShowDropdown(true);
+  };
+
+  // The form opens below the search box rather than inside the dropdown, so
+  // closing or reopening the dropdown doesn't wipe what was typed into it.
+  // Prefilled from what's in the box now, which may be newer than the panel
+  // the link was clicked on.
+  const openRequestForm = () => {
+    setRequestName(trimmedQuery);
+    dismissedRef.current = true;
+    setShowDropdown(false);
   };
 
   const handleSelect = (result: OrgSearchResult) => {
@@ -199,13 +223,27 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
           className="absolute z-50 w-full mt-2 bg-[#161b22] border border-[#30363d] rounded-xl shadow-xl overflow-hidden max-h-80 overflow-y-auto"
         >
           {status === 'empty' && (
-            <div className="flex items-start gap-3 px-4 py-4 text-left">
-              <SearchX size={16} className="text-gray-400 shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm text-white">No organizations match &ldquo;{searchedQuery}&rdquo;</p>
-                <p className="text-xs text-gray-400 mt-1">
-                  Try a shorter name, a different spelling, or search by EIN.
-                </p>
+            <div className="px-4 py-4 text-left">
+              <div className="flex items-start gap-3">
+                <SearchX size={16} className="text-gray-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm text-white">No organizations match &ldquo;{searchedQuery}&rdquo;</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Try a shorter name, a different spelling, or search by EIN.
+                    {!showRequestForm && (
+                      <>
+                        {' '}Not listed?{' '}
+                        <button
+                          type="button"
+                          onClick={openRequestForm}
+                          className="text-blue-400 hover:text-blue-300 underline"
+                        >
+                          Request it
+                        </button>
+                      </>
+                    )}
+                  </p>
+                </div>
               </div>
             </div>
           )}
@@ -263,6 +301,26 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
               )}
             </button>
           ))}
+          {status === 'results' && !showRequestForm && (
+            <div className="border-t border-[#30363d]/50 px-4 py-3 text-left">
+              <p className="text-xs text-gray-400">
+                Not seeing it?{' '}
+                <button
+                  type="button"
+                  onClick={openRequestForm}
+                  className="text-blue-400 hover:text-blue-300 underline"
+                >
+                  Request it
+                </button>
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {showRequestForm && (
+        <div className="mt-2 bg-[#161b22] border border-[#30363d] rounded-xl px-4 py-3 text-left">
+          <OrgRequestForm initialName={requestName} onSubmitted={() => setRequestSubmitted(true)} />
         </div>
       )}
     </div>

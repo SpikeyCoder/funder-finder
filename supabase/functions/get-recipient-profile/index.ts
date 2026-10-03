@@ -1,6 +1,7 @@
 import { corsHeaders } from '../_shared/cors.ts';
 import { sanitiseError } from '../_shared/errors.ts';
 import { ipRateLimit } from "../_shared/rate_limit.ts";
+import { einDigits, einVariants } from '../_shared/ein.ts';
 /**
  * get-recipient-profile — Supabase Edge Function
  *
@@ -186,20 +187,61 @@ Deno.serve(async (req) => {
       );
     }
 
+    // EINs aren't consistently zero-padded across tables (peer links may drop
+    // the leading zero), so match either form — for an EIN-shaped id only. A
+    // dashed id is used without its dash from here on (990 lookup, response).
+    const digits = einDigits(lookupEin);
+    if (digits) lookupEin = digits;
+    const einFilter = digits
+      ? `in.(${encodeURIComponent(einVariants(digits).map((v) => `"${v}"`).join(','))})`
+      : `eq.${encodeURIComponent(lookupEin)}`;
+
     // Fetch grants and 990 budget concurrently
     const [grants, budget990] = await Promise.all([
       restQuery(
         'foundation_grants',
-        `grantee_ein=eq.${encodeURIComponent(lookupEin)}&select=foundation_id,grant_year,grant_amount,grantee_name,grantee_ein,grantee_city,grantee_state&order=grant_year.desc&limit=10000`,
+        `grantee_ein=${einFilter}&select=foundation_id,grant_year,grant_amount,grantee_name,grantee_ein,grantee_city,grantee_state&order=grant_year.desc&limit=10000`,
       ) as Promise<GrantRow[]>,
       fetchGrantee990Budget(lookupEin),
     ]);
 
     if (grants.length === 0) {
-      return new Response(
-        JSON.stringify({ error: 'Recipient not found' }),
-        { status: 404, headers: { ...headers, 'Content-Type': 'application/json' } },
-      );
+      // FM-2026-10-02-02: organizations added through the request queue
+      // (process-organization-requests) exist in recipient_organizations
+      // before any grants to them are ingested. Serve an empty-history
+      // profile from that row plus the 990 data instead of a 404.
+      const orgs = (await restQuery(
+        'recipient_organizations',
+        // Only an organization with no grants on record (e.g. queue-added):
+        // one whose stored totals say otherwise but whose grants weren't
+        // found is a data problem, still a 404 as before.
+        `ein=${einFilter}&or=(grant_count.is.null,grant_count.eq.0)` +
+          '&select=ein,name,primary_city,primary_state,ntee_codes&limit=1',
+      )) as Array<{
+          ein: string;
+          name: string;
+          primary_city: string | null;
+          primary_state: string | null;
+          ntee_codes: string[] | null;
+        }>;
+      if (orgs.length === 0) {
+        return new Response(
+          JSON.stringify({ error: 'Recipient not found' }),
+          { status: 404, headers: { ...headers, 'Content-Type': 'application/json' } },
+        );
+      }
+      const org = orgs[0];
+      return new Response(JSON.stringify({
+        id: org.ein,
+        ein: org.ein,
+        name: org.name,
+        location: { city: org.primary_city, state: org.primary_state },
+        fundingSummary: { totalFunding: 0, grantCount: 0, funderCount: 0, firstGrantYear: null, lastGrantYear: null },
+        yearlyTrends: [],
+        topFunders: [],
+        ntee_codes: org.ntee_codes ?? [],
+        budget: budget990,
+      }), { headers: { ...headers, 'Content-Type': 'application/json' } });
     }
 
     // Determine name, location from most recent grant

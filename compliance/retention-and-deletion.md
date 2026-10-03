@@ -15,6 +15,7 @@ last-reviewed: 2026-05-04
 | `grant_drafts` (`ai-draft` outputs) | 12 months after last edit | `purge_expired_grant_drafts()` via pg_cron (`purge-grant-drafts`, daily 10:20 UTC) |
 | `search_signal_events` | 24 months (offline-tuning corpus) | `purge_expired_search_signal_events()` via pg_cron (`purge-search-signal-events`, daily 10:25 UTC) |
 | `access_log` (share-link views) | 12 months | `purge_expired_access_log()` via pg_cron (`purge-access-log`, daily 10:15 UTC) |
+| `organization_requests` ("request a missing organization") | `requester_email` cleared 30 days after the request is processed; a request still unprocessed after 30 days is closed (`failed`) and its email cleared; rows deleted after 180 days | `purge_expired_organization_requests()` via pg_cron (`purge-organization-requests`, daily 10:35 UTC) |
 | Uploaded reference docs | 24 months after last reference | Storage policy + Postgres job |
 | Supabase logs / Vercel logs | 30 days (vendor default) | Automatic |
 

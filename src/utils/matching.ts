@@ -6,6 +6,7 @@ const EDGE_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/match-funders`;
 const SUGGEST_PEERS_URL = `${SUPABASE_URL}/functions/v1/suggest-peers`;
 const FUNDER_INSIGHTS_URL = `${SUPABASE_URL}/functions/v1/get-funder-990-insights`;
 const SEARCH_ORGS_URL = `${SUPABASE_URL}/functions/v1/search-organizations`;
+const REQUEST_ORG_URL = `${SUPABASE_URL}/functions/v1/request-organization`;
 const RECIPIENT_PROFILE_URL = `${SUPABASE_URL}/functions/v1/get-recipient-profile`;
 const COMPUTE_PEERS_URL = `${SUPABASE_URL}/functions/v1/compute-peers`;
 
@@ -119,6 +120,35 @@ export async function searchOrganizations(
     throw new Error(data.error || 'Unexpected search response');
   }
   return data.results;
+}
+
+export interface OrganizationRequest {
+  name: string;
+  ein?: string;
+  state?: string;
+  email?: string;
+}
+
+/**
+ * Queue a missing organization to be looked up and added (Trello #153).
+ * Resolves to whether the outcome will be emailed (an email can be dropped by
+ * the server's per-address cap).
+ */
+export async function requestOrganization(request: OrganizationRequest): Promise<{ notify: boolean }> {
+  const headers = await getEdgeFunctionHeaders('application/json', { useAnonOnly: true });
+  const res = await fetch(REQUEST_ORG_URL, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(request),
+  });
+
+  if (!res.ok) {
+    if (res.status === 429) throw new Error('Too many requests — please try again later.');
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Server error (${res.status})`);
+  }
+  const body = await res.json().catch(() => ({}));
+  return { notify: body.notify === true };
 }
 
 export async function fetchRecipientProfile(
