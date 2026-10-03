@@ -164,6 +164,10 @@ function send(payload: CrashReport | VitalsReport): Promise<SendResult> {
   }
 }
 
+// The running build, which can't change during the page's life.
+let runningBuild: string | null = null;
+const build = () => (runningBuild ??= currentBuild());
+
 const sentCrashes = new Set<string>();
 // Crashes already sent again once after a failed send: not again.
 const resentCrashes = new Set<string>();
@@ -185,7 +189,7 @@ export function reportCrash(kind: CrashKind, error: unknown, componentStack = ''
     const rawKey = `${route}|${kind}|${raw.name}|${raw.message.slice(0, 200)}|${raw.stack.split('\n', 3).join('|').slice(0, 400)}`;
     if (seenRaw.has(rawKey)) return;
     if (seenRaw.size < 200) seenRaw.add(rawKey);
-    const report = buildCrashReport(kind, error, path, currentBuild(), componentStack, chunkGaveUp);
+    const report = buildCrashReport(kind, error, path, build(), componentStack, chunkGaveUp);
     if (!report) return;
     // Once a tab per crash, plus once more if it later brings up the error
     // screen, so the server learns it did (the card says so).
@@ -288,7 +292,7 @@ export function installMonitoring(): void {
       const batch = metrics.slice(i, i + 6);
       void send({
         type: 'vitals',
-        release: currentBuild().slice(0, 100),
+        release: build().slice(0, 100),
         metrics: batch,
       }).then((result) => {
         // Lost (offline, over the keepalive budget, server error): send

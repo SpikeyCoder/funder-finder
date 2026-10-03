@@ -40,13 +40,14 @@ const RETRY_AFTER_MS = 60 * 60 * 1000;
 // rejects that card, and it mustn't take a daily slot forever. It's tried
 // again if it comes back after 7 quiet days (record_client_crash).
 const MAX_CARD_ATTEMPTS = 3;
-const MAX_CARD_TRIES = 10; // also in record_client_crash (migration 20261003140000)
+const MAX_CARD_TRIES = 10;
 const DAY_MS = 24 * 60 * 60 * 1000;
 // No new card is started after this long into a run: a card takes up to
-// ~30 s (Trello's timeout, then recording its URL with retries), and the
-// Edge Function is stopped at 150 s, which could leave a card opened but
-// unrecorded (then opened again an hour later).
-const RUN_CARD_DEADLINE_MS = 90_000;
+// ~37 s (its claim, Trello's timeout, then recording its URL with retries),
+// and pg_net gives up on the run at 120 s (the Edge Function itself at
+// 150 s), which could leave a card opened but unrecorded (then opened again
+// an hour later).
+const RUN_CARD_DEADLINE_MS = 70_000;
 
 const FETCH_TIMEOUT_MS = 7000;
 
@@ -63,6 +64,9 @@ export const SLA_FAILING_RUNS = 2;
 const SLA_QUERIES = ["foundation", "community foundation", "01-0224898"];
 const SLA_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const VITALS_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+// A page-speed card that failed is retried a day later, not hourly: it isn't
+// urgent, and a Trello that keeps rejecting gets a few calls a day.
+const VITALS_RETRY_MS = 24 * 60 * 60 * 1000;
 const VITALS_MIN_SAMPLES = 20;
 const MAX_VITALS_CARDS = 2;
 export const MAX_VITALS_CARDS_PER_DAY = 5;
@@ -284,18 +288,19 @@ export function alertDue(
  * unchanged), so overlapping runs can't both open it. Pass the alert's row
  * if already fetched (null if it has none). Returns the card URL, or null
  * if nothing was opened (not due, claimed by another run, or Trello failed:
- * then the claim stays and it's retried after RETRY_AFTER_MS).
+ * then the claim stays and it's retried after `retryAfterMs`).
  */
 async function openAlertCard(
   key: string,
   cooldownMs: number,
   card: { name: string; desc: string },
   known?: AlertRow | null,
+  retryAfterMs = RETRY_AFTER_MS,
 ): Promise<string | null> {
   const row = known !== undefined ? known : (await restJson<AlertRow[]>(
     `monitor_alerts?alert_key=eq.${encodeURIComponent(key)}&select=alert_key,last_carded_at,trello_card_url`,
   ))[0] ?? null;
-  if (!alertDue(row, cooldownMs)) return null;
+  if (!alertDue(row, cooldownMs, Date.now(), retryAfterMs)) return null;
   const claimed = { last_carded_at: new Date().toISOString(), trello_card_url: null };
   const claim = row
     ? await rest(
@@ -498,12 +503,12 @@ async function sweepVitals(summary: Summary, deadline: number): Promise<void> {
   // Trello is called at most MAX_VITALS_CARDS times a run, as for crashes.
   const due = breaches
     .map((b) => ({ b, key: `vitals:${b.metric}:${b.path}` }))
-    .filter(({ key }) => alertDue(alerts.get(key), VITALS_COOLDOWN_MS, Date.now(), DAY_MS))
+    .filter(({ key }) => alertDue(alerts.get(key), VITALS_COOLDOWN_MS, Date.now(), VITALS_RETRY_MS))
     .slice(0, Math.max(0, budget));
   let carded = 0;
   for (const { b, key } of due) {
     if (Date.now() > deadline) break;
-    if (await openAlertCard(key, VITALS_COOLDOWN_MS, vitalsCard(b), alerts.get(key) ?? null)) carded++;
+    if (await openAlertCard(key, VITALS_COOLDOWN_MS, vitalsCard(b), alerts.get(key) ?? null, VITALS_RETRY_MS)) carded++;
   }
   summary.vitals_cards = carded;
 }

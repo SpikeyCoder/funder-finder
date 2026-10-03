@@ -104,7 +104,9 @@ export function reloadOnceForChunkError(error: unknown): ChunkReloadResult {
     if (seen.includes(key)) return 'already-reloaded';
     // The marker first: if recording the key then fails, we don't reload,
     // and the key isn't recorded as reloaded-for either.
-    sessionStorage.setItem(PENDING_RELOAD_KEY, JSON.stringify({ key, at: Date.now() }));
+    // (With the path: a duplicated tab copies sessionStorage, and its first
+    // page isn't this reload's unless it's the same page.)
+    sessionStorage.setItem(PENDING_RELOAD_KEY, JSON.stringify({ key, path: window.location.pathname, at: Date.now() }));
     try {
       sessionStorage.setItem(CHUNK_RELOAD_KEY, JSON.stringify([...seen, key].slice(-MAX_REMEMBERED)));
     } catch (err) {
@@ -123,10 +125,11 @@ export function reloadOnceForChunkError(error: unknown): ChunkReloadResult {
 export function takeReloadMarker(): void {
   reloadedFor = null;
   try {
-    const marker = JSON.parse(sessionStorage.getItem(PENDING_RELOAD_KEY) || 'null') as { key?: unknown; at?: unknown } | null;
+    const marker = JSON.parse(sessionStorage.getItem(PENDING_RELOAD_KEY) || 'null') as { key?: unknown; path?: unknown; at?: unknown } | null;
     sessionStorage.removeItem(PENDING_RELOAD_KEY);
     const age = typeof marker?.at === 'number' ? Date.now() - marker.at : NaN;
-    if (typeof marker?.key === 'string' && age >= 0 && age < MARKER_FRESH_MS) reloadedFor = marker.key;
+    const samePage = marker?.path === window.location.pathname;
+    if (typeof marker?.key === 'string' && samePage && age >= 0 && age < MARKER_FRESH_MS) reloadedFor = marker.key;
   } catch {
     // Unreadable or corrupt: not a reload.
   }

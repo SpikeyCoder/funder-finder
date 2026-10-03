@@ -202,3 +202,10 @@ test('if recording the reload fails, nothing is left half-recorded', () => {
   // Once storage works again, the reload is still available.
   assert.equal(reloadOnceForChunkError(LINK), 'reloading');
 });
+
+test('a marker is only taken by a load of the same page (not a duplicated tab elsewhere)', () => {
+  assert.equal(reloadOnceForChunkError(fetchFail('Shared-1.js')), 'reloading');
+  window.location.pathname = '/elsewhere';
+  takeReloadMarker();
+  assert.equal(onReloadPageFor(fetchFail('Shared-1.js')), false);
+});
