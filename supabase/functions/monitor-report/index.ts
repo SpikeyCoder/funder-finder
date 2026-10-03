@@ -64,19 +64,30 @@ export interface VitalRow {
 // Local part can't span URL syntax, so "…?email=eq.a@b.org" masks just the address.
 // Short words a message really contains, as opposed to minified names.
 const WORDS = new Set(["a", "an", "as", "at", "be", "by", "do", "id", "if", "in", "is", "it", "no", "of", "on", "or", "to", "up"]);
+const minified = (name: string) => /^[A-Za-z_$][\w$]?$/.test(name) && !WORDS.has(name.toLowerCase());
+
+// A quoted part of a message: kept if it's a short identifier or dotted
+// path ("reading 'name'" and "reading 'map'" are different bugs), with
+// minified segments of a dotted path replaced (Safari quotes whole
+// expressions: 'n.current.focus'); anything else is a value.
+function quoted(q: string, inner: string): string {
+  if (!/^[A-Za-z_$][\w$.-]{0,39}$/.test(inner)) return "<str>";
+  if (!inner.includes(".")) return q + inner + q;
+  return q + inner.split(".").map((seg) => (minified(seg) ? "<id>" : seg)).join(".") + q;
+}
 
 /**
- * A message with its values taken out but its meaning kept: URLs and long
- * or value-like quoted strings go; short identifier-like quoted strings
- * stay ("reading 'name'" and "reading 'map'" are different bugs); one- and
- * two-letter names, which are what minifying produces ("Xt is not a
- * function"), become <id>; numbers become <n>.
+ * A message with its values taken out but its meaning kept: URLs and
+ * value-like quoted strings go, identifier-like ones stay (see quoted());
+ * one- and two-letter names, which are what minifying produces ("Xt is not
+ * a function"), become <id>; numbers become <n>.
  */
 export function normalizeMessage(message: string): string {
   return message
     .replace(/https?:\/\/\S+/g, "<url>")
-    .replace(/(["'`])(.*?)\1/g, (m, _q, inner) => (/^[A-Za-z_$][\w$.-]{0,39}$/.test(inner) ? m : "<str>"))
-    .replace(/(^|[^\w$'"`<])([A-Za-z_$][\w$]?)(?=[^\w$'"`>]|$)/g, (m, pre, tok) => (WORDS.has(tok.toLowerCase()) ? m : `${pre}<id>`))
+    .replace(/(["'`])(.*?)\1/g, (_m, q, inner) => quoted(q, inner))
+    // Unquoted too: Firefox says "t.current is null".
+    .replace(/(^|[^\w$'"`<])([A-Za-z_$][\w$]?)(?=[^\w$'"`>]|$)/g, (m, pre, tok) => (minified(tok) ? `${pre}<id>` : m))
     .replace(/\b0x[0-9a-f]+\b/gi, "<n>")
     .replace(/\d+/g, "<n>")
     .trim();
@@ -156,7 +167,10 @@ export function parseVitals(b: Record<string, unknown>): VitalRow[] | string {
     }
     if (!RATINGS.has(rating)) return "Invalid rating";
     seen.add(metric);
-    rows.push({ metric_id: id, metric, value, rating, path, release: release(b.release) });
+    // Per metric (INP/CLS can belong to a later page than LCP); the report's
+    // path for older clients.
+    const mPath = typeof m?.path === "string" ? normalizePath(str(m.path, 500)) : path;
+    rows.push({ metric_id: id, metric, value, rating, path: mPath, release: release(b.release) });
   }
   return rows;
 }

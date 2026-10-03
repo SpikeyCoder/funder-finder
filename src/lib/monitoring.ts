@@ -45,7 +45,9 @@ export interface VitalsReport {
   path: string;
   release: string;
   // `id` is web-vitals' per-page-view id: the server keeps one row per id.
-  metrics: { id: string; name: string; value: number; rating: string }[];
+  // `path` is per metric: LCP belongs to the page that loaded, INP and CLS
+  // to the page the visitor was on when they were reported.
+  metrics: { id: string; name: string; value: number; rating: string; path: string }[];
 }
 
 // ── Pure helpers (unit-tested) ──────────────────────────────────────────────
@@ -60,6 +62,10 @@ export function isNoise(error: unknown, message: string, stack: string, chunkGav
   if (isChunkLoadError(error)) return !chunkGaveUp;
   if (/^Script error\.?$/i.test(message.trim())) return true;
   if (/ResizeObserver loop/i.test(message)) return true;
+  // Lost connections and cancelled requests, in each browser's wording: the
+  // network, not our code.
+  if (/^(?:TypeError: )?(?:Failed to fetch|Load failed|NetworkError when attempting to fetch resource\.?|Network request failed)$/i.test(message.trim())) return true;
+  if ((error as { name?: unknown } | null)?.name === 'AbortError') return true;
   return /(?:chrome|moz|safari(?:-web)?)-extension:\/\//i.test(stack);
 }
 
@@ -169,7 +175,9 @@ export function installMonitoring(): void {
   onLCP(record);
   onINP(record);
   onCLS(record);
-  // SPA navigations keep the first page's path: vitals describe the page load.
+  // LCP describes the page load, so it keeps the landing page's path; INP
+  // and CLS accumulate across client-side navigations, so they take the
+  // path the visitor is on when they're reported.
   const path = normalizePath(window.location.pathname);
   const flush = () => {
     if (pending.size === 0) return;
@@ -180,7 +188,13 @@ export function installMonitoring(): void {
       type: 'vitals',
       path,
       release: currentBuild().slice(0, 100),
-      metrics: metrics.map((m) => ({ id: m.id, name: m.name, value: m.value, rating: m.rating })),
+      metrics: metrics.map((m) => ({
+        id: m.id,
+        name: m.name,
+        value: m.value,
+        rating: m.rating,
+        path: m.name === 'LCP' ? path : normalizePath(window.location.pathname),
+      })),
     });
   };
   document.addEventListener('visibilitychange', () => {

@@ -37,7 +37,7 @@ export const ROUTES = [
 
 const ROUTE_PATTERNS = ROUTES.map((r) => ({
   route: r,
-  re: new RegExp("^" + r.replace(/:id/g, "[^/]+") + "$"),
+  re: new RegExp("^" + r.replace(/:id/g, "[^/]+") + "$", "i"),
 }));
 
 /**
@@ -47,7 +47,8 @@ const ROUTE_PATTERNS = ROUTES.map((r) => ({
  * Literal routes win over parameter ones (/projects/new is not /projects/:id).
  */
 export function normalizePath(pathname: string): string {
-  const bare = pathname.split(/[?#]/)[0].replace(/\/+$/, "") || "/";
+  // React Router matches case-insensitively, so /Search is /search.
+  const bare = pathname.split(/[?#]/)[0].replace(/\/+$/, "").toLowerCase() || "/";
   const literal = ROUTES.find((r) => !r.includes(":") && r === bare);
   if (literal) return literal;
   return ROUTE_PATTERNS.find((p) => p.re.test(bare))?.route ?? "(other)";

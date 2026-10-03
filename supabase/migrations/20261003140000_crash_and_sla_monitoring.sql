@@ -10,7 +10,8 @@
 -- The sweep opens a card for:
 --   * each new crash fingerprint (most frequent first, at most 5 per run and
 --     10 per 24 h; past that, one summary card a day says how many wait),
---     with its stack and how often it happened;
+--     with its stack and how often it happened. A card that fails is retried
+--     an hour later, and after 3 failures once a day;
 --   * a page whose 75th-percentile LCP, INP or CLS over the last 24 h is
 --     "poor" by web-vitals' thresholds, with at least 20 page views (once per
 --     page and metric per 7 days; at most 5 a day). Paths are the app's
@@ -49,8 +50,8 @@ CREATE TABLE IF NOT EXISTS public.monitor_crashes (
   last_seen        timestamptz NOT NULL DEFAULT now(),
   trello_card_url  text,
   -- The sweep claims a crash before opening its card, so overlapping runs
-  -- and a failed write can't open two; a failed card is retried an hour
-  -- later, at most 3 times.
+  -- can't both open one; a failed card is retried an hour later, and after
+  -- 3 failures once a day.
   card_attempted_at timestamptz,
   card_attempts    integer NOT NULL DEFAULT 0
 );
@@ -105,7 +106,9 @@ REVOKE ALL ON public.monitor_crashes, public.monitor_vitals, public.monitor_sla_
 
 -- ── Recording a crash ───────────────────────────────────────────────────────
 -- One row per fingerprint: a repeat bumps the count and keeps the latest
--- occurrence's details (its release and browser are the most useful).
+-- occurrence's details (its release and browser are the most useful). The
+-- kind becomes 'boundary' once any occurrence showed the error screen, so
+-- the card says the worst way it was seen.
 
 CREATE OR REPLACE FUNCTION public.record_client_crash(
   p_fingerprint text, p_kind text, p_name text, p_message text, p_stack text,
@@ -120,6 +123,7 @@ AS $$
     (p_fingerprint, p_kind, p_name, p_message, p_stack, p_component_stack, p_path, p_release, p_user_agent)
   ON CONFLICT (fingerprint) DO UPDATE
     SET occurrences = c.occurrences + 1,
+        kind = CASE WHEN EXCLUDED.kind = 'boundary' THEN 'boundary' ELSE c.kind END,
         last_seen = now(),
         message = EXCLUDED.message,
         stack = EXCLUDED.stack,

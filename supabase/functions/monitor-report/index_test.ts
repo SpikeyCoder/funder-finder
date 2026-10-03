@@ -16,6 +16,8 @@ Deno.test("normalizePath hides share tokens and route ids", () => {
   assertEquals(normalizePath("/unknown/a1b2c3d4e5f6g7h8i9"), "(other)");
   assertEquals(normalizePath("/made-up-path-1"), "(other)");
   assertEquals(normalizePath("/onboarding/first-project"), "/onboarding/first-project");
+  assertEquals(normalizePath("/Search/"), "/search");
+  assertEquals(normalizePath("/Projects/42/Tracker"), "/projects/:id/tracker");
 });
 
 Deno.test("normalizePath collapses ids and drops query strings", () => {
@@ -57,6 +59,12 @@ Deno.test("message normalisation keeps the meaning, drops values and minified na
   assertEquals(normalizeMessage("e is undefined"), "<id> is undefined");
   assertEquals(normalizeMessage('No funder "Ford Foundation 2024" found'), "No funder <str> found");
   assertEquals(normalizeMessage("Request 42 failed at https://x/y"), "Request <n> failed at <url>");
+  // Safari quotes expressions; Firefox doesn't: minified parts go either way.
+  assertEquals(
+    normalizeMessage("undefined is not an object (evaluating 'n.current.focus')"),
+    normalizeMessage("undefined is not an object (evaluating 't.current.focus')"),
+  );
+  assertEquals(normalizeMessage("t.current is null"), "<id>.current is null");
 });
 
 Deno.test("fingerprint separates different errors and frames", async () => {
@@ -112,6 +120,10 @@ Deno.test("parseVitals accepts the three metrics within range only", () => {
   assertEquals(parseVitals({ metrics: [{ name: "LCP", value: 1, rating: "good" }] }), "Invalid id");
   assertEquals(parseVitals({ metrics: [{ ...m("LCP", 1), id: "x'; drop" }] }), "Invalid id");
   assertEquals(parseVitals({ metrics: [m("toString", 1)] }), "Invalid metric");
+  // Per-metric path wins over the report's (INP/CLS can belong to a later page).
+  const perMetric = parseVitals({ path: "/", metrics: [{ ...m("INP", 900, "poor"), path: "/search?q=x" }, m("LCP", 1000, "good", 2)] });
+  if (typeof perMetric === "string") throw new Error(perMetric);
+  assertEquals(perMetric.map((r) => [r.metric, r.path]), [["INP", "/search"], ["LCP", "/"]]);
   assertEquals(parseVitals({ metrics: "x" }), "Invalid metrics");
 });
 

@@ -45,6 +45,7 @@ test('normalizePath never lets a share token through', () => {
   assert.equal(normalizePath('/projects/abc/tracker'), '/projects/:id/tracker');
   assert.equal(normalizePath('/onboarding/first-project'), '/onboarding/first-project');
   assert.equal(normalizePath('/not-a-route/abc'), '(other)');
+  assert.equal(normalizePath('/Shared/ABCDEF'), '/shared/:id');
 });
 
 test("the route list matches App.tsx's routes", async () => {
@@ -75,6 +76,14 @@ test('noise: extensions, opaque cross-origin errors, ResizeObserver', () => {
   assert.equal(isNoise(null, 'Script error.', ''), true);
   assert.equal(isNoise(null, 'ResizeObserver loop completed with undelivered notifications.', ''), true);
   assert.equal(isNoise(new TypeError('x is undefined'), 'x is undefined', 'at f (https://fundermatch.org/assets/a.js:1:1)'), false);
+});
+
+test('network failures and aborts are noise, in each browser\'s wording', () => {
+  for (const msg of ['Failed to fetch', 'Load failed', 'NetworkError when attempting to fetch resource.', 'TypeError: Failed to fetch']) {
+    assert.equal(isNoise(new TypeError(msg), msg, ''), true, msg);
+  }
+  assert.equal(isNoise(new DOMException('The user aborted a request.', 'AbortError'), 'The user aborted a request.', ''), true);
+  assert.equal(isNoise(new TypeError('Failed to fetch funders: 500'), 'Failed to fetch funders: 500', ''), false);
 });
 
 test('chunk-load failures are noise unless the automatic reload already failed', () => {

@@ -32,8 +32,9 @@ const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") || "";
 const MAX_CRASH_CARDS = 5;
 export const MAX_CRASH_CARDS_PER_DAY = 10;
 // A crash or alert claimed for a card that didn't get one is retried after
-// this long; a crash is given up on after MAX_CARD_ATTEMPTS.
+// this long.
 const RETRY_AFTER_MS = 60 * 60 * 1000;
+// After this many failed attempts a crash is retried daily instead.
 const MAX_CARD_ATTEMPTS = 3;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 7000;
@@ -227,10 +228,12 @@ async function runSlaCheck(query: string): Promise<SlaCheck> {
   }
 }
 
+type AlertRow = { alert_key: string; last_carded_at: string; trello_card_url: string | null };
+
 /** Whether an alert may open a card now: never alerted, quiet period over,
  * or claimed without getting a card more than RETRY_AFTER_MS ago. */
 export function alertDue(
-  row: { last_carded_at: string; trello_card_url: string | null } | undefined,
+  row: Pick<AlertRow, "last_carded_at" | "trello_card_url"> | null | undefined,
   cooldownMs: number,
   now = Date.now(),
 ): boolean {
@@ -240,24 +243,39 @@ export function alertDue(
 }
 
 /**
- * Open an alert's card, claiming the alert first: if the claim can't be
- * written, no card is opened (the next run retries); if the card is opened
- * but its URL can't be recorded, the claim still holds the quiet period off
- * for RETRY_AFTER_MS. Returns the card URL, or null if nothing was opened.
+ * Open an alert's card, claiming the alert first with a compare-and-set
+ * (an insert for a new alert, or an update conditional on the row being
+ * unchanged), so overlapping runs can't both open it. Pass the alert's row
+ * if already fetched (null if it has none). Returns the card URL, or null
+ * if nothing was opened (not due, claimed by another run, or Trello failed:
+ * then the claim stays and it's retried after RETRY_AFTER_MS).
  */
-async function openAlertCard(key: string, cooldownMs: number, card: { name: string; desc: string }): Promise<string | null> {
-  const [row] = await restJson<{ last_carded_at: string; trello_card_url: string | null }[]>(
-    `monitor_alerts?alert_key=eq.${encodeURIComponent(key)}&select=last_carded_at,trello_card_url`,
-  );
+async function openAlertCard(
+  key: string,
+  cooldownMs: number,
+  card: { name: string; desc: string },
+  known?: AlertRow | null,
+): Promise<string | null> {
+  const row = known !== undefined ? known : (await restJson<AlertRow[]>(
+    `monitor_alerts?alert_key=eq.${encodeURIComponent(key)}&select=alert_key,last_carded_at,trello_card_url`,
+  ))[0] ?? null;
   if (!alertDue(row, cooldownMs)) return null;
-  const claim = await rest("monitor_alerts?on_conflict=alert_key", {
-    method: "POST",
-    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-    body: JSON.stringify({ alert_key: key, last_carded_at: new Date().toISOString(), trello_card_url: null }),
-  });
+  const claimed = { last_carded_at: new Date().toISOString(), trello_card_url: null };
+  const claim = row
+    ? await rest(
+      `monitor_alerts?alert_key=eq.${encodeURIComponent(key)}&last_carded_at=eq.${encodeURIComponent(row.last_carded_at)}&select=alert_key`,
+      { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify(claimed) },
+    )
+    : await rest("monitor_alerts?select=alert_key", {
+      method: "POST",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({ alert_key: key, ...claimed }),
+    });
+  if (claim.status === 409) return null; // another run inserted it first
   if (!claim.ok) throw new Error(`REST monitor_alerts claim ${claim.status}: ${await claim.text()}`);
+  if (((await claim.json()) as unknown[]).length !== 1) return null; // another run updated it first
   const url = await createTrelloCard(card);
-  if (!url || url === "unconfigured") return null; // claim stays; retried after RETRY_AFTER_MS
+  if (!url || url === "unconfigured") return null;
   await recordCard(`monitor_alerts?alert_key=eq.${encodeURIComponent(key)}`, url, key);
   return url;
 }
@@ -284,9 +302,26 @@ async function recordCard(target: string, url: string, what: string): Promise<vo
   }
 }
 
+/** Exact row count for a PostgREST query (from Content-Range). */
+async function restCount(path: string): Promise<number> {
+  const res = await rest(path, { method: "HEAD", headers: { Prefer: "count=exact" } });
+  if (!res.ok) throw new Error(`REST ${path.split("?")[0]} count ${res.status}`);
+  const total = Number(res.headers.get("content-range")?.split("/")[1]);
+  return Number.isFinite(total) ? total : 0;
+}
+
 type Summary = Record<string, number | string>;
 
 async function sweepSla(summary: Summary): Promise<void> {
+  // Untimed first request: wakes search-organizations if it has gone cold
+  // since the last sweep, so its boot time doesn't count against the SLA
+  // (visitors on a busy site rarely meet a cold function).
+  await fetch(`${SUPABASE_URL}/functions/v1/search-organizations`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` },
+    body: JSON.stringify({ query: "%%", limit: 1 }),
+    signal: AbortSignal.timeout(SLA_CHECK_TIMEOUT_MS),
+  }).then((r) => r.body?.cancel()).catch(() => {});
   const checks: SlaCheck[] = [];
   for (const q of SLA_QUERIES) checks.push(await runSlaCheck(q)); // one at a time, like visitors
   const res = await rest("monitor_sla_checks", {
@@ -308,21 +343,22 @@ async function sweepSla(summary: Summary): Promise<void> {
 
 async function sweepCrashes(summary: Summary): Promise<void> {
   const now = Date.now();
-  const dayAgo = new Date(now - DAY_MS).toISOString();
-  const retryBefore = new Date(now - RETRY_AFTER_MS).toISOString();
-  const cardedToday = (await restJson<unknown[]>(
-    `monitor_crashes?trello_card_url=not.is.null&card_attempted_at=gte.${encodeURIComponent(dayAgo)}&select=fingerprint`,
-  )).length;
-  // Waiting: no card yet, not given up on, not claimed in the last hour.
-  const waiting = await restJson<CrashRow[]>(
-    `monitor_crashes?trello_card_url=is.null&card_attempts=lt.${MAX_CARD_ATTEMPTS}` +
-      `&or=(card_attempted_at.is.null,card_attempted_at.lt.${encodeURIComponent(retryBefore)})` +
-      "&order=occurrences.desc,first_seen.asc&limit=100" +
+  const iso = (ms: number) => encodeURIComponent(new Date(ms).toISOString());
+  const cardedToday = await restCount(
+    `monitor_crashes?trello_card_url=not.is.null&card_attempted_at=gte.${iso(now - DAY_MS)}`,
+  );
+  // Due: no card yet, and never claimed, or last claimed over an hour ago
+  // (over a day ago after MAX_CARD_ATTEMPTS failures: a long Trello outage
+  // delays a card, it never loses one).
+  const due = await restJson<CrashRow[]>(
+    "monitor_crashes?trello_card_url=is.null" +
+      `&or=(card_attempted_at.is.null,and(card_attempts.lt.${MAX_CARD_ATTEMPTS},card_attempted_at.lt.${iso(now - RETRY_AFTER_MS)}),card_attempted_at.lt.${iso(now - DAY_MS)})` +
+      `&order=occurrences.desc,first_seen.asc&limit=${MAX_CRASH_CARDS}` +
       "&select=fingerprint,kind,name,message,stack,component_stack,path,release,user_agent,occurrences,first_seen,last_seen,card_attempts",
   );
   const budget = Math.min(MAX_CRASH_CARDS, MAX_CRASH_CARDS_PER_DAY - cardedToday);
   let carded = 0;
-  for (const c of waiting.slice(0, Math.max(0, budget))) {
+  for (const c of due.slice(0, Math.max(0, budget))) {
     // Claim it (counts as an attempt) only if no other run has meanwhile.
     const claim = await rest(
       `monitor_crashes?fingerprint=eq.${c.fingerprint}&trello_card_url=is.null&card_attempts=eq.${c.card_attempts}&select=fingerprint`,
@@ -335,17 +371,19 @@ async function sweepCrashes(summary: Summary): Promise<void> {
     if (!claim.ok) throw new Error(`REST monitor_crashes claim ${claim.status}: ${await claim.text()}`);
     if (((await claim.json()) as unknown[]).length !== 1) continue;
     const url = await createTrelloCard(crashCard(c));
-    // Trello rejected or failed this one: it's retried after an hour (up to
-    // MAX_CARD_ATTEMPTS times), and doesn't hold up the rest.
+    // Trello rejected or failed this one: it's retried later and doesn't
+    // hold up the rest.
     if (!url || url === "unconfigured") continue;
     await recordCard(`monitor_crashes?fingerprint=eq.${c.fingerprint}`, url, `crash ${c.fingerprint}`);
     carded++;
   }
   summary.crash_cards = carded;
-  const left = waiting.length - carded;
-  summary.crashes_waiting = left;
-  if (left > 0 && cardedToday + carded >= MAX_CRASH_CARDS_PER_DAY) {
-    const url = await openAlertCard("crash:overflow", DAY_MS, crashOverflowCard(left));
+  if (cardedToday + carded < MAX_CRASH_CARDS_PER_DAY) return;
+  // The daily limit is reached: say (once a day) how many kinds wait.
+  const waiting = await restCount("monitor_crashes?trello_card_url=is.null");
+  summary.crashes_waiting = waiting;
+  if (waiting > 0) {
+    const url = await openAlertCard("crash:overflow", DAY_MS, crashOverflowCard(waiting));
     if (url) summary.crash_overflow_card = url;
   }
 }
@@ -355,15 +393,21 @@ async function sweepVitals(summary: Summary): Promise<void> {
     method: "POST",
     body: JSON.stringify({ p_min_samples: VITALS_MIN_SAMPLES }),
   });
-  const dayAgo = new Date(Date.now() - DAY_MS).toISOString();
-  const cardedToday = (await restJson<unknown[]>(
-    `monitor_alerts?alert_key=like.vitals:*&last_carded_at=gte.${encodeURIComponent(dayAgo)}&select=alert_key`,
-  )).length;
+  if (breaches.length === 0) return;
+  // Every vitals alert in one query, rather than one per breach.
+  const alerts = new Map(
+    (await restJson<AlertRow[]>("monitor_alerts?alert_key=like.vitals:*&select=alert_key,last_carded_at,trello_card_url"))
+      .map((a) => [a.alert_key, a]),
+  );
+  const dayAgo = Date.now() - DAY_MS;
+  const cardedToday = [...alerts.values()].filter((a) => Date.parse(a.last_carded_at) >= dayAgo).length;
   let budget = Math.min(MAX_VITALS_CARDS, MAX_VITALS_CARDS_PER_DAY - cardedToday);
   let carded = 0;
   for (const b of breaches) {
     if (budget <= 0) break;
-    if (await openAlertCard(`vitals:${b.metric}:${b.path}`, VITALS_COOLDOWN_MS, vitalsCard(b))) {
+    const key = `vitals:${b.metric}:${b.path}`;
+    if (!alertDue(alerts.get(key), VITALS_COOLDOWN_MS)) continue;
+    if (await openAlertCard(key, VITALS_COOLDOWN_MS, vitalsCard(b), alerts.get(key) ?? null)) {
       carded++;
       budget--;
     }
