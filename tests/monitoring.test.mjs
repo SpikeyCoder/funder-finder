@@ -116,11 +116,14 @@ test('chunk-load failures are noise unless the automatic reload already failed',
 test('describe handles errors, error-like objects, strings and odd values', () => {
   assert.deepEqual(describe('boom'), { name: 'NonError', message: 'boom', stack: '' });
   assert.equal(describe({ name: 'AbortError', message: 'aborted' }).name, 'AbortError');
-  assert.equal(describe({ a: 1 }).message, '{"a":1}');
+  // Only the shape of a non-Error value, never its contents.
+  assert.equal(describe({ profile: { name: 'Jane Doe', phone: '555-0100' } }).message, 'object with keys profile');
+  assert.equal(describe([1, 2]).message, 'array with keys 0, 1');
   const circular = {};
   circular.self = circular;
   assert.equal(describe(circular).name, 'NonError'); // no throw
   assert.equal(describe(undefined).message, 'undefined');
+  assert.equal(describe(42).message, 'number');
 });
 
 test('the error name is scrubbed too', () => {

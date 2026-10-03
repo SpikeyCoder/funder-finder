@@ -40,8 +40,10 @@ Free and in-house (FM-2026-10-03-02; migration `20261003140000`):
   "poor", across at least 20 page views, gets a card (at most weekly per page
   and metric).
 - **Search SLA.** `monitor-sweep` times three searches through the public
-  search endpoint every 15 minutes. Two or more checks in an hour that fail or
-  take over 2 s open a card (at most daily).
+  search endpoint every 15 minutes. Checks that fail or take over 2 s in two
+  or more of an hour's runs open a card (at most daily). One slow run alone
+  doesn't (a cold start slows all its checks), so an outage shorter than
+  the 15 minutes between runs may not be carded.
 
 Cards go to the same Trello list as user bug reports. No user id or IP is
 stored; see `retention-and-deletion.md` for what is kept and for how long.

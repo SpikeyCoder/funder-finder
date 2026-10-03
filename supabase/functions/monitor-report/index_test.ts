@@ -207,3 +207,11 @@ Deno.test("normalizeMessage folds ids and JSON-parse details into one kind", () 
   assertEquals(json[0], "Unexpected token <tok>, <str> is not valid JSON");
   assertEquals(normalizeMessage(`JSON Parse error: Unexpected identifier "Not"`), "JSON Parse error: Unexpected identifier <tok>");
 });
+
+Deno.test("fingerprint ignores an @ in Chrome's message line", () => {
+  const msg = "Failed to resolve module specifier '@scope/pkg/index.js'";
+  const stack = `TypeError: ${msg}\n    at Xt (https://fundermatch.org/assets/Search-BrsvDQt6.js:1:2)`;
+  assertEquals(fingerprintSource("TypeError", msg, stack).split("|")[2], "/assets/Search.js");
+  assertEquals(fingerprintSource("TypeError", msg, "Xt@https://fundermatch.org/assets/Search-BrsvDQt6.js:1:2").split("|")[2], "/assets/Search.js");
+  assertEquals(fingerprintSource("TypeError", msg, "@https://fundermatch.org/assets/Search-BrsvDQt6.js:1:2").split("|")[2], "/assets/Search.js");
+});

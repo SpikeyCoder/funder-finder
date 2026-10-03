@@ -16,8 +16,8 @@
 --     "poor" by web-vitals' thresholds, with at least 20 page views (once per
 --     page and metric per 7 days; at most 5 a day). Paths are the app's
 --     routes (anything else is "(other)"), so made-up paths add nothing;
---   * search breaching its SLA: 2 or more of the last hour's synthetic checks
---     failed or took over 2 s (once per 24 h).
+--   * search breaching its SLA: synthetic checks failed or took over 2 s in
+--     2 or more of the last hour's sweep runs (once per 24 h).
 --
 -- Only the public Edge Function writes reports, and only the sweep opens
 -- cards, so flooding the endpoint can't flood Trello: at most 10 crash cards

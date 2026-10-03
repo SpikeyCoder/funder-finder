@@ -7,8 +7,8 @@
  *
  *   1. times live searches through search-organizations, as a visitor would
  *      (anon key, so anon's 3 s statement_timeout applies), and records each
- *      check; 2 or more failed or slow checks in the last hour open a card
- *      (at most once per 24 h);
+ *      check; failed or slow checks in 2 or more of the last hour's runs
+ *      open a card (at most once per 24 h);
  *   2. opens a card for each new crash fingerprint monitor-report recorded,
  *      most frequent first: at most MAX_CRASH_CARDS per run and
  *      MAX_CRASH_CARDS_PER_DAY per 24 h, then one summary card a day saying
@@ -145,7 +145,7 @@ export function slaCard(checks: SlaCheck[]): { name: string; desc: string } {
   return {
     name: `[SLA] Search: ${failed.length} of ${checks.length} checks failed in the last hour`,
     desc: [
-      `Search missed its SLA (a 200 with results within ${SLA_MS} ms) on ${failed.length} of the last hour's ${checks.length} synthetic checks. Visitors see "Search failed" when the database query passes anon's 3 s statement_timeout.`,
+      `Search missed its SLA (a 200 with results within ${SLA_MS} ms) on ${failed.length} of the last hour's ${checks.length} synthetic checks, in more than one run. Visitors see "Search failed" when the database query passes anon's 3 s statement_timeout.`,
       "",
       "| Checked at (UTC) | Query | Status | ms | Result |",
       "|---|---|---|---|---|",
@@ -327,7 +327,7 @@ async function recordCard(target: string, url: string, what: string): Promise<vo
     } catch (err) {
       console.error(`monitor-sweep: recording ${url} for ${what} failed (attempt ${attempt}):`, err);
     }
-    await new Promise((r) => setTimeout(r, 500 * attempt));
+    if (attempt < 3) await new Promise((r) => setTimeout(r, 500 * attempt));
   }
 }
 

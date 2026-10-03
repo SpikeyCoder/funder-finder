@@ -82,11 +82,21 @@ export function describe(error: unknown): { name: string; message: string; stack
       return { name: typeof e.name === 'string' ? e.name : 'Error', message: e.message, stack: typeof e.stack === 'string' ? e.stack : '' };
     }
   }
+  // Anything else: a thrown string is a message; for other values only their
+  // shape, never their contents (a rejected object can hold a profile or a
+  // token, and scrubbing only knows emails).
+  if (typeof error === 'string') return { name: 'NonError', message: error, stack: '' };
   let message: string;
-  try {
-    message = typeof error === 'string' ? error : JSON.stringify(error) ?? String(error);
-  } catch {
-    message = String(error);
+  if (error && typeof error === 'object') {
+    let keys: string[] = [];
+    try {
+      keys = Object.keys(error).slice(0, 10);
+    } catch {
+      // A hostile proxy; the shape stays unknown.
+    }
+    message = `${Array.isArray(error) ? 'array' : 'object'}${keys.length ? ` with keys ${keys.join(', ')}` : ''}`;
+  } else {
+    message = error === null ? 'null' : typeof error;
   }
   return { name: 'NonError', message, stack: '' };
 }

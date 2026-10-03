@@ -135,7 +135,9 @@ export function fingerprintSource(name: string, message: string, stack: string):
   // it was thrown.
   let file = "";
   for (const line of stack.split("\n")) {
-    if (!/^\s*at\s|@/.test(line)) continue;
+    // V8 frames start with "at"; Firefox/Safari frames are "fn@url" (no
+    // spaces before the @, unlike a message that mentions "@scope/pkg").
+    if (!/^\s*at\s|^[^\s@]*@\S/.test(line)) continue;
     const m = line.match(/(?:https?:\/\/[^/\s)]+)?(\/[^\s():?#]+\.(?:js|mjs|cjs|ts|tsx))(?::\d+)?/);
     if (m) {
       // Vite's hashes are exactly 8 base64url characters, so they can contain
