@@ -62,6 +62,7 @@ export interface VitalRow {
   rating: string;
   path: string;
   release: string;
+  seq: number;
 }
 
 // ── Pure helpers (unit-tested) ──────────────────────────────────────────────
@@ -229,8 +230,9 @@ export function parseVitals(b: Record<string, unknown>): VitalRow[] | string {
   const rows: VitalRow[] = [];
   const seen = new Set<string>();
   let error = "";
+  const rel = release(b.release);
   for (const m of b.metrics as Record<string, unknown>[]) {
-    const row = parseVital(m, seen, release(b.release));
+    const row = parseVital(m, seen, rel);
     if (typeof row === "string") error ||= row;
     else rows.push(row);
   }
@@ -251,8 +253,11 @@ function parseVital(m: Record<string, unknown>, seen: Set<string>, rel: string):
   if (!RATINGS.has(rating)) return "Invalid rating";
   // Per metric: INP and CLS can belong to a later page than LCP.
   if (typeof m?.path !== "string") return "Invalid path";
+  // The report's order within its page view (record_vitals keeps the latest).
+  const seq = m?.seq ?? 0;
+  if (typeof seq !== "number" || !Number.isInteger(seq) || seq < 0 || seq > 1_000_000) return "Invalid seq";
   seen.add(id);
-  return { metric_id: id, metric, value, rating, path: normalizePath(str(m.path, 500)), release: rel };
+  return { metric_id: id, metric, value, rating, path: normalizePath(str(m.path, 500)), release: rel, seq };
 }
 
 /** The body as text, or null if it's over `max` bytes (stops reading there). */

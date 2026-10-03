@@ -85,6 +85,8 @@ CREATE TABLE IF NOT EXISTS public.monitor_vitals (
   rating      text NOT NULL CHECK (rating IN ('good', 'needs-improvement', 'poor')),
   path        text NOT NULL,
   release     text NOT NULL DEFAULT '',
+  -- The report's order within its page view (see record_vitals).
+  seq         integer NOT NULL DEFAULT 0,
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 
@@ -169,7 +171,9 @@ AS $$
         last_seen = now(),
         message = EXCLUDED.message,
         stack = EXCLUDED.stack,
-        component_stack = EXCLUDED.component_stack,
+        -- (Only an error-screen report has one: an uncaught occurrence of
+        -- the same crash doesn't erase it.)
+        component_stack = coalesce(nullif(EXCLUDED.component_stack, ''), c.component_stack),
         path = EXCLUDED.path,
         release = EXCLUDED.release,
         user_agent = EXCLUDED.user_agent;
@@ -185,24 +189,23 @@ GRANT EXECUTE ON FUNCTION public.record_client_crash(text, text, text, text, tex
 -- threshold Core Web Vitals use), with enough page views to mean something.
 -- Thresholds are web-vitals' own: LCP > 4000 ms, INP > 500 ms, CLS > 0.25.
 
--- Records a vitals report (monitor-report). LCP and CLS only grow within a
--- page view (the largest paint, the worst window), so for them a report
--- that arrives late, after a newer one, doesn't replace the newer value.
--- INP can go down (it's a high percentile of the page's interactions, not
--- the worst one), so the latest INP report wins.
+-- Records a vitals report (monitor-report). Each report of a metric carries
+-- a sequence number that grows within its page view, so one that arrives
+-- late, after a newer one (separate keepalive requests aren't ordered),
+-- doesn't replace the newer value.
 CREATE OR REPLACE FUNCTION public.record_vitals(p_rows jsonb)
 RETURNS void
 LANGUAGE sql
 SET search_path = ''
 AS $$
-  INSERT INTO public.monitor_vitals AS v (metric_id, metric, value, rating, path, release, created_at)
-  SELECT r.metric_id, r.metric, r.value, r.rating, r.path, coalesce(r.release, ''), now()
+  INSERT INTO public.monitor_vitals AS v (metric_id, metric, value, rating, path, release, seq, created_at)
+  SELECT r.metric_id, r.metric, r.value, r.rating, r.path, coalesce(r.release, ''), coalesce(r.seq, 0), now()
     FROM jsonb_to_recordset(p_rows)
-      AS r(metric_id text, metric text, value double precision, rating text, path text, release text)
+      AS r(metric_id text, metric text, value double precision, rating text, path text, release text, seq integer)
   ON CONFLICT (metric_id) DO UPDATE
      SET value = EXCLUDED.value, rating = EXCLUDED.rating, path = EXCLUDED.path,
-         release = EXCLUDED.release, created_at = EXCLUDED.created_at
-   WHERE v.metric = 'INP' OR EXCLUDED.value >= v.value;
+         release = EXCLUDED.release, seq = EXCLUDED.seq, created_at = EXCLUDED.created_at
+   WHERE EXCLUDED.seq >= v.seq;
 $$;
 
 REVOKE EXECUTE ON FUNCTION public.record_vitals(jsonb) FROM PUBLIC, anon, authenticated;

@@ -44,7 +44,9 @@ export interface VitalsReport {
   release: string;
   // `id` is web-vitals' per-page-view id: the server keeps one row per id.
   // `path` is per metric (see installMonitoring).
-  metrics: { id: string; name: string; value: number; rating: string; path: string }[];
+  // `seq` orders a metric's reports within the page view, so the server
+  // ignores one that arrives after a newer one.
+  metrics: { id: string; name: string; value: number; rating: string; path: string; seq: number }[];
 }
 
 // ── Pure helpers (unit-tested) ──────────────────────────────────────────────
@@ -114,8 +116,9 @@ export function buildCrashReport(
   release: string,
   componentStack = '',
   chunkGaveUp = false,
+  described = describe(error),
 ): CrashReport | null {
-  const { name, message, stack } = describe(error);
+  const { name, message, stack } = described;
   if (isNoise(error, message, stack, chunkGaveUp, kind === 'boundary')) return null;
   return {
     type: 'crash',
@@ -189,7 +192,7 @@ export function reportCrash(kind: CrashKind, error: unknown, componentStack = ''
     const rawKey = `${route}|${kind}|${raw.name}|${raw.message.slice(0, 200)}|${raw.stack.split('\n', 3).join('|').slice(0, 400)}`;
     if (seenRaw.has(rawKey)) return;
     if (seenRaw.size < 200) seenRaw.add(rawKey);
-    const report = buildCrashReport(kind, error, path, build(), componentStack, chunkGaveUp);
+    const report = buildCrashReport(kind, error, path, build(), componentStack, chunkGaveUp, raw);
     if (!report) return;
     // Once a tab per crash, plus once more if it later brings up the error
     // screen, so the server learns it did (the card says so).
@@ -270,6 +273,7 @@ export function installMonitoring(): void {
   type Sample = VitalsReport['metrics'][number];
   const pending = new Map<string, Sample>();
   const sentValues = new Map<string, number>();
+  let seq = 0;
   const record = (m: Metric) => {
     if (sentValues.get(m.id) === m.value) {
       // Back to what was sent (INP can go down): nothing newer to send.
@@ -277,7 +281,7 @@ export function installMonitoring(): void {
       return;
     }
     const path = m.name === 'LCP' ? loadedPath : currentRoute();
-    pending.set(m.id, { id: m.id, name: m.name, value: m.value, rating: m.rating, path });
+    pending.set(m.id, { id: m.id, name: m.name, value: m.value, rating: m.rating, path, seq: ++seq });
   };
   // Part of the entry bundle (about 2 KB), not loaded later: a visitor who
   // gives up on a slow load before a separate chunk arrived would send no

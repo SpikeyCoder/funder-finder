@@ -301,3 +301,12 @@ Deno.test("a value Postgres quotes in an input error is a value", () => {
   assertEquals(normalizeMessage('invalid input syntax for type uuid: "abc"'), "invalid input syntax for type uuid: <str>");
   assertEquals(normalizeMessage('invalid input syntax for type integer: "hello"'), normalizeMessage('invalid input syntax for type integer: "x"'));
 });
+
+Deno.test("parseVitals passes each metric's seq through, and checks it", () => {
+  const base = { id: "v5-1696300000000-1234567890123", name: "INP", value: 300, rating: "good", path: "/" };
+  const rows = parseVitals({ metrics: [{ ...base, seq: 7 }] });
+  if (typeof rows === "string") throw new Error(rows);
+  assertEquals(rows[0].seq, 7);
+  assertEquals(parseVitals({ metrics: [{ ...base, seq: -1 }] }), "Invalid seq");
+  assertEquals(parseVitals({ metrics: [{ ...base, seq: 1.5 }] }), "Invalid seq");
+});
