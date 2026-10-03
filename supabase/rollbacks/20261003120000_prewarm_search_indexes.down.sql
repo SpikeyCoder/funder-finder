@@ -18,16 +18,16 @@
 DO $$
 DECLARE
   v_job_id bigint;
+  v_purge_id bigint;
 BEGIN
   SELECT jobid INTO v_job_id FROM cron.job WHERE jobname = 'prewarm-search-indexes';
-  -- Its run history (matched as the purge does); nothing would purge it once
-  -- the purge job is gone.
+  SELECT jobid INTO v_purge_id FROM cron.job WHERE jobname = 'purge-prewarm-run-details';
+  IF v_job_id IS NOT NULL THEN PERFORM cron.unschedule(v_job_id); END IF;
+  IF v_purge_id IS NOT NULL THEN PERFORM cron.unschedule(v_purge_id); END IF;
+  -- Then its run history (matched as the purge does); nothing would purge it
+  -- once the purge job is gone.
   DELETE FROM cron.job_run_details
    WHERE jobid = v_job_id OR command = 'SELECT public.prewarm_search_indexes()';
-  IF v_job_id IS NOT NULL THEN PERFORM cron.unschedule(v_job_id); END IF;
-  v_job_id := NULL;
-  SELECT jobid INTO v_job_id FROM cron.job WHERE jobname = 'purge-prewarm-run-details';
-  IF v_job_id IS NOT NULL THEN PERFORM cron.unschedule(v_job_id); END IF;
 END $$;
 
 DROP FUNCTION IF EXISTS public.prewarm_search_indexes();

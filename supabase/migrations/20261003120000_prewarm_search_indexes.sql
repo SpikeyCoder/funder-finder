@@ -139,10 +139,10 @@ SELECT cron.schedule(
 -- current jobid or its command, so history from an earlier jobid (the job
 -- unscheduled and scheduled again) is purged too, and so is history from
 -- before a change to its command (but not both at once: whoever changes both
--- should purge the old rows). A run cut off by a restart
--- before it started has no timestamps and isn't aged out: it's the record of
--- the restart, and there's at most one per restart. Logs its row count, like
--- the other purge_* functions.
+-- should purge the old rows). A run that failed before it started (a
+-- restart, no connection) has no timestamps; it's aged by its runid instead,
+-- which pg_cron assigns in order: older than the first run that started in
+-- the last 30 days. Logs its row count, like the other purge_* functions.
 -- Daily at 10:40 UTC, after the other 10:xx purge jobs.
 
 CREATE OR REPLACE FUNCTION public.purge_prewarm_run_details()
@@ -156,7 +156,10 @@ BEGIN
   DELETE FROM cron.job_run_details
    WHERE (jobid IN (SELECT jobid FROM cron.job WHERE jobname = 'prewarm-search-indexes')
           OR command = 'SELECT public.prewarm_search_indexes()')
-     AND coalesce(end_time, start_time) < now() - interval '30 days';
+     AND (coalesce(end_time, start_time) < now() - interval '30 days'
+          OR (start_time IS NULL AND end_time IS NULL
+              AND runid < (SELECT min(runid) FROM cron.job_run_details
+                            WHERE start_time >= now() - interval '30 days')));
   GET DIAGNOSTICS v_deleted = ROW_COUNT;
   RAISE LOG 'purge_prewarm_run_details: deleted % rows', v_deleted;
   RETURN v_deleted;
