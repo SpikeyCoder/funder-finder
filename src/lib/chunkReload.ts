@@ -111,7 +111,10 @@ export function onReloadPageFor(error: unknown): boolean {
     const last = JSON.parse(sessionStorage.getItem(LAST_RELOAD_KEY) || 'null') as { key?: string; at?: number } | null;
     if (!last || typeof last.at !== 'number') return false;
     if (last.key !== reloadKey(error, window.location.pathname, currentBuild())) return false;
-    const sinceReload = performance.timeOrigin - last.at;
+    // When this page started loading, on the same wall clock as `at`
+    // (timeOrigin is monotonic and can drift from Date.now(), e.g. after
+    // the machine sleeps).
+    const sinceReload = Date.now() - performance.now() - last.at;
     return sinceReload >= 0 && sinceReload < RELOAD_PAGE_WINDOW_MS;
   } catch {
     return false;

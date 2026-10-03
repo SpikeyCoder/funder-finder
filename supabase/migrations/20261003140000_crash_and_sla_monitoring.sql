@@ -22,7 +22,7 @@
 -- Only the public Edge Function writes reports, and only the sweep opens
 -- cards, so flooding the endpoint can't flood Trello: at most 10 crash cards
 -- a day plus one summary, and 5 page-speed cards, whatever is reported. Reports are rate-limited per
--- IP in the function (crashes 10/h, vitals 120/h).
+-- IP in the function (crashes 30/h, vitals 120/h).
 --
 -- Access: RLS on, no policies, no grants to anon/authenticated; only the
 -- service role (the two Edge Functions) touches these tables.

@@ -168,16 +168,19 @@ export function installMonitoring(): void {
   });
   window.addEventListener('unhandledrejection', (event) => reportCrash('rejection', event.reason));
 
-  // Core Web Vitals, sent whenever the page is hidden: web-vitals reports a
-  // metric's value then, and again on a later hide if it changed (INP and CLS
-  // keep growing while the page is open). Only changed values are sent; the
-  // server keeps the latest per metric id. web-vitals listens on window in
-  // the capture phase, so it reports before the flush below (on document)
-  // runs, whenever it was loaded.
-  const pending = new Map<string, Metric>();
+  // Core Web Vitals, sent whenever the page is hidden, and again on a later
+  // hide if a value changed (INP and CLS keep growing while the page is
+  // open); the server keeps the latest per metric id. Each change is
+  // recorded with the route it happened on: with reportAllChanges,
+  // web-vitals calls back as an LCP candidate paints, a new worst interaction
+  // (INP) finishes or a layout shift (CLS) happens, so the path then is where
+  // the slow thing was, not where the visitor is when the tab is hidden.
+  // web-vitals also reports on hide, listening on window in the capture
+  // phase, so final values land before the flush below (on document) runs.
+  const pending = new Map<string, { m: Metric; path: string }>();
   const sentValues = new Map<string, number>();
   const record = (m: Metric) => {
-    if (sentValues.get(m.id) !== m.value) pending.set(m.id, m);
+    if (sentValues.get(m.id) !== m.value) pending.set(m.id, { m, path: normalizePath(window.location.pathname) });
   };
   // Loaded once the browser is idle (at most a second in), so its chunk
   // doesn't compete with the first page's; its observers read buffered
@@ -186,38 +189,23 @@ export function installMonitoring(): void {
   const load = () =>
     void import('web-vitals')
       .then(({ onLCP, onINP, onCLS }) => {
-        onLCP(record);
-        onINP(record);
-        onCLS(record);
+        onLCP(record, { reportAllChanges: true });
+        onINP(record, { reportAllChanges: true });
+        onCLS(record, { reportAllChanges: true });
       })
       .catch(() => {});
   if ('requestIdleCallback' in window) window.requestIdleCallback(load, { timeout: 1000 });
   else setTimeout(load, 500);
-  // LCP describes the page load, so it keeps the landing page's path; INP
-  // and CLS accumulate across client-side navigations, so they take the
-  // path the visitor is on when they're reported.
-  let path = normalizePath(window.location.pathname);
-  // A page restored from the back/forward cache gets a new LCP (and new
-  // metric ids) for the route it was restored on.
-  window.addEventListener('pageshow', (e) => {
-    if (e.persisted) path = normalizePath(window.location.pathname);
-  });
   const flush = () => {
     if (pending.size === 0) return;
     const metrics = [...pending.values()];
     pending.clear();
-    for (const m of metrics) sentValues.set(m.id, m.value);
+    for (const { m } of metrics) sentValues.set(m.id, m.value);
     send({
       type: 'vitals',
-      path,
+      path: normalizePath(window.location.pathname),
       release: currentBuild().slice(0, 100),
-      metrics: metrics.map((m) => ({
-        id: m.id,
-        name: m.name,
-        value: m.value,
-        rating: m.rating,
-        path: m.name === 'LCP' ? path : normalizePath(window.location.pathname),
-      })),
+      metrics: metrics.map(({ m, path }) => ({ id: m.id, name: m.name, value: m.value, rating: m.rating, path })),
     });
   };
   document.addEventListener('visibilitychange', () => {

@@ -144,7 +144,8 @@ test('a corrupt stored value is treated as empty, not as a crash', () => {
 
 test('onReloadPageFor: only the page our reload loaded, for the same failure', () => {
   const realPerformance = globalThis.performance;
-  const pageStartedAt = (ms) => Object.defineProperty(globalThis, 'performance', { value: { timeOrigin: ms }, configurable: true });
+  // The page started loading at wall time `ms` (Date.now() - performance.now()).
+  const pageStartedAt = (ms) => Object.defineProperty(globalThis, 'performance', { value: { now: () => Date.now() - ms }, configurable: true });
   try {
     const before = Date.now();
     assert.equal(reloadOnceForChunkError(LINK), 'reloading');

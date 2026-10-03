@@ -60,6 +60,11 @@ Deno.test("message normalisation keeps the meaning, drops values and minified na
   assertEquals(normalizeMessage("e is undefined"), "<id> is undefined");
   assertEquals(normalizeMessage('No funder "Ford Foundation 2024" found'), "No funder <str> found");
   assertEquals(normalizeMessage("Request 42 failed at https://x/y"), "Request <n> failed at <url>");
+  // HTTP statuses are different failures; other numbers aren't.
+  assertEquals(normalizeMessage("Request failed with status code 401"), "Request failed with status code 401");
+  assertEquals(normalizeMessage("HTTP 500 from server"), "HTTP 500 from server");
+  assertEquals(normalizeMessage("Expected 200 rows"), "Expected <n> rows");
+  assertEquals(normalizeMessage("status code 12345"), "status code <n>");
   // Safari quotes expressions; Firefox doesn't: minified parts go either way.
   assertEquals(
     normalizeMessage("undefined is not an object (evaluating 'n.current.focus')"),

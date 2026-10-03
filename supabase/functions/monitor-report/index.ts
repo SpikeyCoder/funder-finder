@@ -30,8 +30,9 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
 const MAX_BODY_BYTES = 16 * 1024;
 // A page load sends at most 5 crash reports, and a vitals report each time
-// it's hidden with a changed value.
-const RATE_LIMITS = { crash: 10, vitals: 120 } as const;
+// it's hidden with a changed value. Generous enough for an office of
+// visitors behind one IP; the board is protected by the sweep's card caps.
+const RATE_LIMITS = { crash: 30, vitals: 120 } as const;
 const RATE_WINDOW_MS = 60 * 60 * 1000;
 
 const VITAL_LIMITS: Record<string, number> = { LCP: 600_000, INP: 600_000, CLS: 100 };
@@ -103,8 +104,9 @@ export function normalizeMessage(message: string): string {
         : m)
     .replace(/\b0x[0-9a-f]+\b/gi, "<n>")
     // Numbered error codes stay: React's "Minified React error #418" and
-    // "#310" are different bugs.
-    .replace(/(?<![#\d])\d+/g, "<n>")
+    // "#310" are different bugs, and so are "status code 401" and "… 500".
+    .replace(/(?<![#\d])\d+/g, (d, offset: number, all: string) =>
+      /^[1-5]\d\d$/.test(d) && /(?:status|code|http)\W*$/i.test(all.slice(Math.max(0, offset - 16), offset)) ? d : "<n>")
     .trim();
 }
 
