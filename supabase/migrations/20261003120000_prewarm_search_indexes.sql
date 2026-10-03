@@ -44,11 +44,13 @@
 -- rename shows as a failed run in cron.job_run_details. (What was read stays
 -- cached: page-cache reads aren't undone by the rollback.)
 --
--- Locks: a run holds AccessShareLock on the indexes it has read until it
--- returns. That conflicts only with DDL on these tables, not with the batch
--- loads' INSERT/UPDATE. A run takes ~45 ms when cached and under a second when
--- half is cold (measured); a fully cold run after a restart reads ~200 MB and
--- can take a few seconds. An index whose lock it can't get within 1 s (DDL in
+-- Locks: pg_prewarm takes AccessShareLock on one index at a time and releases
+-- it when that index is read (checked on production: no lock held after the
+-- call), so a run holds at most one index lock, for at most one index's read.
+-- That conflicts only with DDL on these tables, not with the batch loads'
+-- INSERT/UPDATE. A run takes ~45 ms when cached and under a second when half
+-- is cold (measured); a fully cold run after a restart reads ~200 MB and can
+-- take a few seconds. An index whose lock it can't get within 1 s (DDL in
 -- progress) is skipped rather than waited for.
 --
 -- The job adds 288 rows a day to cron.job_run_details, which nothing purges;

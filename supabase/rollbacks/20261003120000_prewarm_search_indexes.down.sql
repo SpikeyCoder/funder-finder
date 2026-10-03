@@ -15,6 +15,8 @@
 --
 -- Apply manually: psql "$DATABASE_URL" -f supabase/rollbacks/20261003120000_prewarm_search_indexes.down.sql
 
+BEGIN;
+
 DO $$
 DECLARE
   v_job_id bigint;
@@ -34,3 +36,5 @@ DROP FUNCTION IF EXISTS public.prewarm_search_indexes();
 DROP FUNCTION IF EXISTS public.purge_prewarm_run_details();
 
 DROP EXTENSION IF EXISTS pg_prewarm;
+
+COMMIT;
