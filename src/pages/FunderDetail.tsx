@@ -12,7 +12,6 @@ import Footer from '../components/Footer';
 import NavBar from '../components/NavBar';
 import { SUPABASE_URL } from '../lib/supabaseProject';
 
-
 /** Classify giving trend as increasing / stable / decreasing (FEAT-006) */
 function classifyTrend(yearTrend: { year: number; totalAmount: number }[]): { label: string; color: string } | null {
   if (yearTrend.length < 3) return null;

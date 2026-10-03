@@ -44,13 +44,12 @@ const MAX_CARD_TRIES = 10;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const WEEK_MS = 7 * DAY_MS;
 // No new card is started after this long into a run: a card takes up to
-// ~37 s (its claim, Trello's timeout, then recording its URL with retries),
+// ~37 s (its claim, Trello's timeout, then recording its URL with retries;
+// database calls time out at _shared/rest.ts's 7 s default),
 // and pg_net gives up on the run at 120 s (the Edge Function itself at
 // 150 s), which could leave a card opened but unrecorded (then opened again
 // an hour later).
 const RUN_CARD_DEADLINE_MS = 70_000;
-
-const FETCH_TIMEOUT_MS = 7000;
 
 // Search SLA: a check fails if it doesn't return 200 with at least one
 // result within SLA_MS (every query below has matches). The 3 s anon

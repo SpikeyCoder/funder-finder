@@ -13,7 +13,9 @@ export function restConfigured(): boolean {
 /** A PostgREST request. `init` can override the method, body and headers. */
 export function rest(path: string, init: RequestInit = {}, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<Response> {
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-  // Caller headers win, in any form (object, Headers or pairs).
+  // Caller headers are kept, in any form (object, Headers or pairs), except
+  // apikey and Authorization: these are always the service key, so a caller
+  // can't swap in another credential through this helper.
   const headers = new Headers(init.headers);
   headers.set("apikey", key);
   headers.set("Authorization", `Bearer ${key}`);

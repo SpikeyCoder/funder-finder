@@ -340,4 +340,6 @@ Deno.test("unquoted tokens are values", () => {
 Deno.test("schema-qualified table names stay: different tables are different bugs", () => {
   assertEquals(normalizeMessage('relation "public.tracked_grants" does not exist'), 'relation "public.tracked_grants" does not exist');
   assertEquals(normalizeMessage("No account found for 'jane.doe'"), "No account found for <str>");
+  // A value that only looks schema-qualified is still a value.
+  assertEquals(normalizeMessage("No project named 'net.jane'"), "No project named <str>");
 });

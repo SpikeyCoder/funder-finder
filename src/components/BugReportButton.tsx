@@ -4,7 +4,6 @@ import { X, Bug, Loader2, Camera, CheckCircle, AlertCircle, Lightbulb } from 'lu
 import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import { SUPABASE_URL } from '../lib/supabaseProject';
 
-
 interface CapturedError {
   message: string;
   timestamp: number;

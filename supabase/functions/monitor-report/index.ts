@@ -26,7 +26,6 @@ import { corsHeaders } from "../_shared/cors.ts";
 // The browser scrubs with the same module; redone here because reports are untrusted.
 import { errorTypeName, FRAME, normalizePath, scrub } from "../_shared/monitor_scrub.ts";
 
-
 // The client caps fields by characters (about 6,600 in all); in bytes that
 // can be several times more (3-byte CJK, 6-byte \uXXXX JSON escapes).
 const MAX_BODY_BYTES = 48 * 1024;
@@ -85,6 +84,8 @@ const usedAsName = (next: string | undefined, rest: string) =>
 const GLOBALS = new Set(["window", "document", "navigator", "location", "globalThis", "self", "this", "Math", "JSON", "Object", "Array", "Promise", "React"]);
 // Database schemas a quoted table or function name starts with ("relation
 // "public.tracked_grants" does not exist"): different tables, different bugs.
+// Only in a message about a database object, so a value that happens to
+// start with one ('net.jane') is still a value.
 const SCHEMAS = new Set(["public", "auth", "storage", "extensions", "cron", "vault", "net"]);
 
 // A quoted part of a message: kept if it's code, a single identifier
@@ -92,7 +93,7 @@ const SCHEMAS = new Set(["public", "auth", "storage", "extensions", "cron", "vau
 // (one starting with a minified variable, which becomes <id>: Safari's
 // 'n.current.focus'; or with a global). Anything else is a value: a dotted
 // or hyphenated one could be a username or a project name ('jane.doe').
-function quoted(q: string, inner: string): string {
+function quoted(q: string, inner: string, aboutDbObject = false): string {
   if (inner === "<id>") return q + inner + q; // already replaced
   if (!/^[A-Za-z_$][\w$.]{0,39}$/.test(inner)) return "<str>";
   // A long token with digits in it is an id ('abcdef1234', 'a1b2c3d4…').
@@ -104,7 +105,7 @@ function quoted(q: string, inner: string): string {
   // a word like 'a'); the property names after it keep their names.
   const [first, ...props] = inner.split(".");
   if (/^[A-Za-z_$][\w$]?$/.test(first)) return q + ["<id>", ...props].join(".") + q;
-  return GLOBALS.has(first) || SCHEMAS.has(first) ? q + inner + q : "<str>";
+  return GLOBALS.has(first) || (aboutDbObject && SCHEMAS.has(first)) ? q + inner + q : "<str>";
 }
 
 /**
@@ -133,7 +134,8 @@ export function normalizeMessage(message: string): string {
     // lexical declaration 'Xt' before initialization" (Firefox).
     .replace(/(access (?:lexical declaration )?)(["'`])[A-Za-z_$][\w$]?\2/gi, "$1$2<id>$2")
     // A quote right after a letter is an apostrophe ("can't"), not a quote.
-    .replace(/(?<![A-Za-z])(["'`])(.*?)\1/g, (_m, q, inner) => quoted(q, inner))
+    .replace(/(?<![A-Za-z])(["'`])(.*?)\1/g, (_m, q, inner) =>
+      quoted(q, inner, /\b(?:relation|table|view|function|column|schema|constraint|index|sequence)\b/i.test(message)))
     // Postgres quotes the input it rejected ("invalid input syntax for type
     // uuid: "abc""): a value, even if it's one word.
     .replace(/(invalid input (?:syntax|value) for [\w ]+:\s*)"(?:<id>|[^"]*)"/gi, "$1<str>")

@@ -20,9 +20,10 @@
  * must not become "Students Feeding Oahu Foundation".
  *
  * Invoked every 15 minutes by pg_cron via public.invoke_organization_request_
- * processor(). Requires CRON_SECRET (X-Cron-Secret or `Bearer cron:<secret>`),
- * and unlike send-reminders it fails CLOSED when CRON_SECRET is unset: this
- * function writes to recipient_organizations and sends email.
+ * processor(). Requires CRON_SECRET (X-Cron-Secret or `Bearer cron:<secret>`)
+ * and, like every cron-only function (_shared/cron_auth.ts), fails CLOSED
+ * when CRON_SECRET is unset: this function writes to recipient_organizations
+ * and sends email.
  *
  * Deploy with `--no-verify-jwt`, like send-reminders / process-notifications:
  * pg_net sends no JWT, so the gateway would reject every call otherwise. The

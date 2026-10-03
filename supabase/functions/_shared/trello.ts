@@ -98,7 +98,9 @@ export async function attachUrlToTrelloCard(cardId: string, url: string, name: s
       body: new URLSearchParams({ url, name }),
       signal: AbortSignal.timeout(timeoutMs),
     });
-    if (!res.ok) console.warn("Trello attachment failed:", res.status);
+    // Read the body either way, so the connection is released.
+    const text = await res.text().catch(() => "");
+    if (!res.ok) console.warn("Trello attachment failed:", res.status, text.slice(0, 200));
     return res.ok;
   } catch (err) {
     console.warn("Trello attachment failed:", err);

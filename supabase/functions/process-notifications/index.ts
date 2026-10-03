@@ -35,7 +35,6 @@ function escapeHtml(input: unknown): string {
     .replace(/'/g, '&#39;');
 }
 
-
 // FM-2026-06-17-04: defense-in-depth cron-only auth gate. This endpoint is
 // designed to be invoked by pg_cron / the Supabase scheduler -- it uses
 // the service-role key internally and has no per-user authorization.
@@ -61,7 +60,6 @@ if (!cronAuthorized(req, Deno.env.get('CRON_SECRET') || '')) {
     headers: { ...CORS_HEADERS(req), 'Content-Type': 'application/json' },
   });
 }
-
 
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
