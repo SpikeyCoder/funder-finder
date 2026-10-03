@@ -179,8 +179,10 @@ export function reportCrash(kind: CrashKind, error: unknown, componentStack = ''
     pageReports.count++;
     void send(report).then((delivered) => {
       // Not delivered (offline, rate-limited, server error): the next time
-      // it happens may get through.
-      if (!delivered) sentCrashes.delete(key);
+      // it happens may get through, and it doesn't use up the route's cap.
+      if (delivered) return;
+      sentCrashes.delete(key);
+      if (pageReports.path === route) pageReports.count--;
     });
   } catch {
     // Reporting must never break the page.

@@ -136,14 +136,15 @@ SET search_path = ''
 AS $$
   -- A regression first starts over as if new (count 0, no card; the upsert
   -- below then counts it), so the 7-day rule lives in one place. Carded
-  -- crashes, and ones whose card timed out (it may exist).
+  -- crashes, ones whose card timed out (it may exist), and ones the sweep
+  -- gave up carding (10 tries: MAX_CARD_TRIES in monitor-sweep).
   UPDATE public.monitor_crashes
      SET occurrences = 0, first_seen = now(), kind = p_kind,
          -- (A timed-out card has no URL: keep the link to the one before.)
          previous_card_url = coalesce(trello_card_url, previous_card_url),
          trello_card_url = NULL, card_uncertain_at = NULL, card_attempted_at = NULL, card_attempts = 0
    WHERE fingerprint = p_fingerprint AND last_seen < now() - interval '7 days'
-     AND (trello_card_url IS NOT NULL OR card_uncertain_at IS NOT NULL)
+     AND (trello_card_url IS NOT NULL OR card_uncertain_at IS NOT NULL OR card_attempts >= 10)
      AND card_attempted_at < now() - interval '7 days';
 
   -- Its card timed out a day or more ago (it may or may not exist) and it's

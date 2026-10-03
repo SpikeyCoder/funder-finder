@@ -35,8 +35,12 @@ export const MAX_CRASH_CARDS_PER_DAY = 10;
 // A crash or alert claimed for a card that didn't get one is retried after
 // this long.
 const RETRY_AFTER_MS = 60 * 60 * 1000;
-// After this many failed attempts a crash is retried daily instead.
+// After this many failed attempts a crash is retried daily instead, and
+// after MAX_CARD_TRIES (about a week of daily tries) not at all: Trello
+// rejects that card, and it mustn't take a daily slot forever. It's tried
+// again if it comes back after 7 quiet days (record_client_crash).
 const MAX_CARD_ATTEMPTS = 3;
+const MAX_CARD_TRIES = 10; // also in record_client_crash (migration 20261003140000)
 const DAY_MS = 24 * 60 * 60 * 1000;
 // No new card is started after this long into a run: a card takes up to
 // ~30 s (Trello's timeout, then recording its URL with retries), and the
@@ -122,6 +126,9 @@ export function crashCard(c: CrashRow): { name: string; desc: string } {
       "",
       `**Occurrences:** ${c.occurrences} (first ${c.first_seen}, last ${c.last_seen})`,
       c.previous_card_url ? `**Came back** after 7+ quiet days; earlier card: ${c.previous_card_url}` : "",
+      c.card_attempts > 0
+        ? `**Earlier tries:** ${c.card_attempts} (one may have opened a card if Trello was slow; search the board for this fingerprint)`
+        : "",
       `**Page:** ${code(c.path)}`,
       `**Build:** ${c.release ? code(c.release) : "unknown"}`,
       `**Browser (latest):** ${c.user_agent ? code(c.user_agent) : "unknown"}`,
@@ -304,7 +311,7 @@ async function openAlertCard(
   if (((await claim.json()) as unknown[]).length !== 1) return null; // another run updated it first
   const url = cardUrl(await createTrelloCard(card));
   if (!url) return null;
-  await recordCard(`monitor_alerts?alert_key=eq.${encodeURIComponent(key)}`, url, key);
+  await recordCard(`monitor_alerts?alert_key=eq.${encodeURIComponent(key)}`, { trello_card_url: url }, `card ${url} for alert ${key}`);
   return url;
 }
 
@@ -320,22 +327,23 @@ export function cardUrl(result: string | null | "unconfigured" | "timeout"): str
 }
 
 /**
- * Record an opened card's URL, retrying twice: until it's recorded, the
- * claim alone holds a retry off for RETRY_AFTER_MS, after which a second
- * card could be opened. Logged if it still fails.
+ * Record what became of a card (its URL, or that its call timed out),
+ * retrying twice: until it's recorded, the claim alone holds a retry off for
+ * RETRY_AFTER_MS, after which a second card could be opened. Logged if it
+ * still fails.
  */
-async function recordCard(target: string, url: string, what: string): Promise<void> {
+async function recordCard(target: string, fields: Record<string, string>, what: string): Promise<void> {
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const res = await rest(target, {
         method: "PATCH",
         headers: { Prefer: "return=minimal" },
-        body: JSON.stringify({ trello_card_url: url }),
+        body: JSON.stringify(fields),
       });
       if (res.ok) return;
-      console.error(`monitor-sweep: recording ${url} for ${what} failed (attempt ${attempt}):`, res.status, await res.text());
+      console.error(`monitor-sweep: recording ${what} failed (attempt ${attempt}):`, res.status, await res.text());
     } catch (err) {
-      console.error(`monitor-sweep: recording ${url} for ${what} failed (attempt ${attempt}):`, err);
+      console.error(`monitor-sweep: recording ${what} failed (attempt ${attempt}):`, err);
     }
     if (attempt < 3) await new Promise((r) => setTimeout(r, 500 * attempt));
   }
@@ -401,7 +409,7 @@ async function sweepCrashes(summary: Summary, deadline: number): Promise<void> {
     ),
     // Not tried in the last day: each uses the daily budget.
     restJson<CrashRow[]>(
-      `${uncarded}&or=(card_attempted_at.is.null,card_attempted_at.lt.${iso(now - DAY_MS)})${select}&limit=${MAX_CRASH_CARDS}`,
+      `${uncarded}&card_attempts=lt.${MAX_CARD_TRIES}&or=(card_attempted_at.is.null,card_attempted_at.lt.${iso(now - DAY_MS)})${select}&limit=${MAX_CRASH_CARDS}`,
     ),
   ]);
   const dayLeft = MAX_CRASH_CARDS_PER_DAY - triedToday;
@@ -427,18 +435,18 @@ async function sweepCrashes(summary: Summary, deadline: number): Promise<void> {
     if (result === "timeout") {
       // The card may exist: not retried (no duplicate) until the crash
       // happens again a day later (record_client_crash clears this).
-      const res = await rest(`monitor_crashes?fingerprint=eq.${c.fingerprint}`, {
-        method: "PATCH",
-        body: JSON.stringify({ card_uncertain_at: new Date().toISOString() }),
-      });
-      if (!res.ok) console.error(`monitor-sweep: marking crash ${c.fingerprint} uncertain failed:`, res.status, await res.text());
+      await recordCard(
+        `monitor_crashes?fingerprint=eq.${c.fingerprint}`,
+        { card_uncertain_at: new Date().toISOString() },
+        `crash ${c.fingerprint} timed out`,
+      );
       continue;
     }
     const url = cardUrl(result);
     // Trello rejected or failed: retried in an hour (the claim counts as an
     // attempt), without holding up the rest.
     if (!url) continue;
-    await recordCard(`monitor_crashes?fingerprint=eq.${c.fingerprint}`, url, `crash ${c.fingerprint}`);
+    await recordCard(`monitor_crashes?fingerprint=eq.${c.fingerprint}`, { trello_card_url: url }, `card ${url} for crash ${c.fingerprint}`);
     carded++;
   }
   summary.crash_cards = carded;
@@ -450,7 +458,7 @@ async function sweepCrashes(summary: Summary, deadline: number): Promise<void> {
   ))[0] ?? null;
   if (!alertDue(overflow, DAY_MS)) return;
   const waiting = await restCount(
-    `monitor_crashes?trello_card_url=is.null&card_uncertain_at=is.null&or=(card_attempted_at.is.null,card_attempted_at.lt.${iso(now - DAY_MS)})`,
+    `monitor_crashes?trello_card_url=is.null&card_uncertain_at=is.null&card_attempts=lt.${MAX_CARD_TRIES}&or=(card_attempted_at.is.null,card_attempted_at.lt.${iso(now - DAY_MS)})`,
   );
   summary.crashes_waiting = waiting;
   if (waiting > 0) {
