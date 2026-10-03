@@ -36,6 +36,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { einVariants, padEin } from "../_shared/ein.ts";
 import { cronAuthorized } from "../_shared/cron_auth.ts";
 import { createTrelloCard } from "../_shared/trello.ts";
+import { rest, restJson } from "../_shared/rest.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -119,25 +120,6 @@ export function pickExactMatch(query: string, state: string | null, results: Irs
 }
 
 // ── IO ──────────────────────────────────────────────────────────────────────
-
-function rest(path: string, init: RequestInit = {}): Promise<Response> {
-  return fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    ...init,
-    headers: {
-      apikey: SERVICE_KEY,
-      Authorization: `Bearer ${SERVICE_KEY}`,
-      "Content-Type": "application/json",
-      ...(init.headers || {}),
-    },
-  });
-}
-
-async function restJson<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await rest(path, init);
-  if (!res.ok) throw new Error(`REST ${path.split("?")[0]} ${res.status}: ${await res.text()}`);
-  return await res.json() as T;
-}
 
 async function propublica(path: string): Promise<Record<string, unknown> | null> {
   const res = await fetch(`${PROPUBLICA}${path}`, {

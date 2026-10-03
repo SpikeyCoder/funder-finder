@@ -1,7 +1,9 @@
-// Authentication for Edge Functions called by pg_cron (through pg_net), which
-// sends CRON_SECRET from Vault. Same scheme as send-reminders and
-// process-organization-requests: `X-Cron-Secret: <secret>` or
-// `Authorization: Bearer cron:<secret>`. Fails closed when CRON_SECRET is unset.
+// Authentication for Edge Functions called by a scheduler (pg_cron through
+// pg_net, which sends CRON_SECRET from Vault): `X-Cron-Secret: <secret>` or
+// `Authorization: Bearer cron:<secret>`. Fails closed when CRON_SECRET is
+// unset. Used by every cron-only function: send-reminders,
+// process-notifications, check-deadlines, process-organization-requests and
+// monitor-sweep.
 
 function constantTimeEqual(a: string, b: string): boolean {
   let diff = a.length ^ b.length;

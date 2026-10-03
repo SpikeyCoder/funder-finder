@@ -25,6 +25,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { cronAuthorized } from "../_shared/cron_auth.ts";
 import { createTrelloCard, trelloConfigured } from "../_shared/trello.ts";
+import { rest, restCount, restJson } from "../_shared/rest.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -221,25 +222,6 @@ export function crashOverflowCard(waiting: number): { name: string; desc: string
 
 // ── IO ──────────────────────────────────────────────────────────────────────
 
-function rest(path: string, init: RequestInit = {}): Promise<Response> {
-  return fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    ...init,
-    headers: {
-      apikey: SERVICE_KEY,
-      Authorization: `Bearer ${SERVICE_KEY}`,
-      "Content-Type": "application/json",
-      ...(init.headers || {}),
-    },
-  });
-}
-
-async function restJson<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await rest(path, init);
-  if (!res.ok) throw new Error(`REST ${path.split("?")[0]} ${res.status}: ${await res.text()}`);
-  return await res.json() as T;
-}
-
 async function runSlaCheck(query: string): Promise<SlaCheck> {
   const t0 = Date.now();
   try {
@@ -355,17 +337,6 @@ async function recordCard(target: string, fields: Record<string, string>, what: 
     }
     if (attempt < 3) await new Promise((r) => setTimeout(r, 500 * attempt));
   }
-}
-
-/** Exact row count for a PostgREST query (from Content-Range). */
-async function restCount(path: string): Promise<number> {
-  const res = await rest(path, { method: "HEAD", headers: { Prefer: "count=exact" } });
-  if (!res.ok) throw new Error(`REST ${path.split("?")[0]} count ${res.status}`);
-  // No readable count is an error, not 0: the daily cap is counted this way,
-  // and reading 0 would lift it.
-  const total = Number(res.headers.get("content-range")?.split("/")[1] ?? NaN);
-  if (!Number.isFinite(total)) throw new Error(`REST ${path.split("?")[0]} count unreadable`);
-  return total;
 }
 
 export type Summary = Record<string, number | string>;

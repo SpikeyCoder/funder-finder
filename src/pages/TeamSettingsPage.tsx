@@ -8,8 +8,8 @@ import {
   ChevronDown, ChevronRight, Users, FolderOpen, AlertCircle,
   CheckCircle, Loader, X, Search, Briefcase
 } from 'lucide-react';
+import { SUPABASE_URL } from '../lib/supabaseProject';
 
-const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const TEAM_INVITE_URL = `${SUPABASE_URL}/functions/v1/team-invite`;
 
 // ── Types ────────────────────────────────────────────────────────────────────

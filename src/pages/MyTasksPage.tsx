@@ -5,8 +5,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
 import type { GrantTask, PortfolioGrant } from '../types';
+import { SUPABASE_URL } from '../lib/supabaseProject';
 
-const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const GRANT_TASKS_URL = `${SUPABASE_URL}/functions/v1/grant-tasks`;
 const PORTFOLIO_URL = `${SUPABASE_URL}/functions/v1/portfolio`;
 const TEAM_INVITE_URL = `${SUPABASE_URL}/functions/v1/team-invite`;

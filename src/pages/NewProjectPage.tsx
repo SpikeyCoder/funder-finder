@@ -4,8 +4,9 @@ import { ChevronRight, ChevronLeft, X, Sparkles } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
+import { SUPABASE_URL } from '../lib/supabaseProject';
 
-const MATCH_FUNDERS_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co/functions/v1/match-funders';
+const MATCH_FUNDERS_URL = `${SUPABASE_URL}/functions/v1/match-funders`;
 
 interface SearchCriteria {
   locations: string[];

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import NavBar from '../components/NavBar';
 import Footer from '../components/Footer';
+import { SUPABASE_URL } from '../lib/supabaseProject';
 
 export default function ContactPage() {
   // Fix stale-title carryover when navigating from other SPA routes (audit P2 2026-05-04).
@@ -25,7 +26,7 @@ export default function ContactPage() {
 
     try {
       const res = await fetch(
-        'https://tgtotjvdubhjxzybmdex.supabase.co/functions/v1/contact-form',
+        `${SUPABASE_URL}/functions/v1/contact-form`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

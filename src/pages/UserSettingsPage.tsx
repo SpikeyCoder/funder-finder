@@ -4,8 +4,8 @@ import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import NavBar from '../components/NavBar';
 import type { NotificationPreferences, TeamNotificationPreferences, CalendarFeed } from '../types';
+import { SUPABASE_URL } from '../lib/supabaseProject';
 
-const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const CALENDAR_FEED_URL = `${SUPABASE_URL}/functions/v1/calendar-feed`;
 
 const US_STATES = [

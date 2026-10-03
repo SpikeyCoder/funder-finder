@@ -3,8 +3,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
 import { Download, Filter, TrendingUp, DollarSign, Target, Award, Clock, BarChart3, PieChart } from 'lucide-react';
+import { SUPABASE_URL } from '../lib/supabaseProject';
 
-const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const REPORTS_URL = `${SUPABASE_URL}/functions/v1/reports-portfolio`;
 const GENERATE_URL = `${SUPABASE_URL}/functions/v1/generate-report`;
 

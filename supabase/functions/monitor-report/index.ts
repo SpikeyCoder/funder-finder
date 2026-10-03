@@ -21,6 +21,7 @@
  */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { ipRateLimit } from "../_shared/rate_limit.ts";
+import { rest } from "../_shared/rest.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 // The browser scrubs with the same module; redone here because reports are untrusted.
 import { errorTypeName, FRAME, normalizePath, scrub } from "../_shared/monitor_scrub.ts";
@@ -300,18 +301,10 @@ export async function readLimited(req: Request, max: number): Promise<string | n
 
 // ── Handler ─────────────────────────────────────────────────────────────────
 
-function rest(path: string, body: unknown, prefer = "return=minimal"): Promise<Response> {
-  return fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    method: "POST",
-    headers: {
-      apikey: SERVICE_KEY,
-      Authorization: `Bearer ${SERVICE_KEY}`,
-      "Content-Type": "application/json",
-      Prefer: prefer,
-    },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(5000),
-  });
+// A POST to PostgREST (an RPC or an insert), with a short timeout: the
+// browser that sent the report isn't waiting on it, but keep the function brief.
+function post(path: string, body: unknown, prefer = "return=minimal"): Promise<Response> {
+  return rest(path, { method: "POST", headers: { Prefer: prefer }, body: JSON.stringify(body) }, 5000);
 }
 
 if (import.meta.main) {
@@ -355,7 +348,7 @@ if (import.meta.main) {
     if (kind === "crash") {
       const row = await parseCrash(body, req.headers.get("user-agent") ?? "");
       if (typeof row === "string") return reply(400, row);
-      write = () => rest("rpc/record_client_crash", Object.fromEntries(Object.entries(row).map(([k, v]) => [`p_${k}`, v])));
+      write = () => post("rpc/record_client_crash", Object.fromEntries(Object.entries(row).map(([k, v]) => [`p_${k}`, v])));
     } else {
       const rows = parseVitals(body);
       if (typeof rows === "string") return reply(400, rows);
@@ -364,7 +357,7 @@ if (import.meta.main) {
       // earlier one, even if lower (INP can go down); one that arrives late
       // doesn't. It dates the row to now, so a tab open for days still
       // counts in the 24 h window. See record_vitals.
-      write = () => rest("rpc/record_vitals", { p_rows: rows });
+      write = () => post("rpc/record_vitals", { p_rows: rows });
     }
 
     if (!SUPABASE_URL || !SERVICE_KEY) {

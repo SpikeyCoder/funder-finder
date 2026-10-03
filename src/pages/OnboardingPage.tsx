@@ -6,8 +6,8 @@ import { ArrowRight, ArrowLeft, User, FolderPlus, Search, Bookmark, Sparkles } f
 import NavBar from '../components/NavBar';
 import OnboardingAdvisor from '../components/OnboardingAdvisor';
 import type { OrgProfile } from '../lib/onboardingAdvisor';
+import { SUPABASE_URL } from '../lib/supabaseProject';
 
-const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const ONBOARDING_URL = `${SUPABASE_URL}/functions/v1/onboarding`;
 
 const STEPS = [
