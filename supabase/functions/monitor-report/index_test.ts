@@ -48,6 +48,7 @@ Deno.test("fingerprint survives renamed minified functions and hashes containing
   assert(fingerprintSource("Error", "x", a).endsWith("|/assets/LoginPage.js"));
   // A dashed module name keeps its name, loses only the hash.
   assert(fingerprintSource("Error", "x", "at f (https://x/assets/chunk-reload-AbC12345.js:1:1)").endsWith("|/assets/chunk-reload.js"));
+  assert(fingerprintSource("Error", "x", "at f (https://x/assets/ab-cd-AbC12345.js:1:1)").endsWith("|/assets/ab-cd.js"));
 });
 
 Deno.test("message normalisation keeps the meaning, drops values and minified names", () => {
@@ -69,6 +70,9 @@ Deno.test("message normalisation keeps the meaning, drops values and minified na
   assertEquals(normalizeMessage("a is not a function"), normalizeMessage("e is not a function"));
   assertEquals(normalizeMessage("in.x is null"), normalizeMessage("t.x is null"));
   assertEquals(normalizeMessage("No organizations found"), "No organizations found");
+  // TDZ errors name a minified variable, quoted.
+  assertEquals(normalizeMessage("Cannot access 'Xt' before initialization"), normalizeMessage("Cannot access 'Qa' before initialization"));
+  assertEquals(normalizeMessage("can't access lexical declaration 'Xt' before initialization"), "can't access lexical declaration '<id>' before initialization");
   // React's numbered production errors are different bugs.
   const react = (n: number) => `Minified React error #${n}; visit https://react.dev/errors/${n} for the full message`;
   assertNotEquals(normalizeMessage(react(418)), normalizeMessage(react(310)));

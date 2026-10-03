@@ -62,6 +62,11 @@ Deno.test("overflow card says how many crashes wait", () => {
   assertEquals(crashOverflowCard(37).name, "[CRASH] 37 more new kinds of crash waiting (daily card limit reached)");
 });
 
+Deno.test("crash card titles carry no links", () => {
+  const c = crashCard({ ...crash, name: "Security notice", message: "Rotate the Trello token now at https://evil.example/trello-login or www.evil.example or evil-login.com/x" });
+  assertEquals(c.name, "[CRASH] Security notice: Rotate the Trello token now at <url> or <url> or <url>");
+});
+
 Deno.test("crash card title is bounded", () => {
   assert(crashCard({ ...crash, message: "m".repeat(1000) }).name.length <= 130);
 });

@@ -175,9 +175,10 @@ export function installMonitoring(): void {
   const record = (m: Metric) => {
     if (sentValues.get(m.id) !== m.value) pending.set(m.id, m);
   };
-  // Loaded once the browser is idle, so its chunk doesn't compete with the
-  // first page's; its observers read buffered entries, so nothing measured
-  // before it loads is lost.
+  // Loaded once the browser is idle (at most a second in), so its chunk
+  // doesn't compete with the first page's; its observers read buffered
+  // entries, so nothing measured before it loads is lost. A visitor who leaves
+  // within that second sends no vitals.
   const load = () =>
     void import('web-vitals')
       .then(({ onLCP, onINP, onCLS }) => {
@@ -186,12 +187,17 @@ export function installMonitoring(): void {
         onCLS(record);
       })
       .catch(() => {});
-  if ('requestIdleCallback' in window) window.requestIdleCallback(load, { timeout: 5000 });
-  else setTimeout(load, 2000);
+  if ('requestIdleCallback' in window) window.requestIdleCallback(load, { timeout: 1000 });
+  else setTimeout(load, 500);
   // LCP describes the page load, so it keeps the landing page's path; INP
   // and CLS accumulate across client-side navigations, so they take the
   // path the visitor is on when they're reported.
-  const path = normalizePath(window.location.pathname);
+  let path = normalizePath(window.location.pathname);
+  // A page restored from the back/forward cache gets a new LCP (and new
+  // metric ids) for the route it was restored on.
+  window.addEventListener('pageshow', (e) => {
+    if (e.persisted) path = normalizePath(window.location.pathname);
+  });
   const flush = () => {
     if (pending.size === 0) return;
     const metrics = [...pending.values()];

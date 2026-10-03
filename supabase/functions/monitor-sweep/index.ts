@@ -97,7 +97,13 @@ const fence = (s: string) => "```\n" + s.replace(/```/g, "ˋˋˋ") + "\n```";
 export const code = (s: string) => "`" + s.replace(/[`\n\r]/g, " ") + "`";
 
 export function crashCard(c: CrashRow): { name: string; desc: string } {
-  const title = `${c.name}: ${c.message}`.replace(/\s+/g, " ").slice(0, 120);
+  // The title is plain text but still reporter-supplied: no URLs or domains
+  // in it, so a forged report can't put a convincing link on the board.
+  const title = `${c.name}: ${c.message}`
+    .replace(/(?:https?:\/\/|www\.)\S+/gi, "<url>")
+    .replace(/\b[\w-]+(?:\.[\w-]+)*\.(?:com|org|net|io|dev|app|co|us|uk|info|biz|example)\b\S*/gi, "<url>")
+    .replace(/\s+/g, " ")
+    .slice(0, 120);
   return {
     name: `[CRASH] ${title}`,
     desc: [
@@ -357,13 +363,13 @@ async function sweepCrashes(summary: Summary, _trello: boolean): Promise<void> {
   // Due: no card yet, and never claimed, or last claimed over an hour ago
   // (over a day ago after MAX_CARD_ATTEMPTS failures: a long Trello outage
   // delays a card, it never loses one).
-  const due = await restJson<CrashRow[]>(
+  const budget = Math.min(MAX_CRASH_CARDS, MAX_CRASH_CARDS_PER_DAY - cardedToday);
+  const due = budget <= 0 ? [] : await restJson<CrashRow[]>(
     "monitor_crashes?trello_card_url=is.null" +
       `&or=(card_attempted_at.is.null,and(card_attempts.lt.${MAX_CARD_ATTEMPTS},card_attempted_at.lt.${iso(now - RETRY_AFTER_MS)}),card_attempted_at.lt.${iso(now - DAY_MS)})` +
       `&order=occurrences.desc,first_seen.asc&limit=${MAX_CRASH_CARDS}` +
       "&select=fingerprint,kind,name,message,stack,component_stack,path,release,user_agent,occurrences,first_seen,last_seen,card_attempts",
   );
-  const budget = Math.min(MAX_CRASH_CARDS, MAX_CRASH_CARDS_PER_DAY - cardedToday);
   let carded = 0;
   for (const c of due.slice(0, Math.max(0, budget))) {
     // Claim it (counts as an attempt) only if no other run has meanwhile.

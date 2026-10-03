@@ -74,6 +74,7 @@ const usedAsName = (next: string | undefined, atStart: boolean, rest: string) =>
 // minified segments of a dotted path replaced (Safari quotes whole
 // expressions: 'n.current.focus'); anything else is a value.
 function quoted(q: string, inner: string): string {
+  if (inner === "<id>") return q + inner + q; // already replaced
   if (!/^[A-Za-z_$][\w$.-]{0,39}$/.test(inner)) return "<str>";
   if (!inner.includes(".")) return q + inner + q;
   return q + inner.split(".").map((seg) => (minified(seg) ? "<id>" : seg)).join(".") + q;
@@ -88,7 +89,12 @@ function quoted(q: string, inner: string): string {
 export function normalizeMessage(message: string): string {
   return message
     .replace(/https?:\/\/\S+/g, "<url>")
-    .replace(/(["'`])(.*?)\1/g, (_m, q, inner) => quoted(q, inner))
+    // A variable named in a TDZ error is a minified name, quoted or not:
+    // "Cannot access 'Xt' before initialization" (Chrome), "can't access
+    // lexical declaration 'Xt' before initialization" (Firefox).
+    .replace(/(access (?:lexical declaration )?)(["'`])[A-Za-z_$][\w$]?\2/gi, "$1$2<id>$2")
+    // A quote right after a letter is an apostrophe ("can't"), not a quote.
+    .replace(/(?<![A-Za-z])(["'`])(.*?)\1/g, (_m, q, inner) => quoted(q, inner))
     // Unquoted too: Firefox says "t.current is null". A short word is a name
     // where it's used as one ("a is not a function", "in.x is null").
     .replace(/(^|[^\w$'"`<])([A-Za-z_$][\w$]?)(?=([^\w$'"`>]|$))/g, (m, pre, tok, next, offset, all) =>
@@ -115,9 +121,11 @@ export function fingerprintSource(name: string, message: string, stack: string):
   for (const line of stack.split("\n")) {
     const m = line.match(/(?:https?:\/\/[^/\s)]+)?(\/[^\s():?#]+\.(?:js|mjs|cjs|ts|tsx))(?::\d+)?/);
     if (m) {
-      // Vite's hashes are base64url, so they can contain - and _:
-      // OrgSearch-BrsvDQt6.js, LoginPage-DK1D-7OR.js → OrgSearch.js, LoginPage.js.
-      file = m[1].replace(/-[\w-]{6,12}(\.(?:js|mjs|cjs))$/, "$1");
+      // Vite's hashes are exactly 8 base64url characters, so they can contain
+      // - and _: OrgSearch-BrsvDQt6.js, LoginPage-DK1D-7OR.js → OrgSearch.js,
+      // LoginPage.js. Exactly 8, anchored to the end, so a hyphenated name
+      // keeps its own parts (ab-cd-AbC12345.js → ab-cd.js).
+      file = m[1].replace(/-[\w-]{8}(\.(?:js|mjs|cjs))$/, "$1");
       break;
     }
   }
