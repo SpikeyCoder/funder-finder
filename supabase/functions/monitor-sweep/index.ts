@@ -36,11 +36,12 @@ export const MAX_CRASH_CARDS_PER_DAY = 10;
 // this long.
 const RETRY_AFTER_MS = 60 * 60 * 1000;
 // After this many failed attempts a crash is retried daily instead, and
-// after MAX_CARD_TRIES (about a week of daily tries) not at all: Trello
-// rejects that card, and it mustn't take a daily slot forever. It's tried
-// again if it comes back after 7 quiet days (record_client_crash).
+// after MAX_CARD_TRIES (about a week of daily tries) weekly, behind every
+// other crash: Trello may reject that card, and it mustn't take a daily
+// slot every day; but a long outage delays a card, it never loses one.
 const MAX_CARD_ATTEMPTS = 3;
 const MAX_CARD_TRIES = 10;
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 // No new card is started after this long into a run: a card takes up to
 // ~37 s (its claim, Trello's timeout, then recording its URL with retries),
@@ -417,7 +418,7 @@ export async function sweepCrashes(summary: Summary, deadline: number): Promise<
     restJson<CrashRow[]>(
       // (And not tried in the last hour: one retried late in its day waits
       // its hour like any retry.)
-      `${uncarded}&card_attempts=lt.${MAX_CARD_TRIES}` +
+      `${uncarded}&or=(card_attempts.lt.${MAX_CARD_TRIES},card_counted_at.lt.${iso(now - WEEK_MS)})` +
         `&and=(or(card_counted_at.is.null,card_counted_at.lt.${iso(now - DAY_MS)}),or(card_attempted_at.is.null,card_attempted_at.lt.${iso(now - RETRY_AFTER_MS)}))` +
         `${select}&limit=${MAX_CRASH_CARDS}`,
     ),
@@ -465,7 +466,8 @@ export async function sweepCrashes(summary: Summary, deadline: number): Promise<
     carded++;
   }
   summary.crash_cards = carded;
-  if (triedToday + freshTried < MAX_CRASH_CARDS_PER_DAY || Date.now() > deadline) return;
+  // (With headroom: the summary card takes a few more calls than a crash's.)
+  if (triedToday + freshTried < MAX_CRASH_CARDS_PER_DAY || Date.now() > deadline - 15_000) return;
   // The daily limit is reached: say (once a day) how many kinds wait for it
   // (not ones tried today and waiting only on a Trello retry).
   const overflow = (await restJson<AlertRow[]>(
@@ -473,7 +475,7 @@ export async function sweepCrashes(summary: Summary, deadline: number): Promise<
   ))[0] ?? null;
   if (!alertDue(overflow, DAY_MS)) return;
   const waiting = await restCount(
-    `monitor_crashes?trello_card_url=is.null&card_uncertain_at=is.null&card_attempts=lt.${MAX_CARD_TRIES}&or=(card_counted_at.is.null,card_counted_at.lt.${iso(now - DAY_MS)})`,
+    `monitor_crashes?trello_card_url=is.null&card_uncertain_at=is.null&or=(card_counted_at.is.null,card_counted_at.lt.${iso(now - DAY_MS)})`,
   );
   summary.crashes_waiting = waiting;
   if (waiting > 0) {

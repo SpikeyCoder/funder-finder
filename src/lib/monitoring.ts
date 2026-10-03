@@ -271,7 +271,11 @@ export function installMonitoring(): void {
   const pending = new Map<string, Sample>();
   const sentValues = new Map<string, number>();
   const record = (m: Metric) => {
-    if (sentValues.get(m.id) === m.value) return;
+    if (sentValues.get(m.id) === m.value) {
+      // Back to what was sent (INP can go down): nothing newer to send.
+      pending.delete(m.id);
+      return;
+    }
     const path = m.name === 'LCP' ? loadedPath : currentRoute();
     pending.set(m.id, { id: m.id, name: m.name, value: m.value, rating: m.rating, path });
   };

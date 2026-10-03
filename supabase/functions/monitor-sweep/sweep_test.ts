@@ -146,3 +146,13 @@ Deno.test("no overflow card is started past the run's deadline", async () => {
     f.restore();
   }
 });
+
+Deno.test("the overflow card needs headroom before the run's deadline", async () => {
+  const f = fake({ triedToday: MAX_CRASH_CARDS_PER_DAY, waiting: 3, retries: [], fresh: [], trello: () => "ok" });
+  try {
+    await sweepCrashes({}, Date.now() + 5_000);
+    assertEquals(f.cards.length, 0);
+  } finally {
+    f.restore();
+  }
+});

@@ -31,8 +31,9 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 // The client caps fields by characters (about 6,600 in all); in bytes that
 // can be several times more (3-byte CJK, 6-byte \uXXXX JSON escapes).
 const MAX_BODY_BYTES = 48 * 1024;
-// A page load sends at most 5 crash reports, and a vitals report each time
-// it's hidden with a changed value. Generous enough for an office, school or
+// A page sends at most 5 crash reports per route it visits (each crash
+// once, plus once more if it brings up the error screen), and a vitals
+// report each time it's hidden with a changed value. Generous enough for an office, school or
 // mobile carrier's visitors behind one IP; the board is protected by the
 // sweep's card caps.
 const RATE_LIMITS = { crash: 120, vitals: 600, other: 20 } as const;
