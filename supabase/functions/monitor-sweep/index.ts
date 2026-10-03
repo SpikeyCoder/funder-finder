@@ -82,6 +82,7 @@ export interface CrashRow {
   last_seen: string;
   card_attempts: number;
   card_attempted_at: string | null;
+  card_counted_at?: string | null;
   previous_card_url?: string | null;
 }
 
@@ -401,15 +402,15 @@ export async function sweepCrashes(summary: Summary, deadline: number): Promise<
   const [triedToday, retries, fresh] = await Promise.all([
     // Every crash whose card was tried in the last day counts against the
     // daily cap, opened or not: a Trello timeout may still have opened it.
-    restCount(`monitor_crashes?card_attempted_at=gte.${iso(now - DAY_MS)}`),
+    restCount(`monitor_crashes?card_counted_at=gte.${iso(now - DAY_MS)}`),
     // Tried in the last day and failed: already counted, so no new budget.
     restJson<CrashRow[]>(
-      `${uncarded}&card_attempts=lt.${MAX_CARD_ATTEMPTS}&card_attempted_at=lt.${iso(now - RETRY_AFTER_MS)}&card_attempted_at=gte.${iso(now - DAY_MS)}` +
+      `${uncarded}&card_attempts=lt.${MAX_CARD_ATTEMPTS}&card_attempted_at=lt.${iso(now - RETRY_AFTER_MS)}&card_counted_at=gte.${iso(now - DAY_MS)}` +
         `${select}&limit=${MAX_CRASH_CARDS}`,
     ),
     // Not tried in the last day: each uses the daily budget.
     restJson<CrashRow[]>(
-      `${uncarded}&card_attempts=lt.${MAX_CARD_TRIES}&or=(card_attempted_at.is.null,card_attempted_at.lt.${iso(now - DAY_MS)})${select}&limit=${MAX_CRASH_CARDS}`,
+      `${uncarded}&card_attempts=lt.${MAX_CARD_TRIES}&or=(card_counted_at.is.null,card_counted_at.lt.${iso(now - DAY_MS)})${select}&limit=${MAX_CRASH_CARDS}`,
     ),
   ]);
   const dayLeft = MAX_CRASH_CARDS_PER_DAY - triedToday;
@@ -425,7 +426,12 @@ export async function sweepCrashes(summary: Summary, deadline: number): Promise<
       {
         method: "PATCH",
         headers: { Prefer: "return=representation" },
-        body: JSON.stringify({ card_attempted_at: new Date().toISOString(), card_attempts: c.card_attempts + 1 }),
+        body: JSON.stringify({
+          card_attempted_at: new Date().toISOString(),
+          card_attempts: c.card_attempts + 1,
+          // A fresh pick takes a daily slot; a retry within the day doesn't.
+          ...(freshPicked.has(c) ? { card_counted_at: new Date().toISOString() } : {}),
+        }),
       },
     );
     if (!claim.ok) throw new Error(`REST monitor_crashes claim ${claim.status}: ${await claim.text()}`);
@@ -458,7 +464,7 @@ export async function sweepCrashes(summary: Summary, deadline: number): Promise<
   ))[0] ?? null;
   if (!alertDue(overflow, DAY_MS)) return;
   const waiting = await restCount(
-    `monitor_crashes?trello_card_url=is.null&card_uncertain_at=is.null&card_attempts=lt.${MAX_CARD_TRIES}&or=(card_attempted_at.is.null,card_attempted_at.lt.${iso(now - DAY_MS)})`,
+    `monitor_crashes?trello_card_url=is.null&card_uncertain_at=is.null&card_attempts=lt.${MAX_CARD_TRIES}&or=(card_counted_at.is.null,card_counted_at.lt.${iso(now - DAY_MS)})`,
   );
   summary.crashes_waiting = waiting;
   if (waiting > 0) {

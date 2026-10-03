@@ -54,6 +54,9 @@ CREATE TABLE IF NOT EXISTS public.monitor_crashes (
   -- 3 failures once a day.
   card_attempted_at timestamptz,
   card_attempts    integer NOT NULL DEFAULT 0,
+  -- When it last took one of the day's card slots (its first try in 24 h;
+  -- retries within the day don't move it), for the daily cap.
+  card_counted_at  timestamptz,
   -- Set when a card's Trello call timed out: it may or may not exist, so
   -- it isn't retried (no duplicate) until the crash happens again a day
   -- later (see record_client_crash).
@@ -67,9 +70,9 @@ CREATE TABLE IF NOT EXISTS public.monitor_crashes (
 CREATE INDEX IF NOT EXISTS monitor_crashes_uncarded
   ON public.monitor_crashes (card_attempts, occurrences DESC, first_seen)
   WHERE trello_card_url IS NULL AND card_uncertain_at IS NULL;
--- The sweep's daily card count (cards tried in the last 24 h).
-CREATE INDEX IF NOT EXISTS monitor_crashes_attempted
-  ON public.monitor_crashes (card_attempted_at) WHERE card_attempted_at IS NOT NULL;
+-- The sweep's daily card count (crashes that took a slot in the last 24 h).
+CREATE INDEX IF NOT EXISTS monitor_crashes_counted
+  ON public.monitor_crashes (card_counted_at) WHERE card_counted_at IS NOT NULL;
 
 -- One row per metric per page view: the browser re-sends a metric whenever
 -- its value changes (INP and CLS keep growing while the page is open), keyed
@@ -142,7 +145,8 @@ AS $$
      SET occurrences = 0, first_seen = now(), kind = p_kind,
          -- (A timed-out card has no URL: keep the link to the one before.)
          previous_card_url = coalesce(trello_card_url, previous_card_url),
-         trello_card_url = NULL, card_uncertain_at = NULL, card_attempted_at = NULL, card_attempts = 0
+         trello_card_url = NULL, card_uncertain_at = NULL, card_attempted_at = NULL, card_counted_at = NULL,
+         card_attempts = 0
    WHERE fingerprint = p_fingerprint AND last_seen < now() - interval '7 days'
      AND (trello_card_url IS NOT NULL OR card_uncertain_at IS NOT NULL OR card_attempts >= 10)
      AND card_attempted_at < now() - interval '7 days';

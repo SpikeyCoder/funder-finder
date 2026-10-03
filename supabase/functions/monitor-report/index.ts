@@ -35,7 +35,7 @@ const MAX_BODY_BYTES = 48 * 1024;
 // it's hidden with a changed value. Generous enough for an office, school or
 // mobile carrier's visitors behind one IP; the board is protected by the
 // sweep's card caps.
-const RATE_LIMITS = { crash: 120, vitals: 600 } as const;
+const RATE_LIMITS = { crash: 120, vitals: 600, other: 20 } as const;
 const RATE_WINDOW_MS = 60 * 60 * 1000;
 
 const VITAL_LIMITS: Record<string, number> = { LCP: 600_000, INP: 600_000, CLS: 100 };
@@ -307,6 +307,18 @@ if (import.meta.main) {
 
     const text = await readLimited(req, MAX_BODY_BYTES);
     if (text === null) return reply(413, "Report too large");
+    // Rate-limit before parsing, scrubbing and hashing, so the limit caps
+    // each caller's CPU as well as their writes. The kind is sniffed from
+    // the text (and checked once parsed); anything else is limited apart,
+    // tightly, so junk can't use up the budget for real reports.
+    const sniffed = /"type"\s*:\s*"(crash|vitals)"/.exec(text)?.[1] as "crash" | "vitals" | undefined;
+    const limited = await ipRateLimit(req, {
+      namespace: `monitor-report:${sniffed ?? "other"}`,
+      limit: RATE_LIMITS[sniffed ?? "other"],
+      windowMs: RATE_WINDOW_MS,
+      extraHeaders: headers,
+    });
+    if (!limited.allow && limited.response) return limited.response;
     let body: Record<string, unknown>;
     try {
       const parsed = JSON.parse(text);
@@ -315,19 +327,8 @@ if (import.meta.main) {
     } catch {
       return reply(400, "Invalid JSON");
     }
-
-    if (body.type !== "crash" && body.type !== "vitals") return reply(400, "Invalid type");
-    // Rate-limit before the parsing, scrubbing and hashing below, so the
-    // limit caps each caller's CPU as well as their writes. (A malformed
-    // report counts too: only well-formed JSON of a known type gets here.)
-    const kind = body.type;
-    const limited = await ipRateLimit(req, {
-      namespace: `monitor-report:${kind}`,
-      limit: RATE_LIMITS[kind],
-      windowMs: RATE_WINDOW_MS,
-      extraHeaders: headers,
-    });
-    if (!limited.allow && limited.response) return limited.response;
+    if (body.type !== sniffed) return reply(400, "Invalid type");
+    const kind = sniffed;
 
     let write: () => Promise<Response>;
     if (kind === "crash") {

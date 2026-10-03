@@ -10,7 +10,7 @@ const source = readFileSync(new URL('../src/lib/chunkReload.ts', import.meta.url
 const { outputText } = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 },
 });
-const { isChunkLoadError, onReloadPageFor, reloadKey, reloadManually, reloadOnceForChunkError, takeReloadMarker } = await import(
+const { isChunkLoadError, onReloadPageFor, reloadKey, reloadOnceForChunkError, takeReloadMarker } = await import(
   `data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`
 );
 
@@ -201,12 +201,4 @@ test('if recording the reload fails, nothing is left half-recorded', () => {
   assert.equal(onReloadPageFor(LINK), false);
   // Once storage works again, the reload is still available.
   assert.equal(reloadOnceForChunkError(LINK), 'reloading');
-});
-
-test('a manual Reload clears a marker whose automatic reload never happened', () => {
-  assert.equal(reloadOnceForChunkError(LINK), 'reloading'); // say reload() did nothing
-  reloadManually();
-  assert.equal(reloads, 2);
-  takeReloadMarker();
-  assert.equal(onReloadPageFor(LINK), false);
 });

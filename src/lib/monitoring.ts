@@ -277,9 +277,10 @@ export function installMonitoring(): void {
         release: currentBuild().slice(0, 100),
         metrics: batch,
       }).then((result) => {
-        if (result === 'done') return;
-        // Not delivered (offline, over the keepalive budget, rate-limited):
-        // send these again on the next hide, unless newer values came in.
+        // Lost (offline, over the keepalive budget, server error): send
+        // these again on the next hide, unless newer values came in. Not if
+        // rate-limited: that means back off, and samples can be spared.
+        if (result !== 'failed') return;
         for (const s of batch) {
           if (sentValues.get(s.id) !== s.value) continue; // a newer value went since
           sentValues.delete(s.id);

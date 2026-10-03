@@ -1,6 +1,6 @@
 import { Component, ReactNode } from 'react';
 import { AlertCircle } from 'lucide-react';
-import { isChunkLoadError, onReloadPageFor, reloadManually, reloadOnceForChunkError } from '../lib/chunkReload';
+import { isChunkLoadError, onReloadPageFor, reloadOnceForChunkError } from '../lib/chunkReload';
 import { reportCrash } from '../lib/monitoring';
 
 interface Props {
@@ -94,7 +94,10 @@ export default class ErrorBoundary extends Component<Props, State> {
             <button
               // Just reload: clearing the error first would re-render the
               // failed subtree and throw (and log) again before navigating.
-              onClick={reloadManually}
+              // (A plain reload keeps the automatic reload's marker, so if
+              // the visitor taps this while it's under way and the page
+              // fails the same way, that's still reported.)
+              onClick={() => window.location.reload()}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
             >
               {copy.button}

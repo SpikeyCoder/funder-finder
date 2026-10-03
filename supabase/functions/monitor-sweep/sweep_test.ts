@@ -47,7 +47,7 @@ function fake(world: World) {
       return new Response(null, { status: 200, headers: { "content-range": `*/${n}` } });
     }
     if (method === "GET" && path.startsWith("monitor_crashes")) {
-      return json(path.includes("card_attempted_at=gte.") ? world.retries : world.fresh);
+      return json(path.includes("card_counted_at=gte.") ? world.retries : world.fresh);
     }
     if (method === "GET" && path.startsWith("monitor_alerts")) return json([]);
     if (method === "POST" && path.startsWith("monitor_alerts")) return json([{ alert_key: "crash:overflow" }], 201);
@@ -116,6 +116,22 @@ Deno.test("no new card is started past the run's deadline", async () => {
   try {
     await sweepCrashes({}, Date.now() - 1);
     assertEquals(f.cards.length, 0);
+  } finally {
+    f.restore();
+  }
+});
+
+Deno.test("only a fresh pick takes a daily slot (card_counted_at); a retry doesn't", async () => {
+  const f = fake({
+    triedToday: 0, waiting: 0,
+    retries: [crash("r1", 1, new Date(Date.now() - 2 * 3600_000).toISOString())],
+    fresh: [crash("f1")],
+    trello: () => "reject",
+  });
+  try {
+    await sweepCrashes({}, later());
+    const claims = f.patches.filter((p) => p.url.includes("card_attempts=eq."));
+    assertEquals(claims.map((c) => "card_counted_at" in c.body), [false, true]);
   } finally {
     f.restore();
   }
