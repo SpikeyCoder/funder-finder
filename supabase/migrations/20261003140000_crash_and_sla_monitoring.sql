@@ -185,6 +185,28 @@ GRANT EXECUTE ON FUNCTION public.record_client_crash(text, text, text, text, tex
 -- threshold Core Web Vitals use), with enough page views to mean something.
 -- Thresholds are web-vitals' own: LCP > 4000 ms, INP > 500 ms, CLS > 0.25.
 
+-- Records a vitals report (monitor-report). A metric's value only grows
+-- within a page view (LCP's final element, CLS's worst window; INP almost
+-- always), so a report that arrives late, after a newer one, doesn't
+-- replace the newer value.
+CREATE OR REPLACE FUNCTION public.record_vitals(p_rows jsonb)
+RETURNS void
+LANGUAGE sql
+SET search_path = ''
+AS $$
+  INSERT INTO public.monitor_vitals AS v (metric_id, metric, value, rating, path, release, created_at)
+  SELECT r.metric_id, r.metric, r.value, r.rating, r.path, coalesce(r.release, ''), now()
+    FROM jsonb_to_recordset(p_rows)
+      AS r(metric_id text, metric text, value double precision, rating text, path text, release text)
+  ON CONFLICT (metric_id) DO UPDATE
+     SET value = EXCLUDED.value, rating = EXCLUDED.rating, path = EXCLUDED.path,
+         release = EXCLUDED.release, created_at = EXCLUDED.created_at
+   WHERE EXCLUDED.value >= v.value;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.record_vitals(jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.record_vitals(jsonb) TO service_role;
+
 CREATE OR REPLACE FUNCTION public.monitor_vitals_breaches(p_min_samples integer DEFAULT 20)
 RETURNS TABLE (metric text, path text, samples bigint, p75 double precision, poor_share double precision)
 LANGUAGE sql
@@ -198,6 +220,8 @@ AS $$
              avg((v.rating = 'poor')::int)::double precision AS poor_share
         FROM public.monitor_vitals v
        WHERE v.created_at >= now() - interval '24 hours'
+         -- Unknown paths pooled together: no page to act on.
+         AND v.path <> '(other)'
        GROUP BY v.metric, v.path
       HAVING count(*) >= p_min_samples
     ) g

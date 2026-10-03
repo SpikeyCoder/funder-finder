@@ -119,6 +119,9 @@ export function normalizeMessage(message: string): string {
     .replace(/(access (?:lexical declaration )?)(["'`])[A-Za-z_$][\w$]?\2/gi, "$1$2<id>$2")
     // A quote right after a letter is an apostrophe ("can't"), not a quote.
     .replace(/(?<![A-Za-z])(["'`])(.*?)\1/g, (_m, q, inner) => quoted(q, inner))
+    // Postgres quotes the input it rejected ("invalid input syntax for type
+    // uuid: "abc""): a value, even if it's one word.
+    .replace(/(invalid input (?:syntax|value) for [\w ]+:\s*)"(?:<id>|[^"]*)"/gi, "$1<str>")
     // Chrome marks a cut-off quoted excerpt: "Internal S"...
     .replace(/<str>\.\.\./g, "<str>")
     // Unquoted too: Firefox says "t.current is null". A short word is a name
@@ -339,10 +342,10 @@ if (import.meta.main) {
       const rows = parseVitals(body);
       if (typeof rows === "string") return reply(400, rows);
       if (rows.length === 0) return reply(204);
-      // A changed value for a metric id replaces the earlier one, and dates
-      // the row to now: a tab open for days still counts in the 24 h window.
-      const now = new Date().toISOString();
-      write = () => rest("monitor_vitals?on_conflict=metric_id", rows.map((r) => ({ ...r, created_at: now })), "resolution=merge-duplicates,return=minimal");
+      // A larger value for a metric id replaces the earlier one (one that
+      // arrives late doesn't), and dates the row to now: a tab open for days
+      // still counts in the 24 h window. See record_vitals.
+      write = () => rest("rpc/record_vitals", { p_rows: rows });
     }
 
     if (!SUPABASE_URL || !SERVICE_KEY) {

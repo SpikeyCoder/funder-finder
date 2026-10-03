@@ -30,6 +30,7 @@ END $$;
 DROP FUNCTION IF EXISTS public.invoke_monitor_sweep();
 DROP FUNCTION IF EXISTS public.purge_monitoring();
 DROP FUNCTION IF EXISTS public.monitor_vitals_breaches(integer);
+DROP FUNCTION IF EXISTS public.record_vitals(jsonb);
 DROP FUNCTION IF EXISTS public.record_client_crash(text, text, text, text, text, text, text, text, text);
 
 DROP TABLE IF EXISTS public.monitor_alerts;

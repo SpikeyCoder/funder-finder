@@ -296,3 +296,8 @@ Deno.test("a multi-line message's \"at …\" line isn't a stack frame", async ()
   assertEquals(row.stack, "    at f (https://fundermatch.org/assets/a.js:1:2)");
   assertEquals(normalizeMessage("I can't do that"), "I can't do that");
 });
+
+Deno.test("a value Postgres quotes in an input error is a value", () => {
+  assertEquals(normalizeMessage('invalid input syntax for type uuid: "abc"'), "invalid input syntax for type uuid: <str>");
+  assertEquals(normalizeMessage('invalid input syntax for type integer: "hello"'), normalizeMessage('invalid input syntax for type integer: "x"'));
+});
