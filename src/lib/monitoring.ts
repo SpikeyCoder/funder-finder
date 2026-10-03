@@ -13,7 +13,7 @@
 // Privacy: no user id, IP or query string is sent; paths are reduced to the
 // app's route (ids and share tokens become :id). Email addresses in error
 // text are masked here and again on the server.
-import type { Metric } from 'web-vitals';
+import { onCLS, onINP, onLCP, type Metric } from 'web-vitals';
 import { currentBuild, isChunkLoadError } from './chunkReload';
 // Shared with the monitor-report Edge Function, so both scrub the same way.
 import { normalizePath, scrub } from '../../supabase/functions/_shared/monitor_scrub.ts';
@@ -219,20 +219,12 @@ export function installMonitoring(): void {
     if (sentValues.get(m.id) === m.value) return;
     pending.set(m.id, { m, path: m.name === 'LCP' ? loadedPath : normalizePath(window.location.pathname) });
   };
-  // Loaded once the browser is idle (at most a second in), so its chunk
-  // doesn't compete with the first page's; its observers read buffered
-  // entries, so nothing measured before it loads is lost. A visitor who leaves
-  // within that second sends no vitals.
-  const load = () =>
-    void import('web-vitals')
-      .then(({ onLCP, onINP, onCLS }) => {
-        onLCP(record, { reportAllChanges: true });
-        onINP(record, { reportAllChanges: true });
-        onCLS(record, { reportAllChanges: true });
-      })
-      .catch(() => {});
-  if ('requestIdleCallback' in window) window.requestIdleCallback(load, { timeout: 1000 });
-  else setTimeout(load, 500);
+  // Part of the entry bundle (about 2 KB), not loaded later: a visitor who
+  // gives up on a slow load before a separate chunk arrived would send no
+  // LCP, and those are the poor loads the p75 is meant to catch.
+  onLCP(record, { reportAllChanges: true });
+  onINP(record, { reportAllChanges: true });
+  onCLS(record, { reportAllChanges: true });
   const flush = () => {
     if (pending.size === 0) return;
     const metrics = [...pending.values()];

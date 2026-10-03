@@ -35,7 +35,7 @@ const MAX_BODY_BYTES = 48 * 1024;
 // it's hidden with a changed value. Generous enough for an office, school or
 // mobile carrier's visitors behind one IP; the board is protected by the
 // sweep's card caps.
-const RATE_LIMITS = { crash: 30, vitals: 600 } as const;
+const RATE_LIMITS = { crash: 120, vitals: 600 } as const;
 const RATE_WINDOW_MS = 60 * 60 * 1000;
 
 const VITAL_LIMITS: Record<string, number> = { LCP: 600_000, INP: 600_000, CLS: 100 };
@@ -109,7 +109,10 @@ export function normalizeMessage(message: string): string {
     // What a JSON parse choked on is the response, not the bug: "Unexpected
     // token 'N', "Not Found" is not valid JSON" and "… '<', "<!DOCTYPE"…"
     // are the same missing res.ok check.
-    .replace(/\b(Unexpected (?:token|identifier|character))\s+(?:(["'`]).*?\2|[^\s,]+)/gi, "$1 <tok>")
+    // Only a token itself: quoted, a run of symbols ("<"), or one character
+    // ("Unexpected token o in JSON"); not a word ("unexpected character at
+    // line 1").
+    .replace(/\b(Unexpected (?:token|identifier|character))\s+(?:(["'`]).*?\2|[^\s\w,]+|\w(?=[\s,]|$))/gi, "$1 <tok>")
     // A variable named in a TDZ error is a minified name, quoted or not:
     // "Cannot access 'Xt' before initialization" (Chrome), "can't access
     // lexical declaration 'Xt' before initialization" (Firefox).

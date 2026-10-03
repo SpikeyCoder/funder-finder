@@ -251,3 +251,12 @@ Deno.test("a minified name that is also a word is still a name", () => {
   // Property names after the variable keep their names.
   assertEquals(normalizeMessage("(evaluating 'n.id.to')"), "(evaluating '<id>.id.to')");
 });
+
+Deno.test("only the token itself is taken out of a JSON parse error", () => {
+  assertEquals(
+    normalizeMessage("JSON.parse: unexpected character at line 1 column 1 of the JSON data"),
+    "JSON.parse: unexpected character at line <n> column <n> of the JSON data",
+  );
+  assertEquals(normalizeMessage("Unexpected token < in JSON at position 0"), "Unexpected token <tok> in JSON at position <n>");
+  assertEquals(normalizeMessage("Unexpected token o in JSON at position 1"), "Unexpected token <tok> in JSON at position <n>");
+});
