@@ -3,8 +3,23 @@ import { useNavigate } from 'react-router-dom';
 import { Search, Building2, Users, Loader2, SearchX, AlertCircle } from 'lucide-react';
 import { OrgSearchResult } from '../types';
 import { searchOrganizations } from '../utils/matching';
+import { SearchCache, searchKey } from '../lib/searchCache';
 import { fmtDollar } from './InsightCharts';
 import OrgRequestForm from './OrgRequestForm';
+
+// Shared by every search box in the tab, so results survive navigating away
+// and back.
+const searchCache = new SearchCache<OrgSearchResult[]>();
+
+// Wait this long after the last keystroke before searching. (Not shorter:
+// the function allows 60 searches a minute per IP, aborted ones included,
+// and people behind one office address share that.)
+const DEBOUNCE_MS = 300;
+
+// Give up on a search that hangs (e.g. a stalled mobile connection) so the
+// error panel and "Try again" appear instead of an endless spinner. Searches
+// normally take well under a second; the database caps one at 3 s.
+const REQUEST_TIMEOUT_MS = 15_000;
 
 interface OrgSearchProps {
   autoFocus?: boolean;
@@ -17,6 +32,11 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
   const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<OrgSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
+  // A request has gone out and no result has replaced it yet: what the
+  // spinner and the "Searching…" panel show. Set when a request starts (not
+  // during the debounce), and kept while a newer query takes over from it so
+  // they don't blink off on every keystroke.
+  const [inFlight, setInFlight] = useState(false);
   // Outcome of the latest completed search, so a miss or a failure is shown
   // instead of the dropdown silently staying closed.
   const [status, setStatus] = useState<'idle' | 'results' | 'empty' | 'error'>('idle');
@@ -36,21 +56,49 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
   // still in flight doesn't pop it back open; cleared when they type or refocus.
   const dismissedRef = useRef(false);
 
-  // Whitespace-only edits shouldn't abort and resend an identical search.
-  const trimmedQuery = query.trim();
+  // Whitespace-only edits shouldn't abort and resend an identical search:
+  // whitespace runs collapse ("red  cross" is "red cross"), as on the server.
+  const trimmedQuery = searchKey(query);
+  // Set by "Try again" for the effect run it triggers: a retry has nothing
+  // to wait for, so it skips the debounce.
+  const retryRef = useRef(false);
 
   useEffect(() => {
+    const retry = retryRef.current;
+    retryRef.current = false;
+
     // The highlighted row and an open request form belong to the previous
     // results.
     setSelectedIdx(-1);
     setRequestName(null);
     setRequestSubmitted(false);
 
+    // Shows a finished search, fresh or from the cache.
+    const land = (searched: string, data: OrgSearchResult[], outcome: 'results' | 'empty' | 'error') => {
+      setSearchedQuery(searched);
+      setResults(data);
+      setStatus(outcome);
+      setLoading(false);
+      setInFlight(false);
+      // A slow response shouldn't pop the panel back up after Escape or an
+      // outside click.
+      if (!dismissedRef.current) setShowDropdown(true);
+    };
+
     if (trimmedQuery.length < 2) {
       setResults([]);
       setStatus('idle');
       setLoading(false);
+      setInFlight(false);
       setShowDropdown(false);
+      return;
+    }
+
+    // Already searched in this tab: show it now, no request. (Misses aren't
+    // cached; see SearchCache.)
+    const cached = searchCache.get(trimmedQuery);
+    if (cached) {
+      land(trimmedQuery, cached, 'results');
       return;
     }
 
@@ -60,29 +108,35 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       const searched = trimmedQuery;
+      setInFlight(true);
+      // Opens the panel now (the first search's shows "Searching…"), unless
+      // the user closed it.
+      if (!dismissedRef.current) setShowDropdown(true);
+      // Aborted by the cleanup (as above) or after REQUEST_TIMEOUT_MS; only
+      // the latter is shown, as an error.
+      const request = new AbortController();
+      const cancel = () => request.abort();
+      controller.signal.addEventListener('abort', cancel);
+      const timeout = setTimeout(cancel, REQUEST_TIMEOUT_MS);
       try {
-        const data = await searchOrganizations(searched, 15, controller.signal);
+        const data = await searchOrganizations(searched, 15, request.signal);
+        searchCache.set(searched, data);
         if (controller.signal.aborted) return;
-        setSearchedQuery(searched);
-        setResults(data);
-        setStatus(data.length > 0 ? 'results' : 'empty');
+        land(searched, data, data.length > 0 ? 'results' : 'empty');
       } catch (err) {
         if (controller.signal.aborted) return;
         // Logged so a bug report filed from the error panel shows the cause.
-        console.error('Organization search failed:', err);
-        setSearchedQuery(searched);
-        setResults([]);
-        setStatus('error');
+        console.error('Organization search failed:', request.signal.aborted ? 'timed out' : err);
+        land(searched, [], 'error');
       } finally {
-        if (!controller.signal.aborted) {
-          setLoading(false);
-          // A slow response shouldn't pop the panel back up after Escape or an
-          // outside click.
-          if (!dismissedRef.current) setShowDropdown(true);
-        }
+        clearTimeout(timeout);
+        controller.signal.removeEventListener('abort', cancel);
       }
-    }, 300);
+    }, retry ? 0 : DEBOUNCE_MS);
 
+    // inFlight is left as is: a newer search replaces this one, so the
+    // spinner stays steady while typing instead of blinking off each
+    // keystroke. The next run clears it if no request will follow.
     return () => {
       clearTimeout(timer);
       controller.abort();
@@ -110,17 +164,21 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
 
   // The error panel's own query is being searched again.
   const retrying = status === 'error' && loading && searchedQuery === trimmedQuery;
+  // The panel shows an earlier query's outcome while a newer one is being
+  // fetched (in step with the spinner, not from the first keystroke).
+  const stale = inFlight && searchedQuery !== trimmedQuery;
 
   const reopenDropdown = (text = query) => {
     // With the request form open for this text, clicking back into the box
     // shouldn't cover the form with the panel it came from. (Typing new text
     // reopens as usual, and the new search closes the form.)
     // Once it's submitted, the results are worth reaching again.
-    if (requestName !== null && !requestSubmitted && text.trim() === requestName) return;
+    if (requestName !== null && !requestSubmitted && searchKey(text) === requestName) return;
     dismissedRef.current = false;
     // Below two characters the effect is about to reset to idle; don't flash
     // the previous panel first.
-    if (status !== 'idle' && text.trim().length >= 2) setShowDropdown(true);
+    // (While the first search runs, that's its "Searching…" panel.)
+    if ((status !== 'idle' || inFlight) && searchKey(text).length >= 2) setShowDropdown(true);
   };
 
   // The form opens below the search box rather than inside the dropdown, so
@@ -201,8 +259,13 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
           aria-label="Search by organization name or EIN"
           className="w-full bg-[#0d1117] border border-[#30363d] rounded-xl pl-11 pr-10 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-blue-600 transition-colors"
         />
-        {loading && (
-          <Loader2 size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 animate-spin" />
+        {inFlight && (
+          // Centered by the wrapper: on the icon itself, animate-spin's
+          // `transform: rotate()` replaced the -translate-y-1/2, so the
+          // spinner dropped half its height and wobbled while it spun.
+          <span className="absolute right-4 top-1/2 -translate-y-1/2 flex pointer-events-none" aria-hidden="true">
+            <Loader2 size={16} className="text-gray-400 motion-safe:animate-spin" />
+          </span>
         )}
       </div>
 
@@ -211,6 +274,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
       <div role="status" aria-live="polite" className="sr-only">
         {/* Includes the query so a new search with the same count is still
             announced. */}
+        {inFlight && status === 'idle' && 'Searching…'}
         {status === 'empty' && `No organizations match ${searchedQuery}`}
         {status === 'error' &&
           (retrying ? `Retrying search for ${searchedQuery}` : `Search for ${searchedQuery} is temporarily unavailable.`)}
@@ -218,9 +282,23 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
           `Showing ${results.length} organization${results.length === 1 ? '' : 's'} for ${searchedQuery}`}
       </div>
 
+      {/* The first search's panel: until now nothing showed below the box
+          while it loaded. */}
+      {showDropdown && inFlight && status === 'idle' && (
+        <div className="absolute z-50 w-full mt-2 bg-[#161b22] border border-[#30363d] rounded-xl shadow-xl overflow-hidden">
+          <div className="flex items-center gap-3 px-4 py-3 text-sm text-gray-400">
+            <Loader2 size={16} className="shrink-0 motion-safe:animate-spin" aria-hidden="true" />
+            Searching…
+          </div>
+        </div>
+      )}
+
       {showDropdown && status !== 'idle' && (
         <div
-          className="absolute z-50 w-full mt-2 bg-[#161b22] border border-[#30363d] rounded-xl shadow-xl overflow-hidden max-h-80 overflow-y-auto"
+          aria-busy={stale}
+          className={`absolute z-50 w-full mt-2 bg-[#161b22] border border-[#30363d] rounded-xl shadow-xl overflow-hidden max-h-80 overflow-y-auto transition-opacity ${
+            stale ? 'opacity-60' : ''
+          }`}
         >
           {status === 'empty' && (
             <div className="px-4 py-4 text-left">
@@ -263,6 +341,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
                   disabled={loading}
                   onClick={() => {
                     inputRef.current?.focus();
+                    retryRef.current = true;
                     setRetryNonce((n) => n + 1);
                   }}
                   className="text-xs text-blue-400 hover:text-blue-300 mt-1 underline disabled:opacity-50 disabled:no-underline"
@@ -320,7 +399,15 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
 
       {showRequestForm && (
         <div className="mt-2 bg-[#161b22] border border-[#30363d] rounded-xl px-4 py-3 text-left">
-          <OrgRequestForm initialName={requestName} onSubmitted={() => setRequestSubmitted(true)} />
+          <OrgRequestForm
+            initialName={requestName}
+            onSubmitted={() => {
+              setRequestSubmitted(true);
+              // Once it's added, any search that could find it (the name, a
+              // prefix, an edited spelling) should reach the server.
+              searchCache.pause();
+            }}
+          />
         </div>
       )}
     </div>
