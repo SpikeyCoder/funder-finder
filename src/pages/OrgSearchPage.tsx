@@ -1,14 +1,44 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Database } from 'lucide-react';
 import OrgSearch from '../components/OrgSearch';
 import NavBar from '../components/NavBar';
 import Footer from '../components/Footer';
 
+const US_STATES = [
+  'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA', 'HI', 'ID', 'IL', 'IN', 'IA',
+  'KS', 'KY', 'LA', 'ME', 'MD', 'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ',
+  'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VT',
+  'VA', 'WA', 'WV', 'WI', 'WY', 'DC', 'PR',
+];
+
+// The state picked last time, a convenience only (storage can be unavailable).
+const STATE_KEY = 'orgSearch.state';
+function savedState(): string {
+  try {
+    const s = localStorage.getItem(STATE_KEY) ?? '';
+    return US_STATES.includes(s) ? s : '';
+  } catch {
+    return '';
+  }
+}
+
 export default function OrgSearchPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const initialQuery = searchParams.get('q') || '';
+  // Many organizations share a name (YMCA, Habitat for Humanity chapters);
+  // those in this state are listed first.
+  const [state, setState] = useState(savedState);
+  const pickState = (s: string) => {
+    setState(s);
+    try {
+      if (s) localStorage.setItem(STATE_KEY, s);
+      else localStorage.removeItem(STATE_KEY);
+    } catch {
+      // Not remembered; it still applies now.
+    }
+  };
 
   useEffect(() => {
     document.title = 'Search Organizations | FunderMatch';
@@ -42,7 +72,20 @@ export default function OrgSearchPage() {
           </p>
         </div>
 
-        <OrgSearch autoFocus placeholder="Search by organization name or EIN..." initialQuery={initialQuery} />
+        <div className="mb-3 flex items-center justify-end gap-2 text-sm text-gray-400">
+          <label htmlFor="org-search-state">List first from</label>
+          <select
+            id="org-search-state"
+            value={state}
+            onChange={(e) => pickState(e.target.value)}
+            className="bg-[#161b22] border border-[#30363d] rounded-lg px-2 py-1 text-white focus:outline-none focus:border-blue-500"
+          >
+            <option value="">Any state</option>
+            {US_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+
+        <OrgSearch autoFocus placeholder="Search by organization name or EIN..." initialQuery={initialQuery} state={state} />
 
         <div className="mt-12 grid grid-cols-2 gap-4">
           <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-5">

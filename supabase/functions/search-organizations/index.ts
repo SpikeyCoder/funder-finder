@@ -2,7 +2,9 @@
  * search-organizations — Supabase Edge Function
  *
  * Thin wrapper around the `search_organizations` PostgreSQL RPC function.
- * Accepts { query, limit? } and returns matching funders/recipients.
+ * Accepts { query, limit?, state? } and returns matching funders/recipients.
+ * `state` (a 2-letter code) ranks organizations in that state first among
+ * equally good matches; anything else is ignored.
  *
  * FM-2026-06-08-01 (pen-test): migrated from a per-function ALLOWED_ORIGINS
  * + inline corsHeaders() implementation to the shared
@@ -71,6 +73,9 @@ Deno.serve(async (req) => {
       : '';
     // p_limit is an integer: a fractional limit would make PostgREST reject the call.
     const limit = Number.isFinite(body?.limit) ? Math.min(Math.max(Math.trunc(body.limit), 1), 50) : 15;
+    const state = typeof body?.state === 'string' && /^[A-Za-z]{2}$/.test(body.state)
+      ? body.state.toUpperCase()
+      : null;
 
     if (!query || query.length < 2) {
       return new Response(
@@ -79,16 +84,29 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Call the existing search_organizations RPC function in PostgreSQL
-    const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/search_organizations`, {
-      method: 'POST',
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ p_query: query, p_limit: limit }),
-    });
+    const callRpc = (params: Record<string, unknown>) =>
+      fetch(`${SUPABASE_URL}/rest/v1/rpc/search_organizations`, {
+        method: 'POST',
+        headers: {
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(params),
+      });
+    let rpcRes = await callRpc(state ? { p_query: query, p_limit: limit, p_state: state } : { p_query: query, p_limit: limit });
+    // A database without p_state yet (this deployed before its migration, or
+    // after a rollback) answers PGRST202; search without the state rather
+    // than fail.
+    if (state && rpcRes.status === 404) {
+      const errBody = await rpcRes.text();
+      if (errBody.includes('PGRST202')) {
+        console.error('search_organizations has no p_state; searching without it');
+        rpcRes = await callRpc({ p_query: query, p_limit: limit });
+      } else {
+        rpcRes = new Response(errBody, { status: 404 });
+      }
+    }
 
     const searchFailed = () => new Response(
       JSON.stringify({ results: [], error: 'Search failed' }),

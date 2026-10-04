@@ -96,16 +96,19 @@ export async function fetchFunderInsights(funderId: string): Promise<FunderInsig
   return res.json();
 }
 
+// `state` (a 2-letter code) ranks organizations there first among equally
+// good matches; it doesn't filter.
 export async function searchOrganizations(
   query: string,
   limit = 15,
   signal?: AbortSignal,
+  state?: string,
 ): Promise<OrgSearchResult[]> {
   const headers = await getEdgeFunctionHeaders('application/json', { useAnonOnly: true });
   const res = await fetch(SEARCH_ORGS_URL, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ query, limit }),
+    body: JSON.stringify(state ? { query, limit, state } : { query, limit }),
     signal,
   });
 

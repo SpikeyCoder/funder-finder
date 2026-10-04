@@ -10,7 +10,8 @@
 //
 // Keyed by the query with whitespace runs collapsed (the server collapses
 // them too, so those are the same search), but case kept: ranking reads camelCase ("SitStayRead" is split
-// into words, "sitstayread" isn't). Entries expire, so a long-open tab still
+// into words, "sitstayread" isn't). And by scope: anything else the results
+// depend on (the state ranked first). Entries expire, so a long-open tab still
 // sees newly added organizations, and the oldest go first past the cap.
 
 const MAX_ENTRIES = 50;
@@ -28,6 +29,12 @@ export function searchKey(query: string): string {
   return query.replace(/\s+/g, ' ').trim();
 }
 
+// NUL can't be in a query (Postgres text can't hold it), so it can't make two
+// different (query, scope) pairs collide.
+function cacheKey(query: string, scope: string): string {
+  return `${scope}\u0000${searchKey(query)}`;
+}
+
 export class SearchCache<T extends readonly unknown[]> {
   private entries = new Map<string, Entry<T>>();
   private pausedUntil = 0;
@@ -38,9 +45,9 @@ export class SearchCache<T extends readonly unknown[]> {
     private readonly now: () => number = Date.now,
   ) {}
 
-  get(query: string): T | undefined {
+  get(query: string, scope = ''): T | undefined {
     if (this.paused()) return undefined;
-    const key = searchKey(query);
+    const key = cacheKey(query, scope);
     const entry = this.entries.get(key);
     if (!entry) return undefined;
     if (this.now() - entry.at > this.ttlMs) {
@@ -63,9 +70,9 @@ export class SearchCache<T extends readonly unknown[]> {
     return this.now() < this.pausedUntil;
   }
 
-  set(query: string, value: T): void {
+  set(query: string, value: T, scope = ''): void {
     if (value.length === 0 || this.paused()) return;
-    const key = searchKey(query);
+    const key = cacheKey(query, scope);
     this.entries.delete(key);
     this.entries.set(key, { value, at: this.now() });
     while (this.entries.size > this.maxEntries) {
