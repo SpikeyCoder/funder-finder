@@ -4,19 +4,20 @@
 //
 // Only results with matches are kept: a search that found nothing is always
 // sent again. After the user requests a missing organization the cache is
-// off for a while (pause()): adding it takes up to ~15 minutes (the request
-// queue runs every 15), and any cached search (its name, a prefix of it,
-// another spelling) could hide it meanwhile.
+// off for a while (pause()): the request queue runs every 15 minutes, 20
+// requests a run, retrying failures on later runs, and any cached search (its
+// name, a prefix of it, another spelling) could hide it meanwhile.
 //
-// Keyed by the query as sent, with whitespace runs collapsed (the server does
-// the same), but case kept: ranking reads camelCase ("SitStayRead" is split
+// Keyed by the query with whitespace runs collapsed (the server collapses
+// them too, so those are the same search), but case kept: ranking reads camelCase ("SitStayRead" is split
 // into words, "sitstayread" isn't). Entries expire, so a long-open tab still
 // sees newly added organizations, and the oldest go first past the cap.
 
 const MAX_ENTRIES = 50;
 const TTL_MS = 5 * 60_000;
-// Requests are processed every 15 minutes; leave room for a slow run.
-const PAUSE_MS = 30 * 60_000;
+// Long enough for a backlog or a retried lookup; only the tab that made a
+// request pays for it, with uncached repeat searches.
+const PAUSE_MS = 2 * 60 * 60_000;
 
 interface Entry<T> {
   value: T;

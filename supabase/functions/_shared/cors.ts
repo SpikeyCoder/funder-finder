@@ -40,11 +40,12 @@ const DEFAULT_HEADERS = "authorization, x-client-info, apikey, content-type";
 
 // How long a browser may reuse a preflight. Without it a browser re-sends the
 // preflight after ~5 s, so most calls (each search as the user types) paid
-// an extra round trip to the function first. Browsers cap it (Chromium 2 h,
-// Safari 10 min) and ignore it on non-preflight responses, so it's sent with
-// every CORS header set, whether a function answers OPTIONS through
-// preflightResponse or inline.
-const PREFLIGHT_MAX_AGE = "7200";
+// an extra round trip to the function first. 10 minutes (Safari's cap) keeps
+// nearly all of that saving while a narrowed allowlist (e.g. dropping
+// ALLOW_LOCAL_CORS) still reaches browsers within minutes. Browsers ignore it
+// on non-preflight responses, so it's sent with every CORS header set,
+// whether a function answers OPTIONS through preflightResponse or inline.
+const PREFLIGHT_MAX_AGE = "600";
 
 export function corsHeaders(
   requestOrigin: string | null,

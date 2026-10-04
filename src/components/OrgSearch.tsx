@@ -52,10 +52,17 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
   const dismissedRef = useRef(false);
 
   // Whitespace-only edits shouldn't abort and resend an identical search:
-  // normalized as the cache and the server do ("red  cross" is "red cross").
+  // whitespace runs collapse ("red  cross" is "red cross"), as on the server.
   const trimmedQuery = searchKey(query);
+  // The query the effect last ran for: the same one again is a retry.
+  const lastQueryRef = useRef('');
 
   useEffect(() => {
+    // Run again for the same query: a retry ("Try again"), which has nothing
+    // to wait for.
+    const retry = lastQueryRef.current === trimmedQuery;
+    lastQueryRef.current = trimmedQuery;
+
     // The highlighted row and an open request form belong to the previous
     // results.
     setSelectedIdx(-1);
@@ -112,7 +119,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
         console.error('Organization search failed:', err);
         land(searched, [], 'error');
       }
-    }, DEBOUNCE_MS);
+    }, retry ? 0 : DEBOUNCE_MS);
 
     // inFlight is left as is: a newer search replaces this one, so the
     // spinner stays steady while typing instead of blinking off each
