@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search, Building2, Users, Loader2, SearchX, AlertCircle } from 'lucide-react';
 import { OrgSearchResult } from '../types';
 import { searchOrganizations } from '../utils/matching';
-import { SearchCache } from '../lib/searchCache';
+import { SearchCache, searchKey } from '../lib/searchCache';
 import { fmtDollar } from './InsightCharts';
 import OrgRequestForm from './OrgRequestForm';
 
@@ -11,8 +11,10 @@ import OrgRequestForm from './OrgRequestForm';
 // and back.
 const searchCache = new SearchCache<OrgSearchResult[]>();
 
-// Wait this long after the last keystroke before searching.
-const DEBOUNCE_MS = 200;
+// Wait this long after the last keystroke before searching. (Not shorter:
+// the function allows 60 searches a minute per IP, aborted ones included,
+// and people behind one office address share that.)
+const DEBOUNCE_MS = 300;
 
 interface OrgSearchProps {
   autoFocus?: boolean;
@@ -25,9 +27,10 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
   const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<OrgSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
-  // A request is actually on the wire (not just the debounce): what the
-  // spinner and the "Searching…" panel show, so they don't flash on every
-  // keystroke.
+  // A request has gone out and no result has replaced it yet: what the
+  // spinner and the "Searching…" panel show. Set when a request starts (not
+  // during the debounce), and kept while a newer query takes over from it so
+  // they don't blink off on every keystroke.
   const [inFlight, setInFlight] = useState(false);
   // Outcome of the latest completed search, so a miss or a failure is shown
   // instead of the dropdown silently staying closed.
@@ -48,8 +51,9 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
   // still in flight doesn't pop it back open; cleared when they type or refocus.
   const dismissedRef = useRef(false);
 
-  // Whitespace-only edits shouldn't abort and resend an identical search.
-  const trimmedQuery = query.trim();
+  // Whitespace-only edits shouldn't abort and resend an identical search:
+  // normalized as the cache and the server do ("red  cross" is "red cross").
+  const trimmedQuery = searchKey(query);
 
   useEffect(() => {
     // The highlighted row and an open request form belong to the previous
@@ -67,12 +71,13 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
       return;
     }
 
-    // Already searched in this tab: show it now, no request.
+    // Already searched in this tab: show it now, no request. (Only matches
+    // are cached; a miss is always searched again.)
     const cached = searchCache.get(trimmedQuery);
     if (cached) {
       setSearchedQuery(trimmedQuery);
       setResults(cached);
-      setStatus(cached.length > 0 ? 'results' : 'empty');
+      setStatus('results');
       setLoading(false);
       setInFlight(false);
       if (!dismissedRef.current) setShowDropdown(true);
@@ -154,7 +159,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
     // shouldn't cover the form with the panel it came from. (Typing new text
     // reopens as usual, and the new search closes the form.)
     // Once it's submitted, the results are worth reaching again.
-    if (requestName !== null && !requestSubmitted && text.trim() === requestName) return;
+    if (requestName !== null && !requestSubmitted && searchKey(text) === requestName) return;
     dismissedRef.current = false;
     // Below two characters the effect is about to reset to idle; don't flash
     // the previous panel first.
@@ -254,6 +259,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
       <div role="status" aria-live="polite" className="sr-only">
         {/* Includes the query so a new search with the same count is still
             announced. */}
+        {inFlight && status === 'idle' && 'Searching…'}
         {status === 'empty' && `No organizations match ${searchedQuery}`}
         {status === 'error' &&
           (retrying ? `Retrying search for ${searchedQuery}` : `Search for ${searchedQuery} is temporarily unavailable.`)}
@@ -377,7 +383,15 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
 
       {showRequestForm && (
         <div className="mt-2 bg-[#161b22] border border-[#30363d] rounded-xl px-4 py-3 text-left">
-          <OrgRequestForm initialName={requestName} onSubmitted={() => setRequestSubmitted(true)} />
+          <OrgRequestForm
+            initialName={requestName}
+            onSubmitted={() => {
+              setRequestSubmitted(true);
+              // Once it's added, searching again should find it, not the
+              // results cached from before.
+              searchCache.clear();
+            }}
+          />
         </div>
       )}
     </div>

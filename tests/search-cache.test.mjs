@@ -64,3 +64,12 @@ test('re-setting a query refreshes its value and age', () => {
   now = 1500;
   assert.equal(cache.get('q'), 2);
 });
+
+test('clear drops every entry', () => {
+  const cache = new SearchCache();
+  cache.set('a', 1);
+  cache.set('b', 2);
+  cache.clear();
+  assert.equal(cache.get('a'), undefined);
+  assert.equal(cache.get('b'), undefined);
+});

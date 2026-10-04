@@ -42,6 +42,10 @@ export class SearchCache<T> {
     return entry.value;
   }
 
+  clear(): void {
+    this.entries.clear();
+  }
+
   set(query: string, value: T): void {
     const key = searchKey(query);
     this.entries.delete(key);
