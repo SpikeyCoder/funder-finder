@@ -74,5 +74,13 @@ export function preflightResponse(
   request: Request,
   options: CorsOptions = {},
 ): Response {
-  return new Response("ok", { headers: corsHeaders(request.headers.get("origin"), options) });
+  return new Response("ok", {
+    headers: {
+      ...corsHeaders(request.headers.get("origin"), options),
+      // Without it a browser re-sends the preflight after ~5 s, so most
+      // requests (each search as the user types) paid an extra round trip
+      // to the function first. Browsers cap it: Chromium 2 h, Safari 10 min.
+      "Access-Control-Max-Age": "7200",
+    },
+  });
 }
