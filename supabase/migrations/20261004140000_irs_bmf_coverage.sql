@@ -27,14 +27,18 @@
 --
 -- Chapters often carry their group's name in NAME and their own in SORT_NAME
 -- ("PTA CALIFORNIA CONGRESS …" / "DONA MERCED ELEMENTARY PTA"; 2,880
--- "LITTLE LEAGUE BASEBALL INC"s). For a name 5+ BMF organizations share, a
--- SORT_NAME with a word in it is the organization's own name: it's added as
--- "DONA MERCED ELEMENTARY PTA (PTA CALIFORNIA CONGRESS …)" and searched by
--- that. A group-exemption chapter (affiliation 9) with a shared name and no
--- such SORT_NAME ("8138") is skipped, so thousands of rows don't flood
--- searches for the group; any other shared name is kept (hundreds of churches
--- really are each "FIRST BAPTIST CHURCH"). An unshared NAME is the
--- organization's own, chapter or not ("VILLA ROSA INC").
+-- "LITTLE LEAGUE BASEBALL INC"s). For a branch or chapter (affiliation 3 or
+-- 9) whose name 5+ BMF organizations share, a SORT_NAME with a word in it is
+-- its own name, unless it's a label ("GROUP RETURN"): it's added and searched
+-- as "DONA MERCED ELEMENTARY PTA (PTA CALIFORNIA CONGRESS …)", with the group
+-- after it so a chapter named for its host ("UNIVERSITY OF NORTH ALABAMA
+-- (BETA BETA BETA)") doesn't match as the host itself. Such a chapter
+-- (affiliation 9) with no own name ("8138") is skipped, so thousands of rows
+-- don't flood searches for the group. A group's central organization
+-- (affiliation 6 or 8) keeps NAME: its SORT_NAME is a label ("NATIONAL
+-- HEADQUARTERS", "PARENT ORGANIZATION"). Any other shared name is kept too
+-- (hundreds of churches really are each "FIRST BAPTIST CHURCH"), as is an
+-- unshared NAME, chapter or not ("VILLA ROSA INC").
 --
 -- org_search_alias: the normalized IRS legal name of an org_search row, where
 -- it differs from the stored name, refreshed after each load by
@@ -84,9 +88,10 @@ ALTER TABLE public.irs_organizations ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.irs_organizations FROM PUBLIC, anon, authenticated;
 GRANT SELECT, INSERT, UPDATE ON public.irs_organizations TO service_role;
 
--- The organization's own name: NAME, except for a name 5+ organizations
--- share (see above), where SORT_NAME is when it has a word of 3+ letters (not
--- just a number). NULL for such a group-exemption chapter without one.
+-- The organization's own name: NAME, except for a branch or chapter whose
+-- name 5+ organizations share (see above), where it's SORT_NAME when that has
+-- a word of 3+ letters (not just a number) and isn't a label. NULL for such a
+-- group-exemption chapter without one.
 CREATE OR REPLACE FUNCTION public.irs_own_name(
   p_name text, p_sort_name text, p_affiliation text, p_group_size integer)
 RETURNS text
@@ -96,8 +101,11 @@ PARALLEL SAFE
 SET search_path = ''
 AS $$
   SELECT CASE
-    WHEN coalesce(p_group_size, 1) < 5 THEN p_name
-    WHEN p_sort_name ~ '[A-Za-z]{3}' THEN btrim(p_sort_name)
+    WHEN coalesce(p_group_size, 1) < 5 OR p_affiliation IS DISTINCT FROM '9' AND p_affiliation IS DISTINCT FROM '3'
+      THEN p_name
+    WHEN p_sort_name ~ '[A-Za-z]{3}'
+         AND upper(btrim(p_sort_name)) !~ '^(GROUP RETURN|PARENT( ORGANIZATION| COMPANY| ORG)?|((NATIONAL|INTERNATIONAL|STATE|CENTRAL) )?(HEADQUARTERS|HQ|OFFICE|ORGANIZATION)|NATIONAL|INTERNATIONAL)$'
+      THEN btrim(p_sort_name)
     WHEN p_affiliation = '9' THEN NULL
     ELSE p_name
   END
@@ -293,8 +301,8 @@ CREATE INDEX IF NOT EXISTS org_search_alias_match
   ON public.org_search_alias (alt_match text_pattern_ops) WHERE alt_match IS NOT NULL;
 
 -- The normalized IRS name for an org_search row (kind, EIN, stored name), if
--- it differs from the stored name: the organization's own name (a chapter's,
--- not its group's).
+-- it differs from the stored name: as an added recipient would be named (a
+-- chapter's own name, then its group's).
 -- None for a recipient whose EIN is also a funder's. (A name from an older
 -- load is still a good alias.)
 CREATE OR REPLACE FUNCTION public.org_search_alt(p_kind text, p_ein text, p_name text)
@@ -306,7 +314,7 @@ SET search_path = ''
 AS $$
   SELECT x.alt
     FROM (SELECT public.org_search_norm(
-                   public.irs_own_name(i.name, i.sort_name, i.affiliation, i.group_size)) AS alt
+                   public.irs_display_name(i.name, i.sort_name, i.affiliation, i.group_size)) AS alt
             FROM public.irs_organizations i
            WHERE p_ein ~ '^\d{1,9}$' AND i.ein = lpad(p_ein, 9, '0')
              AND NOT (p_kind = 'recipient' AND EXISTS (
