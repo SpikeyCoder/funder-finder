@@ -285,11 +285,15 @@ async function sync(dir, month, since) {
     if (!DRY_RUN) stored += await rpc('irs_bmf_stage', { p_rows: batch, p_month: month });
     batch = [];
   };
+  // An EIN listed twice in one batch would fail it ("ON CONFLICT DO UPDATE
+  // command cannot affect row a second time"); keep the first.
+  const seen = new Set();
   for (const [f, path] of files) {
     let fileRows = 0;
     for await (const rec of bmfRecords(path)) {
       const row = toStageRow(rec, nameCounts.get(c3Name(rec)) || 1);
-      if (!row) continue;
+      if (!row || seen.has(row.ein)) continue;
+      seen.add(row.ein);
       batch.push(row);
       fileRows++;
       if (batch.length >= BATCH_ROWS) await flush();

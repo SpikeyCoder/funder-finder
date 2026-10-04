@@ -386,7 +386,6 @@ END;
 $$;
 
 DROP FUNCTION IF EXISTS public.org_search_refresh_alt(text, text, integer);
-DROP FUNCTION IF EXISTS public.org_search_alt(text, text, text);
 DROP TABLE IF EXISTS public.org_search_alias;
 
 DROP FUNCTION IF EXISTS public.irs_bmf_add_recipients(timestamptz, text, integer);

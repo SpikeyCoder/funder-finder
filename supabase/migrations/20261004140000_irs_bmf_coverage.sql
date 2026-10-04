@@ -300,30 +300,6 @@ CREATE INDEX IF NOT EXISTS org_search_alias_trgm
 CREATE INDEX IF NOT EXISTS org_search_alias_match
   ON public.org_search_alias (alt_match text_pattern_ops) WHERE alt_match IS NOT NULL;
 
--- The normalized IRS name for an org_search row (kind, EIN, stored name), if
--- it differs from the stored name: as an added recipient would be named (a
--- chapter's own name, then its group's).
--- None for a recipient whose EIN is also a funder's. (A name from an older
--- load is still a good alias.)
-CREATE OR REPLACE FUNCTION public.org_search_alt(p_kind text, p_ein text, p_name text)
-RETURNS text
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-  SELECT x.alt
-    FROM (SELECT public.org_search_norm(
-                   public.irs_display_name(i.name, i.sort_name, i.affiliation, i.group_size)) AS alt
-            FROM public.irs_organizations i
-           WHERE p_ein ~ '^\d{1,9}$' AND i.ein = lpad(p_ein, 9, '0')
-             AND NOT (p_kind = 'recipient' AND EXISTS (
-                   SELECT 1 FROM public.funders f WHERE f.id IN (i.ein, ltrim(i.ein, '0'))))) x
-   WHERE x.alt <> ''
-     AND public.org_search_core(x.alt)
-         IS DISTINCT FROM public.org_search_core(public.org_search_norm(p_name))
-$$;
-
 -- After a load: recomputes the alias of the next p_window org_search rows
 -- after (p_after_kind, p_after_id). Returns the last key looked at (NULLs
 -- when done) and how many aliases changed.
@@ -349,11 +325,37 @@ BEGIN
     RETURN;
   END IF;
 
-  WITH w AS (
-    SELECT s.kind, s.id, public.org_search_alt(s.kind, s.ein, s.name) AS alt
-      FROM public.org_search s
+  -- Each row's alias: its IRS name as an added recipient would be named (a
+  -- chapter's own name, then its group's), normalized, where that differs
+  -- from the stored name. None for a recipient whose EIN is also a funder's
+  -- (a grant record that names the funder's EIN for its grantee would
+  -- otherwise give the grantee the funder's name). A name from an older load
+  -- is still a good alias. (Inline rather than a per-row function call, which
+  -- couldn't be inlined: twice as fast.)
+  -- (The window's keys by an index-ordered LIMIT, and LIMIT 1 in the
+  -- lateral so it stays a per-row primary-key lookup: unlimited, the planner
+  -- hash-joins all of irs_organizations for every window.)
+  WITH keys AS (
+    SELECT s.kind, s.id FROM public.org_search s
      WHERE (s.kind, s.id) > (coalesce(p_after_kind, ''), coalesce(p_after_id, ''))
-       AND (s.kind, s.id) <= (v_kind, v_id)
+     ORDER BY s.kind, s.id LIMIT LEAST(GREATEST(p_window, 1), 100000)
+  ),
+  w AS (
+    SELECT s.kind, s.id,
+           CASE WHEN n.alt <> '' AND public.org_search_core(n.alt)
+                                     IS DISTINCT FROM public.org_search_core(s.match_name)
+                THEN n.alt END AS alt
+      FROM keys k
+      JOIN public.org_search s ON s.kind = k.kind AND s.id = k.id
+      LEFT JOIN LATERAL (
+        SELECT public.org_search_norm(
+                 public.irs_display_name(i.name, i.sort_name, i.affiliation, i.group_size)) AS alt
+          FROM public.irs_organizations i
+         WHERE s.ein ~ '^\d{1,9}$' AND i.ein = lpad(s.ein, 9, '0')
+           AND NOT (s.kind = 'recipient' AND EXISTS (
+                 SELECT 1 FROM public.funders f WHERE f.id IN (i.ein, ltrim(i.ein, '0'))))
+         LIMIT 1
+      ) n ON true
   ),
   set_alias AS (
     INSERT INTO public.org_search_alias AS a (kind, id, alt_match)
@@ -376,7 +378,6 @@ END;
 $$;
 
 -- Only the sync job (service role) calls these.
-REVOKE EXECUTE ON FUNCTION public.org_search_alt(text, text, text) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.irs_bmf_stage(jsonb, date) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.irs_bmf_add_recipients(timestamptz, text, integer) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.org_search_refresh_alt(text, text, integer) FROM PUBLIC, anon, authenticated;

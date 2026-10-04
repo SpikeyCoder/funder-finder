@@ -404,10 +404,14 @@ export default function ProjectWorkspace() {
           if (stateMatches?.length) matched = stateMatches[0];
         }
         if (!matched) {
+          // Anywhere: only organizations with grants on record (or not from
+          // the IRS file), so a same-named IRS-file row elsewhere isn't taken
+          // for the peer.
           const { data: anyMatches } = await supabase
             .from('recipient_organizations')
             .select('ein, name, primary_state, ntee_code, total_funding, funder_count')
             .ilike('name', `%${safeName}%`)
+            .or('source.is.null,grant_count.gt.0')
             .order('funder_count', { ascending: false }).limit(1);
           if (anyMatches?.length) matched = anyMatches[0];
         }
