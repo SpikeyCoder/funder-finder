@@ -7,39 +7,49 @@
 -- state, from the IRS Business Master File) found 129 of 510 not in
 -- FunderMatch at all: recipient_organizations only holds organizations named
 -- in a funder's grant records. Of the BMF's 445,753 active 501(c)(3) public
--- charities that report income, 194,126 aren't in FunderMatch.
--- And 168k organizations FunderMatch does hold are stored under a name other
--- than their IRS legal name (grant records write "CCHRC" for COLD CLIMATE
+-- charities that report income, about 194,000 aren't in FunderMatch.
+-- And about 140,000 organizations FunderMatch does hold are stored under a name
+-- other than their IRS legal name (grant records write "CCHRC" for COLD CLIMATE
 -- HOUSING RESEARCH CENTER, "KBRW" for SILAKKUAGVIK COMMUNICATION INC), so a
 -- search for the legal name misses them.
 --
 -- FIX
 -- ---
 -- irs_organizations: the BMF's 501(c)(3) rows that matter here (active public
--- charities with income, and any organization FunderMatch already holds),
--- loaded monthly by scripts/sync-irs-bmf.js (.github/workflows/sync-irs-bmf.yml)
--- through irs_bmf_stage(). Service role only.
+-- charities with income, organizations FunderMatch already holds, and rows
+-- already stored, so a change in status overwrites them), loaded monthly by
+-- scripts/sync-irs-bmf.js (.github/workflows/sync-irs-bmf.yml) through
+-- irs_bmf_stage(). Service role only.
 --
--- irs_bmf_add_recipients() adds the missing public charities to
--- recipient_organizations with source = 'irs_bmf' and no grants (as the
--- organization-request queue already adds requested ones). A unique index on
--- recipient_organizations.ein (every row has a distinct 9-digit EIN today)
--- keeps it and the request queue from adding one twice.
+-- irs_bmf_add_recipients() adds the missing public charities staged by the
+-- current run to recipient_organizations, with source = 'irs_bmf' and no
+-- grants (as the organization-request queue already adds requested ones).
 --
--- org_search.alt_match: the normalized IRS legal name, where it differs from
--- the stored name. Set by a trigger on org_search (so sync inserts and
--- org_search_rebuild() fill it) and refreshed after each load by
--- org_search_refresh_alt(). search_organizations matches and ranks both names.
+-- Chapters often carry their group's name in NAME and their own in SORT_NAME
+-- ("PTA CALIFORNIA CONGRESS …" / "DONA MERCED ELEMENTARY PTA"; 2,880
+-- "LITTLE LEAGUE BASEBALL INC"s). For a name 5+ BMF organizations share, a
+-- SORT_NAME with a word in it is the organization's own name: it's added as
+-- "DONA MERCED ELEMENTARY PTA (PTA CALIFORNIA CONGRESS …)" and searched by
+-- that. A group-exemption chapter (affiliation 9) with a shared name and no
+-- such SORT_NAME ("8138") is skipped, so thousands of rows don't flood
+-- searches for the group; any other shared name is kept (hundreds of churches
+-- really are each "FIRST BAPTIST CHURCH"). An unshared NAME is the
+-- organization's own, chapter or not ("VILLA ROSA INC").
 --
--- Nothing here deletes: a row gone from the BMF keeps its last bmf_month, and
--- only rows from the latest load are added as recipients.
+-- org_search_alias: the normalized IRS legal name of an org_search row, where
+-- it differs from the stored name, refreshed after each load by
+-- org_search_refresh_alt(). A side table rather than an org_search column: an
+-- update there would move the row to the end of the heap, and the capped
+-- candidate sets read org_search in its rebuilt (largest funding first) order.
+-- No alias for a recipient whose EIN is also a funder's (a grant record that
+-- names the funder's EIN for its grantee would otherwise give the grantee the
+-- funder's name). search_organizations matches and ranks both names.
 --
--- On a local copy of production's search data with the September 2026 BMF:
--- 661,579 IRS rows kept, 194,663 public charities added, 141,226 search rows
--- given their IRS legal name; the full load takes ~3.5 minutes. Of the
--- 1,020-name test (state passed), nonprofits found in the top 15 go from 317
--- to 508 of 510, foundations from 476 to 498 (all FunderMatch holds). Search
--- latency p50 31 ms, p95 65 ms (was 17 / 45).
+-- Nothing here deletes: a row gone from the BMF keeps its old staged_at, and
+-- only rows staged by the current run are added as recipients.
+--
+-- On a local copy of production's search data with the September 2026 BMF,
+-- see the PR for the measured results.
 --
 -- Rollback: supabase/rollbacks/20261004140000_irs_bmf_coverage.down.sql
 
@@ -48,6 +58,10 @@
 CREATE TABLE IF NOT EXISTS public.irs_organizations (
   ein text PRIMARY KEY CHECK (ein ~ '^\d{9}$'),
   name text NOT NULL,
+  sort_name text,
+  affiliation text,
+  -- How many of the BMF's 501(c)(3) organizations have this NAME.
+  group_size integer,
   city text,
   state text,
   zip text,
@@ -61,16 +75,52 @@ CREATE TABLE IF NOT EXISTS public.irs_organizations (
   ruling text,
   -- The BMF release (first of its month) this row was last seen in.
   bmf_month date NOT NULL,
-  updated_at timestamptz NOT NULL DEFAULT now()
+  -- When a sync run last staged it.
+  staged_at timestamptz NOT NULL DEFAULT now()
 );
 ALTER TABLE public.irs_organizations ENABLE ROW LEVEL SECURITY;
 -- No policies: only the service role (which bypasses RLS) and SECURITY
 -- DEFINER functions read it.
-REVOKE ALL ON public.irs_organizations FROM anon, authenticated;
+REVOKE ALL ON public.irs_organizations FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.irs_organizations TO service_role;
+
+-- The organization's own name: NAME, except for a name 5+ organizations
+-- share (see above), where SORT_NAME is when it has a word of 3+ letters (not
+-- just a number). NULL for such a group-exemption chapter without one.
+CREATE OR REPLACE FUNCTION public.irs_own_name(
+  p_name text, p_sort_name text, p_affiliation text, p_group_size integer)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+PARALLEL SAFE
+SET search_path = ''
+AS $$
+  SELECT CASE
+    WHEN coalesce(p_group_size, 1) < 5 THEN p_name
+    WHEN p_sort_name ~ '[A-Za-z]{3}' THEN btrim(p_sort_name)
+    WHEN p_affiliation = '9' THEN NULL
+    ELSE p_name
+  END
+$$;
+
+-- The name an added recipient gets: its own name, with the group's after it
+-- when they differ ("DONA MERCED ELEMENTARY PTA (PTA CALIFORNIA CONGRESS …)").
+CREATE OR REPLACE FUNCTION public.irs_display_name(
+  p_name text, p_sort_name text, p_affiliation text, p_group_size integer)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+PARALLEL SAFE
+SET search_path = ''
+AS $$
+  SELECT CASE WHEN o.own = p_name THEN o.own ELSE o.own || ' (' || p_name || ')' END
+    FROM (SELECT public.irs_own_name(p_name, p_sort_name, p_affiliation, p_group_size) AS own) o
+$$;
 
 -- An active 501(c)(3) public charity that reports income: what's added as a
 -- recipient. (Foundation codes 10-24 are public charities; 02-04 private
--- foundations. Status 01: unconditional exemption.)
+-- foundations. Status 01: unconditional exemption. It also needs a name of
+-- its own: irs_own_name().)
 CREATE OR REPLACE FUNCTION public.irs_bmf_eligible(
   p_subsection text, p_foundation_code text, p_status text, p_income bigint)
 RETURNS boolean
@@ -114,8 +164,9 @@ END;
 $$;
 
 -- One batch of BMF rows (JSON array of objects with the columns above, EINs
--- 9 digits). Keeps eligible rows and rows for organizations FunderMatch
--- already holds (either EIN form); returns how many it stored.
+-- 9 digits). Keeps eligible rows, rows for organizations FunderMatch already
+-- holds (either EIN form), and rows already stored (so a lapsed exemption or
+-- a new name overwrites the old one); returns how many it stored.
 CREATE OR REPLACE FUNCTION public.irs_bmf_stage(p_rows jsonb, p_month date)
 RETURNS integer
 LANGUAGE sql
@@ -123,29 +174,33 @@ SET search_path = ''
 AS $$
   WITH ins AS (
     INSERT INTO public.irs_organizations AS i
-      (ein, name, city, state, zip, ntee_code, subsection, foundation_code, status,
-       income_amt, asset_amt, revenue_amt, ruling, bmf_month, updated_at)
-    SELECT r.ein, btrim(r.name), nullif(btrim(r.city), ''), nullif(btrim(r.state), ''),
-           nullif(btrim(r.zip), ''), nullif(btrim(r.ntee_code), ''), r.subsection,
-           r.foundation_code, r.status, r.income_amt, r.asset_amt, r.revenue_amt,
-           nullif(btrim(r.ruling), ''), p_month, now()
+      (ein, name, sort_name, affiliation, group_size, city, state, zip, ntee_code, subsection,
+       foundation_code, status, income_amt, asset_amt, revenue_amt, ruling, bmf_month, staged_at)
+    SELECT r.ein, btrim(r.name), nullif(btrim(r.sort_name), ''), r.affiliation, r.group_size,
+           nullif(btrim(r.city), ''), nullif(btrim(r.state), ''), nullif(btrim(r.zip), ''),
+           nullif(btrim(r.ntee_code), ''), r.subsection, r.foundation_code, r.status,
+           r.income_amt, r.asset_amt, r.revenue_amt, nullif(btrim(r.ruling), ''), p_month, now()
       FROM jsonb_to_recordset(p_rows) AS r(
-             ein text, name text, city text, state text, zip text, ntee_code text,
-             subsection text, foundation_code text, status text,
+             ein text, name text, sort_name text, affiliation text, group_size integer,
+             city text, state text,
+             zip text, ntee_code text, subsection text, foundation_code text, status text,
              income_amt bigint, asset_amt bigint, revenue_amt bigint, ruling text)
      WHERE r.ein ~ '^\d{9}$' AND btrim(r.name) <> ''
        AND (public.irs_bmf_eligible(r.subsection, r.foundation_code, r.status, r.income_amt)
+            OR EXISTS (SELECT 1 FROM public.irs_organizations x WHERE x.ein = r.ein)
             OR EXISTS (SELECT 1 FROM public.recipient_organizations o
                         WHERE o.ein IN (r.ein, ltrim(r.ein, '0')))
             OR EXISTS (SELECT 1 FROM public.funders f
                         WHERE f.id IN (r.ein, ltrim(r.ein, '0'))))
     ON CONFLICT (ein) DO UPDATE
-       SET name = EXCLUDED.name, city = EXCLUDED.city, state = EXCLUDED.state,
+       SET name = EXCLUDED.name, sort_name = EXCLUDED.sort_name,
+           affiliation = EXCLUDED.affiliation, group_size = EXCLUDED.group_size,
+           city = EXCLUDED.city, state = EXCLUDED.state,
            zip = EXCLUDED.zip, ntee_code = EXCLUDED.ntee_code,
            subsection = EXCLUDED.subsection, foundation_code = EXCLUDED.foundation_code,
            status = EXCLUDED.status, income_amt = EXCLUDED.income_amt,
            asset_amt = EXCLUDED.asset_amt, revenue_amt = EXCLUDED.revenue_amt,
-           ruling = EXCLUDED.ruling, bmf_month = EXCLUDED.bmf_month, updated_at = now()
+           ruling = EXCLUDED.ruling, bmf_month = EXCLUDED.bmf_month, staged_at = now()
     RETURNING 1
   )
   SELECT count(*)::integer FROM ins
@@ -155,19 +210,15 @@ $$;
 
 ALTER TABLE public.recipient_organizations ADD COLUMN IF NOT EXISTS source text;
 COMMENT ON COLUMN public.recipient_organizations.source IS
-  'NULL: from grant records; irs_bmf: added from the IRS Business Master File (no grants yet).';
+  'irs_bmf: added from the IRS Business Master File, with no grants at the time. NULL: from grant records or the organization-request queue.';
 
--- (On production built CONCURRENTLY beforehand, so this is a no-op there.)
-CREATE UNIQUE INDEX IF NOT EXISTS recipient_organizations_ein_key
-  ON public.recipient_organizations (ein);
-
--- Adds the eligible organizations from p_month's load that FunderMatch
--- doesn't hold (as a recipient or a funder, either EIN form), among the next
--- p_window IRS rows after EIN p_after. Returns the last EIN looked at (NULL
--- when there are none left) and how many were added; call again with that
--- EIN until it's NULL.
+-- Adds the eligible organizations staged since p_since (the current run's
+-- start) that FunderMatch doesn't hold, as a recipient or a funder under
+-- either EIN form, among the next p_window IRS rows after EIN p_after.
+-- Returns the last EIN looked at (NULL when there are none left) and how many
+-- were added; call again with that EIN until it's NULL.
 CREATE OR REPLACE FUNCTION public.irs_bmf_add_recipients(
-  p_month date, p_after text DEFAULT '', p_window integer DEFAULT 10000)
+  p_since timestamptz, p_after text DEFAULT '', p_window integer DEFAULT 10000)
 RETURNS TABLE(last_ein text, added integer)
 LANGUAGE plpgsql
 SET search_path = ''
@@ -189,20 +240,21 @@ BEGIN
     INSERT INTO public.recipient_organizations
       (ein, name, name_normalized, primary_city, primary_state, ntee_code, ntee_codes,
        total_funding, grant_count, funder_count, source)
-    SELECT i.ein, i.name, public.irs_name_normalized(i.name), i.city, i.state, i.ntee_code,
+    SELECT i.ein, n.name, public.irs_name_normalized(n.name), i.city, i.state, i.ntee_code,
            CASE WHEN i.ntee_code IS NULL THEN '{}'::text[] ELSE ARRAY[i.ntee_code] END,
            0, 0, 0, 'irs_bmf'
       FROM public.irs_organizations i
+      CROSS JOIN LATERAL (
+        SELECT public.irs_display_name(i.name, i.sort_name, i.affiliation, i.group_size) AS name) n
      WHERE i.ein > coalesce(p_after, '') AND i.ein <= v_last
-       AND i.bmf_month = p_month
+       AND i.staged_at >= p_since
+       AND n.name IS NOT NULL
        AND public.irs_bmf_eligible(i.subsection, i.foundation_code, i.status, i.income_amt)
        AND NOT EXISTS (SELECT 1 FROM public.recipient_organizations o
                         WHERE o.ein IN (i.ein, ltrim(i.ein, '0')))
        AND NOT EXISTS (SELECT 1 FROM public.funders f
                         WHERE f.id IN (i.ein, ltrim(i.ein, '0')))
      ORDER BY i.ein
-    -- The request queue may have added one meanwhile.
-    ON CONFLICT (ein) DO NOTHING
     RETURNING 1
   )
   SELECT count(*)::integer INTO v_added FROM ins;
@@ -212,12 +264,32 @@ $$;
 
 -- ── IRS names as a second searchable name ───────────────────────────────────
 
-ALTER TABLE public.org_search ADD COLUMN IF NOT EXISTS alt_match text;
+CREATE TABLE IF NOT EXISTS public.org_search_alias (
+  kind text NOT NULL,
+  id text NOT NULL,
+  -- NULL once the alias no longer applies (rows are cleared, not deleted).
+  alt_match text,
+  PRIMARY KEY (kind, id)
+);
+-- Public IRS names, read by search_organizations as its caller.
+ALTER TABLE public.org_search_alias ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.org_search_alias FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON public.org_search_alias TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.org_search_alias TO service_role;
+DROP POLICY IF EXISTS "Allow public read on org_search_alias" ON public.org_search_alias;
+CREATE POLICY "Allow public read on org_search_alias" ON public.org_search_alias FOR SELECT USING (true);
 
--- The normalized IRS legal name for an organization with this EIN and stored
--- name, if it differs from the stored name. (A name from an older load is
--- still a good alias.)
-CREATE OR REPLACE FUNCTION public.org_search_alt(p_ein text, p_name text)
+CREATE INDEX IF NOT EXISTS org_search_alias_trgm
+  ON public.org_search_alias USING gin (alt_match extensions.gin_trgm_ops) WHERE alt_match IS NOT NULL;
+CREATE INDEX IF NOT EXISTS org_search_alias_match
+  ON public.org_search_alias (alt_match text_pattern_ops) WHERE alt_match IS NOT NULL;
+
+-- The normalized IRS name for an org_search row (kind, EIN, stored name), if
+-- it differs from the stored name: the organization's own name (a chapter's,
+-- not its group's).
+-- None for a recipient whose EIN is also a funder's. (A name from an older
+-- load is still a good alias.)
+CREATE OR REPLACE FUNCTION public.org_search_alt(p_kind text, p_ein text, p_name text)
 RETURNS text
 LANGUAGE sql
 STABLE
@@ -225,34 +297,20 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
   SELECT x.alt
-    FROM (SELECT public.org_search_norm(i.name) AS alt
+    FROM (SELECT public.org_search_norm(
+                   public.irs_own_name(i.name, i.sort_name, i.affiliation, i.group_size)) AS alt
             FROM public.irs_organizations i
-           WHERE p_ein ~ '^\d{1,9}$' AND i.ein = lpad(p_ein, 9, '0')) x
-   WHERE public.org_search_core(x.alt)
+           WHERE p_ein ~ '^\d{1,9}$' AND i.ein = lpad(p_ein, 9, '0')
+             AND NOT (p_kind = 'recipient' AND EXISTS (
+                   SELECT 1 FROM public.funders f WHERE f.id IN (i.ein, ltrim(i.ein, '0'))))) x
+   WHERE x.alt <> ''
+     AND public.org_search_core(x.alt)
          IS DISTINCT FROM public.org_search_core(public.org_search_norm(p_name))
 $$;
-REVOKE EXECUTE ON FUNCTION public.org_search_alt(text, text) FROM PUBLIC, anon, authenticated;
 
-CREATE OR REPLACE FUNCTION public.org_search_set_alt()
-RETURNS trigger
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-BEGIN
-  NEW.alt_match := public.org_search_alt(NEW.ein, NEW.name);
-  RETURN NEW;
-END;
-$$;
-
-DROP TRIGGER IF EXISTS org_search_alt ON public.org_search;
-CREATE TRIGGER org_search_alt
-  BEFORE INSERT OR UPDATE OF ein, name ON public.org_search
-  FOR EACH ROW EXECUTE FUNCTION public.org_search_set_alt();
-
--- After a load: recomputes alt_match for the next p_window org_search rows
+-- After a load: recomputes the alias of the next p_window org_search rows
 -- after (p_after_kind, p_after_id). Returns the last key looked at (NULLs
--- when done) and how many rows changed.
+-- when done) and how many aliases changed.
 CREATE OR REPLACE FUNCTION public.org_search_refresh_alt(
   p_after_kind text DEFAULT '', p_after_id text DEFAULT '', p_window integer DEFAULT 10000)
 RETURNS TABLE(last_kind text, last_id text, changed integer)
@@ -275,32 +333,44 @@ BEGIN
     RETURN;
   END IF;
 
-  UPDATE public.org_search s
-     SET alt_match = public.org_search_alt(s.ein, s.name)
-   WHERE (s.kind, s.id) > (coalesce(p_after_kind, ''), coalesce(p_after_id, ''))
-     AND (s.kind, s.id) <= (v_kind, v_id)
-     AND s.alt_match IS DISTINCT FROM public.org_search_alt(s.ein, s.name);
-  GET DIAGNOSTICS v_changed = ROW_COUNT;
+  WITH w AS (
+    SELECT s.kind, s.id, public.org_search_alt(s.kind, s.ein, s.name) AS alt
+      FROM public.org_search s
+     WHERE (s.kind, s.id) > (coalesce(p_after_kind, ''), coalesce(p_after_id, ''))
+       AND (s.kind, s.id) <= (v_kind, v_id)
+  ),
+  set_alias AS (
+    INSERT INTO public.org_search_alias AS a (kind, id, alt_match)
+    SELECT w.kind, w.id, w.alt FROM w WHERE w.alt IS NOT NULL
+    ON CONFLICT (kind, id) DO UPDATE SET alt_match = EXCLUDED.alt_match
+     WHERE a.alt_match IS DISTINCT FROM EXCLUDED.alt_match
+    RETURNING 1
+  ),
+  cleared AS (
+    UPDATE public.org_search_alias a SET alt_match = NULL
+      FROM w
+     WHERE a.kind = w.kind AND a.id = w.id AND w.alt IS NULL AND a.alt_match IS NOT NULL
+    RETURNING 1
+  )
+  SELECT (SELECT count(*) FROM set_alias)::integer + (SELECT count(*) FROM cleared)::integer
+    INTO v_changed;
+
   RETURN QUERY SELECT v_kind, v_id, v_changed;
 END;
 $$;
 
 -- Only the sync job (service role) calls these.
+REVOKE EXECUTE ON FUNCTION public.org_search_alt(text, text, text) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.irs_bmf_stage(jsonb, date) FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.irs_bmf_add_recipients(date, text, integer) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.irs_bmf_add_recipients(timestamptz, text, integer) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.org_search_refresh_alt(text, text, integer) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.irs_bmf_stage(jsonb, date) TO service_role;
-GRANT EXECUTE ON FUNCTION public.irs_bmf_add_recipients(date, text, integer) TO service_role;
+GRANT EXECUTE ON FUNCTION public.irs_bmf_add_recipients(timestamptz, text, integer) TO service_role;
 GRANT EXECUTE ON FUNCTION public.org_search_refresh_alt(text, text, integer) TO service_role;
 
-CREATE INDEX IF NOT EXISTS org_search_alt_trgm
-  ON public.org_search USING gin (alt_match extensions.gin_trgm_ops) WHERE alt_match IS NOT NULL;
-CREATE INDEX IF NOT EXISTS org_search_alt
-  ON public.org_search (alt_match text_pattern_ops) WHERE alt_match IS NOT NULL;
-
 -- ── Search ──────────────────────────────────────────────────────────────────
--- 20261004120000's, with candidates also drawn from alt_match and each name
--- (stored and IRS legal) ranked on its own; an organization ranks by the
+-- 20261004120000's, with candidates also drawn from org_search_alias and each
+-- name (stored and IRS) ranked on its own; an organization ranks by the
 -- better of the two.
 
 CREATE OR REPLACE FUNCTION public.search_organizations(
@@ -493,12 +563,12 @@ BEGIN
     -- recipients are capped separately. The exact-name set guarantees an
     -- exact match is never cut by the others' caps.
     (SELECT s.id AS _id, s.ein AS _ein, s.name AS _name, s.match_name AS _match, s.state AS _state,
-            s.kind AS _etype, s.grant_count AS _gc, s.total_funding AS _tf, s.alt_match AS _alt
+            s.kind AS _etype, s.grant_count AS _gc, s.total_funding AS _tf, NULL::text AS _alt
        FROM org_search s
       WHERE s.kind = 'funder' AND s.match_name = ANY(v_exacts)
       LIMIT 500)
     UNION
-    (SELECT s.id, s.ein, s.name, s.match_name, s.state, s.kind, s.grant_count, s.total_funding, s.alt_match
+    (SELECT s.id, s.ein, s.name, s.match_name, s.state, s.kind, s.grant_count, s.total_funding, NULL::text
        FROM org_search s
       WHERE s.kind = 'funder' AND v_all1 IS NOT NULL AND s.match_name LIKE v_all1
         AND (v_all2 IS NULL OR s.match_name LIKE v_all2)
@@ -507,24 +577,24 @@ BEGIN
         AND (v_short IS NULL OR s.match_name LIKE v_short)
       LIMIT v_all_cap)
     UNION
-    (SELECT s.id, s.ein, s.name, s.match_name, s.state, s.kind, s.grant_count, s.total_funding, s.alt_match
+    (SELECT s.id, s.ein, s.name, s.match_name, s.state, s.kind, s.grant_count, s.total_funding, NULL::text
        FROM org_search s
       WHERE s.kind = 'funder'
         AND (s.match_name LIKE v_nothe || '%' OR s.match_name LIKE 'the ' || v_nothe || '%')
       LIMIT 500)
     UNION
-    (SELECT s.id, s.ein, s.name, s.match_name, s.state, s.kind, s.grant_count, s.total_funding, s.alt_match
+    (SELECT s.id, s.ein, s.name, s.match_name, s.state, s.kind, s.grant_count, s.total_funding, NULL::text
        FROM org_search s
       WHERE s.kind = 'funder' AND v_loose IS NOT NULL
         AND (s.match_name LIKE v_loose OR s.match_name LIKE v_loose2)
       LIMIT 500)
     UNION
-    (SELECT s.id, s.ein, s.name, s.match_name, s.state, s.kind, s.grant_count, s.total_funding, s.alt_match
+    (SELECT s.id, s.ein, s.name, s.match_name, s.state, s.kind, s.grant_count, s.total_funding, NULL::text
        FROM org_search s
       WHERE s.kind = 'recipient' AND s.match_name = ANY(v_exacts)
       LIMIT 500)
     UNION
-    (SELECT s.id, s.ein, s.name, s.match_name, s.state, s.kind, s.grant_count, s.total_funding, s.alt_match
+    (SELECT s.id, s.ein, s.name, s.match_name, s.state, s.kind, s.grant_count, s.total_funding, NULL::text
        FROM org_search s
       WHERE s.kind = 'recipient' AND v_all1 IS NOT NULL AND s.match_name LIKE v_all1
         AND (v_all2 IS NULL OR s.match_name LIKE v_all2)
@@ -533,44 +603,43 @@ BEGIN
         AND (v_short IS NULL OR s.match_name LIKE v_short)
       LIMIT v_all_cap)
     UNION
-    (SELECT s.id, s.ein, s.name, s.match_name, s.state, s.kind, s.grant_count, s.total_funding, s.alt_match
+    (SELECT s.id, s.ein, s.name, s.match_name, s.state, s.kind, s.grant_count, s.total_funding, NULL::text
        FROM org_search s
       WHERE s.kind = 'recipient'
         AND (s.match_name LIKE v_nothe || '%' OR s.match_name LIKE 'the ' || v_nothe || '%')
       LIMIT 500)
     UNION
-    (SELECT s.id, s.ein, s.name, s.match_name, s.state, s.kind, s.grant_count, s.total_funding, s.alt_match
+    (SELECT s.id, s.ein, s.name, s.match_name, s.state, s.kind, s.grant_count, s.total_funding, NULL::text
        FROM org_search s
       WHERE s.kind = 'recipient' AND v_loose IS NOT NULL
         AND (s.match_name LIKE v_loose OR s.match_name LIKE v_loose2)
       LIMIT 500)
 
-    -- The same on IRS legal names (alt_match, set only where it differs from
+    -- The same on IRS names (org_search_alias, set only where it differs from
     -- the stored name): exact, all words, prefix.
     UNION
-    (SELECT s.id, s.ein, s.name, s.match_name, s.state, s.kind, s.grant_count, s.total_funding, s.alt_match
-       FROM org_search s
-      WHERE s.alt_match = ANY(v_exacts)
+    (SELECT s.id, s.ein, s.name, s.match_name, s.state, s.kind, s.grant_count, s.total_funding, a.alt_match
+       FROM org_search_alias a JOIN org_search s ON s.kind = a.kind AND s.id = a.id
+      WHERE a.alt_match = ANY(v_exacts)
       LIMIT 500)
     UNION
-    (SELECT s.id, s.ein, s.name, s.match_name, s.state, s.kind, s.grant_count, s.total_funding, s.alt_match
-       FROM org_search s
-      WHERE v_all1 IS NOT NULL AND s.alt_match LIKE v_all1
-        AND (v_all2 IS NULL OR s.alt_match LIKE v_all2)
-        AND (v_all3 IS NULL OR s.alt_match LIKE v_all3)
-        AND (v_all4 IS NULL OR s.alt_match LIKE v_all4)
-        AND (v_short IS NULL OR s.alt_match LIKE v_short)
+    (SELECT s.id, s.ein, s.name, s.match_name, s.state, s.kind, s.grant_count, s.total_funding, a.alt_match
+       FROM org_search_alias a JOIN org_search s ON s.kind = a.kind AND s.id = a.id
+      WHERE v_all1 IS NOT NULL AND a.alt_match LIKE v_all1
+        AND (v_all2 IS NULL OR a.alt_match LIKE v_all2)
+        AND (v_all3 IS NULL OR a.alt_match LIKE v_all3)
+        AND (v_all4 IS NULL OR a.alt_match LIKE v_all4)
+        AND (v_short IS NULL OR a.alt_match LIKE v_short)
       LIMIT v_all_cap)
     UNION
-    (SELECT s.id, s.ein, s.name, s.match_name, s.state, s.kind, s.grant_count, s.total_funding, s.alt_match
-       FROM org_search s
-      WHERE s.alt_match LIKE v_nothe || '%' OR s.alt_match LIKE 'the ' || v_nothe || '%'
+    (SELECT s.id, s.ein, s.name, s.match_name, s.state, s.kind, s.grant_count, s.total_funding, a.alt_match
+       FROM org_search_alias a JOIN org_search s ON s.kind = a.kind AND s.id = a.id
+      WHERE a.alt_match LIKE v_nothe || '%' OR a.alt_match LIKE 'the ' || v_nothe || '%'
       LIMIT 500)
   ),
   measured AS (
     -- Per-row values the tiers share, computed once, on each normalized name
-    -- (stored and IRS legal, as rows of their own; the better one wins in
-    -- deduped).
+    -- (stored and IRS, as rows of their own; the better one wins in deduped).
     -- A query word hits when the name has it as a whole word, or (the last
     -- word, which may be partly typed) as the start of one; a word found only
     -- inside another ("mary" in "maryland") is half a hit.
@@ -659,7 +728,7 @@ END;
 $function$;
 
 -- ── Prewarm ─────────────────────────────────────────────────────────────────
--- As 20261004120000's, plus the alt_match indexes.
+-- As 20261004120000's, plus the alias table and its indexes.
 
 CREATE OR REPLACE FUNCTION public.prewarm_search_indexes()
 RETURNS bigint
@@ -679,8 +748,9 @@ BEGIN
     ['public.org_search_recipient_match', 'read'],
     ['public.org_search_funder_match_trgm', 'read'],
     ['public.org_search_recipient_match_trgm', 'read'],
-    ['public.org_search_alt', 'read'],
-    ['public.org_search_alt_trgm', 'read'],
+    ['public.org_search_alias', 'read'],
+    ['public.org_search_alias_match', 'read'],
+    ['public.org_search_alias_trgm', 'read'],
     ['public.funders_pkey', 'read'],
     ['public.recipient_organizations_pkey', 'read'],
     ['public.idx_recipient_org_ein', 'read']

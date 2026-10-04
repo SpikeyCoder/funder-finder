@@ -1,11 +1,13 @@
 -- Rollback for 20261004140000_irs_bmf_coverage.sql.
 -- Kept outside supabase/migrations/ so `supabase db push` never applies it.
 -- Puts back search_organizations and prewarm_search_indexes as of
--- 20261004120000, then drops the alias trigger, functions, indexes and
--- column, the IRS functions and table. Organizations the IRS load added stay
--- (they are real organizations); the last section removes them if wanted.
+-- 20261004120000, then drops the alias table and the IRS functions and
+-- table. Organizations the IRS load added stay (they are real organizations);
+-- the last section removes them if wanted.
 --
--- Disable the sync-irs-bmf workflow first.
+-- Disable the sync-irs-bmf workflow first, and deploy match-funders from
+-- before this change (its filter reads recipient_organizations.source) if
+-- that column is dropped.
 --
 -- Apply manually: psql "$DATABASE_URL" -f supabase/rollbacks/20261004140000_irs_bmf_coverage.down.sql
 
@@ -383,17 +385,16 @@ BEGIN
 END;
 $$;
 
-DROP TRIGGER IF EXISTS org_search_alt ON public.org_search;
-DROP FUNCTION IF EXISTS public.org_search_set_alt();
 DROP FUNCTION IF EXISTS public.org_search_refresh_alt(text, text, integer);
-DROP FUNCTION IF EXISTS public.org_search_alt(text, text);
--- Dropping the column drops its indexes.
-ALTER TABLE public.org_search DROP COLUMN IF EXISTS alt_match;
+DROP FUNCTION IF EXISTS public.org_search_alt(text, text, text);
+DROP TABLE IF EXISTS public.org_search_alias;
 
-DROP FUNCTION IF EXISTS public.irs_bmf_add_recipients(date, text, integer);
+DROP FUNCTION IF EXISTS public.irs_bmf_add_recipients(timestamptz, text, integer);
 DROP FUNCTION IF EXISTS public.irs_bmf_stage(jsonb, date);
 DROP FUNCTION IF EXISTS public.irs_name_normalized(text);
 DROP FUNCTION IF EXISTS public.irs_bmf_eligible(text, text, text, bigint);
+DROP FUNCTION IF EXISTS public.irs_display_name(text, text, text, integer);
+DROP FUNCTION IF EXISTS public.irs_own_name(text, text, text, integer);
 DROP TABLE IF EXISTS public.irs_organizations;
 
 COMMIT;
@@ -401,8 +402,7 @@ COMMIT;
 SELECT public.prewarm_search_indexes();
 
 -- Optional, to also remove the organizations the IRS load added (and then the
--- source column and the unique EIN index). Recipients someone has since
--- linked to (projects, saved lists) would lose those links; check first.
--- DELETE FROM public.recipient_organizations WHERE source = 'irs_bmf';
+-- source column). Recipients someone has since linked to (projects, saved
+-- lists) or that have since received grants would be lost; check first.
+-- DELETE FROM public.recipient_organizations WHERE source = 'irs_bmf' AND coalesce(grant_count, 0) = 0;
 -- ALTER TABLE public.recipient_organizations DROP COLUMN IF EXISTS source;
--- DROP INDEX IF EXISTS public.recipient_organizations_ein_key;

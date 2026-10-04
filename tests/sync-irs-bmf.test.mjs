@@ -2,7 +2,7 @@
 // Master File CSV parsing and the rows it sends to irs_bmf_stage().
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseCsvLine, toStageRow, bmfMonth } from '../scripts/sync-irs-bmf.js';
+import { parseCsvLine, toStageRow, bmfMonth, c3Name } from '../scripts/sync-irs-bmf.js';
 
 test('CSV fields: plain, quoted with commas, doubled quotes, empty', () => {
   assert.deepEqual(parseCsvLine('a,"b,c",,"say ""hi""",'), ['a', 'b,c', '', 'say "hi"', '']);
@@ -12,18 +12,31 @@ test('CSV fields: plain, quoted with commas, doubled quotes, empty', () => {
   );
 });
 
+test('a line with an unclosed quote is rejected', () => {
+  assert.equal(parseCsvLine('a,"b,c'), null);
+});
+
 const rec = {
   EIN: '956195778', NAME: 'LOS ANGELES SOCCER CLUB,INC', CITY: 'N HOLLYWOOD', STATE: 'CA',
   ZIP: '91601-3125', SUBSECTION: '03', FOUNDATION: '16', STATUS: '01', RULING: '202406',
+  AFFILIATION: '3', SORT_NAME: '',
   ASSET_AMT: '3401', INCOME_AMT: '38075', REVENUE_AMT: '34059', NTEE_CD: 'N64',
 };
 
 test('a 501(c)(3) record maps to a stage row', () => {
   assert.deepEqual(toStageRow(rec), {
-    ein: '956195778', name: 'LOS ANGELES SOCCER CLUB,INC', city: 'N HOLLYWOOD', state: 'CA',
+    ein: '956195778', name: 'LOS ANGELES SOCCER CLUB,INC', group_size: 1, sort_name: null, affiliation: '3',
+    city: 'N HOLLYWOOD', state: 'CA',
     zip: '91601', ntee_code: 'N64', subsection: '03', foundation_code: '16', status: '01',
     income_amt: 38075, asset_amt: 3401, revenue_amt: 34059, ruling: '202406',
   });
+});
+
+test("a chapter keeps its own name alongside its parent's", () => {
+  const row = toStageRow({ ...rec, NAME: 'PTA NORTH CAROLINA CONGRESS', AFFILIATION: '9', SORT_NAME: ' BREWSTER MIDDLE SCHOOL PTA ' });
+  assert.equal(row.name, 'PTA NORTH CAROLINA CONGRESS');
+  assert.equal(row.sort_name, 'BREWSTER MIDDLE SCHOOL PTA');
+  assert.equal(row.affiliation, '9');
 });
 
 test('blank amounts and codes are null', () => {
@@ -34,7 +47,12 @@ test('blank amounts and codes are null', () => {
   assert.equal(row.city, null);
 });
 
+test('the group size is passed through', () => {
+  assert.equal(toStageRow(rec, 97).group_size, 97);
+});
+
 test('other subsections, bad EINs and nameless rows are skipped', () => {
+  assert.equal(c3Name({ ...rec, SUBSECTION: '04' }), null);
   assert.equal(toStageRow({ ...rec, SUBSECTION: '04' }), null);
   assert.equal(toStageRow({ ...rec, EIN: '12345' }), null);
   assert.equal(toStageRow({ ...rec, NAME: '  ' }), null);
