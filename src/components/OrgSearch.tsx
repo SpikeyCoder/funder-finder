@@ -86,9 +86,14 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
     const timer = setTimeout(async () => {
       const searched = trimmedQuery;
       setInFlight(true);
+      // Opens the panel now (the first search's shows "Searching…"), unless
+      // the user closed it.
+      if (!dismissedRef.current) setShowDropdown(true);
       try {
         const data = await searchOrganizations(searched, 15, controller.signal);
-        searchCache.set(searched, data);
+        // Not a miss: an organization added meanwhile (e.g. just requested)
+        // should turn up when searched again.
+        if (data.length > 0) searchCache.set(searched, data);
         if (controller.signal.aborted) return;
         setSearchedQuery(searched);
         setResults(data);
@@ -111,10 +116,12 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
       }
     }, DEBOUNCE_MS);
 
+    // inFlight is left as is: a newer search replaces this one, so the
+    // spinner stays steady while typing instead of blinking off each
+    // keystroke. The next run clears it if no request will follow.
     return () => {
       clearTimeout(timer);
       controller.abort();
-      setInFlight(false);
     };
   }, [trimmedQuery, retryNonce]);
 
@@ -256,7 +263,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
 
       {/* The first search's panel: until now nothing showed below the box
           while it loaded. */}
-      {inFlight && status === 'idle' && !dismissedRef.current && (
+      {showDropdown && inFlight && status === 'idle' && (
         <div className="absolute z-50 w-full mt-2 bg-[#161b22] border border-[#30363d] rounded-xl shadow-xl overflow-hidden">
           <div className="flex items-center gap-3 px-4 py-3 text-sm text-gray-400">
             <Loader2 size={16} className="shrink-0 motion-safe:animate-spin" aria-hidden="true" />
