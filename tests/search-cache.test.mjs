@@ -28,6 +28,15 @@ test('returns what was stored for the same query', () => {
   assert.equal(cache.get('Red Cross'), undefined);
 });
 
+test('the same query in another scope is a different search', () => {
+  const cache = new SearchCache();
+  cache.set('habitat for humanity', ['any']);
+  cache.set('habitat for humanity', ['ga'], 'GA');
+  assert.deepEqual(cache.get('habitat for humanity'), ['any']);
+  assert.deepEqual(cache.get('habitat  for humanity', 'GA'), ['ga']);
+  assert.equal(cache.get('habitat for humanity', 'TX'), undefined);
+});
+
 test('a search that found nothing is not cached', () => {
   const cache = new SearchCache();
   cache.set('zzz nothing', []);

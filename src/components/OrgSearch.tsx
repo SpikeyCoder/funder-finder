@@ -25,9 +25,12 @@ interface OrgSearchProps {
   autoFocus?: boolean;
   placeholder?: string;
   initialQuery?: string;
+  // A 2-letter state code: organizations there rank first among equally good
+  // matches. '' for none.
+  state?: string;
 }
 
-export default function OrgSearch({ autoFocus = false, placeholder = 'Search funders & recipients by name or EIN...', initialQuery = '' }: OrgSearchProps) {
+export default function OrgSearch({ autoFocus = false, placeholder = 'Search funders & recipients by name or EIN...', initialQuery = '', state = '' }: OrgSearchProps) {
   const navigate = useNavigate();
   const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<OrgSearchResult[]>([]);
@@ -40,8 +43,10 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
   // Outcome of the latest completed search, so a miss or a failure is shown
   // instead of the dropdown silently staying closed.
   const [status, setStatus] = useState<'idle' | 'results' | 'empty' | 'error'>('idle');
-  // The query `status` describes, which lags `query` while a search is pending.
+  // The query (and state) `status` describes, which lag `query` (and `state`)
+  // while a search is pending.
   const [searchedQuery, setSearchedQuery] = useState('');
+  const [searchedState, setSearchedState] = useState('');
   const [retryNonce, setRetryNonce] = useState(0);
   // The name the request form was opened for (null = closed). Fixed when it
   // opens, so a search landing afterwards can't remount it and wipe its input.
@@ -59,9 +64,16 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
   // Whitespace-only edits shouldn't abort and resend an identical search:
   // whitespace runs collapse ("red  cross" is "red cross"), as on the server.
   const trimmedQuery = searchKey(query);
+  const searchState = /^[A-Z]{2}$/.test(state) ? state : '';
   // Set by "Try again" for the effect run it triggers: a retry has nothing
   // to wait for, so it skips the debounce.
   const retryRef = useRef(false);
+
+  // Picking a state asks for its results: show them even if the panel was
+  // closed (choosing from the picker counts as an outside click).
+  useEffect(() => {
+    dismissedRef.current = false;
+  }, [searchState]);
 
   useEffect(() => {
     const retry = retryRef.current;
@@ -76,6 +88,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
     // Shows a finished search, fresh or from the cache.
     const land = (searched: string, data: OrgSearchResult[], outcome: 'results' | 'empty' | 'error') => {
       setSearchedQuery(searched);
+      setSearchedState(searchState);
       setResults(data);
       setStatus(outcome);
       setLoading(false);
@@ -96,7 +109,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
 
     // Already searched in this tab: show it now, no request. (Misses aren't
     // cached; see SearchCache.)
-    const cached = searchCache.get(trimmedQuery);
+    const cached = searchCache.get(trimmedQuery, searchState);
     if (cached) {
       land(trimmedQuery, cached, 'results');
       return;
@@ -119,8 +132,8 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
       controller.signal.addEventListener('abort', cancel);
       const timeout = setTimeout(cancel, REQUEST_TIMEOUT_MS);
       try {
-        const data = await searchOrganizations(searched, 15, request.signal);
-        searchCache.set(searched, data);
+        const data = await searchOrganizations(searched, 15, request.signal, searchState || undefined);
+        searchCache.set(searched, data, searchState);
         if (controller.signal.aborted) return;
         land(searched, data, data.length > 0 ? 'results' : 'empty');
       } catch (err) {
@@ -141,7 +154,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
       clearTimeout(timer);
       controller.abort();
     };
-  }, [trimmedQuery, retryNonce]);
+  }, [trimmedQuery, searchState, retryNonce]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -162,11 +175,13 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  // The panel shows the outcome for what's in the box (and the state picked).
+  const current = searchedQuery === trimmedQuery && searchedState === searchState;
   // The error panel's own query is being searched again.
-  const retrying = status === 'error' && loading && searchedQuery === trimmedQuery;
+  const retrying = status === 'error' && loading && current;
   // The panel shows an earlier query's outcome while a newer one is being
   // fetched (in step with the spinner, not from the first keystroke).
-  const stale = inFlight && searchedQuery !== trimmedQuery;
+  const stale = inFlight && !current;
 
   const reopenDropdown = (text = query) => {
     // With the request form open for this text, clicking back into the box
@@ -213,7 +228,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
     // values come from this render, so a fast Enter can't slip past (a
     // `loading` flag set in an effect lags by a render). A mouse click on a
     // visible row is an explicit choice and still works.
-    if (!showDropdown || status !== 'results' || searchedQuery !== trimmedQuery) return;
+    if (!showDropdown || status !== 'results' || !current) return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       setSelectedIdx(prev => Math.min(prev + 1, results.length - 1));

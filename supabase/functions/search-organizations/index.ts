@@ -2,7 +2,9 @@
  * search-organizations — Supabase Edge Function
  *
  * Thin wrapper around the `search_organizations` PostgreSQL RPC function.
- * Accepts { query, limit? } and returns matching funders/recipients.
+ * Accepts { query, limit?, state? } and returns matching funders/recipients.
+ * `state` (a 2-letter code) ranks organizations in that state first among
+ * equally good matches; anything else is ignored.
  *
  * FM-2026-06-08-01 (pen-test): migrated from a per-function ALLOWED_ORIGINS
  * + inline corsHeaders() implementation to the shared
@@ -71,6 +73,9 @@ Deno.serve(async (req) => {
       : '';
     // p_limit is an integer: a fractional limit would make PostgREST reject the call.
     const limit = Number.isFinite(body?.limit) ? Math.min(Math.max(Math.trunc(body.limit), 1), 50) : 15;
+    const state = typeof body?.state === 'string' && /^[A-Za-z]{2}$/.test(body.state)
+      ? body.state.toUpperCase()
+      : null;
 
     if (!query || query.length < 2) {
       return new Response(
@@ -87,7 +92,9 @@ Deno.serve(async (req) => {
         Authorization: `Bearer ${SUPABASE_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ p_query: query, p_limit: limit }),
+      // p_state only when given, so this also works against the function
+      // before it had the parameter.
+      body: JSON.stringify(state ? { p_query: query, p_limit: limit, p_state: state } : { p_query: query, p_limit: limit }),
     });
 
     const searchFailed = () => new Response(
