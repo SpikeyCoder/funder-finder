@@ -276,8 +276,16 @@ ALTER TABLE public.org_search_alias ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.org_search_alias FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON public.org_search_alias TO anon, authenticated;
 GRANT SELECT, INSERT, UPDATE ON public.org_search_alias TO service_role;
-DROP POLICY IF EXISTS "Allow public read on org_search_alias" ON public.org_search_alias;
-CREATE POLICY "Allow public read on org_search_alias" ON public.org_search_alias FOR SELECT USING (true);
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policy
+                  WHERE polrelid = 'public.org_search_alias'::regclass
+                    AND polname = 'Allow public read on org_search_alias') THEN
+    CREATE POLICY "Allow public read on org_search_alias" ON public.org_search_alias
+      FOR SELECT USING (true);
+  END IF;
+END;
+$$;
 
 CREATE INDEX IF NOT EXISTS org_search_alias_trgm
   ON public.org_search_alias USING gin (alt_match extensions.gin_trgm_ops) WHERE alt_match IS NOT NULL;
