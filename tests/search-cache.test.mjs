@@ -28,10 +28,24 @@ test('returns what was stored for the same query', () => {
   assert.equal(cache.get('Red Cross'), undefined);
 });
 
-test('an empty result is cached too', () => {
+test('a search that found nothing is not cached', () => {
   const cache = new SearchCache();
   cache.set('zzz nothing', []);
-  assert.deepEqual(cache.get('zzz nothing'), []);
+  assert.equal(cache.get('zzz nothing'), undefined);
+});
+
+test('a requested name is never cached, in any case', () => {
+  const cache = new SearchCache();
+  cache.set('Acme Fund', ['other']);
+  cache.set('acme fund', ['other']);
+  cache.set('Red Cross', ['rc']);
+  cache.forget(' acme  FUND');
+  assert.equal(cache.get('Acme Fund'), undefined);
+  assert.equal(cache.get('acme fund'), undefined);
+  // A search while the request is pending doesn't cache it again.
+  cache.set('Acme Fund', ['other']);
+  assert.equal(cache.get('Acme Fund'), undefined);
+  assert.deepEqual(cache.get('Red Cross'), ['rc']);
 });
 
 test('entries expire after the TTL', () => {
@@ -46,30 +60,22 @@ test('entries expire after the TTL', () => {
 
 test('past the cap the least recently used entry goes first', () => {
   const cache = new SearchCache(2);
-  cache.set('a', 1);
-  cache.set('b', 2);
+  cache.set('a', [1]);
+  cache.set('b', [2]);
   cache.get('a'); // a is now more recent than b
-  cache.set('c', 3);
+  cache.set('c', [3]);
   assert.equal(cache.get('b'), undefined);
-  assert.equal(cache.get('a'), 1);
-  assert.equal(cache.get('c'), 3);
+  assert.deepEqual(cache.get('a'), [1]);
+  assert.deepEqual(cache.get('c'), [3]);
 });
 
 test('re-setting a query refreshes its value and age', () => {
   let now = 0;
   const cache = new SearchCache(50, 1000, () => now);
-  cache.set('q', 1);
+  cache.set('q', [1]);
   now = 900;
-  cache.set('q', 2);
+  cache.set('q', [2]);
   now = 1500;
-  assert.equal(cache.get('q'), 2);
+  assert.deepEqual(cache.get('q'), [2]);
 });
 
-test('clear drops every entry', () => {
-  const cache = new SearchCache();
-  cache.set('a', 1);
-  cache.set('b', 2);
-  cache.clear();
-  assert.equal(cache.get('a'), undefined);
-  assert.equal(cache.get('b'), undefined);
-});

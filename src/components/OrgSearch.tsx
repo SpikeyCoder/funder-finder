@@ -71,8 +71,8 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
       return;
     }
 
-    // Already searched in this tab: show it now, no request. (Only matches
-    // are cached; a miss is always searched again.)
+    // Already searched in this tab: show it now, no request. (Misses and
+    // requested names aren't cached; see SearchCache.)
     const cached = searchCache.get(trimmedQuery);
     if (cached) {
       setSearchedQuery(trimmedQuery);
@@ -96,9 +96,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
       if (!dismissedRef.current) setShowDropdown(true);
       try {
         const data = await searchOrganizations(searched, 15, controller.signal);
-        // Not a miss: an organization added meanwhile (e.g. just requested)
-        // should turn up when searched again.
-        if (data.length > 0) searchCache.set(searched, data);
+        searchCache.set(searched, data);
         if (controller.signal.aborted) return;
         setSearchedQuery(searched);
         setResults(data);
@@ -163,7 +161,8 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
     dismissedRef.current = false;
     // Below two characters the effect is about to reset to idle; don't flash
     // the previous panel first.
-    if (status !== 'idle' && text.trim().length >= 2) setShowDropdown(true);
+    // (While the first search runs, that's its "Searching…" panel.)
+    if ((status !== 'idle' || inFlight) && searchKey(text).length >= 2) setShowDropdown(true);
   };
 
   // The form opens below the search box rather than inside the dropdown, so
@@ -387,9 +386,9 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
             initialName={requestName}
             onSubmitted={() => {
               setRequestSubmitted(true);
-              // Once it's added, searching again should find it, not the
-              // results cached from before.
-              searchCache.clear();
+              // Once it's added, searching again should find it, not results
+              // cached before (or while the request was pending).
+              searchCache.forget(requestName);
             }}
           />
         </div>
