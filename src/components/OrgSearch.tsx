@@ -384,7 +384,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
               setRequestSubmitted(true);
               // Once it's added, any search that could find it (the name, a
               // prefix, an edited spelling) should reach the server.
-              searchCache.disable();
+              searchCache.pause();
             }}
           />
         </div>

@@ -4,9 +4,9 @@
 //
 // Only results with matches are kept: a search that found nothing is always
 // sent again. After the user requests a missing organization the cache is
-// off for the rest of the tab (disable()): adding it takes a while, and any
-// cached search (its name, a prefix of it, another spelling) could hide it.
-// Requests are rare, so that costs little.
+// off for a while (pause()): adding it takes up to ~15 minutes (the request
+// queue runs every 15), and any cached search (its name, a prefix of it,
+// another spelling) could hide it meanwhile.
 //
 // Keyed by the query as sent, with whitespace runs collapsed (the server does
 // the same), but case kept: ranking reads camelCase ("SitStayRead" is split
@@ -15,6 +15,8 @@
 
 const MAX_ENTRIES = 50;
 const TTL_MS = 5 * 60_000;
+// Requests are processed every 15 minutes; leave room for a slow run.
+const PAUSE_MS = 30 * 60_000;
 
 interface Entry<T> {
   value: T;
@@ -27,7 +29,7 @@ export function searchKey(query: string): string {
 
 export class SearchCache<T extends readonly unknown[]> {
   private entries = new Map<string, Entry<T>>();
-  private disabled = false;
+  private pausedUntil = 0;
 
   constructor(
     private readonly maxEntries = MAX_ENTRIES,
@@ -36,8 +38,8 @@ export class SearchCache<T extends readonly unknown[]> {
   ) {}
 
   get(query: string): T | undefined {
+    if (this.paused()) return undefined;
     const key = searchKey(query);
-    if (this.disabled) return undefined;
     const entry = this.entries.get(key);
     if (!entry) return undefined;
     if (this.now() - entry.at > this.ttlMs) {
@@ -50,15 +52,19 @@ export class SearchCache<T extends readonly unknown[]> {
     return entry.value;
   }
 
-  // Drops everything and caches nothing more.
-  disable(): void {
-    this.disabled = true;
+  // Drops everything and caches nothing for the next `ms`.
+  pause(ms = PAUSE_MS): void {
+    this.pausedUntil = this.now() + ms;
     this.entries.clear();
   }
 
+  private paused(): boolean {
+    return this.now() < this.pausedUntil;
+  }
+
   set(query: string, value: T): void {
+    if (value.length === 0 || this.paused()) return;
     const key = searchKey(query);
-    if (value.length === 0 || this.disabled) return;
     this.entries.delete(key);
     this.entries.set(key, { value, at: this.now() });
     while (this.entries.size > this.maxEntries) {

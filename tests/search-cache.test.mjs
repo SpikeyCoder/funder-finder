@@ -34,16 +34,21 @@ test('a search that found nothing is not cached', () => {
   assert.equal(cache.get('zzz nothing'), undefined);
 });
 
-test('once disabled it drops everything and caches nothing more', () => {
-  const cache = new SearchCache();
+test('paused, it drops everything and caches nothing until the pause ends', () => {
+  let now = 0;
+  const cache = new SearchCache(50, 60_000, () => now);
   cache.set('Acme', ['other']);
   cache.set('Red Cross', ['rc']);
-  cache.disable();
+  cache.pause(1000);
   assert.equal(cache.get('Acme'), undefined);
   assert.equal(cache.get('Red Cross'), undefined);
   // A search while the request is pending doesn't cache it again.
   cache.set('Acme', ['other']);
+  now = 999;
   assert.equal(cache.get('Acme'), undefined);
+  now = 1000;
+  cache.set('Acme', ['acme']);
+  assert.deepEqual(cache.get('Acme'), ['acme']);
 });
 
 test('entries expire after the TTL', () => {
