@@ -87,12 +87,12 @@ export const ROUTES = [
     slug: 'search',
     title: 'Search Nonprofit Funders and Grant Recipients | FunderMatch',
     description:
-      'Search 300,000+ funders and 449,000+ grant recipients by name or EIN. Explore IRS 990 giving data, funding trends, and grant history for free.',
+      'Search 300,000+ funders and 640,000+ nonprofits by name or EIN. Explore IRS 990 giving data, funding trends, and grant history for free.',
     jsonld: webPage(
       'CollectionPage',
       '/search',
       'Search Organizations',
-      'Search 300,000+ funders and 449,000+ grant recipients by name or EIN and explore their 990 giving data.',
+      'Search 300,000+ funders and 640,000+ nonprofits by name or EIN and explore their 990 giving data.',
     ),
   },
   {

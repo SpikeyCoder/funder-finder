@@ -102,7 +102,9 @@ async function enrichGranteeEins(results: any[]): Promise<void> {
 
   const nameList = [...missingNames].slice(0, 150);
   const nameFilter = nameList.map((n) => `"${n.replace(/"/g, '\\"')}"`).join(',');
-  const url = `${SUPABASE_URL}/rest/v1/recipient_organizations?select=ein,name&name=in.(${encodeURIComponent(nameFilter)})&limit=300`;
+  // Only organizations known from grant records (source is null): an IRS-file
+  // row of the same name is often a different organization elsewhere.
+  const url = `${SUPABASE_URL}/rest/v1/recipient_organizations?select=ein,name&name=in.(${encodeURIComponent(nameFilter)})&source=is.null&limit=300`;
   try {
     const resp = await fetch(url, {
       headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },

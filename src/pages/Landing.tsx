@@ -62,7 +62,7 @@ export default function Landing() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
           {[
             { value: '300K+', label: 'Funders indexed', color: 'text-blue-400' },
-            { value: '449K+', label: 'Grant recipients', color: 'text-green-400' },
+            { value: '640K+', label: 'Nonprofits', color: 'text-green-400' },
             { value: '7.5M+', label: 'Individual grants', color: 'text-purple-400' },
             { value: '1.1M+', label: '990 filings', color: 'text-yellow-400' },
           ].map(({ value, label, color }) => (
