@@ -3,10 +3,10 @@
 // results at once instead of waiting on another round trip.
 //
 // Only results with matches are kept: a search that found nothing is always
-// sent again, so an organization added meanwhile (e.g. just requested) turns
-// up. And a name requested in this tab is never cached at all (forget()),
-// since adding it takes a while and a search in between would otherwise cache
-// results without it.
+// sent again. After the user requests a missing organization the cache is
+// off for the rest of the tab (disable()): adding it takes a while, and any
+// cached search (its name, a prefix of it, another spelling) could hide it.
+// Requests are rare, so that costs little.
 //
 // Keyed by the query as sent, with whitespace runs collapsed (the server does
 // the same), but case kept: ranking reads camelCase ("SitStayRead" is split
@@ -27,8 +27,7 @@ export function searchKey(query: string): string {
 
 export class SearchCache<T extends readonly unknown[]> {
   private entries = new Map<string, Entry<T>>();
-  // Names requested in this tab, case-insensitive (a request is by name).
-  private uncached = new Set<string>();
+  private disabled = false;
 
   constructor(
     private readonly maxEntries = MAX_ENTRIES,
@@ -38,7 +37,7 @@ export class SearchCache<T extends readonly unknown[]> {
 
   get(query: string): T | undefined {
     const key = searchKey(query);
-    if (this.uncached.has(key.toLowerCase())) return undefined;
+    if (this.disabled) return undefined;
     const entry = this.entries.get(key);
     if (!entry) return undefined;
     if (this.now() - entry.at > this.ttlMs) {
@@ -51,19 +50,15 @@ export class SearchCache<T extends readonly unknown[]> {
     return entry.value;
   }
 
-  // Stop caching this name (any case) for the life of the tab, and drop what's
-  // cached for it.
-  forget(query: string): void {
-    const lower = searchKey(query).toLowerCase();
-    this.uncached.add(lower);
-    for (const key of [...this.entries.keys()]) {
-      if (key.toLowerCase() === lower) this.entries.delete(key);
-    }
+  // Drops everything and caches nothing more.
+  disable(): void {
+    this.disabled = true;
+    this.entries.clear();
   }
 
   set(query: string, value: T): void {
     const key = searchKey(query);
-    if (value.length === 0 || this.uncached.has(key.toLowerCase())) return;
+    if (value.length === 0 || this.disabled) return;
     this.entries.delete(key);
     this.entries.set(key, { value, at: this.now() });
     while (this.entries.size > this.maxEntries) {

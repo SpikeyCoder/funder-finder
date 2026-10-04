@@ -62,6 +62,18 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
     setRequestName(null);
     setRequestSubmitted(false);
 
+    // Shows a finished search, fresh or from the cache.
+    const land = (searched: string, data: OrgSearchResult[], outcome: 'results' | 'empty' | 'error') => {
+      setSearchedQuery(searched);
+      setResults(data);
+      setStatus(outcome);
+      setLoading(false);
+      setInFlight(false);
+      // A slow response shouldn't pop the panel back up after Escape or an
+      // outside click.
+      if (!dismissedRef.current) setShowDropdown(true);
+    };
+
     if (trimmedQuery.length < 2) {
       setResults([]);
       setStatus('idle');
@@ -71,16 +83,11 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
       return;
     }
 
-    // Already searched in this tab: show it now, no request. (Misses and
-    // requested names aren't cached; see SearchCache.)
+    // Already searched in this tab: show it now, no request. (Misses aren't
+    // cached; see SearchCache.)
     const cached = searchCache.get(trimmedQuery);
     if (cached) {
-      setSearchedQuery(trimmedQuery);
-      setResults(cached);
-      setStatus('results');
-      setLoading(false);
-      setInFlight(false);
-      if (!dismissedRef.current) setShowDropdown(true);
+      land(trimmedQuery, cached, 'results');
       return;
     }
 
@@ -98,24 +105,12 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
         const data = await searchOrganizations(searched, 15, controller.signal);
         searchCache.set(searched, data);
         if (controller.signal.aborted) return;
-        setSearchedQuery(searched);
-        setResults(data);
-        setStatus(data.length > 0 ? 'results' : 'empty');
+        land(searched, data, data.length > 0 ? 'results' : 'empty');
       } catch (err) {
         if (controller.signal.aborted) return;
         // Logged so a bug report filed from the error panel shows the cause.
         console.error('Organization search failed:', err);
-        setSearchedQuery(searched);
-        setResults([]);
-        setStatus('error');
-      } finally {
-        if (!controller.signal.aborted) {
-          setLoading(false);
-          setInFlight(false);
-          // A slow response shouldn't pop the panel back up after Escape or an
-          // outside click.
-          if (!dismissedRef.current) setShowDropdown(true);
-        }
+        land(searched, [], 'error');
       }
     }, DEBOUNCE_MS);
 
@@ -149,8 +144,9 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
 
   // The error panel's own query is being searched again.
   const retrying = status === 'error' && loading && searchedQuery === trimmedQuery;
-  // The panel shows an earlier query's outcome while a newer one loads.
-  const stale = loading && searchedQuery !== trimmedQuery;
+  // The panel shows an earlier query's outcome while a newer one is being
+  // fetched (in step with the spinner, not from the first keystroke).
+  const stale = inFlight && searchedQuery !== trimmedQuery;
 
   const reopenDropdown = (text = query) => {
     // With the request form open for this text, clicking back into the box
@@ -386,9 +382,9 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
             initialName={requestName}
             onSubmitted={() => {
               setRequestSubmitted(true);
-              // Once it's added, searching again should find it, not results
-              // cached before (or while the request was pending).
-              searchCache.forget(requestName);
+              // Once it's added, any search that could find it (the name, a
+              // prefix, an edited spelling) should reach the server.
+              searchCache.disable();
             }}
           />
         </div>
