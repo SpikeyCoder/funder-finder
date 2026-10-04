@@ -16,6 +16,11 @@ const searchCache = new SearchCache<OrgSearchResult[]>();
 // and people behind one office address share that.)
 const DEBOUNCE_MS = 300;
 
+// Give up on a search that hangs (e.g. a stalled mobile connection) so the
+// error panel and "Try again" appear instead of an endless spinner. Searches
+// normally take well under a second; the database caps one at 3 s.
+const REQUEST_TIMEOUT_MS = 15_000;
+
 interface OrgSearchProps {
   autoFocus?: boolean;
   placeholder?: string;
@@ -54,14 +59,13 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
   // Whitespace-only edits shouldn't abort and resend an identical search:
   // whitespace runs collapse ("red  cross" is "red cross"), as on the server.
   const trimmedQuery = searchKey(query);
-  // The query the effect last ran for: the same one again is a retry.
-  const lastQueryRef = useRef('');
+  // Set by "Try again" for the effect run it triggers: a retry has nothing
+  // to wait for, so it skips the debounce.
+  const retryRef = useRef(false);
 
   useEffect(() => {
-    // Run again for the same query: a retry ("Try again"), which has nothing
-    // to wait for.
-    const retry = lastQueryRef.current === trimmedQuery;
-    lastQueryRef.current = trimmedQuery;
+    const retry = retryRef.current;
+    retryRef.current = false;
 
     // The highlighted row and an open request form belong to the previous
     // results.
@@ -108,16 +112,25 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
       // Opens the panel now (the first search's shows "Searching…"), unless
       // the user closed it.
       if (!dismissedRef.current) setShowDropdown(true);
+      // Aborted by the cleanup (as above) or after REQUEST_TIMEOUT_MS; only
+      // the latter is shown, as an error.
+      const request = new AbortController();
+      const cancel = () => request.abort();
+      controller.signal.addEventListener('abort', cancel);
+      const timeout = setTimeout(cancel, REQUEST_TIMEOUT_MS);
       try {
-        const data = await searchOrganizations(searched, 15, controller.signal);
+        const data = await searchOrganizations(searched, 15, request.signal);
         searchCache.set(searched, data);
         if (controller.signal.aborted) return;
         land(searched, data, data.length > 0 ? 'results' : 'empty');
       } catch (err) {
         if (controller.signal.aborted) return;
         // Logged so a bug report filed from the error panel shows the cause.
-        console.error('Organization search failed:', err);
+        console.error('Organization search failed:', request.signal.aborted ? 'timed out' : err);
         land(searched, [], 'error');
+      } finally {
+        clearTimeout(timeout);
+        controller.signal.removeEventListener('abort', cancel);
       }
     }, retry ? 0 : DEBOUNCE_MS);
 
@@ -328,6 +341,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
                   disabled={loading}
                   onClick={() => {
                     inputRef.current?.focus();
+                    retryRef.current = true;
                     setRetryNonce((n) => n + 1);
                   }}
                   className="text-xs text-blue-400 hover:text-blue-300 mt-1 underline disabled:opacity-50 disabled:no-underline"
