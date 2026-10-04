@@ -426,12 +426,15 @@ BEGIN
       END
       AS _tier,
       -- With a state asked for, its organizations come first within each
-      -- class of match: the name is (or starts with) the query, has it as a
-      -- phrase, or has all its words. So "ymca" in CA lists CA's "YMCA OF …"
-      -- before other states' "YMCA"s, but never a weaker match first.
+      -- class of match: the name is (or starts with) the query's words; has
+      -- them as a phrase, or starts with the query mid-word (still typing);
+      -- has all its words. So "ymca" in CA lists CA's "YMCA OF …" before
+      -- other states' "YMCA"s, but "care" in NY doesn't list CAREERWISE NEW
+      -- YORK before CARE, and a weaker match never comes first.
       CASE
-        WHEN m._full_exact OR m._nothe LIKE v_nothe || '%' THEN 3
-        WHEN strpos(' ' || m._match || ' ', ' ' || v_nothe || ' ') > 0 THEN 2
+        WHEN m._full_exact OR m._nothe = v_nothe OR m._nothe LIKE v_nothe || ' %' THEN 3
+        WHEN strpos(' ' || m._match || ' ', ' ' || v_nothe || ' ') > 0
+          OR m._nothe LIKE v_nothe || '%' THEN 2
         WHEN m._hits = v_counted THEN 1
         ELSE 0
       END AS _class,
@@ -452,6 +455,7 @@ BEGIN
       s._id, s._ein, s._name, s._state, s._etype, s._gc, s._tf, s._tier, s._class, s._in_state, s._fine
     FROM scored s
     ORDER BY coalesce(lpad(nullif(s._ein, ''), 9, '0'), 'id:' || s._id),
+             CASE WHEN p_state IS NULL THEN 0 ELSE s._class END DESC,
              s._tier DESC, s._in_state DESC, s._fine DESC, (s._etype = 'recipient') DESC, s._id
   )
   SELECT d._id, d._ein, d._name, d._state, d._etype, d._gc, d._tf

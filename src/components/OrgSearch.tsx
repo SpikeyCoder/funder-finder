@@ -69,10 +69,18 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
   // to wait for, so it skips the debounce.
   const retryRef = useRef(false);
 
-  // Picking a state asks for its results: show them even if the panel was
-  // closed (choosing from the picker counts as an outside click).
+  // Whether the request form is open, for the effects below (which don't
+  // re-run when it opens or closes).
+  const requestFormOpenRef = useRef(false);
   useEffect(() => {
-    dismissedRef.current = false;
+    requestFormOpenRef.current = requestName !== null && !requestSubmitted;
+  }, [requestName, requestSubmitted]);
+
+  // Picking a state asks for its results: show them even if the panel was
+  // closed (choosing from the picker counts as an outside click), unless the
+  // request form is open, which the panel would cover.
+  useEffect(() => {
+    if (!requestFormOpenRef.current) dismissedRef.current = false;
   }, [searchState]);
 
   // An open request form belongs to the text it was opened for; a new state
