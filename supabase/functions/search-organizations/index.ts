@@ -84,18 +84,29 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Call the existing search_organizations RPC function in PostgreSQL
-    const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/search_organizations`, {
-      method: 'POST',
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      // p_state only when given, so this also works against the function
-      // before it had the parameter.
-      body: JSON.stringify(state ? { p_query: query, p_limit: limit, p_state: state } : { p_query: query, p_limit: limit }),
-    });
+    const callRpc = (params: Record<string, unknown>) =>
+      fetch(`${SUPABASE_URL}/rest/v1/rpc/search_organizations`, {
+        method: 'POST',
+        headers: {
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(params),
+      });
+    let rpcRes = await callRpc(state ? { p_query: query, p_limit: limit, p_state: state } : { p_query: query, p_limit: limit });
+    // A database without p_state yet (this deployed before its migration, or
+    // after a rollback) answers PGRST202; search without the state rather
+    // than fail.
+    if (state && rpcRes.status === 404) {
+      const errBody = await rpcRes.text();
+      if (errBody.includes('PGRST202')) {
+        console.error('search_organizations has no p_state; searching without it');
+        rpcRes = await callRpc({ p_query: query, p_limit: limit });
+      } else {
+        rpcRes = new Response(errBody, { status: 404 });
+      }
+    }
 
     const searchFailed = () => new Response(
       JSON.stringify({ results: [], error: 'Search failed' }),

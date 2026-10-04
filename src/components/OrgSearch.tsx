@@ -75,15 +75,19 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
     dismissedRef.current = false;
   }, [searchState]);
 
+  // An open request form belongs to the text it was opened for; a new state
+  // only reorders results, so it keeps the form (and what's typed in it).
+  useEffect(() => {
+    setRequestName(null);
+    setRequestSubmitted(false);
+  }, [trimmedQuery, retryNonce]);
+
   useEffect(() => {
     const retry = retryRef.current;
     retryRef.current = false;
 
-    // The highlighted row and an open request form belong to the previous
-    // results.
+    // The highlighted row belongs to the previous results.
     setSelectedIdx(-1);
-    setRequestName(null);
-    setRequestSubmitted(false);
 
     // Shows a finished search, fresh or from the cache.
     const land = (searched: string, data: OrgSearchResult[], outcome: 'results' | 'empty' | 'error') => {
@@ -294,7 +298,7 @@ export default function OrgSearch({ autoFocus = false, placeholder = 'Search fun
         {status === 'error' &&
           (retrying ? `Retrying search for ${searchedQuery}` : `Search for ${searchedQuery} is temporarily unavailable.`)}
         {status === 'results' &&
-          `Showing ${results.length} organization${results.length === 1 ? '' : 's'} for ${searchedQuery}`}
+          `Showing ${results.length} organization${results.length === 1 ? '' : 's'} for ${searchedQuery}${searchedState ? `, ${searchedState} first` : ''}`}
       </div>
 
       {/* The first search's panel: until now nothing showed below the box

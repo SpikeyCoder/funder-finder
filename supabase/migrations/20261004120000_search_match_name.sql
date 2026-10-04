@@ -37,7 +37,9 @@
 -- normalized the same way, and candidate sets and ranking both read
 -- match_name. Normalized text holds only letters, digits and spaces, so LIKE
 -- patterns built from it need no escaping. Exact matching also ignores a
--- leading "the" and a trailing legal form (inc, corp, llc, …: org_search_core).
+-- leading "the" and a trailing legal form (inc, corp, llc, …: org_search_core);
+-- prefix and phrase matching keep it, since it may be a word being typed
+-- ("peace corp").
 --
 -- Ranking tiers (per candidate name):
 --   exact            the name is the query, give or take "the"       1.00
@@ -52,14 +54,16 @@
 --                    another word counting half
 -- Stop words ("of", "inc") don't count toward hits.
 --
--- search_organizations gains p_state (optional, a 2-letter code): among
--- equally relevant names, organizations in that state come first. It's a
--- tiebreak, not a filter: it orders names the tiers score the same, ahead of
--- trigram similarity and funding.
+-- search_organizations gains p_state (optional, a 2-letter code), not a
+-- filter: within each class of match (the name is or starts with the query;
+-- has it as a phrase; has all its words) organizations in that state come
+-- first, and among weaker matches it only breaks exact ties. So "ymca" in CA
+-- lists CA's "YMCA OF …" ahead of other states' "YMCA"s, while a partial
+-- match never jumps a better one.
 --
 -- On the same 1,020 names (state passed), found in the top 15: foundations
--- 476 → 482 of 498 held, nonprofits 317 → 334 of 381; ranked first: 423 →
--- 450 and 296 → 319. On 1,000 random stored names, each searched for itself:
+-- 476 → 481 of 498 held, nonprofits 317 → 333 of 381; ranked first: 423 →
+-- 451 and 296 → 320. On 1,000 random stored names, each searched for itself:
 -- found 992 → 999 with the state (990 without; very common names such as
 -- "St Paul's Lutheran Church" now have more than 15 exact twins).
 --
@@ -76,12 +80,17 @@ IMMUTABLE
 PARALLEL SAFE
 SET search_path = ''
 AS $$
-  -- Last step: a run of single letters is one word ("y m c a" → "ymca",
-  -- "s a f e inc" → "safe inc"), as "Y.M.C.A." already is.
+  -- NFC first, so a decomposed accent ("e" + combining mark) stays with its
+  -- letter as a composed one does. Capped: no name is near 1000 characters,
+  -- and anon can call this directly. Last step: a run of single letters is
+  -- one word ("y m c a" → "ymca", "s a f e inc" → "safe inc"), as
+  -- "Y.M.C.A." already is.
+  -- (lower() and [[:alnum:]] follow the database's ctype, so after a locale
+  -- or glibc change run org_search_rebuild() to recompute stored values.)
   SELECT regexp_replace(
            btrim(regexp_replace(
              regexp_replace(
-               regexp_replace(lower(p_text), '[''’‘`.]', '', 'g'),
+               regexp_replace(lower(normalize(left(p_text, 1000), NFC)), '[''’‘`.]', '', 'g'),
                '&', ' and ', 'g'),
              '[^[:alnum:]]+', ' ', 'g')),
            '\m([[:alnum:]]) (?=[[:alnum:]]\M)', '\1', 'g')
@@ -107,8 +116,9 @@ $$;
 -- on a copy; the trigram indexes below take another 10 s. In one transaction
 -- the lock is held to the end and searches stall for all of it, so on
 -- production this file is applied in three parts, each its own transaction:
--- through the ALTER; the CREATE INDEXes (searches keep using the old
--- function and indexes meanwhile); the rest.)
+-- through the ALTER; the CREATE INDEXes, run CONCURRENTLY there so sync
+-- writes aren't blocked either (searches keep using the old function and
+-- indexes meanwhile); the rest.)
 ALTER TABLE public.org_search
   ADD COLUMN IF NOT EXISTS match_name text
   GENERATED ALWAYS AS (public.org_search_norm(name)) STORED;
@@ -147,7 +157,8 @@ SET synchronize_seqscans = off
 AS $function$
 DECLARE
   v_q text;         -- the query, normalized as match_name is
-  v_core text;      -- v_q without a leading "the" or trailing legal form
+  v_nothe text;     -- v_q without a leading "the"
+  v_core text;      -- v_nothe without a trailing legal form (exact matching only)
   v_exacts text[];  -- names that are v_core with those put back
   v_spaced text;    -- v_q with camelCase split ("SitStayRead" → "sit stay read"), else NULL
   v_ein text;
@@ -216,6 +227,9 @@ BEGIN
   END IF;
   -- "the community foundation" also finds "COMMUNITY FOUNDATION …", and
   -- "foster foundation" finds "FOSTER FOUNDATION INC".
+  -- A trailing "co"/"corp" may be a word being typed ("peace corp"), so only
+  -- exact matching drops it.
+  v_nothe := regexp_replace(v_q, '^the ', '');
   v_core := public.org_search_core(v_q);
   SELECT array_agg(p || v_core || x) INTO v_exacts
   FROM unnest(ARRAY['', 'the ']) p,
@@ -332,7 +346,7 @@ BEGIN
     (SELECT s.id, s.ein, s.name, s.match_name, s.state, s.kind, s.grant_count, s.total_funding
        FROM org_search s
       WHERE s.kind = 'funder'
-        AND (s.match_name LIKE v_core || '%' OR s.match_name LIKE 'the ' || v_core || '%')
+        AND (s.match_name LIKE v_nothe || '%' OR s.match_name LIKE 'the ' || v_nothe || '%')
       LIMIT 500)
     UNION
     (SELECT s.id, s.ein, s.name, s.match_name, s.state, s.kind, s.grant_count, s.total_funding
@@ -358,7 +372,7 @@ BEGIN
     (SELECT s.id, s.ein, s.name, s.match_name, s.state, s.kind, s.grant_count, s.total_funding
        FROM org_search s
       WHERE s.kind = 'recipient'
-        AND (s.match_name LIKE v_core || '%' OR s.match_name LIKE 'the ' || v_core || '%')
+        AND (s.match_name LIKE v_nothe || '%' OR s.match_name LIKE 'the ' || v_nothe || '%')
       LIMIT 500)
     UNION
     (SELECT s.id, s.ein, s.name, s.match_name, s.state, s.kind, s.grant_count, s.total_funding
@@ -379,7 +393,9 @@ BEGIN
                 WHEN strpos(n._match, kw) > 0 THEN 0.5
                 ELSE 0 END), 0)
          FROM unnest(v_key_words) kw) AS _hits,
-      EXISTS (SELECT 1 FROM unnest(v_key_words) kw WHERE strpos(n._match, kw) > 0) AS _relevant
+      EXISTS (SELECT 1 FROM unnest(v_key_words) kw WHERE strpos(n._match, kw) > 0) AS _relevant,
+      n._core = v_core AS _exact,
+      n._core = v_core AND (n._nothe = v_nothe OR n._core = n._nothe OR v_core = v_nothe) AS _full_exact
     FROM (
       SELECT c.*,
         regexp_replace(c._match, '^the ', '') AS _nothe,
@@ -390,26 +406,37 @@ BEGIN
   scored AS (
     SELECT m.*,
       -- Relevance tiers.
-      -- Exact: the name is the query, give or take "the" and a legal form.
-      CASE WHEN m._core = v_core THEN 1.0 ELSE 0 END
+      -- Exact: the name is the query, give or take "the" and a legal form
+      -- (half when both have one and they differ: "peace corp" may be
+      -- "PEACE CORPS" being typed rather than "PEACE INC").
+      CASE WHEN NOT m._exact THEN 0 WHEN m._full_exact THEN 1.0 ELSE 0.5 END
       -- Starts with the whole query; else (much less) with its first word.
       + CASE
-        WHEN m._nothe LIKE v_core || '%' THEN 0.80
+        WHEN m._nothe LIKE v_nothe || '%' THEN 0.80
         WHEN e_first IS NOT NULL AND m._nothe ~ ('^' || e_first || '( |$)') THEN 0.20
         ELSE 0
       END
       -- The whole query as whole words anywhere ("bill and melinda gates
       -- foundation" for "gates foundation").
-      + CASE WHEN strpos(' ' || m._match || ' ', ' ' || v_core || ' ') > 0 THEN 0.50 ELSE 0 END
+      + CASE WHEN strpos(' ' || m._match || ' ', ' ' || v_nothe || ' ') > 0 THEN 0.50 ELSE 0 END
       -- Every query word; else a share.
       + CASE
         WHEN m._hits = v_counted THEN 0.30
         ELSE m._hits / v_counted * 0.25
       END
       AS _tier,
-      -- Tiebreaks, in order: the state asked for, then trigram similarity and
-      -- funding (each ≤ 0.05).
+      -- With a state asked for, its organizations come first within each
+      -- class of match: the name is (or starts with) the query, has it as a
+      -- phrase, or has all its words. So "ymca" in CA lists CA's "YMCA OF …"
+      -- before other states' "YMCA"s, but never a weaker match first.
+      CASE
+        WHEN m._full_exact OR m._nothe LIKE v_nothe || '%' THEN 3
+        WHEN strpos(' ' || m._match || ' ', ' ' || v_nothe || ' ') > 0 THEN 2
+        WHEN m._hits = v_counted THEN 1
+        ELSE 0
+      END AS _class,
       (p_state IS NOT NULL AND m._state IS NOT DISTINCT FROM p_state) AS _in_state,
+      -- Tiebreaks: trigram similarity and funding (each ≤ 0.05).
       extensions.similarity(m._match, coalesce(v_spaced, v_q)) * 0.05
       + CASE WHEN m._tf > 0 THEN LEAST(ln(m._tf + 1) / 24.0 * 0.05, 0.05) ELSE 0 END
       AS _fine
@@ -422,14 +449,17 @@ BEGIN
     -- missing so such rows don't collapse together. The more relevant row
     -- wins; on a tie the recipient, then the lower id.
     SELECT DISTINCT ON (coalesce(lpad(nullif(s._ein, ''), 9, '0'), 'id:' || s._id))
-      s._id, s._ein, s._name, s._state, s._etype, s._gc, s._tf, s._tier, s._in_state, s._fine
+      s._id, s._ein, s._name, s._state, s._etype, s._gc, s._tf, s._tier, s._class, s._in_state, s._fine
     FROM scored s
     ORDER BY coalesce(lpad(nullif(s._ein, ''), 9, '0'), 'id:' || s._id),
              s._tier DESC, s._in_state DESC, s._fine DESC, (s._etype = 'recipient') DESC, s._id
   )
   SELECT d._id, d._ein, d._name, d._state, d._etype, d._gc, d._tf
   FROM deduped d
-  ORDER BY d._tier DESC, d._in_state DESC, d._fine DESC, d._tf DESC, d._id
+  ORDER BY
+    CASE WHEN p_state IS NULL THEN 0 ELSE d._class END DESC,
+    (d._in_state AND d._class > 0) DESC,
+    d._tier DESC, d._in_state DESC, d._fine DESC, d._tf DESC, d._id
   LIMIT p_limit;
 END;
 $function$;
