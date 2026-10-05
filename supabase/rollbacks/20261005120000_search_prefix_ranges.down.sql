@@ -4,7 +4,8 @@
 -- failed restore never leaves the new function without its helper.
 -- Kept outside supabase/migrations/ so `supabase db push` never applies it.
 --
--- Apply manually: psql "$DATABASE_URL" -f supabase/rollbacks/20261005120000_search_prefix_ranges.down.sql
+-- Apply manually (ON_ERROR_STOP so a failure exits non-zero):
+-- psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/rollbacks/20261005120000_search_prefix_ranges.down.sql
 
 BEGIN;
 

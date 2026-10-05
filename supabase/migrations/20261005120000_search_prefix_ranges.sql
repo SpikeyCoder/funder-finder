@@ -21,47 +21,52 @@
 -- org_search_rebuild()), as the 500-row caps expect. Same rows,
 -- same results; nothing else changes.
 --
--- The upper bounds come from org_search_prefix_upper(). DO blocks check that
--- the three btrees exist as valid text_pattern_ops indexes (the ranges have
--- no trigram fallback, so seq scans otherwise), before anything is created,
--- and the helper on the edge cases, before search_organizations is replaced.
+-- The upper bounds come from org_search_prefix_upper(). DO blocks check,
+-- before anything is created, that the planner serves each range from an
+-- index (the ranges have no trigram fallback, so seq scans otherwise), and
+-- the helper on the edge cases, before search_organizations is replaced.
 --
 -- Rollback: supabase/rollbacks/20261005120000_search_prefix_ranges.down.sql
 
--- The ranges have no trigram fallback: check the three btrees exist, are
--- valid and are text_pattern_ops on the right column (from the catalog, not
--- the printed definition), before anything is created, so a failure leaves
--- nothing behind even without a wrapping transaction.
+-- The ranges have no trigram fallback: ask the planner that an index serves
+-- each of the three range queries (as search_organizations runs them, with
+-- seq scans priced out so only a usable valid index avoids one), before
+-- anything is created, so a failure leaves nothing behind even without a
+-- wrapping transaction.
 DO $$
 DECLARE
-  c record;
+  q text;
+  l text;
+  plan text;
+  n int;
+  v_seqscan text := current_setting('enable_seqscan');
 BEGIN
-  FOR c IN SELECT * FROM (VALUES
-      ('org_search_funder_match', 'org_search', 'match_name', 'funder'),
-      ('org_search_recipient_match', 'org_search', 'match_name', 'recipient'),
-      ('org_search_alias_match', 'org_search_alias', 'alt_match', NULL)
-    ) v(idx, tbl, col, kind)
+  PERFORM set_config('enable_seqscan', 'off', true);
+  FOREACH q IN ARRAY ARRAY[
+    $q$SELECT 1 FROM public.org_search s WHERE s.kind = 'funder'
+         AND ((s.match_name ~>=~ 'zq' AND s.match_name ~<~ 'zr')
+           OR (s.match_name ~>=~ 'the zq' AND s.match_name ~<~ 'the zr'))$q$,
+    $q$SELECT 1 FROM public.org_search s WHERE s.kind = 'recipient'
+         AND ((s.match_name ~>=~ 'zq' AND s.match_name ~<~ 'zr')
+           OR (s.match_name ~>=~ 'the zq' AND s.match_name ~<~ 'the zr'))$q$,
+    $q$SELECT 1 FROM public.org_search_alias a
+         WHERE (a.alt_match ~>=~ 'zq' AND a.alt_match ~<~ 'zr')
+            OR (a.alt_match ~>=~ 'the zq' AND a.alt_match ~<~ 'the zr')$q$]
   LOOP
-    IF NOT EXISTS (
-      SELECT 1
-      FROM pg_index i
-      JOIN pg_class x ON x.oid = i.indexrelid
-      JOIN pg_am am ON am.oid = x.relam
-      JOIN pg_opclass oc ON oc.oid = i.indclass[0]
-      JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = i.indkey[0]
-      WHERE x.oid = to_regclass('public.' || c.idx)
-        AND i.indrelid = to_regclass('public.' || c.tbl)
-        AND i.indisvalid AND i.indnkeyatts = 1
-        AND am.amname = 'btree' AND oc.opcname = 'text_pattern_ops'
-        AND a.attname = c.col
-        -- a per-kind partial index must be for its kind
-        AND (c.kind IS NULL
-             OR pg_get_expr(i.indpred, i.indrelid) LIKE '%' || quote_literal(c.kind) || '%'))
-    THEN
-      RAISE EXCEPTION '% is missing, invalid or not a text_pattern_ops btree on %.%; prefix ranges would seq-scan',
-        c.idx, c.tbl, c.col;
+    plan := '';
+    n := 0;
+    FOR l IN EXECUTE 'EXPLAIN (COSTS OFF) ' || q LOOP
+      plan := plan || l || E'\n';
+      -- both ORed ranges must be index conditions, not filters
+      IF l LIKE '%Index Cond:%~>=~%~<~%' THEN
+        n := n + 1;
+      END IF;
+    END LOOP;
+    IF plan LIKE '%Seq Scan%' OR n < 2 THEN
+      RAISE EXCEPTION 'no usable btree for a prefix range (it would seq-scan): %', plan;
     END IF;
   END LOOP;
+  PERFORM set_config('enable_seqscan', v_seqscan, true);
 END $$;
 
 -- The least string above every string that starts with p_prefix, for prefix
