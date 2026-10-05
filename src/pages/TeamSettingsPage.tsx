@@ -374,7 +374,7 @@ export default function TeamSettingsPage() {
                   className="w-full sm:w-auto px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
                 >
                   {inviting ? <Loader size={14} className="animate-spin" /> : <Mail size={14} />}
-                  {inviting ? 'Sending...' : 'Send Invite'}
+                  <span>{inviting ? 'Sending...' : 'Send Invite'}</span>
                 </button>
               </div>
             </div>

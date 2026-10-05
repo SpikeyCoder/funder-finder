@@ -499,8 +499,8 @@ function FunderCard({
           }`}
         >
           {saved ? <BookmarkCheck size={12} /> : <Bookmark size={12} />}
-          {/* Changing text sits in spans throughout the demo so React swaps
-              elements, not bare text nodes an extension may have replaced. */}
+          {/* In a span so the icon swap above inserts before an element, not a
+              bare text node that a browser extension may have replaced. */}
           <span>{saved ? 'Saved' : 'Save'}</span>
         </button>
       </div>

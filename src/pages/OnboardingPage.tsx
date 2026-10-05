@@ -94,10 +94,15 @@ export default function OnboardingPage() {
       if (res.ok) {
         const data = await res.json();
         if (data.completed_at || data.skipped) {
+          // Set the flag AuthGuard reads, or it sends this user straight back
+          // here from /portfolio (new device or cleared storage) in a loop.
+          localStorage.setItem('onboarding_complete', 'true');
           navigate('/portfolio');
           return;
         }
-        setCurrentStep(data.current_step || 1);
+        // The server stores whatever step it was sent; keep it within STEPS so
+        // the render's STEPS[currentStep - 1] lookup can't come back undefined.
+        setCurrentStep(Math.min(Math.max(Number(data.current_step) || 1, 1), STEPS.length));
         setCompletedSteps(data.completed_steps || []);
       }
     } catch (err) {
