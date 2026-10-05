@@ -31,11 +31,11 @@
 -- The ranges have no trigram fallback: check, before anything is created
 -- (so a failure leaves nothing behind even without a wrapping transaction),
 -- that the planner serves the funder, recipient and alias range predicates
--- from an index, each probed on its own table with seq scans priced out: no
--- Seq Scan, and the ranges only in index conditions, never in a filter. It
--- checks that a usable valid index exists, not every plan search_organizations
--- may choose (the alias set joins org_search; anon plans under RLS, whose
--- policies are USING (true)).
+-- from an index, each probed on its own table with seq scans priced out: the
+-- ranges in an index condition, never in a filter. It checks that a usable
+-- valid index exists, not every plan search_organizations may choose (the
+-- alias set joins org_search; anon plans under RLS, whose policies are
+-- USING (true)).
 DO $$
 DECLARE
   q text;
@@ -55,8 +55,8 @@ BEGIN
             OR (a.alt_match ~>=~ 'the zq' AND a.alt_match ~<~ 'the zr')$q$]
   LOOP
     EXECUTE 'EXPLAIN (COSTS OFF, FORMAT JSON) ' || q INTO p;
-    IF jsonb_path_exists(p, '$.** ? (@."Node Type" == "Seq Scan")')
-       OR jsonb_path_exists(p, '$.**."Filter" ? (@ like_regex "~>=~|~<~")')
+    -- (a seq scan, or a full scan of another index, has them in its Filter)
+    IF jsonb_path_exists(p, '$.**."Filter" ? (@ like_regex "~>=~|~<~")')
        OR NOT jsonb_path_exists(p, '$.**."Index Cond" ? (@ like_regex "~>=~")') THEN
       RAISE EXCEPTION 'no usable index for a prefix range: %', jsonb_pretty(p);
     END IF;
