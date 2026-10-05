@@ -28,17 +28,18 @@
 --
 -- Rollback: supabase/rollbacks/20261005120000_search_prefix_ranges.down.sql
 
--- The ranges have no trigram fallback: ask the planner that an index serves
--- each of the three range queries (as search_organizations runs them, with
--- seq scans priced out so only a usable valid index avoids one), before
--- anything is created, so a failure leaves nothing behind even without a
--- wrapping transaction.
+-- The ranges have no trigram fallback: check, before anything is created
+-- (so a failure leaves nothing behind even without a wrapping transaction),
+-- that the planner serves the funder, recipient and alias range predicates
+-- from an index, each probed on its own table with seq scans priced out: no
+-- Seq Scan, and the ranges only in index conditions, never in a filter. It
+-- checks that a usable valid index exists, not every plan search_organizations
+-- may choose (the alias set joins org_search; anon plans under RLS, whose
+-- policies are USING (true)).
 DO $$
 DECLARE
   q text;
-  l text;
-  plan text;
-  n int;
+  p jsonb;
   v_seqscan text := current_setting('enable_seqscan');
 BEGIN
   PERFORM set_config('enable_seqscan', 'off', true);
@@ -53,17 +54,11 @@ BEGIN
          WHERE (a.alt_match ~>=~ 'zq' AND a.alt_match ~<~ 'zr')
             OR (a.alt_match ~>=~ 'the zq' AND a.alt_match ~<~ 'the zr')$q$]
   LOOP
-    plan := '';
-    n := 0;
-    FOR l IN EXECUTE 'EXPLAIN (COSTS OFF) ' || q LOOP
-      plan := plan || l || E'\n';
-      -- both ORed ranges must be index conditions, not filters
-      IF l LIKE '%Index Cond:%~>=~%~<~%' THEN
-        n := n + 1;
-      END IF;
-    END LOOP;
-    IF plan LIKE '%Seq Scan%' OR n < 2 THEN
-      RAISE EXCEPTION 'no usable btree for a prefix range (it would seq-scan): %', plan;
+    EXECUTE 'EXPLAIN (COSTS OFF, FORMAT JSON) ' || q INTO p;
+    IF jsonb_path_exists(p, '$.** ? (@."Node Type" == "Seq Scan")')
+       OR jsonb_path_exists(p, '$.**."Filter" ? (@ like_regex "~>=~|~<~")')
+       OR NOT jsonb_path_exists(p, '$.**."Index Cond" ? (@ like_regex "~>=~")') THEN
+      RAISE EXCEPTION 'no usable index for a prefix range: %', jsonb_pretty(p);
     END IF;
   END LOOP;
   PERFORM set_config('enable_seqscan', v_seqscan, true);
