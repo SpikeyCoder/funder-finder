@@ -16,10 +16,9 @@
 -- The three prefix candidate sets (funders, recipients, IRS names) are
 -- written as ranges on match_name / alt_match with the pattern operators
 -- (~>=~ / ~<~), which the text_pattern_ops btrees serve and the trigram
--- indexes can't. Still two
--- ranges ORed, so the scan (a bitmap scan, or a seq scan for a very broad
--- prefix) returns rows in table order (largest funding first after
--- org_search_rebuild()), as the 500-row caps expect. Same rows,
+-- indexes can't. Still two ranges ORed, so the scan (a bitmap scan, or a seq
+-- scan for a very broad prefix) returns rows in table order (largest funding
+-- first after org_search_rebuild()), as the 500-row caps expect. Same rows,
 -- same results; nothing else changes.
 --
 -- The upper bounds come from org_search_prefix_upper(). DO blocks check that
@@ -37,12 +36,13 @@
 -- (so a failure leaves nothing behind even without a wrapping transaction),
 -- that the planner serves the funder, recipient and alias range predicates
 -- from an index (the text_pattern_ops btrees, or any other that serves the
--- operators), each probed with seq scans priced out and bitmap scans on (as
--- search_organizations pins them; two ORed ranges use an index only through
--- a BitmapOr): the ranges in an index condition, never in a filter. It
--- checks that a usable valid index exists for each table, not the plans
--- search_organizations' full queries get (the alias set joins org_search;
--- anon plans under RLS, whose policies are USING (true)).
+-- operators), each probed with seq scans priced out (so a plan without one
+-- shows) and bitmap scans on (which search_organizations pins: two ORed
+-- ranges use an index only through a BitmapOr): the ranges in an index
+-- condition, never in a filter. At run time seq scans stay allowed, for very
+-- broad prefixes. It checks that a usable valid index exists for each table,
+-- not the plans search_organizations' full queries get (the alias set joins
+-- org_search; anon plans under RLS, whose policies are USING (true)).
 DO $$
 DECLARE
   q text;
