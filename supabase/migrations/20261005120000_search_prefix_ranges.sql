@@ -21,11 +21,48 @@
 -- org_search_rebuild()), as the 500-row caps expect. Same rows,
 -- same results; nothing else changes.
 --
--- The upper bounds come from org_search_prefix_upper(); a DO block checks it
--- on the edge cases and that the three btrees exist as text_pattern_ops and
--- are valid (the ranges have no trigram fallback, so seq scans otherwise).
+-- The upper bounds come from org_search_prefix_upper(). DO blocks check that
+-- the three btrees exist as valid text_pattern_ops indexes (the ranges have
+-- no trigram fallback, so seq scans otherwise), before anything is created,
+-- and the helper on the edge cases, before search_organizations is replaced.
 --
 -- Rollback: supabase/rollbacks/20261005120000_search_prefix_ranges.down.sql
+
+-- The ranges have no trigram fallback: check the three btrees exist, are
+-- valid and are text_pattern_ops on the right column (from the catalog, not
+-- the printed definition), before anything is created, so a failure leaves
+-- nothing behind even without a wrapping transaction.
+DO $$
+DECLARE
+  c record;
+BEGIN
+  FOR c IN SELECT * FROM (VALUES
+      ('org_search_funder_match', 'org_search', 'match_name', 'funder'),
+      ('org_search_recipient_match', 'org_search', 'match_name', 'recipient'),
+      ('org_search_alias_match', 'org_search_alias', 'alt_match', NULL)
+    ) v(idx, tbl, col, kind)
+  LOOP
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_index i
+      JOIN pg_class x ON x.oid = i.indexrelid
+      JOIN pg_am am ON am.oid = x.relam
+      JOIN pg_opclass oc ON oc.oid = i.indclass[0]
+      JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = i.indkey[0]
+      WHERE x.oid = to_regclass('public.' || c.idx)
+        AND i.indrelid = to_regclass('public.' || c.tbl)
+        AND i.indisvalid AND i.indnkeyatts = 1
+        AND am.amname = 'btree' AND oc.opcname = 'text_pattern_ops'
+        AND a.attname = c.col
+        -- a per-kind partial index must be for its kind
+        AND (c.kind IS NULL
+             OR pg_get_expr(i.indpred, i.indrelid) LIKE '%' || quote_literal(c.kind) || '%'))
+    THEN
+      RAISE EXCEPTION '% is missing, invalid or not a text_pattern_ops btree on %.%; prefix ranges would seq-scan',
+        c.idx, c.tbl, c.col;
+    END IF;
+  END LOOP;
+END $$;
 
 -- The least string above every string that starts with p_prefix, for prefix
 -- ranges on text_pattern_ops btrees (byte order; UTF-8 byte order is code
@@ -51,9 +88,7 @@ AS $$
         FROM (SELECT rtrim(p_prefix, chr(x'10FFFF'::int)) AS t) s) s
 $$;
 
--- Deploy-time checks, before search_organizations is replaced (so a failure
--- leaves the old one even without a wrapping transaction): the bounds on the
--- edge cases, and the btrees the ranges depend on.
+-- The bounds on the edge cases, before search_organizations is replaced.
 DO $$
 DECLARE
   c record;
@@ -73,22 +108,6 @@ BEGIN
     IF public.org_search_prefix_upper(c.p) IS DISTINCT FROM c.want THEN
       RAISE EXCEPTION 'org_search_prefix_upper(%) = %, expected %',
         quote_literal(c.p), quote_nullable(public.org_search_prefix_upper(c.p)), quote_nullable(c.want);
-    END IF;
-  END LOOP;
-  FOR c IN SELECT * FROM (VALUES
-      ('org_search_funder_match', 'org_search', 'match_name', 'kind = ''funder''::text'),
-      ('org_search_recipient_match', 'org_search', 'match_name', 'kind = ''recipient''::text'),
-      ('org_search_alias_match', 'org_search_alias', 'alt_match', 'alt_match IS NOT NULL')
-    ) v(idx, tbl, col, pred)
-  LOOP
-    IF NOT EXISTS (
-      SELECT 1 FROM pg_index i JOIN pg_class x ON x.oid = i.indexrelid
-      WHERE x.oid = to_regclass('public.' || c.idx) AND i.indisvalid
-        AND pg_get_indexdef(i.indexrelid) = format(
-          'CREATE INDEX %s ON public.%s USING btree (%s text_pattern_ops) WHERE (%s)',
-          c.idx, c.tbl, c.col, c.pred)) THEN
-      RAISE EXCEPTION '% is missing, invalid or not a text_pattern_ops btree on %.%; prefix ranges would seq-scan',
-        c.idx, c.tbl, c.col;
     END IF;
   END LOOP;
 END $$;

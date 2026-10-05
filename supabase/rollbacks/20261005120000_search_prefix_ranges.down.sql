@@ -1,8 +1,12 @@
 -- Rollback for 20261005120000_search_prefix_ranges.sql: search_organizations
--- as of 20261004140000 (prefix candidates as LIKE patterns).
+-- as of 20261004140000 (prefix candidates as LIKE patterns), then the
+-- org_search_prefix_upper() helper it no longer calls. One transaction, so a
+-- failed restore never leaves the new function without its helper.
 -- Kept outside supabase/migrations/ so `supabase db push` never applies it.
 --
 -- Apply manually: psql "$DATABASE_URL" -f supabase/rollbacks/20261005120000_search_prefix_ranges.down.sql
+
+BEGIN;
 
 CREATE OR REPLACE FUNCTION public.search_organizations(
   p_query text, p_limit integer DEFAULT 15, p_state text DEFAULT NULL)
@@ -359,3 +363,5 @@ END;
 $function$;
 
 DROP FUNCTION IF EXISTS public.org_search_prefix_upper(text);
+
+COMMIT;
