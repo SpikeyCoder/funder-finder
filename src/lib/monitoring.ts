@@ -53,9 +53,11 @@ export interface VitalsReport {
 
 /**
  * Errors that aren't ours to fix: browser extensions, the opaque
- * cross-origin "Script error.", ResizeObserver's benign loop warning, and
- * chunk-load failures (ErrorBoundary reloads for those; see chunkReload.ts)
- * unless the reload already happened and didn't help (`chunkGaveUp`).
+ * cross-origin "Script error.", ResizeObserver's benign loop warning, the
+ * Outlook Safe Links crawler, empty rejections, lost connections and aborted
+ * requests (unless the error screen showed), and chunk-load failures
+ * (ErrorBoundary reloads for those; see chunkReload.ts) unless the reload
+ * already happened and didn't help (`chunkGaveUp`).
  */
 export function isNoise(error: unknown, message: string, stack: string, chunkGaveUp = false, screenShown = false): boolean {
   if (isChunkLoadError(error)) return !chunkGaveUp;
@@ -63,6 +65,12 @@ export function isNoise(error: unknown, message: string, stack: string, chunkGav
   if (error === undefined || error === null) return !screenShown;
   if (/^Script error\.?$/i.test(message.trim())) return true;
   if (/ResizeObserver loop/i.test(message)) return true;
+  // Microsoft's Outlook Safe Links crawler, opening emailed links to scan
+  // them: its host bridge rejects with strings such as "Object Not Found
+  // Matching Id:3, MethodName:update, ParamCount:4". Nothing of ours says
+  // this, in any form; matched on the message so it's dropped however it
+  // arrives (a bare string, or an error event with no error object).
+  if (/^Object Not Found Matching Id:\d+, MethodName:\w+, ParamCount:\d+$/.test(message.trim())) return true;
   // Thrown from an extension: its top frame (the first with a URL) is the
   // extension's. Not just any frame: an extension that wraps fetch or
   // addEventListener appears below our own frames in real app crashes.
