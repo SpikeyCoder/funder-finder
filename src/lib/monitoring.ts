@@ -63,6 +63,11 @@ export function isNoise(error: unknown, message: string, stack: string, chunkGav
   if (error === undefined || error === null) return !screenShown;
   if (/^Script error\.?$/i.test(message.trim())) return true;
   if (/ResizeObserver loop/i.test(message)) return true;
+  // Microsoft's Outlook Safe Links crawler, opening emailed links to scan
+  // them: its host bridge rejects with a bare string such as "Object Not Found
+  // Matching Id:3, MethodName:update, ParamCount:4". Our code never rejects
+  // with a string, let alone this one.
+  if (typeof error === 'string' && /^Object Not Found Matching Id:\d+, MethodName:\w+, ParamCount:\d+$/.test(error)) return true;
   // Thrown from an extension: its top frame (the first with a URL) is the
   // extension's. Not just any frame: an extension that wraps fetch or
   // addEventListener appears below our own frames in real app crashes.

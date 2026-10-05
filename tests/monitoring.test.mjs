@@ -112,6 +112,18 @@ test('noise: extensions, opaque cross-origin errors, ResizeObserver', () => {
   assert.equal(isNoise(new TypeError('x is undefined'), 'x is undefined', '    at f (https://fundermatch.org/assets/a.js:1:1)'), false);
 });
 
+test('noise: the Outlook Safe Links crawler\'s string rejections', () => {
+  for (const msg of ['Object Not Found Matching Id:3, MethodName:update, ParamCount:4', 'Object Not Found Matching Id:12, MethodName:simulateEvent, ParamCount:1']) {
+    assert.equal(isNoise(msg, msg, ''), true, msg);
+    assert.equal(buildCrashReport('rejection', msg, '/browse', 'b'), null, msg);
+  }
+  // Only the crawler's exact shape, and only as a bare string.
+  const near = 'Object Not Found Matching Id:3, MethodName:update';
+  assert.equal(isNoise(near, near, ''), false);
+  const wrapped = 'Object Not Found Matching Id:3, MethodName:update, ParamCount:4';
+  assert.equal(isNoise(new Error(wrapped), wrapped, ''), false);
+});
+
 test('network failures and aborts are noise, in each browser\'s wording', () => {
   for (const msg of ['Failed to fetch', 'Load failed', 'NetworkError when attempting to fetch resource.', 'TypeError: Failed to fetch', 'Failed to fetch (tgtotjvdubhjxzybmdex.supabase.co)', 'Failed to send a request to the Edge Function']) {
     assert.equal(isNoise(new TypeError(msg), msg, ''), true, msg);
