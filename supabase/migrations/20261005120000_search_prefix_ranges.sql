@@ -36,13 +36,14 @@
 -- (so a failure leaves nothing behind even without a wrapping transaction),
 -- that the planner serves the funder, recipient and alias range predicates
 -- from an index (the text_pattern_ops btrees, or any other that serves the
--- operators), each probed with seq scans priced out (so a plan without one
--- shows) and bitmap scans on (which search_organizations pins: two ORed
--- ranges use an index only through a BitmapOr): the ranges in an index
--- condition, never in a filter. At run time seq scans stay allowed, for very
--- broad prefixes. It checks that a usable valid index exists for each table,
--- not the plans search_organizations' full queries get (the alias set joins
--- org_search; anon plans under RLS, whose policies are USING (true)).
+-- operators), each probed with seq scans priced out (so the planner picks an
+-- index whenever one can serve) and bitmap scans on (which
+-- search_organizations pins: two ORed ranges use an index only through a
+-- BitmapOr): the ranges in an index condition, never in a filter. At run
+-- time seq scans stay allowed, for very broad prefixes. It checks that a
+-- usable valid index exists for each table, not the plans
+-- search_organizations' full queries get (the alias set joins org_search;
+-- anon plans under RLS, whose policies are USING (true)).
 DO $$
 DECLARE
   q text;
