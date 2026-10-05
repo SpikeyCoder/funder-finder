@@ -116,12 +116,16 @@ test('noise: the Outlook Safe Links crawler\'s string rejections', () => {
   for (const msg of ['Object Not Found Matching Id:3, MethodName:update, ParamCount:4', 'Object Not Found Matching Id:12, MethodName:simulateEvent, ParamCount:1']) {
     assert.equal(isNoise(msg, msg, ''), true, msg);
     assert.equal(buildCrashReport('rejection', msg, '/browse', 'b'), null, msg);
+    // Stray whitespace from the host bridge doesn't get it through.
+    assert.equal(buildCrashReport('rejection', `${msg}\n`, '/browse', 'b'), null, msg);
+    // Nor does an error event with no error object, which installMonitoring
+    // turns into { name, message, stack }.
+    assert.equal(buildCrashReport('error', { name: 'Error', message: msg, stack: '    at :0:0' }, '/browse', 'b'), null, msg);
   }
-  // Only the crawler's exact shape, and only as a bare string.
+  // Only the crawler's exact wording.
   const near = 'Object Not Found Matching Id:3, MethodName:update';
   assert.equal(isNoise(near, near, ''), false);
-  const wrapped = 'Object Not Found Matching Id:3, MethodName:update, ParamCount:4';
-  assert.equal(isNoise(new Error(wrapped), wrapped, ''), false);
+  assert.equal(isNoise(new Error('Object Not Found'), 'Object Not Found', ''), false);
 });
 
 test('network failures and aborts are noise, in each browser\'s wording', () => {
