@@ -2333,7 +2333,7 @@ export default function ProjectWorkspace() {
                   <button onClick={() => refFileInput.current?.click()} disabled={refUploading}
                     className="w-full flex items-center justify-center gap-1.5 px-3 py-2 border border-dashed border-purple-500/30 rounded-lg text-xs text-purple-300 hover:border-purple-500 hover:bg-purple-500/5 transition-colors disabled:opacity-50">
                     {refUploading ? <Loader size={13} className="animate-spin" /> : <Upload size={13} />}
-                    {refUploading ? 'Uploading...' : 'Upload Document'}
+                    <span>{refUploading ? 'Uploading...' : 'Upload Document'}</span>
                   </button>
                   <input ref={refFileInput} type="file" className="hidden"
                     accept=".pdf,.doc,.docx,.txt,.rtf,.md"
@@ -2370,7 +2370,7 @@ export default function ProjectWorkspace() {
                   <button onClick={() => handleGenerateDraft()} disabled={aiDraftLoading}
                     className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60">
                     {aiDraftLoading ? <Loader size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                    {aiDraftLoading ? 'Researching & generating...' : aiDraft ? 'Regenerate Draft' : 'Generate AI Draft Proposal'}
+                    <span>{aiDraftLoading ? 'Researching & generating...' : aiDraft ? 'Regenerate Draft' : 'Generate AI Draft Proposal'}</span>
                   </button>
                   {aiDraft && (
                     <div className="space-y-2">

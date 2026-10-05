@@ -934,7 +934,7 @@ export default function Results() {
                       className={`inline-flex items-center gap-2 border rounded-xl px-4 py-2 min-h-[44px] text-sm transition-colors ${isSaved ? 'border-blue-600 text-blue-400 bg-blue-900/20' : 'border-[#30363d] hover:bg-[#21262d]'}`}
                     >
                       {isSaved ? <BookmarkCheck size={14} aria-hidden="true" /> : <Bookmark size={14} aria-hidden="true" />}
-                      {isSaved ? 'Saved' : 'Save'}
+                      <span>{isSaved ? 'Saved' : 'Save'}</span>
                     </button>
                     <button
                       onClick={() => {
