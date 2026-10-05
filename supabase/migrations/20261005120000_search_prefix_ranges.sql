@@ -21,9 +21,9 @@
 -- org_search_rebuild()), as the 500-row caps expect. Same rows,
 -- same results; nothing else changes.
 --
--- The upper bounds come from org_search_prefix_upper(); the DO block at the
--- end checks it on the edge cases and that the three btrees are valid (the
--- ranges have no trigram fallback, so an invalid one means seq scans).
+-- The upper bounds come from org_search_prefix_upper(); a DO block checks it
+-- on the edge cases and that the three btrees exist as text_pattern_ops and
+-- are valid (the ranges have no trigram fallback, so seq scans otherwise).
 --
 -- Rollback: supabase/rollbacks/20261005120000_search_prefix_ranges.down.sql
 
@@ -31,9 +31,10 @@
 -- ranges on text_pattern_ops btrees (byte order; UTF-8 byte order is code
 -- point order): the last character's code point plus one, stepping from
 -- U+D7FF over the surrogates (which chr() rejects) to U+E000. U+10FFFF has no
--- successor, so trailing U+10FFFFs are dropped first; an empty or all-U+10FFFF
--- prefix has no such string and gives NULL (an empty range). Neither can come
--- out of org_search_norm (never alnum), but the function stays exact.
+-- successor, so trailing U+10FFFFs are dropped first. An empty or
+-- all-U+10FFFF prefix has no such string: NULL, which makes the caller's
+-- range empty (no prefix candidates), not unbounded. Neither can come out of
+-- org_search_norm (v_q is non-empty; U+10FFFF is never alnum).
 CREATE OR REPLACE FUNCTION public.org_search_prefix_upper(p_prefix text)
 RETURNS text
 LANGUAGE sql
@@ -43,12 +44,54 @@ PARALLEL SAFE
 SET search_path = ''
 AS $$
   SELECT CASE WHEN t = '' THEN NULL
-              ELSE left(t, -1) || chr(CASE ascii(right(t, 1))
-                                        WHEN x'D7FF'::int THEN x'E000'::int
-                                        ELSE ascii(right(t, 1)) + 1 END)
+              ELSE left(t, -1) || chr(CASE cp WHEN x'D7FF'::int THEN x'E000'::int
+                                              ELSE cp + 1 END)
          END
-  FROM (SELECT rtrim(p_prefix, chr(x'10FFFF'::int)) AS t) s
+  FROM (SELECT t, ascii(right(t, 1)) AS cp
+        FROM (SELECT rtrim(p_prefix, chr(x'10FFFF'::int)) AS t) s) s
 $$;
+
+-- Deploy-time checks, before search_organizations is replaced (so a failure
+-- leaves the old one even without a wrapping transaction): the bounds on the
+-- edge cases, and the btrees the ranges depend on.
+DO $$
+DECLARE
+  c record;
+BEGIN
+  FOR c IN SELECT * FROM (VALUES
+      ('foundation', 'foundatioo'),
+      ('caf' || chr(x'E9'::int), 'caf' || chr(x'EA'::int)),     -- 2-byte
+      ('a' || chr(x'7F'::int), 'a' || chr(x'80'::int)),           -- 1 → 2 bytes
+      ('a' || chr(x'7FF'::int), 'a' || chr(x'800'::int)),         -- 2 → 3 bytes
+      ('a' || chr(x'FFFF'::int), 'a' || chr(x'10000'::int)),      -- 3 → 4 bytes
+      ('a' || chr(x'D7FF'::int), 'a' || chr(x'E000'::int)),       -- surrogates
+      ('a' || chr(x'10FFFF'::int) || chr(x'10FFFF'::int), 'b'),
+      (chr(x'10FFFF'::int), NULL),
+      ('', NULL)
+    ) v(p, want)
+  LOOP
+    IF public.org_search_prefix_upper(c.p) IS DISTINCT FROM c.want THEN
+      RAISE EXCEPTION 'org_search_prefix_upper(%) = %, expected %',
+        quote_literal(c.p), quote_nullable(public.org_search_prefix_upper(c.p)), quote_nullable(c.want);
+    END IF;
+  END LOOP;
+  FOR c IN SELECT * FROM (VALUES
+      ('org_search_funder_match', 'org_search', 'match_name', 'kind = ''funder''::text'),
+      ('org_search_recipient_match', 'org_search', 'match_name', 'kind = ''recipient''::text'),
+      ('org_search_alias_match', 'org_search_alias', 'alt_match', 'alt_match IS NOT NULL')
+    ) v(idx, tbl, col, pred)
+  LOOP
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_index i JOIN pg_class x ON x.oid = i.indexrelid
+      WHERE x.oid = to_regclass('public.' || c.idx) AND i.indisvalid
+        AND pg_get_indexdef(i.indexrelid) = format(
+          'CREATE INDEX %s ON public.%s USING btree (%s text_pattern_ops) WHERE (%s)',
+          c.idx, c.tbl, c.col, c.pred)) THEN
+      RAISE EXCEPTION '% is missing, invalid or not a text_pattern_ops btree on %.%; prefix ranges would seq-scan',
+        c.idx, c.tbl, c.col;
+    END IF;
+  END LOOP;
+END $$;
 
 CREATE OR REPLACE FUNCTION public.search_organizations(
   p_query text, p_limit integer DEFAULT 15, p_state text DEFAULT NULL)
@@ -421,34 +464,3 @@ BEGIN
   LIMIT p_limit;
 END;
 $function$;
-
--- Deploy-time checks: the bounds on the edge cases, and the btrees the
--- ranges depend on.
-DO $$
-DECLARE
-  c record;
-BEGIN
-  FOR c IN SELECT * FROM (VALUES
-      ('foundation', 'foundatioo'),
-      ('caf' || chr(x'E9'::int), 'caf' || chr(x'EA'::int)),     -- 2-byte
-      ('a' || chr(x'7F'::int), 'a' || chr(x'80'::int)),           -- 1 → 2 bytes
-      ('a' || chr(x'7FF'::int), 'a' || chr(x'800'::int)),         -- 2 → 3 bytes
-      ('a' || chr(x'FFFF'::int), 'a' || chr(x'10000'::int)),      -- 3 → 4 bytes
-      ('a' || chr(x'D7FF'::int), 'a' || chr(x'E000'::int)),       -- surrogates
-      ('a' || chr(x'10FFFF'::int) || chr(x'10FFFF'::int), 'b'),
-      (chr(x'10FFFF'::int), NULL),
-      ('', NULL)
-    ) v(p, want)
-  LOOP
-    IF public.org_search_prefix_upper(c.p) IS DISTINCT FROM c.want THEN
-      RAISE EXCEPTION 'org_search_prefix_upper(%) = %, expected %',
-        quote_literal(c.p), quote_nullable(public.org_search_prefix_upper(c.p)), quote_nullable(c.want);
-    END IF;
-  END LOOP;
-  IF (SELECT count(*) FROM pg_index i JOIN pg_class x ON x.oid = i.indexrelid
-      WHERE x.relnamespace = 'public'::regnamespace
-        AND x.relname IN ('org_search_funder_match', 'org_search_recipient_match', 'org_search_alias_match')
-        AND i.indisvalid) <> 3 THEN
-    RAISE EXCEPTION 'a match_name/alt_match btree is missing or invalid; prefix ranges would seq-scan';
-  END IF;
-END $$;
