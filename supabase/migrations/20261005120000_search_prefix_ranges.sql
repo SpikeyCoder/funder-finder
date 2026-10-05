@@ -21,28 +21,35 @@
 -- org_search_rebuild()), as the 500-row caps expect. Same rows,
 -- same results; nothing else changes.
 --
--- The upper bounds come from org_search_prefix_upper(). DO blocks check,
--- before anything is created, that the planner serves each range from an
--- index (the ranges have no trigram fallback, so seq scans otherwise), and
--- the helper on the edge cases, before search_organizations is replaced.
+-- The upper bounds come from org_search_prefix_upper(). DO blocks check that
+-- the planner serves each range from an index (the ranges have no trigram
+-- fallback, so seq scans otherwise), before anything is created, and the
+-- helper on the edge cases, after it is created and before
+-- search_organizations is replaced.
 --
 -- Rollback: supabase/rollbacks/20261005120000_search_prefix_ranges.down.sql
 
 -- The ranges have no trigram fallback: check, before anything is created
 -- (so a failure leaves nothing behind even without a wrapping transaction),
 -- that the planner serves the funder, recipient and alias range predicates
--- from an index, each probed on its own table with seq scans priced out: the
--- ranges in an index condition, never in a filter. It checks that a usable
--- valid index exists, not every plan search_organizations may choose (the
--- alias set joins org_search; anon plans under RLS, whose policies are
--- USING (true)).
+-- from an index (the text_pattern_ops btrees, or any other that serves the
+-- operators), each probed on its own table with seq scans priced out and
+-- index scans allowed: the ranges in an index condition, never in a filter.
+-- It checks that a usable valid index exists, not every plan
+-- search_organizations may choose (the alias set joins org_search; anon plans
+-- under RLS, whose policies are USING (true)). Each probe must read one
+-- table: a seq scan then has the ranges in its Filter, which fails it.
 DO $$
 DECLARE
   q text;
   p jsonb;
   v_seqscan text := current_setting('enable_seqscan');
+  v_indexscan text := current_setting('enable_indexscan');
+  v_bitmapscan text := current_setting('enable_bitmapscan');
 BEGIN
   PERFORM set_config('enable_seqscan', 'off', true);
+  PERFORM set_config('enable_indexscan', 'on', true);
+  PERFORM set_config('enable_bitmapscan', 'on', true);
   FOREACH q IN ARRAY ARRAY[
     $q$SELECT 1 FROM public.org_search s WHERE s.kind = 'funder'
          AND ((s.match_name ~>=~ 'zq' AND s.match_name ~<~ 'zr')
@@ -55,13 +62,14 @@ BEGIN
             OR (a.alt_match ~>=~ 'the zq' AND a.alt_match ~<~ 'the zr')$q$]
   LOOP
     EXECUTE 'EXPLAIN (COSTS OFF, FORMAT JSON) ' || q INTO p;
-    -- (a seq scan, or a full scan of another index, has them in its Filter)
     IF jsonb_path_exists(p, '$.**."Filter" ? (@ like_regex "~>=~|~<~")')
        OR NOT jsonb_path_exists(p, '$.**."Index Cond" ? (@ like_regex "~>=~")') THEN
       RAISE EXCEPTION 'no usable index for a prefix range: %', jsonb_pretty(p);
     END IF;
   END LOOP;
   PERFORM set_config('enable_seqscan', v_seqscan, true);
+  PERFORM set_config('enable_indexscan', v_indexscan, true);
+  PERFORM set_config('enable_bitmapscan', v_bitmapscan, true);
 END $$;
 
 -- The least string above every string that starts with p_prefix, for prefix
