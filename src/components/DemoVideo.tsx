@@ -187,6 +187,7 @@ export default function DemoVideo() {
       className="w-full flex justify-center px-4 py-8 demo-dark-card"
       aria-hidden="true"
       role="presentation"
+      translate="no"
     >
       {/* Outer wrapper — max width, aspect ratio preserved.
 
@@ -203,7 +204,14 @@ export default function DemoVideo() {
           otherwise produce duplicate-heading noise for screen reader users.
           The sighted-only demo loses nothing — sighted users see the demo,
           AT users get the surrounding hero copy and product explanation
-          (P3 fix, audit 2026-05-14). */}
+          (P3 fix, audit 2026-05-14).
+
+          translate="no" keeps page translators (Google Translate on Android
+          Chrome) out of this subtree. They swap text nodes for <font>
+          wrappers, and the timer-driven re-renders here then call
+          insertBefore/removeChild on nodes that are no longer in the DOM,
+          crashing the whole Landing page ("NotFoundError: Failed to execute
+          'insertBefore' on 'Node'", crash report 2026-10-05). */}
       <div className="w-full max-w-[336rem]">
         {/* Browser chrome mock */}
         <div className="rounded-2xl overflow-hidden border border-[#30363d] shadow-2xl shadow-black/50">
@@ -258,7 +266,7 @@ export default function DemoVideo() {
                 <div className="space-y-1">
                   <label className="text-xs text-gray-400 font-semibold">Your Mission Statement <span className="text-red-400">*</span></label>
                   <div className="bg-[#161b22] border border-blue-700/60 rounded-xl px-3 py-2 text-sm leading-snug min-h-[56px]">
-                    {MISSION_TEXT.slice(0, missionChars)}
+                    <span>{MISSION_TEXT.slice(0, missionChars)}</span>
                     {!missionDone && (
                       <span className="inline-block w-0.5 h-3.5 bg-blue-400 animate-pulse ml-px align-middle" />
                     )}
@@ -273,7 +281,7 @@ export default function DemoVideo() {
                     missionDone ? 'border-blue-700/60' : 'border-[#30363d]'
                   }`}>
                     {locationChars > 0
-                      ? LOCATION_TEXT.slice(0, locationChars)
+                      ? <span>{LOCATION_TEXT.slice(0, locationChars)}</span>
                       : <span className="text-gray-600">e.g. King County, WA · Chicago, IL · National</span>
                     }
                     {missionDone && locationChars < LOCATION_TEXT.length && (
@@ -491,7 +499,9 @@ function FunderCard({
           }`}
         >
           {saved ? <BookmarkCheck size={12} /> : <Bookmark size={12} />}
-          {saved ? 'Saved' : 'Save'}
+          {/* Changing text sits in spans throughout the demo so React swaps
+              elements, not bare text nodes an extension may have replaced. */}
+          <span>{saved ? 'Saved' : 'Save'}</span>
         </button>
       </div>
     </div>
