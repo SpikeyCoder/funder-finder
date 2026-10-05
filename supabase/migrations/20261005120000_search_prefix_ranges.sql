@@ -124,7 +124,12 @@ BEGIN
   -- trigram index: for "foundation%" a 148k-row bitmap and ~2,100 pages read
   -- instead of ~10 (69 ms vs 1 ms warm, and thousands of disk reads cold).
   v_cp := ascii(right(v_nothe, 1));
-  v_nothe_hi := left(v_nothe, -1) || chr(CASE WHEN v_cp = 55295 THEN 57344 ELSE v_cp + 1 END);
+  -- Upper bound: the last character + 1, skipping the surrogates. U+10FFFF
+  -- (a noncharacter, never alnum) can't survive org_search_norm; if it ever
+  -- did, the clamp gives an empty range instead of an error.
+  v_nothe_hi := left(v_nothe, -1) || chr(CASE WHEN v_cp = 55295 THEN 57344
+                                               WHEN v_cp >= 1114111 THEN 1114111
+                                               ELSE v_cp + 1 END);
   v_the := 'the ' || v_nothe;
   v_the_hi := 'the ' || v_nothe_hi;
   v_core := public.org_search_core(v_q);
