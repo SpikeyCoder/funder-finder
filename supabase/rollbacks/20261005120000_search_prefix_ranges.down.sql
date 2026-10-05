@@ -357,3 +357,5 @@ BEGIN
   LIMIT p_limit;
 END;
 $function$;
+
+DROP FUNCTION IF EXISTS public.org_search_prefix_upper(text);

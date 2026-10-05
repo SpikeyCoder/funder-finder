@@ -16,11 +16,39 @@
 -- The three prefix candidate sets (funders, recipients, IRS names) are
 -- written as ranges on match_name / alt_match with the pattern operators
 -- (~>=~ / ~<~), which only the text_pattern_ops btrees serve. Still two
--- ranges ORed, so a bitmap scan returns rows in table order (largest funding
--- first after org_search_rebuild()), as the 500-row caps expect. Same rows,
+-- ranges ORed, so the scan (a bitmap scan, or a seq scan for a very broad
+-- prefix) returns rows in table order (largest funding first after
+-- org_search_rebuild()), as the 500-row caps expect. Same rows,
 -- same results; nothing else changes.
 --
+-- The upper bounds come from org_search_prefix_upper(); the DO block at the
+-- end checks it on the edge cases and that the three btrees are valid (the
+-- ranges have no trigram fallback, so an invalid one means seq scans).
+--
 -- Rollback: supabase/rollbacks/20261005120000_search_prefix_ranges.down.sql
+
+-- The least string above every string that starts with p_prefix, for prefix
+-- ranges on text_pattern_ops btrees (byte order; UTF-8 byte order is code
+-- point order): the last character's code point plus one, stepping from
+-- U+D7FF over the surrogates (which chr() rejects) to U+E000. U+10FFFF has no
+-- successor, so trailing U+10FFFFs are dropped first; an empty or all-U+10FFFF
+-- prefix has no such string and gives NULL (an empty range). Neither can come
+-- out of org_search_norm (never alnum), but the function stays exact.
+CREATE OR REPLACE FUNCTION public.org_search_prefix_upper(p_prefix text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+STRICT
+PARALLEL SAFE
+SET search_path = ''
+AS $$
+  SELECT CASE WHEN t = '' THEN NULL
+              ELSE left(t, -1) || chr(CASE ascii(right(t, 1))
+                                        WHEN x'D7FF'::int THEN x'E000'::int
+                                        ELSE ascii(right(t, 1)) + 1 END)
+         END
+  FROM (SELECT rtrim(p_prefix, chr(x'10FFFF'::int)) AS t) s
+$$;
 
 CREATE OR REPLACE FUNCTION public.search_organizations(
   p_query text, p_limit integer DEFAULT 15, p_state text DEFAULT NULL)
@@ -44,7 +72,6 @@ DECLARE
   v_nothe_hi text;  -- the least string above every one starting with v_nothe
   v_the text;       -- "the " || v_nothe, and its upper bound
   v_the_hi text;
-  v_cp int;
   v_core text;      -- v_nothe without a trailing legal form (exact matching only)
   v_exacts text[];  -- names that are v_core with those put back
   v_spaced text;    -- v_q with camelCase split ("SitStayRead" → "sit stay read"), else NULL
@@ -117,21 +144,14 @@ BEGIN
   -- A trailing "co"/"corp" may be a word being typed ("peace corp"), so only
   -- exact matching drops it.
   v_nothe := regexp_replace(v_q, '^the ', '');
-  -- Prefix candidates are ranges on the btree (text_pattern_ops compares
-  -- bytes, and UTF-8 byte order is code point order): v_nothe up to v_nothe
-  -- with its last character's code point plus one (stepping over the
-  -- surrogate range). As a LIKE 'x%', the planner sometimes picked the
-  -- trigram index: for "foundation%" a 148k-row bitmap and ~2,100 pages read
-  -- instead of ~10 (69 ms vs 1 ms warm, and thousands of disk reads cold).
-  v_cp := ascii(right(v_nothe, 1));
-  -- Upper bound: the last character + 1, skipping the surrogates. U+10FFFF
-  -- (a noncharacter, never alnum) can't survive org_search_norm; if it ever
-  -- did, the clamp gives an empty range instead of an error.
-  v_nothe_hi := left(v_nothe, -1) || chr(CASE WHEN v_cp = 55295 THEN 57344
-                                               WHEN v_cp >= 1114111 THEN 1114111
-                                               ELSE v_cp + 1 END);
+  -- Prefix candidates are ranges on the text_pattern_ops btrees, from the
+  -- prefix up to org_search_prefix_upper(prefix). As a LIKE 'x%', the
+  -- planner sometimes picked the trigram index: for "foundation%" a 148k-row
+  -- bitmap and ~2,100 pages read instead of ~10 (69 ms vs 1 ms warm, and
+  -- thousands of disk reads cold).
+  v_nothe_hi := public.org_search_prefix_upper(v_nothe);
   v_the := 'the ' || v_nothe;
-  v_the_hi := 'the ' || v_nothe_hi;
+  v_the_hi := public.org_search_prefix_upper(v_the);
   v_core := public.org_search_core(v_q);
   SELECT array_agg(p || v_core || x) INTO v_exacts
   FROM unnest(ARRAY['', 'the ']) p,
@@ -248,8 +268,8 @@ BEGIN
     (SELECT s.id, s.ein, s.name, s.match_name, s.state, s.kind, s.grant_count, s.total_funding, NULL::text
        FROM org_search s
       WHERE s.kind = 'funder'
-        -- Two ranges ORed: a bitmap scan, so rows come in table (funding)
-        -- order, as the cap expects, not name order.
+        -- Two ranges ORed: a bitmap or seq scan, so rows come in table
+        -- (funding) order, as the cap expects, not name order.
         AND ((s.match_name ~>=~ v_nothe AND s.match_name ~<~ v_nothe_hi)
           OR (s.match_name ~>=~ v_the AND s.match_name ~<~ v_the_hi))
       LIMIT 500)
@@ -277,8 +297,8 @@ BEGIN
     (SELECT s.id, s.ein, s.name, s.match_name, s.state, s.kind, s.grant_count, s.total_funding, NULL::text
        FROM org_search s
       WHERE s.kind = 'recipient'
-        -- Two ranges ORed: a bitmap scan, so rows come in table (funding)
-        -- order, as the cap expects, not name order.
+        -- Two ranges ORed: a bitmap or seq scan, so rows come in table
+        -- (funding) order, as the cap expects, not name order.
         AND ((s.match_name ~>=~ v_nothe AND s.match_name ~<~ v_nothe_hi)
           OR (s.match_name ~>=~ v_the AND s.match_name ~<~ v_the_hi))
       LIMIT 500)
@@ -401,3 +421,34 @@ BEGIN
   LIMIT p_limit;
 END;
 $function$;
+
+-- Deploy-time checks: the bounds on the edge cases, and the btrees the
+-- ranges depend on.
+DO $$
+DECLARE
+  c record;
+BEGIN
+  FOR c IN SELECT * FROM (VALUES
+      ('foundation', 'foundatioo'),
+      ('caf' || chr(x'E9'::int), 'caf' || chr(x'EA'::int)),     -- 2-byte
+      ('a' || chr(x'7F'::int), 'a' || chr(x'80'::int)),           -- 1 → 2 bytes
+      ('a' || chr(x'7FF'::int), 'a' || chr(x'800'::int)),         -- 2 → 3 bytes
+      ('a' || chr(x'FFFF'::int), 'a' || chr(x'10000'::int)),      -- 3 → 4 bytes
+      ('a' || chr(x'D7FF'::int), 'a' || chr(x'E000'::int)),       -- surrogates
+      ('a' || chr(x'10FFFF'::int) || chr(x'10FFFF'::int), 'b'),
+      (chr(x'10FFFF'::int), NULL),
+      ('', NULL)
+    ) v(p, want)
+  LOOP
+    IF public.org_search_prefix_upper(c.p) IS DISTINCT FROM c.want THEN
+      RAISE EXCEPTION 'org_search_prefix_upper(%) = %, expected %',
+        quote_literal(c.p), quote_nullable(public.org_search_prefix_upper(c.p)), quote_nullable(c.want);
+    END IF;
+  END LOOP;
+  IF (SELECT count(*) FROM pg_index i JOIN pg_class x ON x.oid = i.indexrelid
+      WHERE x.relnamespace = 'public'::regnamespace
+        AND x.relname IN ('org_search_funder_match', 'org_search_recipient_match', 'org_search_alias_match')
+        AND i.indisvalid) <> 3 THEN
+    RAISE EXCEPTION 'a match_name/alt_match btree is missing or invalid; prefix ranges would seq-scan';
+  END IF;
+END $$;
