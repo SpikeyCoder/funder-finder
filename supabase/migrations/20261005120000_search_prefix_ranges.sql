@@ -15,7 +15,8 @@
 -- ---
 -- The three prefix candidate sets (funders, recipients, IRS names) are
 -- written as ranges on match_name / alt_match with the pattern operators
--- (~>=~ / ~<~), which only the text_pattern_ops btrees serve. Still two
+-- (~>=~ / ~<~), which the text_pattern_ops btrees serve and the trigram
+-- indexes can't. Still two
 -- ranges ORed, so the scan (a bitmap scan, or a seq scan for a very broad
 -- prefix) returns rows in table order (largest funding first after
 -- org_search_rebuild()), as the 500-row caps expect. Same rows,
@@ -27,28 +28,29 @@
 -- helper on the edge cases, after it is created and before
 -- search_organizations is replaced.
 --
+-- Assumes a UTF-8 database (Supabase's always is): the bounds rely on UTF-8
+-- byte order, and chr() takes code points above 255 only there.
+--
 -- Rollback: supabase/rollbacks/20261005120000_search_prefix_ranges.down.sql
 
 -- The ranges have no trigram fallback: check, before anything is created
 -- (so a failure leaves nothing behind even without a wrapping transaction),
 -- that the planner serves the funder, recipient and alias range predicates
 -- from an index (the text_pattern_ops btrees, or any other that serves the
--- operators), each probed on its own table with seq scans priced out and
--- index scans allowed: the ranges in an index condition, never in a filter.
--- It checks that a usable valid index exists, not every plan
--- search_organizations may choose (the alias set joins org_search; anon plans
--- under RLS, whose policies are USING (true)). Each probe must read one
--- table: a seq scan then has the ranges in its Filter, which fails it.
+-- operators), each probed with seq scans priced out and bitmap scans on (as
+-- search_organizations pins them; two ORed ranges use an index only through
+-- a BitmapOr): the ranges in an index condition, never in a filter. It
+-- checks that a usable valid index exists for each table, not the plans
+-- search_organizations' full queries get (the alias set joins org_search;
+-- anon plans under RLS, whose policies are USING (true)).
 DO $$
 DECLARE
   q text;
   p jsonb;
   v_seqscan text := current_setting('enable_seqscan');
-  v_indexscan text := current_setting('enable_indexscan');
   v_bitmapscan text := current_setting('enable_bitmapscan');
 BEGIN
   PERFORM set_config('enable_seqscan', 'off', true);
-  PERFORM set_config('enable_indexscan', 'on', true);
   PERFORM set_config('enable_bitmapscan', 'on', true);
   FOREACH q IN ARRAY ARRAY[
     $q$SELECT 1 FROM public.org_search s WHERE s.kind = 'funder'
@@ -68,7 +70,6 @@ BEGIN
     END IF;
   END LOOP;
   PERFORM set_config('enable_seqscan', v_seqscan, true);
-  PERFORM set_config('enable_indexscan', v_indexscan, true);
   PERFORM set_config('enable_bitmapscan', v_bitmapscan, true);
 END $$;
 
@@ -135,6 +136,8 @@ SET plan_cache_mode = force_custom_plan
 -- results are the same from call to call.
 SET max_parallel_workers_per_gather = 0
 SET synchronize_seqscans = off
+-- The prefix ranges are ORed, so they use an index only through a BitmapOr.
+SET enable_bitmapscan = on
 AS $function$
 DECLARE
   v_q text;         -- the query, normalized as match_name is
