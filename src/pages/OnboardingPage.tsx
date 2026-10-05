@@ -225,18 +225,20 @@ export default function OnboardingPage() {
     }
   };
 
+  // FM-IC-ONB-003: when leaving Step 2 (profile), persist what the user
+  // entered so the data is captured even if they bounce out of the
+  // tutorial. Skip the save quietly if every field is blank.
+  const saveProfileIfEntered = async (): Promise<boolean> => {
+    const anyProfileField = !!(
+      orgName || missionStatement || city || stateAbbr || county || orgType || fieldsOfWork.length
+    );
+    return anyProfileField ? saveProfile() : true;
+  };
+
   const handleNext = async () => {
-    // FM-IC-ONB-003: when leaving Step 2 (profile), persist what the user
-    // entered so the data is captured even if they bounce out of the
-    // tutorial. Skip the save quietly if every field is blank.
     if (currentStep === 2) {
-      const anyProfileField = !!(
-        orgName || missionStatement || city || stateAbbr || county || orgType || fieldsOfWork.length
-      );
-      if (anyProfileField) {
-        const ok = await saveProfile();
-        if (!ok) return; // surface the error to the user and stay on step
-      }
+      const ok = await saveProfileIfEntered();
+      if (!ok) return; // surface the error to the user and stay on step
     }
 
     // Step 3: create the project before advancing
@@ -312,11 +314,18 @@ export default function OnboardingPage() {
   // Steps 1-2 map to advisor steps 0-1; steps 3-5 map to 2-3.
   const advisorStep = Math.min(currentStep - 1, 3) as 0 | 1 | 2 | 3;
 
-  const handleAdvisorCreateProject = () => {
+  const handleAdvisorCreateProject = async () => {
     // Jump to step 3 (First Project) if not already there
-    if (currentStep < 3) {
-      setCurrentStep(3);
-    }
+    if (currentStep >= 3) return;
+    // Leaving step 2 this way saves the profile just as Continue does.
+    if (currentStep === 2 && !(await saveProfileIfEntered())) return;
+    // Count the steps jumped over as done: the server only sets completed_at
+    // once completed_steps has all five, so otherwise onboarding never
+    // completes and other devices send the user back into it.
+    const newCompleted = [...completedSteps, 1, 2].filter((v, i, a) => a.indexOf(v) === i);
+    setCompletedSteps(newCompleted);
+    setCurrentStep(3);
+    await saveProgress(3, newCompleted);
   };
 
   return (
