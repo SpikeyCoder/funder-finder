@@ -255,8 +255,10 @@ export default function OnboardingPage() {
     setCompletedSteps(newCompleted);
 
     if (currentStep >= 5) {
-      // Complete onboarding
-      await saveProgress(5, newCompleted);
+      // Complete onboarding. Send every step: the server only sets
+      // completed_at once all five are listed, and a user who jumped ahead
+      // (the advisor's "Create my first project") never visited steps 1-2.
+      await saveProgress(5, STEPS.map((s) => s.num));
       localStorage.setItem('onboarding_complete', 'true');
       navigate('/dashboard');
       return;
@@ -316,16 +318,11 @@ export default function OnboardingPage() {
 
   const handleAdvisorCreateProject = async () => {
     // Jump to step 3 (First Project) if not already there
-    if (currentStep >= 3) return;
+    if (currentStep >= 3 || isSaving) return;
     // Leaving step 2 this way saves the profile just as Continue does.
     if (currentStep === 2 && !(await saveProfileIfEntered())) return;
-    // Count the steps jumped over as done: the server only sets completed_at
-    // once completed_steps has all five, so otherwise onboarding never
-    // completes and other devices send the user back into it.
-    const newCompleted = [...completedSteps, 1, 2].filter((v, i, a) => a.indexOf(v) === i);
-    setCompletedSteps(newCompleted);
     setCurrentStep(3);
-    await saveProgress(3, newCompleted);
+    await saveProgress(3, completedSteps);
   };
 
   return (

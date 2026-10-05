@@ -8,13 +8,16 @@
 // whole page (Trello: "Failed to execute 'insertBefore' on 'Node'" on the
 // Landing page, 2026-10-05).
 //
-// The two methods are patched to fall back only in that mismatch case, which
-// React never produces on its own: everything else goes straight through.
+// The two methods are patched to recover only in that case: the node React
+// passes was detached, or wrapped under the parent it was called on. Anything
+// else (a node from another tree) still throws, so real bugs stay visible.
+// Recovery is best effort: a replaced text node's translated copy can stay on
+// screen, and an insert whose reference was replaced lands at the end.
 
-let warned = false;
+const warned = new Set<string>();
 function warnOnce(method: string): void {
-  if (warned) return;
-  warned = true;
+  if (warned.has(method)) return;
+  warned.add(method);
   console.warn(`translateGuard: ${method} on a node moved by another script (page translation?); recovered.`);
 }
 
@@ -33,11 +36,15 @@ export function installTranslateGuard(): void {
 
   const removeChild = proto.removeChild;
   proto.removeChild = function <T extends Node>(this: Node, child: T): T {
-    if (child.parentNode !== this) {
+    if (child.parentNode === null) {
+      // Replaced outright and detached: there is nothing left to remove.
       warnOnce('removeChild');
-      // Wrapped in place: remove it from where it now lives. Already
-      // detached (replaced outright): there is nothing left to remove.
-      if (child.parentNode && this.contains(child)) removeChild.call(child.parentNode, child);
+      return child;
+    }
+    if (child.parentNode !== this && this.contains(child)) {
+      // Wrapped in place: remove it from where it now lives.
+      warnOnce('removeChild');
+      removeChild.call(child.parentNode, child);
       return child;
     }
     return removeChild.call(this, child) as T;
@@ -46,11 +53,18 @@ export function installTranslateGuard(): void {
   const insertBefore = proto.insertBefore;
   proto.insertBefore = function <T extends Node>(this: Node, node: T, ref: Node | null): T {
     if (ref && ref.parentNode !== this) {
-      warnOnce('insertBefore');
-      // Insert before whatever now holds `ref` (the translator's wrapper),
-      // or at the end when `ref` was replaced outright: its old position is
-      // unknown, and showing the node out of order beats losing the page.
-      return insertBefore.call(this, node, childContaining(this, ref)) as T;
+      if (ref.parentNode === null) {
+        // Replaced outright: its old position is unknown, and showing the
+        // node at the end beats losing the page.
+        warnOnce('insertBefore');
+        return insertBefore.call(this, node, null) as T;
+      }
+      const holder = childContaining(this, ref);
+      if (holder) {
+        // Wrapped in place: insert before the wrapper that now holds it.
+        warnOnce('insertBefore');
+        return insertBefore.call(this, node, holder) as T;
+      }
     }
     return insertBefore.call(this, node, ref) as T;
   };

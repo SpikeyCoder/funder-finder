@@ -136,13 +136,14 @@ test('removeChild a node wrapped in place removes it from the wrapper', () => {
   assert.equal(text.parentNode, null);
 });
 
-test('removeChild of a node from an unrelated tree is left alone', () => {
+test('a node from an unrelated tree still throws, so real bugs stay visible', () => {
   const { el } = button();
   const other = document.createElement('div');
   const stranger = document.createElement('span');
   other.append(stranger);
-  el.removeChild(stranger);
+  assert.throws(() => el.removeChild(stranger), /NotFoundError/);
   assert.equal(stranger.parentNode, other);
+  assert.throws(() => el.insertBefore(document.createElement('b'), stranger), /NotFoundError/);
 });
 
 test('normal DOM calls are unchanged', () => {
@@ -156,6 +157,6 @@ test('normal DOM calls are unchanged', () => {
   assert.equal(el.firstChild, next);
 });
 
-test('warns once, not on every recovery', () => {
-  assert.equal(warnings, 1);
+test('warns once per method, not on every recovery', () => {
+  assert.equal(warnings, 2);
 });

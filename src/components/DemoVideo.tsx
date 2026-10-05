@@ -79,8 +79,9 @@ export default function DemoVideo() {
     const timers: ReturnType<typeof setTimeout>[] = [];
 
     const scheduleSteps = () => {
-      // The last cycle's timers have all fired by now; drop their IDs so the
-      // array doesn't grow by one cycle's worth every 20 s.
+      // Cancel whatever is left of the last cycle (normally nothing, unless a
+      // background tab delayed it) and drop its IDs, so the array doesn't
+      // grow by one cycle's worth every 20 s.
       timers.forEach(clearTimeout);
       timers.length = 0;
       let elapsed = 0;
