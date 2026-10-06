@@ -5,10 +5,10 @@
  * invoke_monitor_sweep(), see
  * migration 20261003140000) it:
  *
- *   1. times live searches through search-organizations, as a visitor would
- *      (anon key, so anon's 3 s statement_timeout applies), and records each
- *      check; failed or slow checks in 2 or more of the last hour's runs
- *      open a card (at most once per 24 h);
+ *   1. once an hour (the :06 run), times a funder match through
+ *      match-funders, as a visitor's request makes it (anon key, the app's
+ *      request body), and records the check; a failed or slow check in 2 of
+ *      the last 3 hours opens a card (at most once per 24 h);
  *   2. opens a card for each new crash fingerprint monitor-report recorded,
  *      most frequent first: at most MAX_CRASH_CARDS per run and
  *      MAX_CRASH_CARDS_PER_DAY per 24 h, then one summary card a day saying
@@ -51,17 +51,38 @@ const WEEK_MS = 7 * DAY_MS;
 // an hour later).
 const RUN_CARD_DEADLINE_MS = 70_000;
 
-// Search SLA: a check fails if it doesn't return 200 with at least one
-// result within SLA_MS (every query below has matches). The 3 s anon
-// timeout makes anything near it a near-miss. Each check is a whole
-// request, as a visitor makes it: this project's Edge Functions boot per
-// request, so boot time is part of what visitors wait for (~0.2 s).
-export const SLA_MS = 2000;
-const SLA_CHECK_TIMEOUT_MS = 5000;
-// How many of the last hour's sweep runs must have a failed check.
+// Matching SLA: the check fails if match-funders doesn't return 200 with at
+// least one funder within MATCH_SLA_MS. It times funder matching rather than
+// org search because matching is what visitors actually run (14 matches and
+// no org searches by visitors on 2026-10-05/06); real matches took 12 s at the
+// median and 18 s at p90 then, so 20 s flags a match slower than nearly all.
+// The check is a whole request, as a visitor makes it: this project's Edge
+// Functions boot per request, so boot time is part of the wait.
+export const MATCH_SLA_MS = 20_000;
+// Real matches peaked at 28 s; past 30 s the check is a failure either way,
+// and the run's 70 s card deadline still leaves room to open the card.
+const MATCH_CHECK_TIMEOUT_MS = 30_000;
+// A match without peers runs peer suggestion and the peer-grant lookup over
+// foundation_grants, uncached: about 12 s of database work. Hourly keeps the
+// check to ~2x the visitors' matching load on this small database, not ~7x.
+export function matchCheckDue(now: Date): boolean {
+  return now.getUTCMinutes() < 15; // the :06 run of the :06/:21/:36/:51 schedule
+}
+// The app's request for a mission search (src/utils/matching.ts findMatches).
+// A plain mission with a location; it matches 340 funders.
+const MATCH_CHECK_NAME = "match: after-school STEM, Chicago";
+const MATCH_CHECK_BODY = {
+  mission: "Provide after-school STEM programs for middle school students",
+  locationServed: "Chicago, IL",
+  keywords: [],
+  budgetBand: "prefer_not_to_say",
+  forceRefresh: false,
+  peerNonprofits: [],
+};
+// How many of the window's hourly checks must have failed, and the window:
+// 2 of the last 3 hours.
 export const SLA_FAILING_RUNS = 2;
-// A common word, a multi-word name, and a dashed EIN (different code paths).
-const SLA_QUERIES = ["foundation", "community foundation", "01-0224898"];
+const SLA_WINDOW_MS = 3 * 60 * 60 * 1000;
 const SLA_COOLDOWN_MS = DAY_MS;
 const VITALS_COOLDOWN_MS = WEEK_MS;
 // A page-speed card that failed is retried a day later, not hourly: it isn't
@@ -147,10 +168,9 @@ export function crashCard(c: CrashRow): { name: string; desc: string } {
   };
 }
 
-// Failures in at least two sweep runs, not just one: a cold boot slows
-// every check in its run, so one slow run is a blip, while an outage is
-// caught by the second run. A run's checks are inserted together, so they
-// share checked_at.
+// Failures in at least two runs, not just one: one slow match is a blip,
+// while an outage is caught by the second. A run's checks are inserted
+// together, so they share checked_at.
 export function slaBreached(checks: Pick<SlaCheck, "ok" | "checked_at">[]): boolean {
   const failed = checks.filter((c) => !c.ok);
   // (Checks without a time count as one run: never more runs than proven.)
@@ -164,15 +184,15 @@ export function slaCard(checks: SlaCheck[]): { name: string; desc: string } {
     `| ${c.checked_at ?? ""} | ${code(c.check_name)} | ${c.status ?? "—"} | ${c.ms} | ${c.ok ? "ok" : "**FAIL**"} ${c.detail ? code(c.detail.replace(/\|/g, "/")) : ""} |`
   );
   return {
-    name: `[SLA] Search: ${failed.length} of ${checks.length} checks failed in the last hour`,
+    name: `[SLA] Funder matching: ${failed.length} of ${checks.length} checks failed in the last 3 hours`,
     desc: [
-      `Search missed its SLA (a 200 with results within ${SLA_MS} ms) on ${failed.length} of the last hour's ${checks.length} synthetic checks, in more than one run. Visitors see "Search failed" when the database query passes anon's 3 s statement_timeout.`,
+      `Funder matching missed its SLA (a 200 with funders within ${MATCH_SLA_MS / 1000} s) on ${failed.length} of the last 3 hours' ${checks.length} hourly synthetic checks. Visitors wait this long on the Results page, or see an error.`,
       "",
-      "| Checked at (UTC) | Query | Status | ms | Result |",
+      "| Checked at (UTC) | Check | Status | ms | Result |",
       "|---|---|---|---|---|",
       ...rows,
       "",
-      "First places to look: the search-organizations Edge Function logs, Postgres logs for \"canceling statement due to statement timeout\", and cron.job_run_details for prewarm-search-indexes.",
+      "First places to look: the match-funders Edge Function logs (execution time per request), Postgres logs for \"canceling statement due to statement timeout\", and pg_stat_statements for the foundation_grants and funders queries (disk reads mean the database is short of memory).",
       "Opened by monitor-sweep (at most once per 24 h).",
     ].join("\n"),
   };
@@ -220,14 +240,15 @@ export function crashOverflowCard(waiting: number): { name: string; desc: string
 
 // ── IO ──────────────────────────────────────────────────────────────────────
 
-async function runSlaCheck(query: string): Promise<SlaCheck> {
+async function runMatchCheck(): Promise<SlaCheck> {
   const t0 = Date.now();
+  const check_name = MATCH_CHECK_NAME;
   try {
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/search-organizations`, {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/match-funders`, {
       method: "POST",
       headers: { "Content-Type": "application/json", apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` },
-      body: JSON.stringify({ query, limit: 15 }),
-      signal: AbortSignal.timeout(SLA_CHECK_TIMEOUT_MS),
+      body: JSON.stringify(MATCH_CHECK_BODY),
+      signal: AbortSignal.timeout(MATCH_CHECK_TIMEOUT_MS),
     });
     const text = await res.text();
     const ms = Date.now() - t0;
@@ -238,14 +259,14 @@ async function runSlaCheck(query: string): Promise<SlaCheck> {
     const valid = res.status === 200 && Array.isArray(results);
     const found = valid && (results as unknown[]).length > 0;
     return {
-      check_name: query,
-      ok: found && ms <= SLA_MS,
+      check_name,
+      ok: found && ms <= MATCH_SLA_MS,
       status: res.status,
       ms,
-      detail: !valid ? text.slice(0, 200) : !found ? "no results" : ms > SLA_MS ? `slow (> ${SLA_MS} ms)` : null,
+      detail: !valid ? text.slice(0, 200) : !found ? "no results" : ms > MATCH_SLA_MS ? `slow (> ${MATCH_SLA_MS} ms)` : null,
     };
   } catch (err) {
-    return { check_name: query, ok: false, status: null, ms: Date.now() - t0, detail: String(err).slice(0, 200) };
+    return { check_name, ok: false, status: null, ms: Date.now() - t0, detail: String(err).slice(0, 200) };
   }
 }
 
@@ -340,8 +361,11 @@ async function recordCard(target: string, fields: Record<string, string>, what: 
 export type Summary = Record<string, number | string>;
 
 async function sweepSla(summary: Summary, trello: boolean): Promise<void> {
-  const checks: SlaCheck[] = [];
-  for (const q of SLA_QUERIES) checks.push(await runSlaCheck(q)); // one at a time, like visitors
+  if (!matchCheckDue(new Date())) {
+    summary.sla = "not this run (hourly)";
+    return;
+  }
+  const checks: SlaCheck[] = [await runMatchCheck()];
   const res = await rest("monitor_sla_checks", {
     method: "POST",
     headers: { Prefer: "return=minimal" },
@@ -350,15 +374,18 @@ async function sweepSla(summary: Summary, trello: boolean): Promise<void> {
   if (!res.ok) throw new Error(`REST monitor_sla_checks ${res.status}: ${await res.text()}`);
   summary.sla_failed_now = checks.filter((c) => !c.ok).length;
 
-  const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-  const hour = await restJson<SlaCheck[]>(
-    `monitor_sla_checks?checked_at=gte.${encodeURIComponent(since)}&order=checked_at.asc&select=check_name,ok,status,ms,detail,checked_at`,
+  // Only matching checks: the org-search checks this replaced are still in
+  // the table for a while and must not count.
+  const since = new Date(Date.now() - SLA_WINDOW_MS).toISOString();
+  const recent = await restJson<SlaCheck[]>(
+    `monitor_sla_checks?checked_at=gte.${encodeURIComponent(since)}&check_name=like.${encodeURIComponent("match:*")}` +
+      `&order=checked_at.asc&select=check_name,ok,status,ms,detail,checked_at`,
   );
-  if (!slaBreached(hour)) return;
+  if (!slaBreached(recent)) return;
   summary.sla_breached = "yes";
   // Without Trello, don't claim the alert for a card that can't be opened.
   if (!trello) return;
-  const url = await openAlertCard("sla:search", SLA_COOLDOWN_MS, slaCard(hour));
+  const url = await openAlertCard("sla:match", SLA_COOLDOWN_MS, slaCard(recent));
   if (url) summary.sla_card = url;
 }
 
