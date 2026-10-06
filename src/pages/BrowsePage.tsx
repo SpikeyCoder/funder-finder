@@ -381,7 +381,7 @@ const BrowsePage: React.FC = () => {
                           title={funder.name}
                         >
                           <span className="truncate min-w-0 flex-1">{funder.name}</span>
-                          <ExternalLink size={14} className="opacity-50 flex-shrink-0" />
+                          <ExternalLink size={14} className="opacity-50 shrink-0" />
                         </button>
                         </td>
                       <td data-label="State" className="px-4 py-3 text-gray-300">{funder.state || '-'}</td>
@@ -427,8 +427,8 @@ const BrowsePage: React.FC = () => {
                       onClick={() => navigate(`/funder/${funder.ein}`)}
                       className="text-[#58a6ff] hover:underline font-medium flex items-center gap-2 min-w-0 text-left"
                     >
-                      <span className="break-words min-w-0">{funder.name}</span>
-                      <ExternalLink size={14} className="opacity-50 flex-shrink-0" />
+                      <span className="wrap-break-word min-w-0">{funder.name}</span>
+                      <ExternalLink size={14} className="opacity-50 shrink-0" />
                     </button>
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       <div className="min-w-0">
@@ -491,7 +491,7 @@ const BrowsePage: React.FC = () => {
               <button
                 onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                 disabled={currentPage === 1 || loading}
-                className="px-3 py-2 bg-[#0d1117] border border-[#30363d] rounded text-gray-300 hover:border-[#58a6ff] hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-3 py-2 bg-[#0d1117] border border-[#30363d] rounded-sm text-gray-300 hover:border-[#58a6ff] hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 Previous
               </button>
@@ -514,7 +514,7 @@ const BrowsePage: React.FC = () => {
                       key={pageNum}
                       onClick={() => setCurrentPage(pageNum)}
                       disabled={loading}
-                      className={`px-3 py-2 rounded transition-colors ${
+                      className={`px-3 py-2 rounded-sm transition-colors ${
                         currentPage === pageNum
                           ? 'bg-[#58a6ff] text-white'
                           : 'bg-[#0d1117] border border-[#30363d] text-gray-300 hover:border-[#58a6ff] hover:text-white disabled:opacity-50'
@@ -529,7 +529,7 @@ const BrowsePage: React.FC = () => {
               <button
                 onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                 disabled={currentPage === totalPages || loading}
-                className="px-3 py-2 bg-[#0d1117] border border-[#30363d] rounded text-gray-300 hover:border-[#58a6ff] hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-3 py-2 bg-[#0d1117] border border-[#30363d] rounded-sm text-gray-300 hover:border-[#58a6ff] hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 Next
               </button>

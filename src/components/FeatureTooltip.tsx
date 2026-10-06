@@ -98,7 +98,7 @@ export default function FeatureTooltips() {
           {TOOLTIPS.findIndex(t => t.id === tooltip.id) + 1} of {TOOLTIPS.length}
         </span>
         <button onClick={() => dismiss(tooltip.id)}
-          className="text-xs font-medium px-2 py-1 bg-white/20 hover:bg-white/30 rounded transition-colors">
+          className="text-xs font-medium px-2 py-1 bg-white/20 hover:bg-white/30 rounded-sm transition-colors">
           Got it
         </button>
       </div>

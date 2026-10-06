@@ -26,13 +26,13 @@ export default function NavBar() {
   const linkClass = (path: string) =>
     `px-4 py-2 min-h-[44px] flex items-center text-sm font-medium rounded-lg transition-colors ${
       isActive(path)
-        ? 'text-white bg-white/[0.08]'
-        : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
+        ? 'text-white bg-white/8'
+        : 'text-gray-400 hover:text-white hover:bg-white/4'
     }`;
 
   return (
     <>
-      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-blue-600 focus:text-white focus:px-4 focus:py-2 focus:rounded">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-blue-600 focus:text-white focus:px-4 focus:py-2 focus:rounded-sm">
         Skip to main content
       </a>
       <nav aria-label="Main navigation" className="sticky top-0 z-40 w-full bg-[#0d1117] border-b border-[#1b2130]">
@@ -52,23 +52,23 @@ export default function NavBar() {
                 <Link to="/tasks" data-tour="tasks" className={linkClass('/tasks')}>Tasks</Link>
                 <NotificationBell />
                 <div ref={accountRef} className="relative ml-2">
-                  <button onClick={() => setAccountOpen(!accountOpen)} aria-expanded={accountOpen} aria-haspopup="true" className="flex items-center gap-1.5 px-4 py-2 min-h-[44px] text-sm font-medium text-gray-400 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors">
+                  <button onClick={() => setAccountOpen(!accountOpen)} aria-expanded={accountOpen} aria-haspopup="true" className="flex items-center gap-1.5 px-4 py-2 min-h-[44px] text-sm font-medium text-gray-400 hover:text-white hover:bg-white/4 rounded-lg transition-colors">
                     <span className="max-w-[140px] truncate">{user.email?.split('@')[0]}</span>
                     <ChevronDown size={14} className={`transition-transform ${accountOpen ? 'rotate-180' : ''}`} />
                   </button>
                   {accountOpen && (
                     <div className="absolute right-0 top-full mt-1 w-56 bg-[#161b22] border border-[#30363d] rounded-lg shadow-xl py-1 z-50" role="menu">
                       <div className="px-4 py-2.5 border-b border-[#30363d]"><p className="text-xs text-gray-500 truncate">{user.email}</p></div>
-                      <button role="menuitem" onClick={() => { navigate('/import'); setAccountOpen(false); }} className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/[0.06] transition-colors">Import Data</button>
-                      <button role="menuitem" onClick={() => { navigate('/settings/team'); setAccountOpen(false); }} className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/[0.06] transition-colors">Team</button>
-                      <button role="menuitem" onClick={() => { navigate('/settings'); setAccountOpen(false); }} className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/[0.06] transition-colors">Settings</button>
-                      <button role="menuitem" onClick={() => { signOut(); setAccountOpen(false); }} className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/[0.06] transition-colors">Sign Out</button>
+                      <button role="menuitem" onClick={() => { navigate('/import'); setAccountOpen(false); }} className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/6 transition-colors">Import Data</button>
+                      <button role="menuitem" onClick={() => { navigate('/settings/team'); setAccountOpen(false); }} className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/6 transition-colors">Team</button>
+                      <button role="menuitem" onClick={() => { navigate('/settings'); setAccountOpen(false); }} className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/6 transition-colors">Settings</button>
+                      <button role="menuitem" onClick={() => { signOut(); setAccountOpen(false); }} className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/6 transition-colors">Sign Out</button>
                     </div>
                   )}
                 </div>
               </>
             ) : (
-              <Link to="/login" className="px-4 py-2 min-h-[44px] flex items-center text-sm font-medium text-gray-400 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors">Sign In</Link>
+              <Link to="/login" className="px-4 py-2 min-h-[44px] flex items-center text-sm font-medium text-gray-400 hover:text-white hover:bg-white/4 rounded-lg transition-colors">Sign In</Link>
             ))}
           </div>
           <div className="md:hidden flex items-center gap-1">
@@ -80,21 +80,21 @@ export default function NavBar() {
         </div>
         {mobileOpen && (
           <div className="md:hidden border-t border-[#1b2130] bg-[#0d1117] px-6 pb-4 pt-2 space-y-1">
-            <Link to="/mission" onClick={() => setMobileOpen(false)} className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${isActive('/mission') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'}`}>Find Funders</Link>
+            <Link to="/mission" onClick={() => setMobileOpen(false)} className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${isActive('/mission') ? 'text-white bg-white/8' : 'text-gray-400 hover:text-white hover:bg-white/4'}`}>Find Funders</Link>
             {!loading && user && (
-              <Link to="/saved" onClick={() => setMobileOpen(false)} className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${isActive('/saved') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'}`}>Saved Funders</Link>
+              <Link to="/saved" onClick={() => setMobileOpen(false)} className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${isActive('/saved') ? 'text-white bg-white/8' : 'text-gray-400 hover:text-white hover:bg-white/4'}`}>Saved Funders</Link>
             )}
-            <Link to="/browse" onClick={() => setMobileOpen(false)} className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${isActive('/browse') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'}`}>Browse Grants</Link>
-            <Link to="/search" onClick={() => setMobileOpen(false)} className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${isActive('/search') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'}`}>Search</Link>
+            <Link to="/browse" onClick={() => setMobileOpen(false)} className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${isActive('/browse') ? 'text-white bg-white/8' : 'text-gray-400 hover:text-white hover:bg-white/4'}`}>Browse Grants</Link>
+            <Link to="/search" onClick={() => setMobileOpen(false)} className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${isActive('/search') ? 'text-white bg-white/8' : 'text-gray-400 hover:text-white hover:bg-white/4'}`}>Search</Link>
             {!loading && (user ? (
               <>
-                <Link to="/portfolio" onClick={() => setMobileOpen(false)} className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${isActive('/portfolio') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'}`}>Dashboard</Link>
-                <Link to="/dashboard" onClick={() => setMobileOpen(false)} className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${isActive('/dashboard') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'}`}>Portfolio</Link>
-                <Link to="/tasks" onClick={() => setMobileOpen(false)} className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${isActive('/tasks') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'}`}>Tasks</Link>
-                <div className="pt-2 border-t border-[#1b2130] mt-2 space-y-1">
-                  <Link to="/import" onClick={() => setMobileOpen(false)} className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${isActive('/import') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'}`}>Import Data</Link>
-                  <Link to="/settings/team" onClick={() => setMobileOpen(false)} className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${isActive('/settings/team') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'}`}>Team</Link>
-                  <Link to="/settings" onClick={() => setMobileOpen(false)} className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${isActive('/settings') && !isActive('/settings/team') ? 'text-white bg-white/[0.08]' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'}`}>Settings</Link>
+                <Link to="/portfolio" onClick={() => setMobileOpen(false)} className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${isActive('/portfolio') ? 'text-white bg-white/8' : 'text-gray-400 hover:text-white hover:bg-white/4'}`}>Dashboard</Link>
+                <Link to="/dashboard" onClick={() => setMobileOpen(false)} className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${isActive('/dashboard') ? 'text-white bg-white/8' : 'text-gray-400 hover:text-white hover:bg-white/4'}`}>Portfolio</Link>
+                <Link to="/tasks" onClick={() => setMobileOpen(false)} className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${isActive('/tasks') ? 'text-white bg-white/8' : 'text-gray-400 hover:text-white hover:bg-white/4'}`}>Tasks</Link>
+                <div className="pt-2 border-t border-[#1b2130] space-y-1">
+                  <Link to="/import" onClick={() => setMobileOpen(false)} className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${isActive('/import') ? 'text-white bg-white/8' : 'text-gray-400 hover:text-white hover:bg-white/4'}`}>Import Data</Link>
+                  <Link to="/settings/team" onClick={() => setMobileOpen(false)} className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${isActive('/settings/team') ? 'text-white bg-white/8' : 'text-gray-400 hover:text-white hover:bg-white/4'}`}>Team</Link>
+                  <Link to="/settings" onClick={() => setMobileOpen(false)} className={`block w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${isActive('/settings') && !isActive('/settings/team') ? 'text-white bg-white/8' : 'text-gray-400 hover:text-white hover:bg-white/4'}`}>Settings</Link>
                   <div className="flex items-center justify-between px-3 py-2">
                     <span className="text-xs text-gray-500 truncate">{user.email}</span>
                     <button onClick={() => { signOut(); setMobileOpen(false); }} className="text-sm font-medium text-gray-300 hover:text-white transition-colors">Sign Out</button>
@@ -102,7 +102,7 @@ export default function NavBar() {
                 </div>
               </>
             ) : (
-              <Link to="/login" onClick={() => setMobileOpen(false)} className="block w-full text-left px-3 py-2.5 text-sm font-medium text-gray-400 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors">Sign In</Link>
+              <Link to="/login" onClick={() => setMobileOpen(false)} className="block w-full text-left px-3 py-2.5 text-sm font-medium text-gray-400 hover:text-white hover:bg-white/4 rounded-lg transition-colors">Sign In</Link>
             ))}
           </div>
         )}

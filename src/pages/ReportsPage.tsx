@@ -224,8 +224,8 @@ export default function ReportsPage() {
                 <p className="text-gray-400 text-sm">No timeline data yet</p>
               )}
               <div className="flex gap-4 mt-3 text-xs text-gray-400">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 bg-blue-500 rounded" /> Submitted</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 bg-green-500 rounded" /> Awarded</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 bg-blue-500 rounded-sm" /> Submitted</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 bg-green-500 rounded-sm" /> Awarded</span>
               </div>
             </div>
 

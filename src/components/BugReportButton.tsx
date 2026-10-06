@@ -292,7 +292,7 @@ export default function BugReportButton() {
     <button
       onClick={handleOpen}
       data-bug-report-button
-      className="fixed bottom-6 left-6 z-40 bg-[#1f6feb] hover:bg-[#388bfd] text-white rounded-full p-3 shadow-lg shadow-black/40 transition-all duration-200 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-[#0d1117] group"
+      className="fixed bottom-6 left-6 z-40 bg-[#1f6feb] hover:bg-[#388bfd] text-white rounded-full p-3 shadow-lg shadow-black/40 transition-all duration-200 hover:scale-110 focus:outline-hidden focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-[#0d1117] group"
       aria-label="Report a bug or request a feature"
       title="Report a bug or request a feature"
     >
@@ -306,7 +306,7 @@ export default function BugReportButton() {
     ? createPortal(
         <div
           data-bug-report-overlay
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm px-4 pb-4 sm:items-center sm:pb-0"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-xs px-4 pb-4 sm:items-center sm:pb-0"
           onClick={(e) => {
             if (e.target === e.currentTarget) handleClose();
           }}
@@ -368,7 +368,7 @@ export default function BugReportButton() {
                   rows={4}
                   maxLength={1000}
                   disabled={isSubmitting}
-                  className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg p-3 text-sm text-white placeholder-gray-500 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-60"
+                  className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg p-3 text-sm text-white placeholder-gray-500 resize-none focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-60"
                 />
                 <p className="text-xs text-gray-400 mt-1 text-right">
                   {description.length}/1000
@@ -382,7 +382,7 @@ export default function BugReportButton() {
                       checked={isFeatureRequest}
                       onChange={(e) => setIsFeatureRequest(e.target.checked)}
                       disabled={isSubmitting}
-                      className="rounded border-[#30363d] bg-[#0d1117] text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
+                      className="rounded-sm border-[#30363d] bg-[#0d1117] text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
                     />
                     This is a feature request
                   </label>
@@ -393,7 +393,7 @@ export default function BugReportButton() {
                       checked={includeScreenshot}
                       onChange={(e) => setIncludeScreenshot(e.target.checked)}
                       disabled={isSubmitting}
-                      className="rounded border-[#30363d] bg-[#0d1117] text-blue-500 focus:ring-blue-500 focus:ring-offset-0 mt-0.5"
+                      className="rounded-sm border-[#30363d] bg-[#0d1117] text-blue-500 focus:ring-blue-500 focus:ring-offset-0 mt-0.5"
                     />
                     <span>
                       <Camera size={14} className="inline mr-1 opacity-60" />
@@ -408,7 +408,7 @@ export default function BugReportButton() {
                 {/* Error message */}
                 {submitStatus === 'error' && (
                   <div className="flex items-center gap-2 bg-red-900/20 border border-red-800/40 rounded-lg p-3 mb-3">
-                    <AlertCircle size={16} className="text-red-400 flex-shrink-0" />
+                    <AlertCircle size={16} className="text-red-400 shrink-0" />
                     <p className="text-xs text-red-300">{errorMessage}</p>
                   </div>
                 )}

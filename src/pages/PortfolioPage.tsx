@@ -235,7 +235,7 @@ export default function PortfolioPage() {
                 <select
                   value={sortKey}
                   onChange={(e) => setSortKey(e.target.value as any)}
-                  className="bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-gray-200"
+                  className="bg-[#0d1117] border border-[#30363d] rounded-sm px-2 py-1 text-gray-200"
                   aria-label="Sort grants by"
                 >
                   <option value="deadline">Deadline</option>
@@ -245,7 +245,7 @@ export default function PortfolioPage() {
                 </select>
                 <button
                   onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
-                  className="bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-gray-300 hover:text-white"
+                  className="bg-[#0d1117] border border-[#30363d] rounded-sm px-2 py-1 text-gray-300 hover:text-white"
                   aria-label={`Sort direction: ${sortDir === 'asc' ? 'ascending' : 'descending'}`}
                 >
                   {sortDir === 'asc' ? 'Asc' : 'Desc'}
@@ -265,7 +265,7 @@ export default function PortfolioPage() {
                   id="portfolio-filter-project"
                   value={filterProject}
                   onChange={(e) => setFilterProject(e.target.value)}
-                  className="w-full bg-[#0d1117] border border-[#30363d] rounded px-2 py-1.5 text-sm text-gray-200"
+                  className="w-full bg-[#0d1117] border border-[#30363d] rounded-sm px-2 py-1.5 text-sm text-gray-200"
                 >
                   <option value="all">All projects</option>
                   {projectOptions.map(p => <option key={p} value={p}>{p}</option>)}
@@ -277,7 +277,7 @@ export default function PortfolioPage() {
                   id="portfolio-filter-status"
                   value={filterStatus}
                   onChange={(e) => setFilterStatus(e.target.value)}
-                  className="w-full bg-[#0d1117] border border-[#30363d] rounded px-2 py-1.5 text-sm text-gray-200"
+                  className="w-full bg-[#0d1117] border border-[#30363d] rounded-sm px-2 py-1.5 text-sm text-gray-200"
                 >
                   <option value="all">All statuses</option>
                   {statusOptions.map(p => <option key={p} value={p}>{p}</option>)}
@@ -290,7 +290,7 @@ export default function PortfolioPage() {
                   type="date"
                   value={filterDeadlineFrom}
                   onChange={(e) => setFilterDeadlineFrom(e.target.value)}
-                  className="w-full bg-[#0d1117] border border-[#30363d] rounded px-2 py-1.5 text-sm text-gray-200"
+                  className="w-full bg-[#0d1117] border border-[#30363d] rounded-sm px-2 py-1.5 text-sm text-gray-200"
                 />
               </div>
               <div>
@@ -300,7 +300,7 @@ export default function PortfolioPage() {
                   type="date"
                   value={filterDeadlineTo}
                   onChange={(e) => setFilterDeadlineTo(e.target.value)}
-                  className="w-full bg-[#0d1117] border border-[#30363d] rounded px-2 py-1.5 text-sm text-gray-200"
+                  className="w-full bg-[#0d1117] border border-[#30363d] rounded-sm px-2 py-1.5 text-sm text-gray-200"
                 />
               </div>
               {hasActiveFilter && (

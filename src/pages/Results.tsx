@@ -598,7 +598,7 @@ export default function Results() {
               value={peerSearchInput}
               onChange={(event) => setPeerSearchInput(event.target.value)}
               placeholder={'Example: Greater Chicago Food Depository\nAustin Bat Cave\nGirls Who Code'}
-              className="mt-3 w-full min-h-[96px] rounded-xl border border-[#30363d] bg-[#0d1117] px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="mt-3 w-full min-h-[96px] rounded-xl border border-[#30363d] bg-[#0d1117] px-3 py-2 text-sm text-gray-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
             />
             <div className="flex flex-wrap items-center gap-2 mt-3">
               <button
@@ -677,7 +677,7 @@ export default function Results() {
           <div className="flex flex-wrap items-center gap-3 mb-6">
             <div className="flex items-center gap-1.5">
               <label htmlFor="sort-select" className="text-xs text-gray-300">Sort by:</label>
-              <select id="sort-select" value={sortBy} onChange={(e) => { setSortBy(e.target.value as typeof sortBy); setCurrentPage(1); }} className="text-xs bg-[#0d1117] border border-[#30363d] text-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <select id="sort-select" value={sortBy} onChange={(e) => { setSortBy(e.target.value as typeof sortBy); setCurrentPage(1); }} className="text-xs bg-[#0d1117] border border-[#30363d] text-gray-200 rounded-lg px-2 py-1.5 focus:outline-hidden focus:ring-2 focus:ring-blue-500">
                 <option value="score">Match Score</option>
                 <option value="grant_amount">Grant Amount</option>
                 <option value="total_giving">Total Giving</option>
@@ -686,7 +686,7 @@ export default function Results() {
             </div>
             <div className="flex items-center gap-1.5">
               <label htmlFor="type-filter" className="text-xs text-gray-300">Type:</label>
-              <select id="type-filter" value={funderTypeFilter} onChange={(e) => { setFunderTypeFilter(e.target.value as typeof funderTypeFilter); setCurrentPage(1); }} className="text-xs bg-[#0d1117] border border-[#30363d] text-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <select id="type-filter" value={funderTypeFilter} onChange={(e) => { setFunderTypeFilter(e.target.value as typeof funderTypeFilter); setCurrentPage(1); }} className="text-xs bg-[#0d1117] border border-[#30363d] text-gray-200 rounded-lg px-2 py-1.5 focus:outline-hidden focus:ring-2 focus:ring-blue-500">
                 <option value="all">All Types</option>
                 <option value="foundation">Foundation</option>
                 <option value="corporate">Corporate</option>
@@ -695,7 +695,7 @@ export default function Results() {
             </div>
             <div className="flex items-center gap-1.5">
               <label htmlFor="state-filter" className="text-xs text-gray-300">State:</label>
-              <input id="state-filter" type="text" value={stateFilter} onChange={(e) => { setStateFilter(e.target.value); setCurrentPage(1); }} placeholder="e.g. CA" maxLength={2} className="text-xs bg-[#0d1117] border border-[#30363d] text-gray-200 rounded-lg px-2 py-1.5 w-16 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <input id="state-filter" type="text" value={stateFilter} onChange={(e) => { setStateFilter(e.target.value); setCurrentPage(1); }} placeholder="e.g. CA" maxLength={2} className="text-xs bg-[#0d1117] border border-[#30363d] text-gray-200 rounded-lg px-2 py-1.5 w-16 focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
             </div>
           </div>
         )}
@@ -912,8 +912,8 @@ export default function Results() {
                       onClick={() => logResultSignal('result_outbound_click', funder, { url: 'linkedin_search' })}
                       className="text-blue-400 hover:text-blue-300 underline underline-offset-2 transition-colors inline-flex items-center gap-1.5"
                     >
-                      <span className="break-words">Find your connections at {funder.name}</span>
-                      <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                      <span className="wrap-break-word">Find your connections at {funder.name}</span>
+                      <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5 shrink-0" aria-hidden="true"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
                     </a>
                   </div>
 

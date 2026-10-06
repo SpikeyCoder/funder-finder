@@ -450,7 +450,7 @@ export default function ConversationalProjectSetup() {
                     value={composerValue}
                     onChange={e => setComposerValue(e.target.value)}
                     placeholder={copy.placeholder}
-                    className="flex-1 bg-transparent text-sm text-white placeholder:text-gray-400 focus:outline-none"
+                    className="flex-1 bg-transparent text-sm text-white placeholder:text-gray-400 focus:outline-hidden"
                     disabled={waitingForReply}
                     aria-label="Message to project setup assistant"
                   />

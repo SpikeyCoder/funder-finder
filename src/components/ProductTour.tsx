@@ -174,7 +174,7 @@ export default function ProductTour() {
   }
 
   return (
-    <div className="fixed inset-0 z-[100]" role="dialog" aria-modal="true" aria-label="Product tour">
+    <div className="fixed inset-0 z-100" role="dialog" aria-modal="true" aria-label="Product tour">
       {/* Dimmed backdrop with a spotlight cutout around the target (or full dim). */}
       {rect ? (
         <div
@@ -237,7 +237,7 @@ export default function ProductTour() {
             {step > 0 && (
               <button
                 onClick={() => setStep((s) => Math.max(s - 1, 0))}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-300 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] rounded-lg transition-colors"
+                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-300 hover:text-white bg-white/4 hover:bg-white/8 rounded-lg transition-colors"
               >
                 <ArrowLeft size={13} aria-hidden="true" /> Back
               </button>

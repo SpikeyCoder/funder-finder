@@ -220,12 +220,12 @@ export default function ApplicationsPage() {
             <input type="text" value={newTitle} onChange={e => setNewTitle(e.target.value)}
               aria-label="Entry title"
               placeholder="Title (e.g., 'Ford Foundation 2027 LOI')"
-              className="w-full mb-3 bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
+              className="w-full mb-3 bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-hidden focus:border-blue-500" />
             <textarea value={newContent} onChange={e => setNewContent(e.target.value)}
               aria-label="Application content"
               placeholder="Paste your application text, proposal sections, or notes here..."
               rows={8}
-              className="w-full mb-3 bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
+              className="w-full mb-3 bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-hidden focus:border-blue-500" />
             <div className="flex justify-end gap-2">
               <button onClick={() => setShowForm(false)} className="px-4 py-2 text-gray-400 hover:text-white text-sm">Cancel</button>
               <button onClick={handleAdd} disabled={!newTitle.trim() || !newContent.trim()}
@@ -252,14 +252,14 @@ export default function ApplicationsPage() {
                   }`}>
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-2">
-                      <FileText size={14} className="mt-0.5 text-gray-400 flex-shrink-0" />
+                      <FileText size={14} className="mt-0.5 text-gray-400 shrink-0" />
                       <div>
                         <p className="text-sm font-medium text-white">{entry.title}</p>
                         <p className="text-xs text-gray-400 mt-0.5">
                           {entry.source_type} · {new Date(entry.created_at).toLocaleDateString()}
                         </p>
                         {entry.outcome && entry.outcome !== 'unknown' && (
-                          <span className={`inline-block mt-1 px-1.5 py-0.5 rounded text-[10px] border ${OUTCOME_OPTIONS.find(o => o.value === entry.outcome)?.badge || ''}`}>
+                          <span className={`inline-block mt-1 px-1.5 py-0.5 rounded-sm text-[10px] border ${OUTCOME_OPTIONS.find(o => o.value === entry.outcome)?.badge || ''}`}>
                             {OUTCOME_OPTIONS.find(o => o.value === entry.outcome)?.label}
                           </span>
                         )}
@@ -267,7 +267,7 @@ export default function ApplicationsPage() {
                     </div>
                     <button onClick={e => { e.stopPropagation(); handleDelete(entry.id); }}
                       aria-label={`Delete prior application "${entry.title}"`}
-                      className="text-gray-600 hover:text-red-400 flex-shrink-0"><Trash2 size={14} aria-hidden="true" /></button>
+                      className="text-gray-600 hover:text-red-400 shrink-0"><Trash2 size={14} aria-hidden="true" /></button>
                   </div>
                 </button>
               ))}
@@ -286,7 +286,7 @@ export default function ApplicationsPage() {
                     </div>
                     <button
                       onClick={() => setShowBookmarkForm(!showBookmarkForm)}
-                      className="px-3 py-2 bg-yellow-600/20 hover:bg-yellow-600/30 border border-yellow-500/30 rounded text-sm text-yellow-400 transition-colors">
+                      className="px-3 py-2 bg-yellow-600/20 hover:bg-yellow-600/30 border border-yellow-500/30 rounded-sm text-sm text-yellow-400 transition-colors">
                       <Star size={14} className="inline mr-1" />
                       Bookmark
                     </button>
@@ -300,7 +300,7 @@ export default function ApplicationsPage() {
                       id="kb-outcome"
                       value={selectedEntry.outcome || 'unknown'}
                       onChange={e => handleUpdateEntry(selectedEntry.id, { outcome: e.target.value as KBEntry['outcome'] })}
-                      className="bg-[#161b22] border border-[#30363d] rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500">
+                      className="bg-[#161b22] border border-[#30363d] rounded-sm px-2 py-1 text-sm text-white focus:outline-hidden focus:border-blue-500">
                       {OUTCOME_OPTIONS.map(o => (
                         <option key={o.value} value={o.value}>{o.label}</option>
                       ))}
@@ -310,7 +310,7 @@ export default function ApplicationsPage() {
                         type="checkbox"
                         checked={selectedEntry.use_for_learning !== false}
                         onChange={e => handleUpdateEntry(selectedEntry.id, { use_for_learning: e.target.checked })}
-                        className="rounded border-[#30363d] accent-blue-500"
+                        className="rounded-sm border-[#30363d] accent-blue-500"
                       />
                       Use to train my AI drafts
                     </label>
@@ -329,7 +329,7 @@ export default function ApplicationsPage() {
                         aria-label="Passage to bookmark"
                         placeholder="Select or paste the passage you want to bookmark..."
                         rows={4}
-                        className="w-full mb-2 bg-[#0d1117] border border-[#30363d] rounded px-2 py-2 text-sm text-gray-300 focus:outline-none focus:border-yellow-500" />
+                        className="w-full mb-2 bg-[#0d1117] border border-[#30363d] rounded-sm px-2 py-2 text-sm text-gray-300 focus:outline-hidden focus:border-yellow-500" />
                       <div className="flex justify-end gap-2">
                         <button
                           onClick={() => setShowBookmarkForm(false)}
@@ -339,7 +339,7 @@ export default function ApplicationsPage() {
                         <button
                           onClick={handleAddBookmark}
                           disabled={!bookmarkText.trim()}
-                          className="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 disabled:opacity-50 rounded text-sm text-white transition-colors">
+                          className="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 disabled:opacity-50 rounded-sm text-sm text-white transition-colors">
                           Save Passage
                         </button>
                       </div>

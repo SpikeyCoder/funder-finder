@@ -19,7 +19,7 @@ export default function Landing() {
       <main id="main-content">
       {/* Hero */}
       <div className="flex flex-col items-center justify-center text-center px-6 pt-24 pb-12">
-        <h1 className="text-5xl md:text-7xl font-bold leading-tight tracking-tight max-w-4xl">
+        <h1 className="text-5xl md:text-7xl font-bold leading-tight md:leading-none tracking-tight max-w-4xl">
           Find Nonprofit Funding Opportunities Matched to Your Mission
         </h1>
         <p className="mt-6 text-lg md:text-xl text-gray-400 max-w-2xl">
