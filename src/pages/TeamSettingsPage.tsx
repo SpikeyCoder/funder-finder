@@ -8,8 +8,8 @@ import {
   ChevronDown, ChevronRight, Users, FolderOpen, AlertCircle,
   CheckCircle, Loader, X, Search, Briefcase
 } from 'lucide-react';
+import { SUPABASE_URL } from '../lib/supabaseProject';
 
-const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const TEAM_INVITE_URL = `${SUPABASE_URL}/functions/v1/team-invite`;
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -306,8 +306,9 @@ export default function TeamSettingsPage() {
             </p>
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="flex-1">
-                <label className="block text-xs text-gray-400 mb-1.5">Email address</label>
+                <label htmlFor="invite-email" className="block text-xs text-gray-400 mb-1.5">Email address</label>
                 <input
+                  id="invite-email"
                   type="email"
                   value={inviteEmail}
                   onChange={e => setInviteEmail(e.target.value)}
@@ -318,8 +319,9 @@ export default function TeamSettingsPage() {
                 />
               </div>
               <div className="sm:w-44">
-                <label className="block text-xs text-gray-400 mb-1.5">Role</label>
+                <label htmlFor="invite-role" className="block text-xs text-gray-400 mb-1.5">Role</label>
                 <select
+                  id="invite-role"
                   value={inviteRole}
                   onChange={e => setInviteRole(e.target.value)}
                   className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-4 py-2.5 text-white text-sm"
@@ -333,8 +335,9 @@ export default function TeamSettingsPage() {
               {inviteRole === 'partner' && (
                 <div className="sm:basis-full grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs text-gray-400 mb-1.5">Partner organization (optional)</label>
+                    <label htmlFor="invite-partner-org" className="block text-xs text-gray-400 mb-1.5">Partner organization (optional)</label>
                     <input
+                      id="invite-partner-org"
                       type="text"
                       value={partnerOrgName}
                       onChange={e => setPartnerOrgName(e.target.value)}
@@ -343,8 +346,9 @@ export default function TeamSettingsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-400 mb-1.5">Partner type (optional)</label>
+                    <label htmlFor="invite-partner-type" className="block text-xs text-gray-400 mb-1.5">Partner type (optional)</label>
                     <select
+                      id="invite-partner-type"
                       value={partnerType}
                       onChange={e => setPartnerType(e.target.value)}
                       className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-4 py-2.5 text-white text-sm"
@@ -370,7 +374,7 @@ export default function TeamSettingsPage() {
                   className="w-full sm:w-auto px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
                 >
                   {inviting ? <Loader size={14} className="animate-spin" /> : <Mail size={14} />}
-                  {inviting ? 'Sending...' : 'Send Invite'}
+                  <span>{inviting ? 'Sending...' : 'Send Invite'}</span>
                 </button>
               </div>
             </div>
@@ -466,6 +470,7 @@ export default function TeamSettingsPage() {
                     <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
                       type="text"
+                      aria-label="Filter members by name or email"
                       value={searchQuery}
                       onChange={e => setSearchQuery(e.target.value)}
                       placeholder="Filter by name or email"

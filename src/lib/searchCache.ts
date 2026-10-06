@@ -1,0 +1,82 @@
+// Recent organization-search results, so a query the user already ran in this
+// tab (backspacing over a typo, going back to the search page) shows its
+// results at once instead of waiting on another round trip.
+//
+// Only results with matches are kept: a search that found nothing is always
+// sent again. After the user requests a missing organization the cache is
+// off for a while (pause()): the request queue runs every 15 minutes, 20
+// requests a run, retrying failures on later runs, and any cached search (its
+// name, a prefix of it, another spelling) could hide it meanwhile.
+//
+// Keyed by the query with whitespace runs collapsed (the server collapses
+// them too, so those are the same search), but case kept: ranking reads camelCase ("SitStayRead" is split
+// into words, "sitstayread" isn't). And by scope: anything else the results
+// depend on (the state ranked first). Entries expire, so a long-open tab still
+// sees newly added organizations, and the oldest go first past the cap.
+
+const MAX_ENTRIES = 50;
+const TTL_MS = 5 * 60_000;
+// Long enough for a backlog or a retried lookup; only the tab that made a
+// request pays for it, with uncached repeat searches.
+const PAUSE_MS = 2 * 60 * 60_000;
+
+interface Entry<T> {
+  value: T;
+  at: number;
+}
+
+export function searchKey(query: string): string {
+  return query.replace(/\s+/g, ' ').trim();
+}
+
+// NUL can't be in a query (Postgres text can't hold it), so it can't make two
+// different (query, scope) pairs collide.
+function cacheKey(query: string, scope: string): string {
+  return `${scope}\u0000${searchKey(query)}`;
+}
+
+export class SearchCache<T extends readonly unknown[]> {
+  private entries = new Map<string, Entry<T>>();
+  private pausedUntil = 0;
+
+  constructor(
+    private readonly maxEntries = MAX_ENTRIES,
+    private readonly ttlMs = TTL_MS,
+    private readonly now: () => number = Date.now,
+  ) {}
+
+  get(query: string, scope = ''): T | undefined {
+    if (this.paused()) return undefined;
+    const key = cacheKey(query, scope);
+    const entry = this.entries.get(key);
+    if (!entry) return undefined;
+    if (this.now() - entry.at > this.ttlMs) {
+      this.entries.delete(key);
+      return undefined;
+    }
+    // Most recently used goes to the back, so it's evicted last.
+    this.entries.delete(key);
+    this.entries.set(key, entry);
+    return entry.value;
+  }
+
+  // Drops everything and caches nothing for the next `ms`.
+  pause(ms = PAUSE_MS): void {
+    this.pausedUntil = this.now() + ms;
+    this.entries.clear();
+  }
+
+  private paused(): boolean {
+    return this.now() < this.pausedUntil;
+  }
+
+  set(query: string, value: T, scope = ''): void {
+    if (value.length === 0 || this.paused()) return;
+    const key = cacheKey(query, scope);
+    this.entries.delete(key);
+    this.entries.set(key, { value, at: this.now() });
+    while (this.entries.size > this.maxEntries) {
+      this.entries.delete(this.entries.keys().next().value as string);
+    }
+  }
+}

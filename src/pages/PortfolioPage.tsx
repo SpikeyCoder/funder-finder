@@ -5,8 +5,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
 import type { PortfolioMetrics, PortfolioGrant } from '../types';
+import { SUPABASE_URL } from '../lib/supabaseProject';
 
-const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const PORTFOLIO_URL = `${SUPABASE_URL}/functions/v1/portfolio`;
 
 function fmtCurrency(amount: number | null | undefined): string {
@@ -260,8 +260,9 @@ export default function PortfolioPage() {
           {showFilters && grants.length > 0 && (
             <div className="mb-4 bg-[#161b22] border border-[#30363d] rounded-lg p-4 grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1">Project</label>
+                <label htmlFor="portfolio-filter-project" className="block text-xs font-medium text-gray-400 mb-1">Project</label>
                 <select
+                  id="portfolio-filter-project"
                   value={filterProject}
                   onChange={(e) => setFilterProject(e.target.value)}
                   className="w-full bg-[#0d1117] border border-[#30363d] rounded px-2 py-1.5 text-sm text-gray-200"
@@ -271,8 +272,9 @@ export default function PortfolioPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1">Status</label>
+                <label htmlFor="portfolio-filter-status" className="block text-xs font-medium text-gray-400 mb-1">Status</label>
                 <select
+                  id="portfolio-filter-status"
                   value={filterStatus}
                   onChange={(e) => setFilterStatus(e.target.value)}
                   className="w-full bg-[#0d1117] border border-[#30363d] rounded px-2 py-1.5 text-sm text-gray-200"
@@ -282,8 +284,9 @@ export default function PortfolioPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1">Deadline from</label>
+                <label htmlFor="portfolio-filter-deadline-from" className="block text-xs font-medium text-gray-400 mb-1">Deadline from</label>
                 <input
+                  id="portfolio-filter-deadline-from"
                   type="date"
                   value={filterDeadlineFrom}
                   onChange={(e) => setFilterDeadlineFrom(e.target.value)}
@@ -291,8 +294,9 @@ export default function PortfolioPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1">Deadline to</label>
+                <label htmlFor="portfolio-filter-deadline-to" className="block text-xs font-medium text-gray-400 mb-1">Deadline to</label>
                 <input
+                  id="portfolio-filter-deadline-to"
                   type="date"
                   value={filterDeadlineTo}
                   onChange={(e) => setFilterDeadlineTo(e.target.value)}

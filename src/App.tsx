@@ -2,8 +2,10 @@ import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-ro
 import { Suspense, lazy, useEffect, useRef } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import AnalyticsTracker from './components/AnalyticsTracker';
+import CanonicalTag from './components/CanonicalTag';
 import AuthGuard from './components/AuthGuard';
 import FeatureTooltips from './components/FeatureTooltip';
+import ProductTour from './components/ProductTour';
 import BugReportButton from './components/BugReportButton';
 import ThemeToggle from './components/ThemeToggle';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -150,12 +152,14 @@ function App() {
     // but outside all Routes so every page has access to the auth context.
     <BrowserRouter>
       <AnalyticsTracker />
+      <CanonicalTag />
       <AuthProvider>
         <main id="main-content">
         <AnimatedRoutes />
         </main>
         <BugReportButton />
         <FeatureTooltips />
+        <ProductTour />
         <ThemeToggle />
       </AuthProvider>
     </BrowserRouter>

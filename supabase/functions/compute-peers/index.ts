@@ -432,7 +432,10 @@ Deno.serve(async (req) => {
       for (const [, c] of candidateMap) {
         if (isLikelyNonNonprofit(c.name)) continue;
 
-        const sourceFunderCount = source.funder_count ?? 10;
+        // No funders on record (an organization added from the IRS file or
+        // the request queue) is unknown, not zero: zero would rule out every
+        // candidate.
+        const sourceFunderCount = source.funder_count || 10;
         if ((c.funder_count ?? 0) > sourceFunderCount * 20) continue;
 
         let ntee = 0;

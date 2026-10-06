@@ -6,8 +6,8 @@ import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
 import { friendlyError } from '../lib/friendlyErrors';
 import type { PipelineStatus, TrackedGrant, CustomFieldValue, GrantTask, ComplianceRequirement, ComplianceDeliverable, ComplianceAttachment } from '../types';
+import { SUPABASE_URL } from '../lib/supabaseProject';
 
-const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const MATCH_FUNDERS_URL = `${SUPABASE_URL}/functions/v1/match-funders`;
 const SUGGEST_PEERS_URL = `${SUPABASE_URL}/functions/v1/suggest-peers`;
 const TRACKED_GRANTS_URL = `${SUPABASE_URL}/functions/v1/tracked-grants`;
@@ -407,10 +407,14 @@ export default function ProjectWorkspace() {
           if (stateMatches?.length) matched = stateMatches[0];
         }
         if (!matched) {
+          // Anywhere: only organizations with grants on record (or not from
+          // the IRS file), so a same-named IRS-file row elsewhere isn't taken
+          // for the peer.
           const { data: anyMatches } = await supabase
             .from('recipient_organizations')
             .select('ein, name, primary_state, ntee_code, total_funding, funder_count')
             .ilike('name', `%${safeName}%`)
+            .or('source.is.null,grant_count.gt.0')
             .order('funder_count', { ascending: false }).limit(1);
           if (anyMatches?.length) matched = anyMatches[0];
         }
@@ -1856,10 +1860,10 @@ export default function ProjectWorkspace() {
       {/* Add Grant Modal */}
       {addGrantOpen && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setAddGrantOpen(false)}>
-          <div className="bg-[#161b22] border border-[#30363d] rounded-xl w-full max-w-lg p-6" onClick={e => e.stopPropagation()}>
+          <div role="dialog" aria-modal="true" aria-labelledby="add-grant-modal-title" className="bg-[#161b22] border border-[#30363d] rounded-xl w-full max-w-lg p-6" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-white">Add Grant to Tracker</h3>
-              <button onClick={() => { setAddGrantOpen(false); setAddGrantError(null); }} className="text-gray-400 hover:text-white"><X size={20} /></button>
+              <h3 id="add-grant-modal-title" className="text-lg font-semibold text-white">Add Grant to Tracker</h3>
+              <button onClick={() => { setAddGrantOpen(false); setAddGrantError(null); }} aria-label="Close dialog" className="text-gray-400 hover:text-white"><X size={20} /></button>
             </div>
             {addGrantError && (
               <div role="alert" aria-live="polite" className="mb-3 p-3 bg-red-900/20 border border-red-800 rounded-lg text-red-200 text-sm">
@@ -1918,10 +1922,10 @@ export default function ProjectWorkspace() {
       {/* CSV Import Modal */}
       {csvImportOpen && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setCsvImportOpen(false)}>
-          <div className="bg-[#161b22] border border-[#30363d] rounded-xl w-full max-w-2xl p-6 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div role="dialog" aria-modal="true" aria-labelledby="csv-import-modal-title" className="bg-[#161b22] border border-[#30363d] rounded-xl w-full max-w-2xl p-6 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-white">Import Grants from CSV</h3>
-              <button onClick={() => setCsvImportOpen(false)} className="text-gray-400 hover:text-white"><X size={20} /></button>
+              <h3 id="csv-import-modal-title" className="text-lg font-semibold text-white">Import Grants from CSV</h3>
+              <button onClick={() => setCsvImportOpen(false)} aria-label="Close dialog" className="text-gray-400 hover:text-white"><X size={20} /></button>
             </div>
 
             {csvStep === 1 && (
@@ -2000,6 +2004,9 @@ export default function ProjectWorkspace() {
           onClick={() => closeDrawer()}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="grant-drawer-title"
             className={`w-full max-w-lg bg-[#161b22] border-l border-[#30363d] h-full flex flex-col transform transition-transform duration-300 ease-in-out ${drawerVisible ? 'translate-x-0' : 'translate-x-full'}`}
             onClick={e => e.stopPropagation()}
           >
@@ -2008,10 +2015,10 @@ export default function ProjectWorkspace() {
             <div className="flex-shrink-0 px-5 py-4 border-b border-[#30363d] bg-[#161b22]">
               <div className="flex items-start justify-between">
                 <div className="min-w-0 flex-1 mr-3">
-                  <h3 className="text-lg font-semibold text-white truncate">{selectedGrant.funder_name}</h3>
+                  <h3 id="grant-drawer-title" className="text-lg font-semibold text-white truncate">{selectedGrant.funder_name}</h3>
                   {selectedGrant.grant_title && <p className="text-sm text-gray-400 mt-0.5 truncate">{selectedGrant.grant_title}</p>}
                 </div>
-                <button onClick={() => closeDrawer()} className="text-gray-400 hover:text-white flex-shrink-0 p-1"><X size={18} /></button>
+                <button onClick={() => closeDrawer()} aria-label="Close grant details" className="text-gray-400 hover:text-white flex-shrink-0 p-1"><X size={18} /></button>
               </div>
               {/* Quick status row */}
               <div className="flex items-center gap-3 mt-3">
@@ -2213,7 +2220,7 @@ export default function ProjectWorkspace() {
                       <input type="text" value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)}
                         placeholder="New task..." onKeyDown={e => e.key === 'Enter' && handleAddTask()}
                         className="flex-1 bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500" />
-                      <button onClick={handleAddTask} disabled={!newTaskTitle.trim()}
+                      <button onClick={handleAddTask} aria-label="Add task" disabled={!newTaskTitle.trim()}
                         className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm transition-colors">
                         <Plus size={14} />
                       </button>
@@ -2340,7 +2347,7 @@ export default function ProjectWorkspace() {
                         </select>
                         <input type="date" value={newCompDue} onChange={e => setNewCompDue(e.target.value)}
                           className="bg-[#0d1117] border border-[#30363d] rounded-lg px-2 py-1.5 text-white text-xs" />
-                        <button onClick={handleAddCompliance} disabled={!newCompTitle.trim()}
+                        <button onClick={handleAddCompliance} aria-label="Add compliance deliverable" disabled={!newCompTitle.trim()}
                           className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-xs"><Plus size={13} /></button>
                       </div>
                       <input type="email" placeholder="Assignee email (optional)"
@@ -2412,7 +2419,7 @@ export default function ProjectWorkspace() {
                   <button onClick={() => refFileInput.current?.click()} disabled={refUploading}
                     className="w-full flex items-center justify-center gap-1.5 px-3 py-2 border border-dashed border-purple-500/30 rounded-lg text-xs text-purple-300 hover:border-purple-500 hover:bg-purple-500/5 transition-colors disabled:opacity-50">
                     {refUploading ? <Loader size={13} className="animate-spin" /> : <Upload size={13} />}
-                    {refUploading ? 'Uploading...' : 'Upload Document'}
+                    <span>{refUploading ? 'Uploading...' : 'Upload Document'}</span>
                   </button>
                   <input ref={refFileInput} type="file" className="hidden"
                     accept=".pdf,.doc,.docx,.txt,.rtf,.md"
@@ -2449,7 +2456,7 @@ export default function ProjectWorkspace() {
                   <button onClick={() => handleGenerateDraft()} disabled={aiDraftLoading}
                     className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60">
                     {aiDraftLoading ? <Loader size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                    {aiDraftLoading ? 'Researching & generating...' : aiDraft ? 'Regenerate Draft' : 'Generate AI Draft Proposal'}
+                    <span>{aiDraftLoading ? 'Researching & generating...' : aiDraft ? 'Regenerate Draft' : 'Generate AI Draft Proposal'}</span>
                   </button>
                   {aiDraft && (
                     <div className="space-y-2">
@@ -2490,11 +2497,11 @@ export default function ProjectWorkspace() {
       {/* Share dialog */}
       {showShareDialog && shareUrl && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowShareDialog(false)}>
-          <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-6 w-[400px] max-w-[90vw]" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold mb-2">Share Link Created</h3>
+          <div role="dialog" aria-modal="true" aria-labelledby="share-dialog-title" className="bg-[#161b22] border border-[#30363d] rounded-lg p-6 w-[400px] max-w-[90vw]" onClick={e => e.stopPropagation()}>
+            <h3 id="share-dialog-title" className="text-lg font-semibold mb-2">Share Link Created</h3>
             <p className="text-sm text-gray-400 mb-4">Anyone with this link can view the tracker (read-only).</p>
             <div className="flex gap-2">
-              <input type="text" readOnly value={shareUrl}
+              <input type="text" readOnly value={shareUrl} aria-label="Shareable link"
                 className="flex-1 bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm" />
               <button onClick={() => { navigator.clipboard.writeText(shareUrl); setShowShareDialog(false); }}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm">Copy</button>

@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback, useRef } f
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase, SUPABASE_CUSTOM_DOMAIN } from '../lib/supabase';
 import { BudgetBand, Funder, FunderStatus, SavedFunderEntry, CustomFieldValue } from '../types';
+import { SUPABASE_URL } from '../lib/supabaseProject';
 
 // The OAuth redirect URL must match what is registered in Supabase dashboard
 // and in each OAuth provider's allowed redirect URIs.
@@ -297,7 +298,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const branded = provider === 'azure'
         ? data.url
         : data.url.replace(
-            'tgtotjvdubhjxzybmdex.supabase.co',
+            new URL(SUPABASE_URL).hostname,
             new URL(SUPABASE_CUSTOM_DOMAIN).hostname,
           );
       window.location.href = branded;

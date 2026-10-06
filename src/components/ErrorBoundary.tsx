@@ -1,5 +1,7 @@
 import { Component, ReactNode } from 'react';
 import { AlertCircle } from 'lucide-react';
+import { isChunkLoadError, onReloadPageFor, reloadOnceForChunkError } from '../lib/chunkReload';
+import { reportCrash } from '../lib/monitoring';
 
 interface Props {
   children: ReactNode;
@@ -8,97 +10,98 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
+  // True while an automatic chunk-error reload is in flight.
+  reloading: boolean;
 }
 
-// Guards against an infinite reload loop if a chunk is genuinely gone.
-const CHUNK_RELOAD_KEY = 'ff_chunk_reload_at';
-const CHUNK_RELOAD_COOLDOWN_MS = 10_000;
-
-// A lazy/dynamic import that fails to download throws one of these. It usually
-// means a new deploy rotated the hashed chunk filenames out from under a client
-// that still has the old index.html, so the route's chunk 404s.
-function isChunkLoadError(error: Error | null): boolean {
-  if (!error) return false;
-  const msg = error.message || '';
-  return (
-    error.name === 'ChunkLoadError' ||
-    /failed to fetch dynamically imported module/i.test(msg) ||
-    /error loading dynamically imported module/i.test(msg) ||
-    /importing a module script failed/i.test(msg) ||
-    /dynamically imported module/i.test(msg)
-  );
-}
+const SCREEN_COPY = {
+  reloading: {
+    title: 'Reloading…',
+    body: 'Part of the page didn’t load. Fetching it again.',
+    button: 'Reload',
+  },
+  reload: {
+    title: 'A new version may be available',
+    body: 'Part of the app didn’t load — usually because it was just updated. Reload to get the latest version.',
+    button: 'Reload',
+  },
+  error: {
+    title: 'Oops! Something went wrong',
+    body: 'We encountered an unexpected error. Please try again or contact support if the problem persists.',
+    button: 'Try Again',
+  },
+};
 
 export default class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false, error: null, reloading: false };
   }
 
-  static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error };
+  static getDerivedStateFromError(error: Error): Partial<State> {
+    // componentDidCatch sets `reloading` again if this error starts a reload.
+    return { hasError: true, error, reloading: false };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('ErrorBoundary caught error:', error, errorInfo);
 
     // For a failed chunk load, reloading pulls a fresh index.html plus valid
-    // chunks and almost always recovers — so do it automatically, once.
-    if (isChunkLoadError(error)) {
-      let lastReload = 0;
-      try {
-        lastReload = Number(sessionStorage.getItem(CHUNK_RELOAD_KEY)) || 0;
-      } catch {
-        /* sessionStorage unavailable (private mode); fall through to manual UI */
-      }
-      if (Date.now() - lastReload > CHUNK_RELOAD_COOLDOWN_MS) {
-        try {
-          sessionStorage.setItem(CHUNK_RELOAD_KEY, String(Date.now()));
-        } catch {
-          /* ignore */
-        }
-        window.location.reload();
-      }
+    // chunks and almost always recovers — so do it automatically, once. If
+    // we've already tried, render() shows a manual Reload with the details.
+    // The "Reloading…" screen keeps a Reload button, so if reload() is ever a
+    // no-op (e.g. a sandboxed webview) nobody is stranded.
+    const chunk = isChunkLoadError(error);
+    const reload = chunk ? reloadOnceForChunkError(error) : null;
+    if (reload === 'reloading') {
+      this.setState({ reloading: true });
+      return;
     }
+    // Whatever screen is shown now (FM-2026-10-03-02). A chunk error is
+    // reported only if the automatic reload didn't help: this is the page
+    // that reload loaded, and it failed the same way. Not if storage is
+    // blocked and no reload was tried, and not a later, separate blip in the
+    // same tab: both are stale deploys or the network, not bugs.
+    reportCrash('boundary', error, errorInfo.componentStack ?? '', chunk && onReloadPageFor(error));
   }
-
-  handleTryAgain = () => {
-    this.setState({ hasError: false, error: null });
-    window.location.reload();
-  };
 
   render() {
     if (this.state.hasError) {
-      const chunkError = isChunkLoadError(this.state.error);
+      const shownError = this.state.error;
+      // While the automatic reload runs: "reloading". Afterwards, a chunk-load
+      // failure still gets the manual "reload" screen (also when
+      // sessionStorage is blocked and we couldn't auto-reload); anything else
+      // shows its real error.
+      const mode = this.state.reloading ? 'reloading' : isChunkLoadError(shownError) ? 'reload' : 'error';
+      const copy = SCREEN_COPY[mode];
       return (
         <div className="min-h-screen bg-[#0d1117] flex items-center justify-center px-4">
           <div className="max-w-md text-center">
             <div className="flex justify-center mb-6">
               <AlertCircle size={48} className="text-red-400" />
             </div>
-            <h1 className="text-2xl font-bold text-white mb-3">
-              {chunkError ? 'A new version is available' : 'Oops! Something went wrong'}
-            </h1>
-            <p className="text-gray-400 mb-6">
-              {chunkError
-                ? 'The app was updated. Reload to get the latest version.'
-                : 'We encountered an unexpected error. Please try again or contact support if the problem persists.'}
-            </p>
-            {!chunkError && this.state.error && (
+            <h1 className="text-2xl font-bold text-white mb-3">{copy.title}</h1>
+            <p className="text-gray-400 mb-6">{copy.body}</p>
+            {mode !== 'reloading' && shownError && (
               <details className="mb-6 text-left bg-[#161b22] border border-[#30363d] rounded-lg p-4">
                 <summary className="cursor-pointer text-sm text-gray-400 font-medium">
                   Error details
                 </summary>
                 <pre className="mt-3 text-xs text-gray-400 overflow-auto max-h-32">
-                  {this.state.error.toString()}
+                  {shownError.toString()}
                 </pre>
               </details>
             )}
             <button
-              onClick={this.handleTryAgain}
+              // Just reload: clearing the error first would re-render the
+              // failed subtree and throw (and log) again before navigating.
+              // (A plain reload keeps the automatic reload's marker, so if
+              // the visitor taps this while it's under way and the page
+              // fails the same way, that's still reported.)
+              onClick={() => window.location.reload()}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
             >
-              {chunkError ? 'Reload' : 'Try Again'}
+              {copy.button}
             </button>
           </div>
         </div>

@@ -6,8 +6,8 @@ import { ArrowRight, ArrowLeft, User, FolderPlus, Search, Bookmark, Sparkles } f
 import NavBar from '../components/NavBar';
 import OnboardingAdvisor from '../components/OnboardingAdvisor';
 import type { OrgProfile } from '../lib/onboardingAdvisor';
+import { SUPABASE_URL } from '../lib/supabaseProject';
 
-const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const ONBOARDING_URL = `${SUPABASE_URL}/functions/v1/onboarding`;
 
 const STEPS = [
@@ -94,10 +94,15 @@ export default function OnboardingPage() {
       if (res.ok) {
         const data = await res.json();
         if (data.completed_at || data.skipped) {
+          // Set the flag AuthGuard reads, or it sends this user straight back
+          // here from /portfolio (new device or cleared storage) in a loop.
+          localStorage.setItem('onboarding_complete', 'true');
           navigate('/portfolio');
           return;
         }
-        setCurrentStep(data.current_step || 1);
+        // The server stores whatever step it was sent; keep it within STEPS so
+        // the render's STEPS[currentStep - 1] lookup can't come back undefined.
+        setCurrentStep(Math.min(Math.max(Number(data.current_step) || 1, 1), STEPS.length));
         setCompletedSteps(data.completed_steps || []);
       }
     } catch (err) {
@@ -220,18 +225,20 @@ export default function OnboardingPage() {
     }
   };
 
+  // FM-IC-ONB-003: when leaving Step 2 (profile), persist what the user
+  // entered so the data is captured even if they bounce out of the
+  // tutorial. Skip the save quietly if every field is blank.
+  const saveProfileIfEntered = async (): Promise<boolean> => {
+    const anyProfileField = !!(
+      orgName || missionStatement || city || stateAbbr || county || orgType || fieldsOfWork.length
+    );
+    return anyProfileField ? saveProfile() : true;
+  };
+
   const handleNext = async () => {
-    // FM-IC-ONB-003: when leaving Step 2 (profile), persist what the user
-    // entered so the data is captured even if they bounce out of the
-    // tutorial. Skip the save quietly if every field is blank.
     if (currentStep === 2) {
-      const anyProfileField = !!(
-        orgName || missionStatement || city || stateAbbr || county || orgType || fieldsOfWork.length
-      );
-      if (anyProfileField) {
-        const ok = await saveProfile();
-        if (!ok) return; // surface the error to the user and stay on step
-      }
+      const ok = await saveProfileIfEntered();
+      if (!ok) return; // surface the error to the user and stay on step
     }
 
     // Step 3: create the project before advancing
@@ -248,8 +255,10 @@ export default function OnboardingPage() {
     setCompletedSteps(newCompleted);
 
     if (currentStep >= 5) {
-      // Complete onboarding
-      await saveProgress(5, newCompleted);
+      // Complete onboarding. Send every step: the server only sets
+      // completed_at once all five are listed, and a user who jumped ahead
+      // (the advisor's "Create my first project") never visited steps 1-2.
+      await saveProgress(5, STEPS.map((s) => s.num));
       localStorage.setItem('onboarding_complete', 'true');
       navigate('/dashboard');
       return;
@@ -279,6 +288,19 @@ export default function OnboardingPage() {
     }
   };
 
+  // Build the org profile from form state so the advisor has current context.
+  // Must stay above the loading early return: a hook that only runs once
+  // loading finishes changes the hook count between renders (React #310).
+  const advisorProfile: OrgProfile = useMemo(() => ({
+    organization_name: orgName || undefined,
+    mission_statement: missionStatement || undefined,
+    city: city || undefined,
+    state: stateAbbr || undefined,
+    county: county || undefined,
+    org_type: orgType || undefined,
+    fields_of_work: fieldsOfWork.length > 0 ? fieldsOfWork : undefined,
+  }), [orgName, missionStatement, city, stateAbbr, county, orgType, fieldsOfWork]);
+
   if (loading || isLoading) return (
     <>
       <NavBar />
@@ -294,22 +316,13 @@ export default function OnboardingPage() {
   // Steps 1-2 map to advisor steps 0-1; steps 3-5 map to 2-3.
   const advisorStep = Math.min(currentStep - 1, 3) as 0 | 1 | 2 | 3;
 
-  // Build the org profile from form state so the advisor has current context.
-  const advisorProfile: OrgProfile = useMemo(() => ({
-    organization_name: orgName || undefined,
-    mission_statement: missionStatement || undefined,
-    city: city || undefined,
-    state: stateAbbr || undefined,
-    county: county || undefined,
-    org_type: orgType || undefined,
-    fields_of_work: fieldsOfWork.length > 0 ? fieldsOfWork : undefined,
-  }), [orgName, missionStatement, city, stateAbbr, county, orgType, fieldsOfWork]);
-
-  const handleAdvisorCreateProject = () => {
+  const handleAdvisorCreateProject = async () => {
     // Jump to step 3 (First Project) if not already there
-    if (currentStep < 3) {
-      setCurrentStep(3);
-    }
+    if (currentStep >= 3 || isSaving) return;
+    // Leaving step 2 this way saves the profile just as Continue does.
+    if (currentStep === 2 && !(await saveProfileIfEntered())) return;
+    setCurrentStep(3);
+    await saveProgress(3, completedSteps);
   };
 
   return (
@@ -321,9 +334,17 @@ export default function OnboardingPage() {
         <div className="max-w-2xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between mb-3">
             <h1 className="text-lg font-bold text-blue-400">FunderMatch</h1>
-            <button onClick={handleSkip} className="text-sm text-gray-500 hover:text-gray-300 transition-colors">
-              Skip Onboarding
-            </button>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => window.dispatchEvent(new Event('fm:start-tour'))}
+                className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+              >
+                Take a quick tour
+              </button>
+              <button onClick={handleSkip} className="text-sm text-gray-500 hover:text-gray-300 transition-colors">
+                Skip Onboarding
+              </button>
+            </div>
           </div>
           <div className="flex gap-1">
             {STEPS.map(s => (

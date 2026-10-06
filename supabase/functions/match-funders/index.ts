@@ -80,11 +80,12 @@ const SCORING_WEIGHTS = {
   limitedDataMinCompleteness: 0.1882,
 } as const;
 
-const ALLOWED_ORIGINS = new Set([
-  'https://fundermatch.org',
-  'https://www.fundermatch.org',
-  'http://localhost:5173',
-]);
+// FM-2026-06-12-02: CORS allowlist now sourced from `_shared/cors.ts`. The
+// previous inline ALLOWED_ORIGINS + corsHeaders pair was functionally
+// equivalent but drifted away from the canonical list. Same migration
+// pattern as the now-closed FM-2026-06-12-01. See
+// compliance/cors-consolidation-2026-06-12.md.
+import { corsHeaders as _sharedCorsHeaders } from '../_shared/cors.ts';
 
 /**
  * Enrich similar_past_grantees with ein from recipient_organizations
@@ -101,7 +102,10 @@ async function enrichGranteeEins(results: any[]): Promise<void> {
 
   const nameList = [...missingNames].slice(0, 150);
   const nameFilter = nameList.map((n) => `"${n.replace(/"/g, '\\"')}"`).join(',');
-  const url = `${SUPABASE_URL}/rest/v1/recipient_organizations?select=ein,name&name=in.(${encodeURIComponent(nameFilter)})&limit=300`;
+  // Only organizations with grants on record (or added other than from the
+  // IRS file): an IRS-file row of the same name, never granted to, is often a
+  // different organization elsewhere.
+  const url = `${SUPABASE_URL}/rest/v1/recipient_organizations?select=ein,name&name=in.(${encodeURIComponent(nameFilter)})&or=(source.is.null,grant_count.gt.0)&limit=300`;
   try {
     const resp = await fetch(url, {
       headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
@@ -256,15 +260,8 @@ interface PeerFullTextMatchSet {
 }
 
 function corsHeaders(requestOrigin: string | null): Record<string, string> {
-  const origin = requestOrigin && ALLOWED_ORIGINS.has(requestOrigin)
-    ? requestOrigin
-    : 'https://fundermatch.org';
-
-  return {
-    'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-    Vary: 'Origin',
-  };
+  // Delegated to `_shared/cors.ts` (FM-2026-06-12-02).
+  return _sharedCorsHeaders(requestOrigin);
 }
 
 function normalizeText(value: string): string {

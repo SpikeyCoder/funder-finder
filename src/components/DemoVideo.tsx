@@ -40,6 +40,19 @@ const STREAMING_LINES = [
 
 const STEP_LABELS = ['Start', 'Mission', 'Search', 'Save', 'Pipeline', 'Write', 'Draft', 'Done'];
 
+/* Usability audit 2026-07-20 (WCAG 2.2.2 Pause/Stop/Hide + 2.3.3):
+   the demo loop is driven by JS timers (setTimeout/setInterval + React
+   state), so the global CSS `prefers-reduced-motion` rules in index.css
+   cannot stop it — CSS can only neutralise CSS animations/transitions.
+   For users who request reduced motion we skip the 20 s auto-loop
+   entirely and render a single static "completed" frame instead.
+   Read at mount; a live listener is intentionally omitted to keep the
+   change minimal. */
+const prefersReducedMotion = () =>
+  typeof window !== 'undefined' &&
+  typeof window.matchMedia === 'function' &&
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 export default function DemoVideo() {
   const [step, setStep] = useState(0);
   const [getStartedClicked, setGetStartedClicked] = useState(false);
@@ -52,9 +65,25 @@ export default function DemoVideo() {
 
   // Advance steps on a timer
   useEffect(() => {
+    // Reduced motion: show the final frame statically, schedule nothing.
+    if (prefersReducedMotion()) {
+      setStep(7);
+      setMissionChars(MISSION_TEXT.length);
+      setLocationChars(LOCATION_TEXT.length);
+      setSaved(true);
+      setStreamIdx(STREAMING_LINES.length);
+      setScore(87);
+      return;
+    }
+
     const timers: ReturnType<typeof setTimeout>[] = [];
 
     const scheduleSteps = () => {
+      // Cancel whatever is left of the last cycle (normally nothing, unless a
+      // background tab delayed it) and drop its IDs, so the array doesn't
+      // grow by one cycle's worth every 20 s.
+      timers.forEach(clearTimeout);
+      timers.length = 0;
       let elapsed = 0;
 
       // ── Step 0: Landing ──────────────────────────────────────────
@@ -147,6 +176,7 @@ export default function DemoVideo() {
   // Animate score counter during step 7
   useEffect(() => {
     if (step !== 7) return;
+    if (prefersReducedMotion()) { setScore(87); return; }
     let v = 0;
     const t = setInterval(() => {
       v += 3;
@@ -162,6 +192,7 @@ export default function DemoVideo() {
       className="w-full flex justify-center px-4 py-8 demo-dark-card"
       aria-hidden="true"
       role="presentation"
+      translate="no"
     >
       {/* Outer wrapper — max width, aspect ratio preserved.
 
@@ -178,7 +209,14 @@ export default function DemoVideo() {
           otherwise produce duplicate-heading noise for screen reader users.
           The sighted-only demo loses nothing — sighted users see the demo,
           AT users get the surrounding hero copy and product explanation
-          (P3 fix, audit 2026-05-14). */}
+          (P3 fix, audit 2026-05-14).
+
+          translate="no" keeps page translators (Google Translate on Android
+          Chrome) out of this subtree. They swap text nodes for <font>
+          wrappers, and the timer-driven re-renders here then call
+          insertBefore/removeChild on nodes that are no longer in the DOM,
+          crashing the whole Landing page ("NotFoundError: Failed to execute
+          'insertBefore' on 'Node'", crash report 2026-10-05). */}
       <div className="w-full max-w-[336rem]">
         {/* Browser chrome mock */}
         <div className="rounded-2xl overflow-hidden border border-[#30363d] shadow-2xl shadow-black/50">
@@ -233,7 +271,7 @@ export default function DemoVideo() {
                 <div className="space-y-1">
                   <label className="text-xs text-gray-400 font-semibold">Your Mission Statement <span className="text-red-400">*</span></label>
                   <div className="bg-[#161b22] border border-blue-700/60 rounded-xl px-3 py-2 text-sm leading-snug min-h-[56px]">
-                    {MISSION_TEXT.slice(0, missionChars)}
+                    <span>{MISSION_TEXT.slice(0, missionChars)}</span>
                     {!missionDone && (
                       <span className="inline-block w-0.5 h-3.5 bg-blue-400 animate-pulse ml-px align-middle" />
                     )}
@@ -248,7 +286,7 @@ export default function DemoVideo() {
                     missionDone ? 'border-blue-700/60' : 'border-[#30363d]'
                   }`}>
                     {locationChars > 0
-                      ? LOCATION_TEXT.slice(0, locationChars)
+                      ? <span>{LOCATION_TEXT.slice(0, locationChars)}</span>
                       : <span className="text-gray-600">e.g. King County, WA · Chicago, IL · National</span>
                     }
                     {missionDone && locationChars < LOCATION_TEXT.length && (
@@ -466,7 +504,9 @@ function FunderCard({
           }`}
         >
           {saved ? <BookmarkCheck size={12} /> : <Bookmark size={12} />}
-          {saved ? 'Saved' : 'Save'}
+          {/* In a span so the icon swap above inserts before an element, not a
+              bare text node that a browser extension may have replaced. */}
+          <span>{saved ? 'Saved' : 'Save'}</span>
         </button>
       </div>
     </div>

@@ -1,11 +1,12 @@
 import { BudgetBand, Funder, FunderInsights, OrgSearchResult, PeerEntry, RecipientProfile } from '../types';
 import { getEdgeFunctionHeaders, getRestApiHeaders } from '../lib/supabase';
+import { SUPABASE_URL } from '../lib/supabaseProject';
 
-const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const EDGE_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/match-funders`;
 const SUGGEST_PEERS_URL = `${SUPABASE_URL}/functions/v1/suggest-peers`;
 const FUNDER_INSIGHTS_URL = `${SUPABASE_URL}/functions/v1/get-funder-990-insights`;
 const SEARCH_ORGS_URL = `${SUPABASE_URL}/functions/v1/search-organizations`;
+const REQUEST_ORG_URL = `${SUPABASE_URL}/functions/v1/request-organization`;
 const RECIPIENT_PROFILE_URL = `${SUPABASE_URL}/functions/v1/get-recipient-profile`;
 const COMPUTE_PEERS_URL = `${SUPABASE_URL}/functions/v1/compute-peers`;
 
@@ -95,12 +96,20 @@ export async function fetchFunderInsights(funderId: string): Promise<FunderInsig
   return res.json();
 }
 
-export async function searchOrganizations(query: string, limit = 15): Promise<OrgSearchResult[]> {
+// `state` (a 2-letter code) ranks organizations there first among equally
+// good matches; it doesn't filter.
+export async function searchOrganizations(
+  query: string,
+  limit = 15,
+  signal?: AbortSignal,
+  state?: string,
+): Promise<OrgSearchResult[]> {
   const headers = await getEdgeFunctionHeaders('application/json', { useAnonOnly: true });
   const res = await fetch(SEARCH_ORGS_URL, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ query, limit }),
+    body: JSON.stringify(state ? { query, limit, state } : { query, limit }),
+    signal,
   });
 
   if (!res.ok) {
@@ -109,7 +118,40 @@ export async function searchOrganizations(query: string, limit = 15): Promise<Or
   }
 
   const data = await res.json();
-  return Array.isArray(data.results) ? data.results : [];
+  // A 200 without a results array is a failure, not "no matches".
+  if (!Array.isArray(data.results)) {
+    throw new Error(data.error || 'Unexpected search response');
+  }
+  return data.results;
+}
+
+export interface OrganizationRequest {
+  name: string;
+  ein?: string;
+  state?: string;
+  email?: string;
+}
+
+/**
+ * Queue a missing organization to be looked up and added (Trello #153).
+ * Resolves to whether the outcome will be emailed (an email can be dropped by
+ * the server's per-address cap).
+ */
+export async function requestOrganization(request: OrganizationRequest): Promise<{ notify: boolean }> {
+  const headers = await getEdgeFunctionHeaders('application/json', { useAnonOnly: true });
+  const res = await fetch(REQUEST_ORG_URL, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(request),
+  });
+
+  if (!res.ok) {
+    if (res.status === 429) throw new Error('Too many requests — please try again later.');
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Server error (${res.status})`);
+  }
+  const body = await res.json().catch(() => ({}));
+  return { notify: body.notify === true };
 }
 
 export async function fetchRecipientProfile(

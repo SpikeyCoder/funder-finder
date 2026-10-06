@@ -15,8 +15,8 @@ import LoginModal from '../components/LoginModal';
 import NavBar from '../components/NavBar';
 import CustomFieldsEditor from '../components/CustomFieldsEditor';
 import { fetchCustomFieldDefinitions } from '../lib/customFields';
+import { SUPABASE_URL } from '../lib/supabaseProject';
 
-const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const TRACKED_GRANTS_URL = `${SUPABASE_URL}/functions/v1/tracked-grants`;
 
 // ── Status config ──────────────────────────────────────────────────────────────

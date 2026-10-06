@@ -10,8 +10,7 @@ import LoginModal from '../components/LoginModal';
 import { GivingTrendsChart, GeoBarChart, GeoHeatMap, StatCard, InsightsSkeleton, fmtDollar } from '../components/InsightCharts';
 import Footer from '../components/Footer';
 import NavBar from '../components/NavBar';
-
-const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
+import { SUPABASE_URL } from '../lib/supabaseProject';
 
 /** Classify giving trend as increasing / stable / decreasing (FEAT-006) */
 function classifyTrend(yearTrend: { year: number; totalAmount: number }[]): { label: string; color: string } | null {
@@ -310,7 +309,7 @@ export default function FunderDetail() {
               className={`inline-flex items-center gap-2 border rounded-xl px-4 py-2 min-h-[44px] text-sm transition-colors ${saved ? 'border-blue-600 text-blue-400 bg-blue-900/20' : 'border-[#30363d] hover:bg-[#21262d]'}`}
             >
               {saved ? <BookmarkCheck size={16} /> : <Bookmark size={16} />}
-              {saved ? 'Saved' : 'Save Funder'}
+              <span>{saved ? 'Saved' : 'Save Funder'}</span>
             </button>
           </div>
 
