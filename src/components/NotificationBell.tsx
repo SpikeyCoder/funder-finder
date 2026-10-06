@@ -180,7 +180,7 @@ export default function NotificationBell() {
         aria-expanded={open}
         aria-haspopup="true"
         aria-label={unread > 0 ? `Notifications (${unread} unread)` : 'Notifications'}
-        className="relative flex items-center justify-center w-10 h-10 min-h-[44px] min-w-[44px] text-gray-400 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors"
+        className="relative flex items-center justify-center w-10 h-10 min-h-[44px] min-w-[44px] text-gray-400 hover:text-white hover:bg-white/4 rounded-lg transition-colors"
       >
         <Bell size={18} />
         {unread > 0 && (
@@ -221,7 +221,7 @@ export default function NotificationBell() {
                     key={n.id}
                     role="menuitem"
                     onClick={() => onSelect(n)}
-                    className={`w-full text-left px-4 py-3 border-b border-[#21262d] last:border-b-0 hover:bg-white/[0.04] transition-colors ${
+                    className={`w-full text-left px-4 py-3 border-b border-[#21262d] last:border-b-0 hover:bg-white/4 transition-colors ${
                       n.read_at ? 'opacity-70' : ''
                     }`}
                   >
@@ -229,7 +229,7 @@ export default function NotificationBell() {
                       {!n.read_at && (
                         <span className="mt-1.5 w-2 h-2 shrink-0 rounded-full bg-blue-500" aria-hidden="true" />
                       )}
-                      <div className={n.read_at ? 'flex-1' : 'flex-1 -ml-0'}>
+                      <div className={n.read_at ? 'flex-1' : 'flex-1 ml-0'}>
                         <p className="text-sm text-gray-200 leading-snug">{notifTitle(n)}</p>
                         {detail && <p className="text-xs text-gray-400 mt-0.5">{detail}</p>}
                         <p className="text-[11px] text-gray-600 mt-0.5">{relativeTime(n.created_at)}</p>

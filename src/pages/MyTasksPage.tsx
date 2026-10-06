@@ -159,7 +159,7 @@ export default function MyTasksPage() {
   }
 
   const allEmpty = Object.values(tasks).every(arr => arr.length === 0);
-  const inputClass = 'w-full px-3 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500';
+  const inputClass = 'w-full px-3 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-sm text-white placeholder-gray-500 focus:outline-hidden focus:border-blue-500';
 
   const renderSection = (title: string, items: GrantTask[], icon: React.ReactNode, color: string) => {
     if (items.length === 0) return null;
@@ -180,7 +180,7 @@ export default function MyTasksPage() {
               <button onClick={() => toggleTask(task.id, task.status)}
                 aria-label={task.status === 'done' ? `Mark task "${task.title}" as not done` : `Mark task "${task.title}" as done`}
                 aria-pressed={task.status === 'done'}
-                className={`mt-0.5 flex-shrink-0 ${task.status === 'done' ? 'text-green-400' : 'text-gray-400 hover:text-gray-300'}`}>
+                className={`mt-0.5 shrink-0 ${task.status === 'done' ? 'text-green-400' : 'text-gray-400 hover:text-gray-300'}`}>
                 <CheckCircle size={18} aria-hidden="true" />
               </button>
               <div className="flex-1 min-w-0">

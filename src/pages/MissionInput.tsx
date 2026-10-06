@@ -150,7 +150,7 @@ export default function MissionInput() {
             aria-required="true"
             aria-describedby="mission-desc"
             aria-invalid={!!errors.mission}
-            className={`w-full bg-[#0d1117] border rounded-xl px-4 py-3 text-white placeholder-gray-600 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.mission ? 'border-red-500' : 'border-[#30363d]'}`}
+            className={`w-full bg-[#0d1117] border rounded-xl px-4 py-3 text-white placeholder-gray-600 resize-none focus:outline-hidden focus:ring-2 focus:ring-blue-500 ${errors.mission ? 'border-red-500' : 'border-[#30363d]'}`}
           />
           <div className="flex items-center justify-between mt-2">
             <span className="text-xs text-gray-300">{mission.length} characters</span>

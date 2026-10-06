@@ -282,7 +282,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
 
     filters.states.forEach((state) => {
       chips.push(
-        <div key={`state-${state}`} className="inline-flex items-center gap-2 bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-sm text-gray-300">
+        <div key={`state-${state}`} className="inline-flex items-center gap-2 bg-[#0d1117] border border-[#30363d] rounded-sm px-2 py-1 text-sm text-gray-300">
           {state}
           <button
             onClick={() => handleStateChange(state, false)}
@@ -296,7 +296,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
 
     filters.counties.forEach((county) => {
       chips.push(
-        <div key={`county-${county}`} className="inline-flex items-center gap-2 bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-sm text-gray-300">
+        <div key={`county-${county}`} className="inline-flex items-center gap-2 bg-[#0d1117] border border-[#30363d] rounded-sm px-2 py-1 text-sm text-gray-300">
           {county}
           <button
             onClick={() => handleRemoveCounty(county)}
@@ -311,7 +311,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
     filters.ntee_codes.forEach((code) => {
       const label = NTEE_CATEGORIES.find((cat) => cat.code === code)?.label || code;
       chips.push(
-        <div key={`ntee-${code}`} className="inline-flex items-center gap-2 bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-sm text-gray-300">
+        <div key={`ntee-${code}`} className="inline-flex items-center gap-2 bg-[#0d1117] border border-[#30363d] rounded-sm px-2 py-1 text-sm text-gray-300">
           {label}
           <button
             onClick={() => handleNTEEChange(code, false)}
@@ -326,7 +326,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
     filters.funding_types.forEach((type) => {
       const label = FUNDING_TYPES.find((t) => t.id === type)?.label || type;
       chips.push(
-        <div key={`funding-${type}`} className="inline-flex items-center gap-2 bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-sm text-gray-300">
+        <div key={`funding-${type}`} className="inline-flex items-center gap-2 bg-[#0d1117] border border-[#30363d] rounded-sm px-2 py-1 text-sm text-gray-300">
           {label}
           <button
             onClick={() => handleFundingTypeChange(type, false)}
@@ -341,7 +341,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
     filters.funder_types.forEach((type) => {
       const label = FUNDER_TYPES.find((t) => t.id === type)?.label || type;
       chips.push(
-        <div key={`funder-${type}`} className="inline-flex items-center gap-2 bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-sm text-gray-300">
+        <div key={`funder-${type}`} className="inline-flex items-center gap-2 bg-[#0d1117] border border-[#30363d] rounded-sm px-2 py-1 text-sm text-gray-300">
           {label}
           <button
             onClick={() => handleFunderTypeChange(type, false)}
@@ -355,7 +355,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
 
     (filters.locations_served || []).forEach((loc) => {
       chips.push(
-        <div key={`loc-${loc}`} className="inline-flex items-center gap-2 bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-sm text-gray-300">
+        <div key={`loc-${loc}`} className="inline-flex items-center gap-2 bg-[#0d1117] border border-[#30363d] rounded-sm px-2 py-1 text-sm text-gray-300">
           {loc}
           <button
             onClick={() => handleLocationServedChange(loc, false)}
@@ -372,7 +372,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
       const maxStr = filters.grant_size_max ? `$${(filters.grant_size_max / 1000).toFixed(0)}K` : '';
       const label = minStr && maxStr ? `${minStr} - ${maxStr}` : minStr || maxStr || 'Custom Range';
       chips.push(
-        <div key="grant-size" className="inline-flex items-center gap-2 bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-sm text-gray-300">
+        <div key="grant-size" className="inline-flex items-center gap-2 bg-[#0d1117] border border-[#30363d] rounded-sm px-2 py-1 text-sm text-gray-300">
           {label}
           <button
             onClick={() => onChange({ ...filters, grant_size_min: null, grant_size_max: null })}
@@ -386,7 +386,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
 
     if (filters.keyword) {
       chips.push(
-        <div key="keyword" className="inline-flex items-center gap-2 bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-sm text-gray-300">
+        <div key="keyword" className="inline-flex items-center gap-2 bg-[#0d1117] border border-[#30363d] rounded-sm px-2 py-1 text-sm text-gray-300">
           {filters.keyword}
           <button
             onClick={() => onChange({ ...filters, keyword: '' })}
@@ -413,7 +413,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
             aria-label="Search keywords"
             value={filters.keyword}
             onChange={(e) => onChange({ ...filters, keyword: e.target.value })}
-            className="w-full pl-10 pr-4 py-2 bg-[#0d1117] border border-[#30363d] rounded text-white placeholder-gray-500 focus:outline-none focus:border-[#58a6ff]"
+            className="w-full pl-10 pr-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-sm text-white placeholder-gray-500 focus:outline-hidden focus:border-[#58a6ff]"
           />
         </div>
       </div>
@@ -452,7 +452,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
               aria-label="Search states"
               value={stateSearchTerm}
               onChange={(e) => setStateSearchTerm(e.target.value)}
-              className="w-full px-3 py-2 bg-[#0d1117] border border-[#30363d] rounded text-white placeholder-gray-500 focus:outline-none focus:border-[#58a6ff] text-sm"
+              className="w-full px-3 py-2 bg-[#0d1117] border border-[#30363d] rounded-sm text-white placeholder-gray-500 focus:outline-hidden focus:border-[#58a6ff] text-sm"
             />
           </div>
           <div className="space-y-2 max-h-48 overflow-y-auto">
@@ -462,7 +462,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
                   type="checkbox"
                   checked={filters.states.includes(state)}
                   onChange={(e) => handleStateChange(state, e.target.checked)}
-                  className="rounded border-[#30363d] accent-[#58a6ff]"
+                  className="rounded-sm border-[#30363d] accent-[#58a6ff]"
                 />
                 <span className="text-sm text-gray-300">{state}</span>
               </label>
@@ -488,13 +488,13 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
                     handleAddCounty();
                   }
                 }}
-                className="flex-1 px-3 py-2 bg-[#0d1117] border border-[#30363d] rounded text-white placeholder-gray-500 focus:outline-none focus:border-[#58a6ff] text-sm"
+                className="flex-1 px-3 py-2 bg-[#0d1117] border border-[#30363d] rounded-sm text-white placeholder-gray-500 focus:outline-hidden focus:border-[#58a6ff] text-sm"
               />
               <button
                 type="button"
                 onClick={handleAddCounty}
                 disabled={!countyInput.trim()}
-                className="px-3 py-2 bg-[#58a6ff] text-white rounded text-sm font-medium hover:bg-[#1f6feb] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="px-3 py-2 bg-[#58a6ff] text-white rounded-sm text-sm font-medium hover:bg-[#1f6feb] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Add
               </button>
@@ -504,7 +504,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
                 {filters.counties.map((county) => (
                   <div
                     key={county}
-                    className="inline-flex items-center gap-1.5 bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-xs text-gray-300"
+                    className="inline-flex items-center gap-1.5 bg-[#0d1117] border border-[#30363d] rounded-sm px-2 py-1 text-xs text-gray-300"
                   >
                     {county}
                     <button
@@ -538,7 +538,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
               aria-label="Search international locations"
               value={intlSearchTerm}
               onChange={(e) => setIntlSearchTerm(e.target.value)}
-              className="w-full px-3 py-2 bg-[#0d1117] border border-[#30363d] rounded text-white placeholder-gray-500 focus:outline-none focus:border-[#58a6ff] text-sm"
+              className="w-full px-3 py-2 bg-[#0d1117] border border-[#30363d] rounded-sm text-white placeholder-gray-500 focus:outline-hidden focus:border-[#58a6ff] text-sm"
             />
           </div>
           <div className="space-y-3 max-h-56 overflow-y-auto">
@@ -552,7 +552,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
                         type="checkbox"
                         checked={(filters.locations_served || []).includes(item)}
                         onChange={(e) => handleLocationServedChange(item, e.target.checked)}
-                        className="rounded border-[#30363d] accent-[#58a6ff]"
+                        className="rounded-sm border-[#30363d] accent-[#58a6ff]"
                       />
                       <span className="text-sm text-gray-300">{item}</span>
                     </label>
@@ -576,7 +576,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
                   type="checkbox"
                   checked={filters.ntee_codes.includes(category.code)}
                   onChange={(e) => handleNTEEChange(category.code, e.target.checked)}
-                  className="rounded border-[#30363d] accent-[#58a6ff] mt-0.5"
+                  className="rounded-sm border-[#30363d] accent-[#58a6ff] mt-0.5"
                 />
                 <span className="text-sm text-gray-300">{category.label}</span>
               </label>
@@ -597,7 +597,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
                   type="checkbox"
                   checked={filters.funding_types.includes(type.id)}
                   onChange={(e) => handleFundingTypeChange(type.id, e.target.checked)}
-                  className="rounded border-[#30363d] accent-[#58a6ff]"
+                  className="rounded-sm border-[#30363d] accent-[#58a6ff]"
                 />
                 <span className="text-sm text-gray-300">{type.label}</span>
               </label>
@@ -618,7 +618,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
                   type="checkbox"
                   checked={filters.funder_types.includes(type.id)}
                   onChange={(e) => handleFunderTypeChange(type.id, e.target.checked)}
-                  className="rounded border-[#30363d] accent-[#58a6ff]"
+                  className="rounded-sm border-[#30363d] accent-[#58a6ff]"
                 />
                 <span className="text-sm text-gray-300">{type.label}</span>
               </label>
@@ -665,7 +665,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
                       grant_size_min: e.target.value ? parseInt(e.target.value) : null,
                     })
                   }
-                  className="flex-1 px-3 py-2 bg-[#0d1117] border border-[#30363d] rounded text-white placeholder-gray-500 focus:outline-none focus:border-[#58a6ff] text-sm"
+                  className="flex-1 px-3 py-2 bg-[#0d1117] border border-[#30363d] rounded-sm text-white placeholder-gray-500 focus:outline-hidden focus:border-[#58a6ff] text-sm"
                 />
                 <input
                   type="number"
@@ -678,7 +678,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
                       grant_size_max: e.target.value ? parseInt(e.target.value) : null,
                     })
                   }
-                  className="flex-1 px-3 py-2 bg-[#0d1117] border border-[#30363d] rounded text-white placeholder-gray-500 focus:outline-none focus:border-[#58a6ff] text-sm"
+                  className="flex-1 px-3 py-2 bg-[#0d1117] border border-[#30363d] rounded-sm text-white placeholder-gray-500 focus:outline-hidden focus:border-[#58a6ff] text-sm"
                 />
               </div>
             </div>
@@ -693,7 +693,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
                 type="checkbox"
                 checked={filters.gives_to_peers}
                 onChange={(e) => onChange({ ...filters, gives_to_peers: e.target.checked })}
-                className="rounded border-[#30363d] accent-[#58a6ff]"
+                className="rounded-sm border-[#30363d] accent-[#58a6ff]"
               />
               <span className="text-sm text-gray-300">Only Gives to Peers</span>
             </label>
@@ -730,7 +730,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
       {isMobileSheetOpen && createPortal(
         <div className="md:hidden fixed inset-0 z-50 flex flex-col">
           <div
-            className="flex-1 bg-black bg-opacity-50"
+            className="flex-1 bg-black/50"
             onClick={() => setIsMobileSheetOpen(false)}
           />
           <div className="bg-[#161b22] rounded-t-lg max-h-[85vh] overflow-hidden flex flex-col">
@@ -739,7 +739,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
               <button
                 onClick={() => setIsMobileSheetOpen(false)}
                 aria-label="Close filters"
-                className="p-1 hover:bg-[#0d1117] rounded transition-colors"
+                className="p-1 hover:bg-[#0d1117] rounded-sm transition-colors"
               >
                 <X size={20} className="text-gray-400" />
               </button>

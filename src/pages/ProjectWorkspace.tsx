@@ -1226,7 +1226,7 @@ export default function ProjectWorkspace() {
                             <td className="px-6 py-4 text-right">
                               <button onClick={(e) => { e.stopPropagation(); handleSaveFunder(m.funder_ein, m.funder_name || m.funder_ein); }}
                                 disabled={trackedGrants.some(tg => tg.funder_ein === m.funder_ein)}
-                                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded text-sm font-medium transition-colors">
+                                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-sm text-sm font-medium transition-colors">
                                 {trackedGrants.some(tg => tg.funder_ein === m.funder_ein) ? 'Tracked' : 'Track'}
                               </button>
                             </td>
@@ -1273,19 +1273,19 @@ export default function ProjectWorkspace() {
                     <label htmlFor="tracker-deadline-from" className="block text-[11px] uppercase tracking-wider text-gray-400 mb-1">Deadline from</label>
                     <input id="tracker-deadline-from" type="date" value={trackerDeadlineFrom}
                       onChange={(e) => setTrackerDeadlineFrom(e.target.value)}
-                      className="bg-[#161b22] border border-[#30363d] rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500" />
+                      className="bg-[#161b22] border border-[#30363d] rounded-sm px-2 py-1.5 text-sm text-white focus:outline-hidden focus:border-blue-500" />
                   </div>
                   <div>
                     <label htmlFor="tracker-deadline-to" className="block text-[11px] uppercase tracking-wider text-gray-400 mb-1">Deadline to</label>
                     <input id="tracker-deadline-to" type="date" value={trackerDeadlineTo}
                       onChange={(e) => setTrackerDeadlineTo(e.target.value)}
-                      className="bg-[#161b22] border border-[#30363d] rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500" />
+                      className="bg-[#161b22] border border-[#30363d] rounded-sm px-2 py-1.5 text-sm text-white focus:outline-hidden focus:border-blue-500" />
                   </div>
                   <div>
                     <label htmlFor="tracker-status" className="block text-[11px] uppercase tracking-wider text-gray-400 mb-1">Status</label>
                     <select id="tracker-status" value={trackerStatusFilter}
                       onChange={(e) => setTrackerStatusFilter(e.target.value)}
-                      className="bg-[#161b22] border border-[#30363d] rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500">
+                      className="bg-[#161b22] border border-[#30363d] rounded-sm px-2 py-1.5 text-sm text-white focus:outline-hidden focus:border-blue-500">
                       <option value="all">All statuses</option>
                       {pipelineStatuses.map((s) => (
                         <option key={s.id} value={s.id}>{s.name}</option>
@@ -1296,7 +1296,7 @@ export default function ProjectWorkspace() {
                     <label htmlFor="tracker-sort" className="block text-[11px] uppercase tracking-wider text-gray-400 mb-1">Sort</label>
                     <select id="tracker-sort" value={trackerSort}
                       onChange={(e) => setTrackerSort(e.target.value as any)}
-                      className="bg-[#161b22] border border-[#30363d] rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500">
+                      className="bg-[#161b22] border border-[#30363d] rounded-sm px-2 py-1.5 text-sm text-white focus:outline-hidden focus:border-blue-500">
                       <option value="deadline_asc">Deadline (soonest)</option>
                       <option value="deadline_desc">Deadline (furthest)</option>
                       <option value="amount_desc">Amount (high to low)</option>
@@ -1367,16 +1367,16 @@ export default function ProjectWorkspace() {
                                 {grant.grant_title && <div className="text-xs text-gray-400 mt-0.5">{grant.grant_title}</div>}
                               </td>
                               <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
-                                <div className="inline-flex items-center gap-2 bg-[#0d1117] border border-[#30363d] rounded px-2 py-1">
+                                <div className="inline-flex items-center gap-2 bg-[#0d1117] border border-[#30363d] rounded-sm px-2 py-1">
                                   <span
-                                    className="w-2 h-2 rounded-full flex-shrink-0"
+                                    className="w-2 h-2 rounded-full shrink-0"
                                     style={{ backgroundColor: statusInfo?.color || '#9ca3af' }}
                                     aria-hidden="true"
                                   />
                                   <select
                                     value={grant.status_id}
                                     onChange={e => handleUpdateGrantStatus(grant.id, e.target.value)}
-                                    className="bg-transparent border-0 text-sm text-white focus:outline-none cursor-pointer"
+                                    className="bg-transparent border-0 text-sm text-white focus:outline-hidden cursor-pointer"
                                     aria-label="Grant status"
                                   >
                                     {pipelineStatuses.map(s => (
@@ -1586,7 +1586,7 @@ export default function ProjectWorkspace() {
                                       setSelectedGrant(grant);
                                       openDrawer();
                                     }}
-                                    className="block w-full text-left px-1.5 py-0.5 bg-blue-900/40 text-blue-200 rounded hover:bg-blue-900/60 transition-colors truncate border border-blue-800/50">
+                                    className="block w-full text-left px-1.5 py-0.5 bg-blue-900/40 text-blue-200 rounded-sm hover:bg-blue-900/60 transition-colors truncate border border-blue-800/50">
                                     <span className="inline-block w-1.5 h-1.5 bg-blue-400 rounded-full mr-1"></span>
                                     {grant.funder_name || 'Grant'}
                                   </button>
@@ -1626,12 +1626,12 @@ export default function ProjectWorkspace() {
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-1">Project Name</label>
                     <input type="text" value={editName} onChange={e => setEditName(e.target.value)}
-                      className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500" />
+                      className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-4 py-2 text-white focus:outline-hidden focus:border-blue-500" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-1">Description</label>
                     <textarea value={editDesc} onChange={e => setEditDesc(e.target.value)} rows={3}
-                      className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500" />
+                      className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-4 py-2 text-white focus:outline-hidden focus:border-blue-500" />
                   </div>
                 </div>
               </div>
@@ -1643,7 +1643,7 @@ export default function ProjectWorkspace() {
                     <label key={st} className="flex items-center gap-1.5 cursor-pointer">
                       <input type="checkbox" checked={editStates.includes(st)}
                         onChange={e => setEditStates(prev => e.target.checked ? [...prev, st] : prev.filter(s => s !== st))}
-                        className="rounded border-[#30363d] bg-[#0d1117] text-blue-600" />
+                        className="rounded-sm border-[#30363d] bg-[#0d1117] text-blue-600" />
                       <span className="text-sm text-gray-400">{st}</span>
                     </label>
                   ))}
@@ -1657,7 +1657,7 @@ export default function ProjectWorkspace() {
                     <label key={c.code} className="flex items-center gap-2 cursor-pointer">
                       <input type="checkbox" checked={editNtee.includes(c.code)}
                         onChange={e => setEditNtee(prev => e.target.checked ? [...prev, c.code] : prev.filter(x => x !== c.code))}
-                        className="rounded border-[#30363d] bg-[#0d1117] text-blue-600" />
+                        className="rounded-sm border-[#30363d] bg-[#0d1117] text-blue-600" />
                       <span className="text-sm text-gray-400">{c.code} - {c.label}</span>
                     </label>
                   ))}
@@ -1671,7 +1671,7 @@ export default function ProjectWorkspace() {
                     <label key={ft.value} className="flex items-center gap-2 cursor-pointer">
                       <input type="checkbox" checked={editFundingTypes.includes(ft.value)}
                         onChange={e => setEditFundingTypes(prev => e.target.checked ? [...prev, ft.value] : prev.filter(x => x !== ft.value))}
-                        className="rounded border-[#30363d] bg-[#0d1117] text-blue-600" />
+                        className="rounded-sm border-[#30363d] bg-[#0d1117] text-blue-600" />
                       <span className="text-sm text-gray-400">{ft.label}</span>
                     </label>
                   ))}
@@ -1684,13 +1684,13 @@ export default function ProjectWorkspace() {
                   <div className="flex-1">
                     <label className="block text-xs text-gray-400 mb-1">Minimum</label>
                     <input type="number" value={editBudgetMin} onChange={e => setEditBudgetMin(e.target.value)} placeholder="e.g. 10000"
-                      className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
+                      className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-hidden focus:border-blue-500" />
                   </div>
                   <span className="text-gray-400 pt-4">to</span>
                   <div className="flex-1">
                     <label className="block text-xs text-gray-400 mb-1">Maximum</label>
                     <input type="number" value={editBudgetMax} onChange={e => setEditBudgetMax(e.target.value)} placeholder="e.g. 500000"
-                      className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
+                      className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-hidden focus:border-blue-500" />
                   </div>
                 </div>
               </div>
@@ -1720,7 +1720,7 @@ export default function ProjectWorkspace() {
                           <button
                             onClick={() => deleteCustomStatus(status.id)}
                             disabled={saving}
-                            className="p-1 hover:bg-red-600/20 rounded text-red-500 hover:text-red-400 disabled:opacity-50 transition-colors"
+                            className="p-1 hover:bg-red-600/20 rounded-sm text-red-500 hover:text-red-400 disabled:opacity-50 transition-colors"
                             title="Delete status"
                           >
                             <Trash2 size={16} />
@@ -1751,7 +1751,7 @@ export default function ProjectWorkspace() {
                         value={newStatusName}
                         onChange={e => setNewStatusName(e.target.value)}
                         placeholder="e.g. In Review"
-                        className="w-full bg-[#161b22] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
+                        className="w-full bg-[#161b22] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-hidden focus:border-blue-500"
                       />
                     </div>
 
@@ -1786,7 +1786,7 @@ export default function ProjectWorkspace() {
                         type="checkbox"
                         checked={newStatusIsTerminal}
                         onChange={e => setNewStatusIsTerminal(e.target.checked)}
-                        className="rounded border-[#30363d] bg-[#0d1117] text-blue-600"
+                        className="rounded-sm border-[#30363d] bg-[#0d1117] text-blue-600"
                       />
                       <span className="text-sm text-gray-300">Is Terminal (grant is done - awarded/rejected)</span>
                     </label>
@@ -1843,29 +1843,29 @@ export default function ProjectWorkspace() {
               <div>
                 <label className="block text-sm text-gray-400 mb-1">Funder Name <span className="text-red-400" aria-hidden="true">*</span><span className="sr-only"> (required)</span></label>
                 <input type="text" required aria-required="true" aria-invalid={!newGrant.funder_name.trim() && addGrantError !== null} value={newGrant.funder_name} onChange={e => setNewGrant(p => ({ ...p, funder_name: e.target.value }))} placeholder="e.g. Ford Foundation"
-                  className={"w-full bg-[#0d1117] border rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500 " + (!newGrant.funder_name.trim() && addGrantError ? "border-red-600" : "border-[#30363d]")} />
+                  className={"w-full bg-[#0d1117] border rounded-lg px-3 py-2 text-white text-sm focus:outline-hidden focus:border-blue-500 " + (!newGrant.funder_name.trim() && addGrantError ? "border-red-600" : "border-[#30363d]")} />
               </div>
               <div>
                 <label className="block text-sm text-gray-400 mb-1">Grant Title</label>
                 <input type="text" value={newGrant.grant_title} onChange={e => setNewGrant(p => ({ ...p, grant_title: e.target.value }))} placeholder="e.g. Community Innovation Fund 2026"
-                  className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
+                  className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-hidden focus:border-blue-500" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm text-gray-400 mb-1">Amount</label>
                   <input type="number" value={newGrant.amount} onChange={e => setNewGrant(p => ({ ...p, amount: e.target.value }))} placeholder="50000"
-                    className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
+                    className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-hidden focus:border-blue-500" />
                 </div>
                 <div>
                   <label className="block text-sm text-gray-400 mb-1">Deadline</label>
                   <input type="date" value={newGrant.deadline} onChange={e => setNewGrant(p => ({ ...p, deadline: e.target.value }))}
-                    className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
+                    className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-hidden focus:border-blue-500" />
                 </div>
               </div>
               <div>
                 <label className="block text-sm text-gray-400 mb-1">URL</label>
                 <input type="url" value={newGrant.grant_url} onChange={e => setNewGrant(p => ({ ...p, grant_url: e.target.value }))} placeholder="https://..."
-                  className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
+                  className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-hidden focus:border-blue-500" />
               </div>
               <div>
                 <label className="block text-sm text-gray-400 mb-1">Status <span className="text-red-400" aria-hidden="true">*</span><span className="sr-only"> (required)</span></label>
@@ -1877,7 +1877,7 @@ export default function ProjectWorkspace() {
               <div>
                 <label className="block text-sm text-gray-400 mb-1">Notes</label>
                 <textarea value={newGrant.notes} onChange={e => setNewGrant(p => ({ ...p, notes: e.target.value }))} rows={2}
-                  className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
+                  className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-hidden focus:border-blue-500" />
               </div>
               <button onClick={handleAddExternalGrant} disabled={!newGrant.funder_name.trim()}
                 className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg font-medium text-sm transition-colors">
@@ -1921,7 +1921,7 @@ export default function ProjectWorkspace() {
                     <div key={field}>
                       <label className="block text-xs text-gray-400 mb-1 capitalize">{field.replace('_', ' ')}</label>
                       <select value={csvMapping[field] || ''} onChange={e => setCsvMapping(p => ({ ...p, [field]: e.target.value }))}
-                        className="w-full bg-[#0d1117] border border-[#30363d] rounded px-2 py-1.5 text-white text-sm">
+                        className="w-full bg-[#0d1117] border border-[#30363d] rounded-sm px-2 py-1.5 text-white text-sm">
                         <option value="">— Skip —</option>
                         {csvData.length > 0 && Object.keys(csvData[0]).map(col => (
                           <option key={col} value={col}>{col}</option>
@@ -1981,25 +1981,25 @@ export default function ProjectWorkspace() {
           >
 
             {/* ─── Sticky Header ─── */}
-            <div className="flex-shrink-0 px-5 py-4 border-b border-[#30363d] bg-[#161b22]">
+            <div className="shrink-0 px-5 py-4 border-b border-[#30363d] bg-[#161b22]">
               <div className="flex items-start justify-between">
                 <div className="min-w-0 flex-1 mr-3">
                   <h3 id="grant-drawer-title" className="text-lg font-semibold text-white truncate">{selectedGrant.funder_name}</h3>
                   {selectedGrant.grant_title && <p className="text-sm text-gray-400 mt-0.5 truncate">{selectedGrant.grant_title}</p>}
                 </div>
-                <button onClick={() => closeDrawer()} aria-label="Close grant details" className="text-gray-400 hover:text-white flex-shrink-0 p-1"><X size={18} /></button>
+                <button onClick={() => closeDrawer()} aria-label="Close grant details" className="text-gray-400 hover:text-white shrink-0 p-1"><X size={18} /></button>
               </div>
               {/* Quick status row */}
               <div className="flex items-center gap-3 mt-3">
                 <div className="inline-flex items-center gap-2 bg-[#0d1117] border border-[#30363d] rounded-lg px-2.5 py-1.5">
                   <span
-                    className="w-2 h-2 rounded-full flex-shrink-0"
+                    className="w-2 h-2 rounded-full shrink-0"
                     style={{ backgroundColor: (pipelineStatuses.find(s => s.id === selectedGrant.status_id)?.color) || '#9ca3af' }}
                     aria-hidden="true"
                   />
                   <select value={selectedGrant.status_id}
                     onChange={e => { handleUpdateGrantStatus(selectedGrant.id, e.target.value); setSelectedGrant(prev => prev ? { ...prev, status_id: e.target.value } : prev); }}
-                    className="bg-transparent border-0 text-white text-xs font-medium focus:outline-none cursor-pointer"
+                    className="bg-transparent border-0 text-white text-xs font-medium focus:outline-hidden cursor-pointer"
                     aria-label="Grant status">
                     {pipelineStatuses.map(s => <option key={s.id} value={s.id} className="bg-[#0d1117] text-white">{s.name}</option>)}
                   </select>
@@ -2019,7 +2019,7 @@ export default function ProjectWorkspace() {
 
               {/* ═══ Section 1: Grant Overview ═══ */}
               <button onClick={() => setDrawerSection(drawerSection === 'overview' ? '' : 'overview')}
-                className="w-full flex items-center justify-between px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider hover:bg-white/[0.02] transition-colors border-b border-[#30363d]">
+                className="w-full flex items-center justify-between px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider hover:bg-white/2 transition-colors border-b border-[#30363d]">
                 <span>Grant Overview</span>
                 <ChevronDown size={14} className={`transition-transform ${drawerSection === 'overview' ? '' : '-rotate-90'}`} />
               </button>
@@ -2082,7 +2082,7 @@ export default function ProjectWorkspace() {
                       onChange={e => setSelectedGrant(prev => prev ? { ...prev, notes: e.target.value } : prev)}
                       onBlur={() => selectedGrant && handleUpdateGrant(selectedGrant.id, { notes: selectedGrant.notes } as any)}
                       rows={2}
-                      className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500 resize-none"
+                      className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-hidden focus:border-blue-500 resize-none"
                       placeholder="Add notes about this grant..."
                     />
                   </div>
@@ -2092,7 +2092,7 @@ export default function ProjectWorkspace() {
 
               {/* ═══ Section 2: Tasks ═══ */}
               <button onClick={() => setDrawerSection(drawerSection === 'tasks' ? '' : 'tasks')}
-                className="w-full flex items-center justify-between px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider hover:bg-white/[0.02] transition-colors border-b border-[#30363d]">
+                className="w-full flex items-center justify-between px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider hover:bg-white/2 transition-colors border-b border-[#30363d]">
                 <span className="flex items-center gap-2">
                   Tasks
                   {grantTasks.length > 0 && (
@@ -2110,7 +2110,7 @@ export default function ProjectWorkspace() {
                   {grantTasks.map(task => (
                     <div key={task.id} className={`flex items-start gap-2.5 p-2.5 rounded-lg ${task.is_overdue ? 'bg-red-900/10 border border-red-900/30' : 'bg-[#0d1117]'}`}>
                       <button onClick={() => handleToggleTask(task.id, task.status)}
-                        className={`mt-0.5 flex-shrink-0 ${task.status === 'done' ? 'text-green-400' : 'text-gray-400 hover:text-gray-300'}`}>
+                        className={`mt-0.5 shrink-0 ${task.status === 'done' ? 'text-green-400' : 'text-gray-400 hover:text-gray-300'}`}>
                         <CheckCircle size={15} />
                       </button>
                       <div className="flex-1 min-w-0">
@@ -2132,7 +2132,7 @@ export default function ProjectWorkspace() {
                     <div className="flex gap-2">
                       <input type="text" value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)}
                         placeholder="New task..." onKeyDown={e => e.key === 'Enter' && handleAddTask()}
-                        className="flex-1 bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500" />
+                        className="flex-1 bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-1.5 text-white text-sm focus:outline-hidden focus:border-blue-500" />
                       <button onClick={handleAddTask} aria-label="Add task" disabled={!newTaskTitle.trim()}
                         className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm transition-colors">
                         <Plus size={14} />
@@ -2152,7 +2152,7 @@ export default function ProjectWorkspace() {
 
               {/* ═══ Section 3: Post-Award Requirements ═══ */}
               <button onClick={() => setDrawerSection(drawerSection === 'compliance' ? '' : 'compliance')}
-                className="w-full flex items-center justify-between px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider hover:bg-white/[0.02] transition-colors border-b border-[#30363d]">
+                className="w-full flex items-center justify-between px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider hover:bg-white/2 transition-colors border-b border-[#30363d]">
                 <span className="flex items-center gap-2">
                   Post-Award Requirements
                   {complianceItems.length > 0 && (
@@ -2184,7 +2184,7 @@ export default function ProjectWorkspace() {
                           </p>
                         </div>
                         <select value={item.status} onChange={e => handleUpdateComplianceStatus(item.id, e.target.value)}
-                          className={`text-xs rounded px-2 py-1 border-0 ml-2 flex-shrink-0 ${
+                          className={`text-xs rounded px-2 py-1 border-0 ml-2 shrink-0 ${
                             item.status === 'approved' ? 'bg-green-900/30 text-green-400' :
                             item.status === 'submitted' ? 'bg-blue-900/30 text-blue-400' :
                             item.is_overdue ? 'bg-red-900/30 text-red-400' :
@@ -2212,7 +2212,7 @@ export default function ProjectWorkspace() {
                             onChange={e => setNewDeliverableText(prev => ({ ...prev, [item.id]: e.target.value }))}
                             onKeyDown={e => { if (e.key === 'Enter') handleAddDeliverable(item); }}
                             placeholder="Add deliverable..."
-                            className="flex-1 bg-transparent border-b border-[#30363d] px-1 py-0.5 text-xs text-gray-300 placeholder-gray-600 focus:outline-none focus:border-blue-500" />
+                            className="flex-1 bg-transparent border-b border-[#30363d] px-1 py-0.5 text-xs text-gray-300 placeholder-gray-600 focus:outline-hidden focus:border-blue-500" />
                           <button onClick={() => handleAddDeliverable(item)}
                             disabled={!(newDeliverableText[item.id] || '').trim()}
                             className="text-gray-400 hover:text-blue-400 disabled:opacity-40"><Plus size={12} /></button>
@@ -2225,11 +2225,11 @@ export default function ProjectWorkspace() {
                           {(item.attachments || []).map((a: ComplianceAttachment, ai: number) => (
                             a.url ? (
                               <a key={ai} href={a.url} target="_blank" rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#161b22] rounded text-xs text-blue-400 hover:underline">
+                                className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#161b22] rounded-sm text-xs text-blue-400 hover:underline">
                                 <Paperclip size={10} /> {a.name}
                               </a>
                             ) : (
-                              <span key={ai} className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#161b22] rounded text-xs text-gray-400">
+                              <span key={ai} className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#161b22] rounded-sm text-xs text-gray-400">
                                 <Paperclip size={10} /> {a.name}
                               </span>
                             )
@@ -2246,7 +2246,7 @@ export default function ProjectWorkspace() {
                     <div className="space-y-2 pt-1">
                       <input type="text" value={newCompTitle} onChange={e => setNewCompTitle(e.target.value)}
                         placeholder="Requirement title..."
-                        className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500" />
+                        className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-1.5 text-white text-sm focus:outline-hidden focus:border-blue-500" />
                       <div className="flex gap-2">
                         <select value={newCompType} onChange={e => setNewCompType(e.target.value)}
                           className="bg-[#0d1117] border border-[#30363d] rounded-lg px-2 py-1.5 text-white text-xs flex-1">
@@ -2266,7 +2266,7 @@ export default function ProjectWorkspace() {
                       <input type="email" placeholder="Assignee email (optional)"
                         aria-label="Compliance task assignee email (optional)"
                         value={newCompAssignee} onChange={e => setNewCompAssignee(e.target.value)}
-                        className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-1.5 text-white text-xs focus:outline-none focus:border-blue-500" />
+                        className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-1.5 text-white text-xs focus:outline-hidden focus:border-blue-500" />
                       <div className="flex items-center gap-2">
                         <label className="flex items-center gap-2 px-3 py-1.5 bg-[#0d1117] border border-[#30363d] rounded-lg text-xs text-gray-400 cursor-pointer hover:border-[#484f58]">
                           <Paperclip size={12} />
@@ -2290,7 +2290,7 @@ export default function ProjectWorkspace() {
 
               {/* ═══ Section 4: Reference Documents ═══ */}
               <button onClick={() => setDrawerSection(drawerSection === 'refdocs' ? '' : 'refdocs')}
-                className="w-full flex items-center justify-between px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider hover:bg-white/[0.02] transition-colors border-b border-[#30363d]">
+                className="w-full flex items-center justify-between px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider hover:bg-white/2 transition-colors border-b border-[#30363d]">
                 <span className="flex items-center gap-2">
                   Reference Documents
                   {refDocs.length > 0 && (
@@ -2309,7 +2309,7 @@ export default function ProjectWorkspace() {
                   </p>
                   {refDocs.map(doc => (
                     <div key={doc.id} className="flex items-center gap-2.5 p-2.5 bg-[#0d1117] rounded-lg group">
-                      <Paperclip size={14} className="text-purple-400 flex-shrink-0" />
+                      <Paperclip size={14} className="text-purple-400 shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-white truncate">{doc.title}</p>
                         <p className="text-xs text-gray-400">
@@ -2345,7 +2345,7 @@ export default function ProjectWorkspace() {
 
               {/* ═══ Section 5: AI Draft Proposal ═══ */}
               <button onClick={() => setDrawerSection(drawerSection === 'draft' ? '' : 'draft')}
-                className="w-full flex items-center justify-between px-5 py-3 text-xs font-semibold text-purple-300 uppercase tracking-wider hover:bg-white/[0.02] transition-colors border-b border-[#30363d]">
+                className="w-full flex items-center justify-between px-5 py-3 text-xs font-semibold text-purple-300 uppercase tracking-wider hover:bg-white/2 transition-colors border-b border-[#30363d]">
                 <span className="flex items-center gap-2">
                   <Sparkles size={13} />
                   AI Draft Proposal
@@ -2363,7 +2363,7 @@ export default function ProjectWorkspace() {
                   )}
                   {refDocs.length > 0 && !aiDraft && !aiDraftLoading && (
                     <div className="flex items-center gap-2 p-2.5 bg-purple-500/10 border border-purple-500/20 rounded-lg">
-                      <CheckCircle size={14} className="text-purple-400 flex-shrink-0" />
+                      <CheckCircle size={14} className="text-purple-400 shrink-0" />
                       <p className="text-xs text-purple-300">{refDocs.length} reference document{refDocs.length !== 1 ? 's' : ''} will guide the AI's writing style</p>
                     </div>
                   )}
@@ -2391,7 +2391,7 @@ export default function ProjectWorkspace() {
                         <textarea
                           value={aiDraft}
                           onChange={e => setAiDraft(e.target.value)}
-                          className="w-full bg-[#0d1117] border border-blue-500/30 rounded-lg p-3 text-sm text-gray-200 focus:outline-none focus:border-blue-500 min-h-[300px] resize-y"
+                          className="w-full bg-[#0d1117] border border-blue-500/30 rounded-lg p-3 text-sm text-gray-200 focus:outline-hidden focus:border-blue-500 min-h-[300px] resize-y"
                         />
                       ) : (
                         <div className="bg-[#0d1117] border border-[#30363d] rounded-lg p-3 max-h-[400px] overflow-y-auto">

@@ -29,11 +29,10 @@ funder-finder/
 │   │   └── storage.ts              # LocalStorage utilities
 │   ├── App.tsx                     # Main app component with routing
 │   ├── main.tsx                    # React entry point
-│   ├── index.css                   # Tailwind + fonts
+│   ├── index.css                   # Tailwind (v4 CSS config: @theme, @source) + fonts
 │   └── types.ts                    # TypeScript interfaces
 ├── index.html                      # Main HTML with SPA redirect
 ├── package.json                    # Dependencies configuration
-├── tailwind.config.js              # Tailwind CSS configuration
 ├── postcss.config.js               # PostCSS configuration
 ├── vite.config.ts                  # Vite configuration
 ├── tsconfig.json                   # TypeScript configuration
@@ -49,7 +48,7 @@ funder-finder/
 2. **tsconfig.json** - TypeScript compiler options
 3. **tsconfig.node.json** - TypeScript Node config
 4. **vite.config.ts** - Vite build configuration with GitHub Pages base path
-5. **tailwind.config.js** - Tailwind CSS theming (dark theme)
+5. **src/index.css** - Tailwind CSS v4 theming via `@theme` (no tailwind.config.js)
 6. **postcss.config.js** - PostCSS plugins for Tailwind
 
 ### HTML & Public

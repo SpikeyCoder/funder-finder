@@ -464,7 +464,7 @@ export default function GrantWriter() {
   // ── Helpers ─────────────────────────────────────────────────────────────
 
   const inputClass =
-    'w-full bg-[#161b22] border border-[#30363d] rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-600';
+    'w-full bg-[#161b22] border border-[#30363d] rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-hidden focus:border-blue-600';
 
   const labelClass = 'block text-xs text-gray-400 mb-1';
 
@@ -549,7 +549,7 @@ export default function GrantWriter() {
               </label>
               <textarea
                 id="gw-mission"
-                className="w-full bg-[#161b22] border border-[#30363d] rounded-xl px-4 py-3 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-600 resize-none"
+                className="w-full bg-[#161b22] border border-[#30363d] rounded-xl px-4 py-3 text-sm text-gray-200 placeholder-gray-600 focus:outline-hidden focus:border-blue-600 resize-none"
                 rows={4}
                 placeholder="Describe your nonprofit's mission and the communities you serve…"
                 value={mission}

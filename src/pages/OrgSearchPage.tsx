@@ -78,7 +78,7 @@ export default function OrgSearchPage() {
             id="org-search-state"
             value={state}
             onChange={(e) => pickState(e.target.value)}
-            className="bg-[#161b22] border border-[#30363d] rounded-lg px-2 py-1 text-white focus:outline-none focus:border-blue-500"
+            className="bg-[#161b22] border border-[#30363d] rounded-lg px-2 py-1 text-white focus:outline-hidden focus:border-blue-500"
           >
             <option value="">Any state</option>
             {US_STATES.map((s) => <option key={s} value={s}>{s}</option>)}

@@ -8,7 +8,7 @@ interface OrgRequestFormProps {
 }
 
 const inputClass =
-  'w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-600';
+  'w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-hidden focus:border-blue-600';
 
 // Trello #153: lets a visitor ask for a missing nonprofit or foundation to be
 // added. The request is queued and resolved against IRS records on a schedule

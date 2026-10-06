@@ -209,7 +209,7 @@ export default function PeerComparison({ source, peer, onClose }: PeerComparison
         </div>
 
         {/* Column headers */}
-        <div className="grid grid-cols-[1.2fr,auto,1.2fr] items-center gap-2 px-5 py-3 border-b border-[#30363d] bg-[#0d1117]">
+        <div className="grid grid-cols-[1.2fr_auto_1.2fr] items-center gap-2 px-5 py-3 border-b border-[#30363d] bg-[#0d1117]">
           <div className="text-sm font-semibold text-cyan-300 truncate" title={decodeName(source.name)}>
             {decodeName(source.name)}
           </div>

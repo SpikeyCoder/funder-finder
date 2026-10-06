@@ -84,7 +84,7 @@ export default function ContactPage() {
                 autoComplete="name"
                 value={form.name}
                 onChange={handleChange}
-                className="w-full rounded-md border border-[#1b2130] bg-[#161b27] px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full rounded-md border border-[#1b2130] bg-[#161b27] px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-hidden focus:ring-1 focus:ring-blue-500"
                 placeholder="Your name"
               />
             </div>
@@ -101,7 +101,7 @@ export default function ContactPage() {
                 autoComplete="email"
                 value={form.email}
                 onChange={handleChange}
-                className="w-full rounded-md border border-[#1b2130] bg-[#161b27] px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full rounded-md border border-[#1b2130] bg-[#161b27] px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-hidden focus:ring-1 focus:ring-blue-500"
                 placeholder="you@example.com"
               />
             </div>
@@ -117,7 +117,7 @@ export default function ContactPage() {
                 required
                 value={form.message}
                 onChange={handleChange}
-                className="w-full rounded-md border border-[#1b2130] bg-[#161b27] px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+                className="w-full rounded-md border border-[#1b2130] bg-[#161b27] px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-hidden focus:ring-1 focus:ring-blue-500 resize-none"
                 placeholder="How can we help?"
               />
             </div>
@@ -131,7 +131,7 @@ export default function ContactPage() {
             <button
               type="submit"
               disabled={sending}
-              className="w-full rounded-md bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[#0d1117] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full rounded-md bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[#0d1117] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {sending ? 'Sending...' : 'Send message'}
             </button>

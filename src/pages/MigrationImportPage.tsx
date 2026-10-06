@@ -515,7 +515,7 @@ export default function MigrationImportPage() {
             {/* Data preview table */}
             <div className="bg-[#161b22] border border-[#30363d] rounded-lg overflow-hidden">
               <div
-                className="flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.02]"
+                className="flex items-center justify-between p-4 cursor-pointer hover:bg-white/2"
                 onClick={() => setPreviewExpanded(!previewExpanded)}
                 onKeyDown={e => {
                   if (e.key === 'Enter' || e.key === ' ') {
@@ -550,7 +550,7 @@ export default function MigrationImportPage() {
                     </thead>
                     <tbody>
                       {parseResult.records.slice(0, 50).map((rec, i) => (
-                        <tr key={i} className="border-t border-[#21262d] hover:bg-white/[0.02]">
+                        <tr key={i} className="border-t border-[#21262d] hover:bg-white/2">
                           <td className="px-3 py-2 text-gray-400">{i + 1}</td>
                           <td className="px-3 py-2 text-gray-200 max-w-[200px] truncate">{rec.funderName}</td>
                           <td className="px-3 py-2 text-gray-400 font-mono">{rec.ein || '—'}</td>
@@ -649,7 +649,7 @@ export default function MigrationImportPage() {
                     value={selectedProjectId ?? ''}
                     onChange={e => setSelectedProjectId(e.target.value)}
                     aria-label="Project to import into"
-                    className="w-full bg-[#161b22] border border-[#30363d] rounded-lg px-4 py-2 text-sm text-gray-200 focus:border-blue-500 focus:outline-none"
+                    className="w-full bg-[#161b22] border border-[#30363d] rounded-lg px-4 py-2 text-sm text-gray-200 focus:border-blue-500 focus:outline-hidden"
                   >
                     {projects.map(p => (
                       <option key={p.id} value={p.id}>{p.name}</option>
@@ -803,7 +803,7 @@ function StatusBadge({ status }: { status: string }) {
     passed: 'text-gray-400 bg-gray-800/40',
   };
   return (
-    <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${styles[status] ?? styles.researching}`}>
+    <span className={`px-2 py-0.5 rounded-sm text-[10px] font-medium ${styles[status] ?? styles.researching}`}>
       {status}
     </span>
   );

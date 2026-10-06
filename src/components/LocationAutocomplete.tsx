@@ -304,7 +304,7 @@ export default function LocationAutocomplete({ value, onChange, hasError, placeh
           aria-required={required ? 'true' : undefined}
           aria-describedby={ariaDescribedBy}
           aria-invalid={hasError ? 'true' : undefined}
-          className={`w-full bg-[#0d1117] border rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 ${hasError ? 'border-red-500' : 'border-[#30363d]'}`}
+          className={`w-full bg-[#0d1117] border rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-hidden focus:ring-2 focus:ring-blue-500 ${hasError ? 'border-red-500' : 'border-[#30363d]'}`}
         />
         {loading && (
           <div className="absolute right-3 top-1/2 -translate-y-1/2">

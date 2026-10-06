@@ -156,8 +156,8 @@ export default function RecipientProfile() {
         <NavBar />
         <div className="min-h-screen bg-[#0d1117] text-white flex items-center justify-center">
           <div className="animate-pulse space-y-4 w-full max-w-2xl px-6">
-            <div className="h-8 bg-[#21262d] rounded w-64" />
-            <div className="h-4 bg-[#21262d] rounded w-40" />
+            <div className="h-8 bg-[#21262d] rounded-sm w-64" />
+            <div className="h-4 bg-[#21262d] rounded-sm w-40" />
             <div className="grid grid-cols-2 gap-3 mt-6">
               {[1, 2, 3, 4].map(i => <div key={i} className="h-20 bg-[#21262d] rounded-xl" />)}
             </div>
@@ -378,7 +378,7 @@ export default function RecipientProfile() {
                           <div className="flex items-center gap-2">
                             <Building2 size={12} className={f.isDaf ? 'text-amber-400 shrink-0' : 'text-blue-400 shrink-0'} />
                             <span className="text-gray-200 truncate">{f.funderName}</span>
-                            {f.isDaf && <span className="text-[10px] text-amber-400/70 bg-amber-900/20 border border-amber-800/30 px-1.5 py-0.5 rounded shrink-0">DAF</span>}
+                            {f.isDaf && <span className="text-[10px] text-amber-400/70 bg-amber-900/20 border border-amber-800/30 px-1.5 py-0.5 rounded-sm shrink-0">DAF</span>}
                           </div>
                         </td>
                         <td className="py-2 px-2 text-right text-gray-300 whitespace-nowrap">{fmtDollar(f.totalAmount)}</td>
@@ -387,7 +387,7 @@ export default function RecipientProfile() {
                         <td className="py-2 pl-2 text-center">
                           <button
                             onClick={(e) => toggleSave(e, f.funderId, f.funderName)}
-                            className="p-1 rounded hover:bg-white/10 transition-colors"
+                            className="p-1 rounded-sm hover:bg-white/10 transition-colors"
                             title={savedIds.has(f.funderId) ? 'Remove from saved' : 'Save funder'}
                           >
                             {savedIds.has(f.funderId) ? (

@@ -278,7 +278,7 @@ export default function TeamSettingsPage() {
         {/* ─── Notifications ─── */}
         {error && (
           <div className="mb-6 p-4 bg-red-900/20 border border-red-800 rounded-lg flex items-start gap-3">
-            <AlertCircle size={18} className="text-red-400 mt-0.5 flex-shrink-0" />
+            <AlertCircle size={18} className="text-red-400 mt-0.5 shrink-0" />
             <p className="text-red-300 text-sm">{error}</p>
             <button onClick={() => setError(null)} className="ml-auto text-red-400 hover:text-red-300">
               <X size={16} />
@@ -287,7 +287,7 @@ export default function TeamSettingsPage() {
         )}
         {successMsg && (
           <div className="mb-6 p-4 bg-green-900/20 border border-green-800 rounded-lg flex items-start gap-3">
-            <CheckCircle size={18} className="text-green-400 mt-0.5 flex-shrink-0" />
+            <CheckCircle size={18} className="text-green-400 mt-0.5 shrink-0" />
             <p className="text-green-300 text-sm">{successMsg}</p>
           </div>
         )}
@@ -314,7 +314,7 @@ export default function TeamSettingsPage() {
                   onChange={e => setInviteEmail(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') handleInvite(); }}
                   placeholder="colleague@organization.org"
-                  className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500 placeholder-gray-500"
+                  className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-4 py-2.5 text-white text-sm focus:outline-hidden focus:border-blue-500 placeholder-gray-500"
                   autoFocus
                 />
               </div>
@@ -420,7 +420,7 @@ export default function TeamSettingsPage() {
               <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Your Account</h2>
               <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-5">
                 <div className="flex items-center gap-4">
-                  <div className="w-11 h-11 bg-blue-600 rounded-full flex items-center justify-center text-base font-bold flex-shrink-0">
+                  <div className="w-11 h-11 bg-blue-600 rounded-full flex items-center justify-center text-base font-bold shrink-0">
                     {user?.email?.[0]?.toUpperCase() || '?'}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -474,7 +474,7 @@ export default function TeamSettingsPage() {
                       value={searchQuery}
                       onChange={e => setSearchQuery(e.target.value)}
                       placeholder="Filter by name or email"
-                      className="pl-8 pr-3 py-1.5 bg-[#0d1117] border border-[#30363d] rounded-lg text-xs text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 w-52"
+                      className="pl-8 pr-3 py-1.5 bg-[#0d1117] border border-[#30363d] rounded-lg text-xs text-white placeholder-gray-500 focus:outline-hidden focus:border-blue-500 w-52"
                     />
                   </div>
                 )}
@@ -516,7 +516,7 @@ export default function TeamSettingsPage() {
                         {/* Member Row */}
                         <div className="flex items-center gap-3 sm:gap-4 p-4 sm:p-5">
                           {/* Avatar */}
-                          <div className="w-10 h-10 bg-[#30363d] rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">
+                          <div className="w-10 h-10 bg-[#30363d] rounded-full flex items-center justify-center text-sm font-bold shrink-0">
                             {(member.display_name?.[0] || member.email?.[0] || '?').toUpperCase()}
                           </div>
 
@@ -545,7 +545,7 @@ export default function TeamSettingsPage() {
                           {/* Expand/collapse */}
                           <button
                             onClick={() => setExpandedMember(isExpanded ? null : member.id)}
-                            className="p-1.5 text-gray-400 hover:text-white transition-colors rounded-md hover:bg-white/[0.06]"
+                            className="p-1.5 text-gray-400 hover:text-white transition-colors rounded-md hover:bg-white/6"
                             title={isExpanded ? 'Collapse' : 'Expand to see details and actions'}
                           >
                             {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
@@ -639,7 +639,7 @@ export default function TeamSettingsPage() {
                                       onClick={() => navigate(`/projects/${project.id}`)}
                                       className="w-full flex items-center gap-3 p-3 bg-[#161b22] border border-[#30363d] rounded-lg hover:border-blue-500/40 transition-colors text-left group"
                                     >
-                                      <FolderOpen size={16} className="text-blue-400 flex-shrink-0" />
+                                      <FolderOpen size={16} className="text-blue-400 shrink-0" />
                                       <div className="flex-1 min-w-0">
                                         <p className="text-sm text-white group-hover:text-blue-300 truncate transition-colors">
                                           {project.name}
@@ -650,7 +650,7 @@ export default function TeamSettingsPage() {
                                           Updated {timeAgo(project.updated_at)}
                                         </p>
                                       </div>
-                                      <ChevronRight size={14} className="text-gray-600 group-hover:text-blue-400 flex-shrink-0 transition-colors" />
+                                      <ChevronRight size={14} className="text-gray-600 group-hover:text-blue-400 shrink-0 transition-colors" />
                                     </button>
                                   ))}
                                   {member.project_summary.total > 5 && (
@@ -696,7 +696,7 @@ export default function TeamSettingsPage() {
                     const isExpired = new Date(inv.expires_at) < new Date();
                     return (
                       <div key={inv.id} className="flex items-center gap-3 sm:gap-4 p-4 sm:p-5">
-                        <div className="w-10 h-10 bg-[#30363d] rounded-full flex items-center justify-center flex-shrink-0">
+                        <div className="w-10 h-10 bg-[#30363d] rounded-full flex items-center justify-center shrink-0">
                           <Mail size={16} className="text-gray-400" />
                         </div>
                         <div className="flex-1 min-w-0">
@@ -717,7 +717,7 @@ export default function TeamSettingsPage() {
                         </div>
                         <button
                           onClick={() => handleRevokeInvite(inv.id)}
-                          className="p-2 text-gray-400 hover:text-red-400 transition-colors rounded-md hover:bg-white/[0.04]"
+                          className="p-2 text-gray-400 hover:text-red-400 transition-colors rounded-md hover:bg-white/4"
                           title="Revoke invitation"
                         >
                           <Trash2 size={16} />

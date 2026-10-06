@@ -161,7 +161,7 @@ export default function OnboardingAdvisor({
         </div>
         <button
           onClick={handleToggle}
-          className="text-gray-400 hover:text-white p-1 rounded transition-colors"
+          className="text-gray-400 hover:text-white p-1 rounded-sm transition-colors"
           aria-label="Collapse advisor panel"
         >
           <ChevronDown size={18} />
@@ -282,7 +282,7 @@ export default function OnboardingAdvisor({
           value={composerValue}
           onChange={(e) => setComposerValue(e.target.value)}
           placeholder="Ask about grant strategy..."
-          className="flex-1 bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-blue-500"
+          className="flex-1 bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-hidden focus:border-blue-500"
           disabled={isLoading}
           aria-label="Message to onboarding advisor"
         />

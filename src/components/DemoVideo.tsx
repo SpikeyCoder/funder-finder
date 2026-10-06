@@ -233,11 +233,11 @@ export default function DemoVideo() {
           </div>
 
           {/* Screen content */}
-          <div className="bg-[#0d1117] h-[18rem] sm:h-[20rem] relative overflow-hidden">
+          <div className="bg-[#0d1117] h-72 sm:h-80 relative overflow-hidden">
 
             {/* ── Step 0: Landing page with Get Started ── */}
             <ScreenSlide visible={step === 0}>
-              <div className="flex flex-col items-center justify-center h-full px-6 sm:px-8 text-center bg-gradient-to-b from-[#020916] via-[#030913] to-[#020712]">
+              <div className="flex flex-col items-center justify-center h-full px-6 sm:px-8 text-center bg-linear-to-b from-[#020916] via-[#030913] to-[#020712]">
                 <h2 className="text-[30px] sm:text-[44px] font-bold leading-[1.08] tracking-[-0.02em] text-white max-w-[760px]">
                   Find Funders Aligned to Your
                   <br />
@@ -269,7 +269,7 @@ export default function DemoVideo() {
                 <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">Tell us about your mission</p>
 
                 <div className="space-y-1">
-                  <label className="text-xs text-gray-400 font-semibold">Your Mission Statement <span className="text-red-400">*</span></label>
+                  <label className="block text-xs leading-6 text-gray-400 font-semibold">Your Mission Statement <span className="text-red-400">*</span></label>
                   <div className="bg-[#161b22] border border-blue-700/60 rounded-xl px-3 py-2 text-sm leading-snug min-h-[56px]">
                     <span>{MISSION_TEXT.slice(0, missionChars)}</span>
                     {!missionDone && (
@@ -311,7 +311,7 @@ export default function DemoVideo() {
                 <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">Tell us about your mission</p>
 
                 <div className="space-y-1">
-                  <label className="text-xs text-gray-400 font-semibold">Your Mission Statement <span className="text-red-400">*</span></label>
+                  <label className="block text-xs leading-6 text-gray-400 font-semibold">Your Mission Statement <span className="text-red-400">*</span></label>
                   <div className="bg-[#161b22] border border-[#30363d] rounded-xl px-3 py-2 text-sm leading-snug">
                     {MISSION_TEXT}
                   </div>
@@ -402,7 +402,7 @@ export default function DemoVideo() {
                     </p>
                   ))}
                   {streamIdx < STREAMING_LINES.length && (
-                    <span className="inline-block w-1.5 h-3 bg-blue-400 animate-pulse rounded-sm" />
+                    <span className="inline-block w-1.5 h-3 bg-blue-400 animate-pulse rounded-xs" />
                   )}
                 </div>
               </div>

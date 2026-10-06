@@ -97,9 +97,9 @@ export function GeoBarChart({ data }: GeoBarProps) {
       {top.map(entry => (
         <div key={entry.state} className="flex items-center gap-3">
           <span className="text-xs text-gray-400 w-6 text-right shrink-0">{entry.state}</span>
-          <div className="flex-1 h-5 bg-[#0d1117] rounded overflow-hidden relative">
+          <div className="flex-1 h-5 bg-[#0d1117] rounded-sm overflow-hidden relative">
             <div
-              className="h-full bg-blue-600/40 rounded"
+              className="h-full bg-blue-600/40 rounded-sm"
               style={{ width: `${(entry.pctOfGrants / maxPct) * 100}%` }}
             />
             <span className="absolute right-2 top-0 leading-5 text-xs text-gray-400">
@@ -134,7 +134,7 @@ export function StatCard({ label, value, color = 'text-white' }: StatCardProps) 
 export function InsightsSkeleton() {
   return (
     <div className="animate-pulse space-y-4 mt-6">
-      <div className="h-5 bg-[#21262d] rounded w-48" />
+      <div className="h-5 bg-[#21262d] rounded-sm w-48" />
       <div className="grid grid-cols-2 gap-3">
         {[1, 2, 3, 4].map(i => (
           <div key={i} className="h-20 bg-[#21262d] rounded-xl" />
