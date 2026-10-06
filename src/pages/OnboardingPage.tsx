@@ -410,7 +410,7 @@ export default function OnboardingPage() {
                   value={stateAbbr} onChange={(e) => setStateAbbr(e.target.value.toUpperCase())}
                   className="bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-hidden focus:border-blue-500" />
               </div>
-              <p className="text-[11px] text-gray-500 -mt-2">
+              <p className="text-[11px] text-gray-500">
                 County-level location helps us match you to local funders that fund specifically in your area (FM-IC-ONB-003).
               </p>
               <select aria-label="Organization type"
