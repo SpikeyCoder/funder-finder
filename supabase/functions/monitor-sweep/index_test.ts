@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "jsr:@std/assert@1";
-import { alertDue, cardUrl, crashCard, crashOverflowCard, slaBreached, slaCard, vitalsCard } from "./index.ts";
+import { alertDue, cardUrl, crashCard, crashOverflowCard, matchCheckDue, slaBreached, slaCard, vitalsCard } from "./index.ts";
 
 const crash = {
   fingerprint: "f".repeat(64),
@@ -48,8 +48,8 @@ Deno.test("alerts: due when new, after the quiet period, or an hour after a clai
   assertEquals(alertDue({ last_carded_at: "2026-10-03T10:30:00Z", trello_card_url: null }, 7 * day, now, day), false);
 });
 
-Deno.test("an SLA check with no results counts as failed (checked in runSlaCheck's detail)", () => {
-  // slaBreached only counts ok=false; runSlaCheck sets ok=false for an empty result.
+Deno.test("an SLA check with no results counts as failed (checked in runMatchCheck's detail)", () => {
+  // slaBreached only counts ok=false; runMatchCheck sets ok=false for an empty result.
   assertEquals(slaBreached([{ ok: false, checked_at: "2026-10-03T07:06:01Z" }, { ok: false, checked_at: "2026-10-03T07:21:01Z" }]), true);
 });
 
@@ -82,20 +82,31 @@ Deno.test("crash card title is bounded", () => {
 Deno.test("SLA breach needs 2 failed checks in the window, from 2 runs", () => {
   const at = (hhmmss: string) => `2026-10-03T${hhmmss}Z`;
   assertEquals(slaBreached([{ ok: true, checked_at: at("07:06:01") }, { ok: false, checked_at: at("07:06:03") }]), false);
-  assertEquals(slaBreached([{ ok: false, checked_at: at("07:06:01") }, { ok: true, checked_at: at("07:21:01") }, { ok: false, checked_at: at("07:36:02") }]), true);
-  // One slow run (a cold boot slows all its checks) isn't a breach.
+  // 2 of the last 3 hourly checks.
+  assertEquals(slaBreached([{ ok: false, checked_at: at("07:06:01") }, { ok: true, checked_at: at("08:06:01") }, { ok: false, checked_at: at("09:06:02") }]), true);
+  assertEquals(slaBreached([{ ok: true, checked_at: at("07:06:01") }, { ok: true, checked_at: at("08:06:01") }, { ok: false, checked_at: at("09:06:02") }]), false);
+  // Checks inserted together share checked_at: one run, not a breach.
   assertEquals(slaBreached([{ ok: false, checked_at: at("07:06:01") }, { ok: false, checked_at: at("07:06:01") }, { ok: false, checked_at: at("07:06:01") }]), false);
   assertEquals(slaBreached([]), false);
 });
 
 Deno.test("SLA card lists every check", () => {
+  const name = "match: after-school STEM, Chicago";
   const c = slaCard([
-    { check_name: "foundation", ok: false, status: 502, ms: 3300, detail: "Search failed", checked_at: "07:09" },
-    { check_name: "foundation", ok: false, status: null, ms: 5001, detail: "TimeoutError", checked_at: "07:24" },
-    { check_name: "01-0224898", ok: true, status: 200, ms: 120, detail: null, checked_at: "07:24" },
+    { check_name: name, ok: false, status: 200, ms: 24100, detail: "slow (> 20000 ms)", checked_at: "07:06" },
+    { check_name: name, ok: true, status: 200, ms: 11800, detail: null, checked_at: "08:06" },
+    { check_name: name, ok: false, status: null, ms: 30001, detail: "TimeoutError", checked_at: "09:06" },
   ]);
-  assertEquals(c.name, "[SLA] Search: 2 of 3 checks failed in the last hour");
-  assertEquals(c.desc.split("\n").filter((l) => l.startsWith("| 07:")).length, 3);
+  assertEquals(c.name, "[SLA] Funder matching: 2 of 3 checks failed in the last 3 hours");
+  assertEquals(c.desc.split("\n").filter((l) => /^\| 0[789]:/.test(l)).length, 3);
+  assert(c.desc.includes("within 20 s"));
+});
+
+Deno.test("the matching check runs once an hour, on the :06 run", () => {
+  const at = (hhmm: string) => new Date(`2026-10-06T${hhmm}:00Z`);
+  assertEquals(["03:06", "03:21", "03:36", "03:51"].map((t) => matchCheckDue(at(t))), [true, false, false, false]);
+  // A late start still counts as the :06 run.
+  assertEquals(matchCheckDue(at("03:14")), true);
 });
 
 Deno.test("vitals card formats each metric", () => {
