@@ -505,7 +505,7 @@ export default function OnboardingPage() {
           {currentStep === 4 && (
             <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-5 mb-6 text-left space-y-4">
               <p className="text-sm font-semibold text-white">Review Your Top Matches</p>
-              <p className="text-xs text-gray-500 mb-2">Based on your project, here are example funders our AI would find for you:</p>
+              <p className="text-xs text-gray-500">Based on your project, here are example funders our AI would find for you:</p>
               {[
                 { name: 'Community Foundation', type: 'Foundation', match: '95%', focus: 'Education & Youth' },
                 { name: 'Regional Health Trust', type: 'Trust', match: '88%', focus: 'Community Health' },

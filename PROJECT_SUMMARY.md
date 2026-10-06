@@ -182,7 +182,6 @@ funder-finder/
 **Styling:**
 - Tailwind CSS 4.3
 - PostCSS 8.4.32
-- Autoprefixer 10.4.16
 
 **Icons:**
 - Lucide React 0.294.0

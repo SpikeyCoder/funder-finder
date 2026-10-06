@@ -158,7 +158,7 @@ export default function RecipientProfile() {
           <div className="animate-pulse space-y-4 w-full max-w-2xl px-6">
             <div className="h-8 bg-[#21262d] rounded-sm w-64" />
             <div className="h-4 bg-[#21262d] rounded-sm w-40" />
-            <div className="grid grid-cols-2 gap-3 mt-6">
+            <div className="grid grid-cols-2 gap-3">
               {[1, 2, 3, 4].map(i => <div key={i} className="h-20 bg-[#21262d] rounded-xl" />)}
             </div>
             <div className="h-48 bg-[#21262d] rounded-xl mt-4" />

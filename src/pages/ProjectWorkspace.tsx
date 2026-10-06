@@ -2319,7 +2319,7 @@ export default function ProjectWorkspace() {
                         </p>
                       </div>
                       <button onClick={() => handleDeleteRefDoc(doc.id, doc.storage_path)}
-                        className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-400 transition-all p-1">
+                        className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 text-gray-400 hover:text-red-400 transition-all p-1">
                         <Trash2 size={13} />
                       </button>
                     </div>

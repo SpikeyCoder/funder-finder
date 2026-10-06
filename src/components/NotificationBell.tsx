@@ -229,7 +229,7 @@ export default function NotificationBell() {
                       {!n.read_at && (
                         <span className="mt-1.5 w-2 h-2 shrink-0 rounded-full bg-blue-500" aria-hidden="true" />
                       )}
-                      <div className={n.read_at ? 'flex-1' : 'flex-1 ml-0'}>
+                      <div className="flex-1">
                         <p className="text-sm text-gray-200 leading-snug">{notifTitle(n)}</p>
                         {detail && <p className="text-xs text-gray-400 mt-0.5">{detail}</p>}
                         <p className="text-[11px] text-gray-600 mt-0.5">{relativeTime(n.created_at)}</p>
