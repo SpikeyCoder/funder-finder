@@ -42,11 +42,17 @@ Deno.serve(async (req) => {
 
   // FM-2026-06-17-01: per-IP rate limit (defense-in-depth) so an
   // attacker cannot spin the trigram-backed RPC at line speed.
+  // The limiter's call normally answers in well under 500 ms, but its trip to
+  // the API gateway sometimes stalls for 1.5 s or more (SLA card, 2026-10-06),
+  // eating most of search's 2 s budget before the search even starts. Past
+  // 1 s it fails open: a stalled limiter costs at most a second, and a rare
+  // unlimited request is the trade.
   const limited = await ipRateLimit(req, {
     namespace: 'search-organizations',
     limit: 60,
     windowMs: 60_000,
     extraHeaders: headers,
+    timeoutMs: 1000,
   });
   if (!limited.allow && limited.response) return limited.response;
 
