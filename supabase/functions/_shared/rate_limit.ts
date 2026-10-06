@@ -67,6 +67,13 @@ interface RateLimitOptions {
    * the calling function, so the browser can actually read the rejection).
    */
   extraHeaders?: Record<string, string>;
+  /**
+   * Give up on the limiter after this many milliseconds and allow the request
+   * (fail open, as for any other limiter error). For latency-sensitive callers:
+   * the limiter's round trip to the API gateway occasionally stalls for
+   * seconds, and without a bound the caller waits it out. Unset: no bound.
+   */
+  timeoutMs?: number;
 }
 
 interface RateLimitDecision {
@@ -110,6 +117,7 @@ export async function ipRateLimit(
     windowMs = DEFAULT_WINDOW_MS,
     namespace = "default",
     extraHeaders = {},
+    timeoutMs,
   } = options;
 
   const ip = callerIp(req);
@@ -138,6 +146,8 @@ export async function ipRateLimit(
         p_limit: limit,
         p_window_seconds: windowSeconds,
       }),
+      // Covers reading the body too, not just the response headers.
+      signal: timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined,
     });
 
     if (!res.ok) {
@@ -147,7 +157,11 @@ export async function ipRateLimit(
 
     allowed = (await res.json()) !== false;
   } catch (err) {
-    console.error("ipRateLimit: check_rate_limit threw", err);
+    if (err instanceof DOMException && err.name === "TimeoutError") {
+      console.error(`ipRateLimit: check_rate_limit took over ${timeoutMs} ms — failing open`);
+    } else {
+      console.error("ipRateLimit: check_rate_limit threw", err);
+    }
     return { allow: true }; // fail open
   }
 
