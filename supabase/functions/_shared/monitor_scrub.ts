@@ -53,7 +53,7 @@ export function errorTypeName(name: unknown): string {
 // ':id' marks a parameter. /shared/:id is a share link whose id is a secret
 // token: it must never be stored or shown.
 export const ROUTES = [
-  "/", "/applications", "/browse", "/contact", "/dashboard", "/funder/:id", "/grant-writer", "/import",
+  "/", "/applications", "/browse", "/contact", "/dashboard", "/docs/api", "/funder/:id", "/grant-writer", "/import",
   "/login", "/mission", "/onboarding/first-project", "/onboarding/matches", "/onboarding/profile",
   "/onboarding/save", "/onboarding/welcome", "/portfolio", "/privacy", "/projects/:id",
   "/projects/:id/calendar", "/projects/:id/matches", "/projects/:id/peers", "/projects/:id/settings",
