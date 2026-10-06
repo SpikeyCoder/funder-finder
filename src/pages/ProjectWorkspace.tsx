@@ -2184,7 +2184,7 @@ export default function ProjectWorkspace() {
                           </p>
                         </div>
                         <select value={item.status} onChange={e => handleUpdateComplianceStatus(item.id, e.target.value)}
-                          className={`text-xs rounded px-2 py-1 border-0 ml-2 shrink-0 ${
+                          className={`text-xs rounded-sm px-2 py-1 border-0 ml-2 shrink-0 ${
                             item.status === 'approved' ? 'bg-green-900/30 text-green-400' :
                             item.status === 'submitted' ? 'bg-blue-900/30 text-blue-400' :
                             item.is_overdue ? 'bg-red-900/30 text-red-400' :

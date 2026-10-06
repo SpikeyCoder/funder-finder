@@ -639,7 +639,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, showPeerTo
                 <button
                   key={preset.label}
                   onClick={() => handleGrantSizePreset(preset.min, preset.max)}
-                  className={`w-full px-3 py-2 text-sm rounded text-left transition-colors ${
+                  className={`w-full px-3 py-2 text-sm rounded-sm text-left transition-colors ${
                     filters.grant_size_min === preset.min && filters.grant_size_max === preset.max
                       ? 'bg-[#58a6ff] text-white'
                       : 'bg-[#0d1117] border border-[#30363d] text-gray-300 hover:border-[#58a6ff]'

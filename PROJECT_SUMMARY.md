@@ -180,7 +180,7 @@ funder-finder/
 - TypeScript 5.2.2
 
 **Styling:**
-- Tailwind CSS 3.3.6
+- Tailwind CSS 4.3
 - PostCSS 8.4.32
 - Autoprefixer 10.4.16
 

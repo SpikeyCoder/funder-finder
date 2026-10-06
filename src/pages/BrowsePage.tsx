@@ -514,7 +514,7 @@ const BrowsePage: React.FC = () => {
                       key={pageNum}
                       onClick={() => setCurrentPage(pageNum)}
                       disabled={loading}
-                      className={`px-3 py-2 rounded transition-colors ${
+                      className={`px-3 py-2 rounded-sm transition-colors ${
                         currentPage === pageNum
                           ? 'bg-[#58a6ff] text-white'
                           : 'bg-[#0d1117] border border-[#30363d] text-gray-300 hover:border-[#58a6ff] hover:text-white disabled:opacity-50'

@@ -1,5 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap')
-layer(base);
+/* Left unlayered: it only declares @font-face, and `layer(base)` here would
+   declare `base` ahead of Tailwind's theme/properties layers. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 /* Scan the same files Tailwind v3's `content` config did. */
 @import 'tailwindcss' source(none);
 @source '../index.html';
@@ -261,7 +262,7 @@ html.light-mode .demo-dark-card .text-red-400   { color: #f87171; }
 
 /* FM-LM (2026-06-06 daily audit): the demo browser-window mockup uses
    text-white (e.g. the inline H2 "Find Funders Aligned to Your Mission"
-   inside the gradient bg-gradient-to-b from-[#020916] ...). The generic
+   inside the gradient bg-linear-to-b from-[#020916] ...). The generic
    light-mode .text-white remap turns that text to #1f2328, producing
    dark-on-dark text on the mockup's hardcoded dark gradient. Restore
    white text inside .demo-dark-card so the mockup stays readable in
