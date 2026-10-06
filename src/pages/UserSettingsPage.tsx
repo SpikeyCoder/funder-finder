@@ -488,7 +488,7 @@ function UserSettingsContent() {
     }
   };
 
-  const inputClass = "w-full px-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500";
+  const inputClass = "w-full px-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500";
   const labelClass = "block text-sm font-medium text-white mb-2";
 
   return (
@@ -515,7 +515,7 @@ function UserSettingsContent() {
                 className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium rounded-md transition-colors ${
                   activeTab === tab.key
                     ? 'bg-[#0d1117] text-white'
-                    : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
+                    : 'text-gray-400 hover:text-white hover:bg-white/4'
                 }`}
               >
                 <tab.icon size={16} />
@@ -527,13 +527,13 @@ function UserSettingsContent() {
           {/* Error/Success Messages */}
           {error && (
             <div className="mb-6 p-4 bg-red-900/20 border border-red-700 rounded-lg flex gap-3">
-              <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+              <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
               <p className="text-red-400">{error}</p>
             </div>
           )}
           {success && (
             <div className="mb-6 p-4 bg-green-900/20 border border-green-700 rounded-lg flex gap-3">
-              <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
+              <CheckCircle className="w-5 h-5 text-green-400 shrink-0 mt-0.5" />
               <p className="text-green-400">Settings saved successfully</p>
             </div>
           )}
@@ -576,13 +576,13 @@ function UserSettingsContent() {
                     </div>
                     {passwordError && (
                       <div className="mt-3 flex items-center gap-2 text-sm text-red-400">
-                        <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                        <AlertCircle className="w-4 h-4 shrink-0" />
                         <span>{passwordError}</span>
                       </div>
                     )}
                     {passwordSuccess && (
                       <div className="mt-3 flex items-center gap-2 text-sm text-green-400">
-                        <CheckCircle className="w-4 h-4 flex-shrink-0" />
+                        <CheckCircle className="w-4 h-4 shrink-0" />
                         <span>Password updated</span>
                       </div>
                     )}
@@ -678,7 +678,7 @@ function UserSettingsContent() {
                       <label key={category.code} className="flex items-center gap-2 cursor-pointer">
                         <input type="checkbox" checked={nteeCodes.includes(category.code)}
                           onChange={() => toggleNteeCode(category.code)}
-                          className="w-4 h-4 rounded bg-[#0d1117] border border-[#30363d] text-blue-600 cursor-pointer" />
+                          className="w-4 h-4 rounded-sm bg-[#0d1117] border border-[#30363d] text-blue-600 cursor-pointer" />
                         <span className="text-sm text-gray-300">{category.label}</span>
                       </label>
                     ))}
@@ -742,7 +742,7 @@ function UserSettingsContent() {
                     />
                     {deleteError && (
                       <div className="mt-3 flex items-center gap-2 text-sm text-red-400">
-                        <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                        <AlertCircle className="w-4 h-4 shrink-0" />
                         <span>{deleteError}</span>
                       </div>
                     )}
@@ -800,7 +800,7 @@ function UserSettingsContent() {
                         <label key={`dl-${opt.value}`} className="flex items-center gap-3 cursor-pointer py-1">
                           <input type="checkbox" checked={deadlineReminders.includes(opt.value)}
                             onChange={() => toggleDeadlineReminder(opt.value)}
-                            className="w-4 h-4 rounded bg-[#0d1117] border border-[#30363d] text-blue-600 cursor-pointer" />
+                            className="w-4 h-4 rounded-sm bg-[#0d1117] border border-[#30363d] text-blue-600 cursor-pointer" />
                           <span className="text-sm text-gray-300">{opt.label}</span>
                         </label>
                       ))}
@@ -816,7 +816,7 @@ function UserSettingsContent() {
                         <label key={`task-${opt.value}`} className="flex items-center gap-3 cursor-pointer py-1">
                           <input type="checkbox" checked={taskReminders.includes(opt.value)}
                             onChange={() => toggleTaskReminder(opt.value)}
-                            className="w-4 h-4 rounded bg-[#0d1117] border border-[#30363d] text-blue-600 cursor-pointer" />
+                            className="w-4 h-4 rounded-sm bg-[#0d1117] border border-[#30363d] text-blue-600 cursor-pointer" />
                           <span className="text-sm text-gray-300">{opt.label}</span>
                         </label>
                       ))}
@@ -881,7 +881,7 @@ function UserSettingsContent() {
                           <input type="checkbox"
                             checked={teamNotifications[item.id]}
                             onChange={() => setTeamNotifications(prev => ({ ...prev, [item.id]: !prev[item.id] }))}
-                            className="w-4 h-4 rounded bg-[#0d1117] border border-[#30363d] text-blue-600 cursor-pointer mt-0.5" />
+                            className="w-4 h-4 rounded-sm bg-[#0d1117] border border-[#30363d] text-blue-600 cursor-pointer mt-0.5" />
                           <div>
                             <span className="text-sm text-gray-300">{item.label}</span>
                             <p className="text-xs text-gray-400">{item.desc}</p>
@@ -937,14 +937,14 @@ function UserSettingsContent() {
                       <label className="flex items-center gap-3 cursor-pointer">
                         <input type="checkbox" checked={newFeedIncludeTasks}
                           onChange={(e) => setNewFeedIncludeTasks(e.target.checked)}
-                          className="w-4 h-4 rounded bg-[#0d1117] border border-[#30363d] text-blue-600 cursor-pointer" />
+                          className="w-4 h-4 rounded-sm bg-[#0d1117] border border-[#30363d] text-blue-600 cursor-pointer" />
                         <span className="text-sm text-gray-300">Include task due dates</span>
                       </label>
 
                       <label className="flex items-center gap-3 cursor-pointer">
                         <input type="checkbox" checked={newFeedIncludeCompliance}
                           onChange={(e) => setNewFeedIncludeCompliance(e.target.checked)}
-                          className="w-4 h-4 rounded bg-[#0d1117] border border-[#30363d] text-blue-600 cursor-pointer" />
+                          className="w-4 h-4 rounded-sm bg-[#0d1117] border border-[#30363d] text-blue-600 cursor-pointer" />
                         <span className="text-sm text-gray-300">Include post-award report deadlines</span>
                       </label>
 
@@ -963,7 +963,7 @@ function UserSettingsContent() {
                       <div className="space-y-3">
                         {calendarFeeds.map(feed => (
                           <div key={feed.id} className="flex items-center gap-3 p-3 bg-[#0d1117] border border-[#30363d] rounded-lg">
-                            <Calendar size={16} className="text-blue-400 flex-shrink-0" />
+                            <Calendar size={16} className="text-blue-400 shrink-0" />
                             <div className="flex-1 min-w-0">
                               <p className="text-sm text-white truncate">
                                 {(feed as any).projects?.name || 'All Projects'}
@@ -971,7 +971,7 @@ function UserSettingsContent() {
                               </p>
                               <p className="text-xs text-gray-400 truncate mt-0.5">{feed.feed_url}</p>
                             </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
+                            <div className="flex items-center gap-2 shrink-0">
                               <button onClick={() => copyFeedUrl(feed)}
                                 className="p-1.5 text-gray-400 hover:text-white transition-colors" title="Copy URL">
                                 {copiedFeedId === feed.id ? <CheckCircle size={16} className="text-green-400" /> : <Copy size={16} />}

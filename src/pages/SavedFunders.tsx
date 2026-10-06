@@ -530,7 +530,7 @@ export default function SavedFunders() {
 
                       {notesOpen && (
                         <textarea
-                          className="mt-2 w-full bg-[#0d1117] border border-[#30363d] rounded-xl px-4 py-3 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-600 resize-none"
+                          className="mt-2 w-full bg-[#0d1117] border border-[#30363d] rounded-xl px-4 py-3 text-sm text-gray-200 placeholder-gray-600 focus:outline-hidden focus:border-blue-600 resize-none"
                           rows={3}
                           aria-label={`Notes about ${f.name}`}
                           placeholder="Add notes about this funder, next steps, contacts, deadlines…"
@@ -610,9 +610,9 @@ export default function SavedFunders() {
                                         >
                                           <span className="truncate">{p.name}</span>
                                           {adding ? (
-                                            <Loader2 size={14} className="animate-spin flex-shrink-0" />
+                                            <Loader2 size={14} className="animate-spin shrink-0" />
                                           ) : added ? (
-                                            <Check size={14} className="text-green-400 flex-shrink-0" />
+                                            <Check size={14} className="text-green-400 shrink-0" />
                                           ) : null}
                                         </button>
                                       );

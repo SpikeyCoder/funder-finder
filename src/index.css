@@ -1,11 +1,59 @@
+/* Left unlayered: it only declares @font-face, and `layer(base)` here would
+   declare `base` ahead of Tailwind's theme/properties layers. */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Scan the same files Tailwind v3's `content` config did. */
+@import 'tailwindcss' source(none);
+@source '../index.html';
+@source '.';
 
+@theme {
+  --font-sans: Inter, system-ui, sans-serif;
+}
 
-/* Non-layered rules win over all @layer (including Tailwind utilities).
-   This ensures focus:outline-none in components cannot suppress keyboard indicators. */
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+
+  /* Tailwind v4's Preflight dropped `cursor: pointer` on buttons; keep v3's. */
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+@keyframes pageFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Everything below lives in the utilities layer, after Tailwind's own
+   utilities, so it competes with them on specificity and source order exactly
+   as it did under Tailwind v3 (where it followed `@tailwind utilities`).
+   Left unlayered, v4's native cascade layers would let every rule here beat
+   every utility regardless of specificity (e.g. `.text-gray-500` below would
+   block `hover:text-white`). */
+@layer utilities {
+
+/* Focus-visible ring for keyboard users. */
 *:focus-visible {
   outline: 2px solid #3b82f6;
   outline-offset: 2px;
@@ -214,7 +262,7 @@ html.light-mode .demo-dark-card .text-red-400   { color: #f87171; }
 
 /* FM-LM (2026-06-06 daily audit): the demo browser-window mockup uses
    text-white (e.g. the inline H2 "Find Funders Aligned to Your Mission"
-   inside the gradient bg-gradient-to-b from-[#020916] ...). The generic
+   inside the gradient bg-linear-to-b from-[#020916] ...). The generic
    light-mode .text-white remap turns that text to #1f2328, producing
    dark-on-dark text on the mockup's hardcoded dark gradient. Restore
    white text inside .demo-dark-card so the mockup stays readable in
@@ -365,17 +413,6 @@ html.light-mode select.bg-\[\#0d1117\] {
 /* Placeholder text in inputs */
 html.light-mode .placeholder-gray-500::placeholder {
   color: #9ca3af !important;
-}
-
-@keyframes pageFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 .page-fade-in {
@@ -706,3 +743,5 @@ a:focus-visible,
   outline-offset: 2px;
   border-radius: 4px;
 }
+
+} /* @layer utilities */

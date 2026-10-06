@@ -259,7 +259,7 @@ export default function SignupPage() {
           {/* Error Message */}
           {error && (
             <div className="mb-6 p-4 bg-red-900/20 border border-red-700 rounded-lg flex gap-3">
-              <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+              <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
               <p className="text-red-400 text-sm">{error}</p>
             </div>
           )}
@@ -280,7 +280,7 @@ export default function SignupPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     autoComplete="email"
                     placeholder="you@example.com"
-                    className="w-full pl-10 pr-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    className="w-full pl-10 pr-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
               </div>
@@ -298,7 +298,7 @@ export default function SignupPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     autoComplete="new-password"
                     placeholder="••••••••"
-                    className="w-full pl-10 pr-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    className="w-full pl-10 pr-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
                 <p className="text-xs text-gray-500 mt-1">At least 8 characters</p>
@@ -317,7 +317,7 @@ export default function SignupPage() {
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     autoComplete="new-password"
                     placeholder="••••••••"
-                    className="w-full pl-10 pr-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    className="w-full pl-10 pr-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
               </div>
@@ -339,7 +339,7 @@ export default function SignupPage() {
                     value={organizationName}
                     onChange={(e) => setOrganizationName(e.target.value)}
                     placeholder="Your nonprofit name"
-                    className="w-full pl-10 pr-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    className="w-full pl-10 pr-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
               </div>
@@ -354,7 +354,7 @@ export default function SignupPage() {
                   value={ein}
                   onChange={(e) => setEin(e.target.value)}
                   placeholder="12-3456789"
-                  className="w-full px-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 />
               </div>
 
@@ -368,7 +368,7 @@ export default function SignupPage() {
                   onChange={(e) => setMissionStatement(e.target.value)}
                   placeholder="Describe your organization's mission..."
                   rows={3}
-                  className="w-full px-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none"
+                  className="w-full px-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none"
                 />
               </div>
 
@@ -383,7 +383,7 @@ export default function SignupPage() {
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
                     placeholder="City"
-                    className="w-full px-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    className="w-full px-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
 
@@ -395,7 +395,7 @@ export default function SignupPage() {
                     id="state"
                     value={state}
                     onChange={(e) => setState(e.target.value)}
-                    className="w-full px-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    className="w-full px-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-white focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                   >
                     <option value="">Select a state</option>
                     {US_STATES.map((s) => (
@@ -417,7 +417,7 @@ export default function SignupPage() {
                   value={county}
                   onChange={(e) => setCounty(e.target.value)}
                   placeholder="e.g. King County"
-                  className="w-full px-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   Helps match funders that prefer local grantmaking.
@@ -435,7 +435,7 @@ export default function SignupPage() {
                         type="checkbox"
                         checked={nteeCodes.includes(category.code)}
                         onChange={() => toggleNteeCode(category.code)}
-                        className="w-4 h-4 rounded bg-[#0d1117] border border-[#30363d] text-blue-600 cursor-pointer"
+                        className="w-4 h-4 rounded-sm bg-[#0d1117] border border-[#30363d] text-blue-600 cursor-pointer"
                       />
                       <span className="text-sm text-gray-300">{category.label}</span>
                     </label>
@@ -453,7 +453,7 @@ export default function SignupPage() {
                   value={fieldsOfWork}
                   onChange={(e) => setFieldsOfWork(e.target.value)}
                   placeholder="Workforce Development, Youth Mentoring, Food Security"
-                  className="w-full px-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   Comma-separated plain-language program areas. Complements the NTEE codes above and improves funder matching.
@@ -468,7 +468,7 @@ export default function SignupPage() {
                   id="budget"
                   value={budgetRange}
                   onChange={(e) => setBudgetRange(e.target.value)}
-                  className="w-full px-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-white focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 >
                   <option value="">Select budget range</option>
                   {BUDGET_RANGES.map((range) => (

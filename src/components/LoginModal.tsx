@@ -78,7 +78,7 @@ export default function LoginModal({ pendingFunder, pendingFunders, onClose }: L
     // elements (e.g. page-fade-in) don't break position: fixed on mobile.
     // items-start + pt-6 anchors the card to the top of the viewport.
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-sm px-4 pt-6"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs px-4 pt-6"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div

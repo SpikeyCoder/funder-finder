@@ -79,7 +79,7 @@ const QuickSaveButton: React.FC<QuickSaveButtonProps> = ({ funder, className = '
   }, [user, saved, funder, busy, saveFunderToDB, unsaveFunderFromDB]);
 
   const baseClasses = compact
-    ? 'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors min-h-[36px]'
+    ? 'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-sm text-xs font-medium transition-colors min-h-[36px]'
     : 'inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors';
 
   const colorClasses = saved

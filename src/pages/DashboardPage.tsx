@@ -174,13 +174,13 @@ export default function DashboardPage() {
 
                   {/* Stats */}
                   <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div className="bg-[#0d1117] rounded p-3">
+                    <div className="bg-[#0d1117] rounded-sm p-3">
                       <div className="text-xs text-gray-400 uppercase tracking-wide">Matched</div>
                       <div className="text-2xl font-bold text-white">
                         {getMatchesCount(project)}
                       </div>
                     </div>
-                    <div className="bg-[#0d1117] rounded p-3">
+                    <div className="bg-[#0d1117] rounded-sm p-3">
                       <div className="text-xs text-gray-400 uppercase tracking-wide">Tracked</div>
                       <div className="text-2xl font-bold text-white">
                         {getSavedFundersCount(project)}

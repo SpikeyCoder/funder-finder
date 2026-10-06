@@ -395,22 +395,22 @@ export default function OnboardingPage() {
               <p className="text-sm font-semibold text-white">Organization Profile</p>
               <input type="text" placeholder="Organization name" aria-label="Organization name"
                 value={orgName} onChange={(e) => setOrgName(e.target.value)}
-                className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
+                className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-hidden focus:border-blue-500" />
               <input type="text" placeholder="Mission statement" aria-label="Mission statement"
                 value={missionStatement} onChange={(e) => setMissionStatement(e.target.value)}
-                className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
+                className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-hidden focus:border-blue-500" />
               <div className="grid grid-cols-3 gap-3">
                 <input type="text" placeholder="City" aria-label="City"
                   value={city} onChange={(e) => setCity(e.target.value)}
-                  className="bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
+                  className="bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-hidden focus:border-blue-500" />
                 <input type="text" placeholder="County" aria-label="County"
                   value={county} onChange={(e) => setCounty(e.target.value)}
-                  className="bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
+                  className="bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-hidden focus:border-blue-500" />
                 <input type="text" placeholder="State" aria-label="State" maxLength={2}
                   value={stateAbbr} onChange={(e) => setStateAbbr(e.target.value.toUpperCase())}
-                  className="bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
+                  className="bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-hidden focus:border-blue-500" />
               </div>
-              <p className="text-[11px] text-gray-500 -mt-2">
+              <p className="text-[11px] text-gray-500">
                 County-level location helps us match you to local funders that fund specifically in your area (FM-IC-ONB-003).
               </p>
               <select aria-label="Organization type"
@@ -459,13 +459,13 @@ export default function OnboardingPage() {
                 aria-label="Project name"
                 value={projectName}
                 onChange={(e) => { setProjectName(e.target.value); setProjectError(null); }}
-                className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
+                className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-hidden focus:border-blue-500" />
               <textarea placeholder="Brief project description — what does it do and who does it serve?"
                 aria-label="Project description"
                 rows={3}
                 value={projectDescription}
                 onChange={(e) => setProjectDescription(e.target.value)}
-                className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500 resize-none" />
+                className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-hidden focus:border-blue-500 resize-none" />
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-gray-500 mb-1 block">Target funding</label>
@@ -473,7 +473,7 @@ export default function OnboardingPage() {
                     aria-label="Target funding"
                     value={targetFunding}
                     onChange={(e) => setTargetFunding(e.target.value)}
-                    className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
+                    className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-hidden focus:border-blue-500" />
                 </div>
                 <div>
                   <label className="text-xs text-gray-500 mb-1 block">Focus area</label>
@@ -505,7 +505,7 @@ export default function OnboardingPage() {
           {currentStep === 4 && (
             <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-5 mb-6 text-left space-y-4">
               <p className="text-sm font-semibold text-white">Review Your Top Matches</p>
-              <p className="text-xs text-gray-500 mb-2">Based on your project, here are example funders our AI would find for you:</p>
+              <p className="text-xs text-gray-500">Based on your project, here are example funders our AI would find for you:</p>
               {[
                 { name: 'Community Foundation', type: 'Foundation', match: '95%', focus: 'Education & Youth' },
                 { name: 'Regional Health Trust', type: 'Trust', match: '88%', focus: 'Community Health' },
@@ -535,7 +535,7 @@ export default function OnboardingPage() {
                   'Export reports and share progress',
                 ].map(tip => (
                   <div key={tip} className="flex items-center gap-2 text-sm text-gray-400">
-                    <span className="w-1.5 h-1.5 bg-green-500 rounded-full flex-shrink-0" />
+                    <span className="w-1.5 h-1.5 bg-green-500 rounded-full shrink-0" />
                     {tip}
                   </div>
                 ))}

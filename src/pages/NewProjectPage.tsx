@@ -374,7 +374,7 @@ export default function NewProjectPage() {
                     value={form.name}
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
                     placeholder="e.g., Community Health Initiative"
-                    className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
+                    className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-hidden focus:border-blue-500 transition-colors"
                   />
                 </div>
 
@@ -388,7 +388,7 @@ export default function NewProjectPage() {
                     onChange={(e) => setForm({ ...form, description: e.target.value })}
                     placeholder="Describe your project mission and goals — this is used to find matching funders..."
                     rows={4}
-                    className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
+                    className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-hidden focus:border-blue-500 transition-colors"
                   />
                 </div>
               </div>
@@ -412,7 +412,7 @@ export default function NewProjectPage() {
                           type="checkbox"
                           checked={form.search_criteria.locations.includes(state)}
                           onChange={() => handleLocationToggle(state)}
-                          className="rounded border-[#30363d] bg-[#0d1117] text-blue-600 cursor-pointer"
+                          className="rounded-sm border-[#30363d] bg-[#0d1117] text-blue-600 cursor-pointer"
                         />
                         <span className="ml-2 text-sm text-gray-400 group-hover:text-white transition-colors">
                           {state}
@@ -437,7 +437,7 @@ export default function NewProjectPage() {
                           type="checkbox"
                           checked={form.search_criteria.fields_of_work.includes(category.code)}
                           onChange={() => handleFieldToggle(category.code)}
-                          className="rounded border-[#30363d] bg-[#0d1117] text-blue-600 cursor-pointer"
+                          className="rounded-sm border-[#30363d] bg-[#0d1117] text-blue-600 cursor-pointer"
                         />
                         <span className="ml-2 text-sm text-gray-400 group-hover:text-white transition-colors">
                           {category.label}
@@ -462,7 +462,7 @@ export default function NewProjectPage() {
                           type="checkbox"
                           checked={form.search_criteria.funding_types.includes(type.value)}
                           onChange={() => handleFundingTypeToggle(type.value)}
-                          className="rounded border-[#30363d] bg-[#0d1117] text-blue-600 cursor-pointer"
+                          className="rounded-sm border-[#30363d] bg-[#0d1117] text-blue-600 cursor-pointer"
                         />
                         <span className="ml-2 text-sm text-gray-400 group-hover:text-white transition-colors">
                           {type.label}
@@ -491,7 +491,7 @@ export default function NewProjectPage() {
                           }
                         }}
                         placeholder="Enter a keyword and press Enter"
-                        className="flex-1 bg-[#0d1117] border border-[#30363d] rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
+                        className="flex-1 bg-[#0d1117] border border-[#30363d] rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-hidden focus:border-blue-500 transition-colors"
                       />
                     </div>
                     {form.search_criteria.keywords.length > 0 && (
@@ -601,7 +601,7 @@ export default function NewProjectPage() {
                         {form.search_criteria.keywords.map(keyword => (
                           <span
                             key={keyword}
-                            className="bg-blue-600/20 text-blue-300 px-2 py-1 rounded text-sm"
+                            className="bg-blue-600/20 text-blue-300 px-2 py-1 rounded-sm text-sm"
                           >
                             {keyword}
                           </span>
