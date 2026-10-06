@@ -5,8 +5,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
 import type { GrantTask, PortfolioGrant } from '../types';
+import { SUPABASE_URL } from '../lib/supabaseProject';
 
-const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const GRANT_TASKS_URL = `${SUPABASE_URL}/functions/v1/grant-tasks`;
 const PORTFOLIO_URL = `${SUPABASE_URL}/functions/v1/portfolio`;
 const TEAM_INVITE_URL = `${SUPABASE_URL}/functions/v1/team-invite`;
@@ -190,9 +190,9 @@ export default function MyTasksPage() {
                     <span className="text-xs text-gray-400">{task.tracked_grants.funder_name}{task.tracked_grants.grant_title ? ` — ${task.tracked_grants.grant_title}` : ''}</span>
                   )}
                   {task.projects && (
-                    <span className="text-xs text-blue-400 cursor-pointer hover:text-blue-300" onClick={() => navigate(`/projects/${task.project_id}/tracker`)}>
+                    <button type="button" aria-label={`Open project ${task.projects.name}`} className="text-xs text-blue-400 cursor-pointer hover:text-blue-300 hover:underline text-left" onClick={() => navigate(`/projects/${task.project_id}/tracker`)}>
                       {task.projects.name}
-                    </span>
+                    </button>
                   )}
                   {task.assignee_email && (
                     <span className="text-xs text-purple-400">@ {task.assignee_email}</span>
@@ -242,8 +242,8 @@ export default function MyTasksPage() {
               ) : (
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-xs font-medium text-gray-400 mb-1">Grant</label>
-                    <select value={formGrantId} onChange={e => setFormGrantId(e.target.value)} className={inputClass}>
+                    <label htmlFor="task-form-grant" className="block text-xs font-medium text-gray-400 mb-1">Grant</label>
+                    <select id="task-form-grant" value={formGrantId} onChange={e => setFormGrantId(e.target.value)} className={inputClass}>
                       {grants.map(g => (
                         <option key={g.id} value={g.id}>
                           {g.funder_name}{g.grant_title ? ` — ${g.grant_title}` : ''}{g.project_name ? ` (${g.project_name})` : ''}
@@ -252,19 +252,19 @@ export default function MyTasksPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-400 mb-1">Task</label>
-                    <input type="text" value={formTitle} onChange={e => setFormTitle(e.target.value)}
+                    <label htmlFor="task-form-title" className="block text-xs font-medium text-gray-400 mb-1">Task</label>
+                    <input id="task-form-title" type="text" value={formTitle} onChange={e => setFormTitle(e.target.value)}
                       placeholder="e.g. Draft letter of inquiry" className={inputClass}
                       onKeyDown={e => { if (e.key === 'Enter') handleCreateTask(); }} />
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-medium text-gray-400 mb-1">Due date</label>
-                      <input type="date" value={formDueDate} onChange={e => setFormDueDate(e.target.value)} className={inputClass} />
+                      <label htmlFor="task-form-due" className="block text-xs font-medium text-gray-400 mb-1">Due date</label>
+                      <input id="task-form-due" type="date" value={formDueDate} onChange={e => setFormDueDate(e.target.value)} className={inputClass} />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-400 mb-1">Assign to (team member email)</label>
-                      <input type="email" list="ff-team-emails" value={formAssignee} onChange={e => setFormAssignee(e.target.value)}
+                      <label htmlFor="task-form-assignee" className="block text-xs font-medium text-gray-400 mb-1">Assign to (team member email)</label>
+                      <input id="task-form-assignee" type="email" list="ff-team-emails" value={formAssignee} onChange={e => setFormAssignee(e.target.value)}
                         placeholder="teammate@org.org" className={inputClass} />
                       <datalist id="ff-team-emails">
                         {memberEmails.map(em => <option key={em} value={em} />)}

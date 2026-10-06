@@ -96,7 +96,7 @@ const QuickSaveButton: React.FC<QuickSaveButtonProps> = ({ funder, className = '
         className={`${baseClasses} ${colorClasses} disabled:opacity-50 ${className}`}
       >
         {saved ? <BookmarkCheck size={compact ? 14 : 16} aria-hidden="true" /> : <Bookmark size={compact ? 14 : 16} aria-hidden="true" />}
-        {saved ? 'Saved' : 'Save'}
+        <span>{saved ? 'Saved' : 'Save'}</span>
       </button>
 
       {toastMsg && (

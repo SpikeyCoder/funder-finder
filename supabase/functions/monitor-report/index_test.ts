@@ -1,0 +1,345 @@
+import { assert, assertEquals, assertNotEquals } from "jsr:@std/assert@1";
+import { fingerprint, fingerprintSource, normalizeMessage, parseCrash, parseVitals, readLimited } from "./index.ts";
+import { normalizePath, scrub } from "../_shared/monitor_scrub.ts";
+
+Deno.test("scrub masks emails and drops query strings", () => {
+  assertEquals(
+    scrub("No user jane.doe+x@example.org at https://fundermatch.org/search?q=jane#top done"),
+    "No user [email] at https://fundermatch.org/search done",
+  );
+});
+
+Deno.test("normalizePath hides share tokens and route ids", () => {
+  assertEquals(normalizePath("/shared/9f3a1c0e5b7d4a2f8e6c1b0a9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e"), "/shared/:id");
+  assertEquals(normalizePath("/shared/abc"), "/shared/:id");
+  assertEquals(normalizePath("/projects/42/tracker"), "/projects/:id/tracker");
+  assertEquals(normalizePath("/projects/new/chat"), "/projects/new/chat");
+  assertEquals(normalizePath("/unknown/a1b2c3d4e5f6g7h8i9"), "(other)");
+  assertEquals(normalizePath("/made-up-path-1"), "(other)");
+  assertEquals(normalizePath("/onboarding/first-project"), "/onboarding/first-project");
+  assertEquals(normalizePath("/Search/"), "/search");
+  assertEquals(normalizePath("/Projects/42/Tracker"), "/projects/:id/tracker");
+});
+
+Deno.test("normalizePath collapses ids and drops query strings", () => {
+  assertEquals(normalizePath("/recipient/2da01037-c1bc-4106-8c21-40008ead6ca7?x=1"), "/recipient/:id");
+  assertEquals(normalizePath("/funder/010224898/"), "/funder/:id");
+  assertEquals(normalizePath("/search"), "/search");
+  assertEquals(normalizePath(""), "/");
+});
+
+const STACK_A = "TypeError: Cannot read properties of undefined (reading 'name')\n" +
+  "    at Xt (https://fundermatch.org/assets/OrgSearch-BrsvDQt6.js:12:345)\n    at div";
+const STACK_B = "TypeError: Cannot read properties of undefined (reading 'name')\n" +
+  "    at Xt (https://fundermatch.org/assets/OrgSearch-Zq81LmP2.js:12:999)\n    at div";
+
+Deno.test("fingerprint ignores build hashes, line numbers and values in the message", async () => {
+  const msg = (n: number) => `Request ${n} failed for "query ${n}"`;
+  assertEquals(
+    await fingerprint("TypeError", msg(1), STACK_A),
+    await fingerprint("TypeError", msg(2), STACK_B),
+  );
+  assert(fingerprintSource("TypeError", msg(1), STACK_A).endsWith("|/assets/OrgSearch.js"));
+});
+
+Deno.test("fingerprint survives renamed minified functions and hashes containing - or _", async () => {
+  const a = "Error: x\n    at Xt (https://fundermatch.org/assets/LoginPage-DK1D-7OR.js:3:9)";
+  const b = "Error: x\n    at Qa (https://fundermatch.org/assets/LoginPage-a_b9Zk2Q.js:7:1)";
+  assertEquals(await fingerprint("Error", "x", a), await fingerprint("Error", "x", b));
+  assert(fingerprintSource("Error", "x", a).endsWith("|/assets/LoginPage.js"));
+  // A dashed module name keeps its name, loses only the hash.
+  assert(fingerprintSource("Error", "x", "    at f (https://x/assets/chunk-reload-AbC12345.js:1:1)").endsWith("|/assets/chunk-reload.js"));
+  assert(fingerprintSource("Error", "x", "    at f (https://x/assets/ab-cd-AbC12345.js:1:1)").endsWith("|/assets/ab-cd.js"));
+});
+
+Deno.test("message normalisation keeps the meaning, drops values and minified names", () => {
+  assertEquals(
+    normalizeMessage("Cannot read properties of undefined (reading 'name')"),
+    "Cannot read properties of undefined (reading 'name')",
+  );
+  assertEquals(normalizeMessage("Xt is not a function"), normalizeMessage("Qa is not a function"));
+  assertEquals(normalizeMessage("e is undefined"), "<id> is undefined");
+  assertEquals(normalizeMessage('No funder "Ford Foundation 2024" found'), "No funder <str> found");
+  assertEquals(normalizeMessage("Request 42 failed at https://x/y"), "Request <n> failed at <url>");
+  // HTTP statuses are different failures; other numbers aren't.
+  assertEquals(normalizeMessage("Request failed with status code 401"), "Request failed with status code 401");
+  assertEquals(normalizeMessage("HTTP 500 from server"), "HTTP 500 from server");
+  assertEquals(normalizeMessage("Expected 200 rows"), "Expected <n> rows");
+  assertEquals(normalizeMessage("status code 12345"), "status code <n>");
+  // Safari quotes expressions; Firefox doesn't: minified parts go either way.
+  assertEquals(
+    normalizeMessage("undefined is not an object (evaluating 'n.current.focus')"),
+    normalizeMessage("undefined is not an object (evaluating 't.current.focus')"),
+  );
+  assertEquals(normalizeMessage("t.current is null"), "<id>.current is null");
+  // Minified names that are also short words.
+  assertEquals(normalizeMessage("a is not a function"), normalizeMessage("e is not a function"));
+  assertEquals(normalizeMessage("in.x is null"), normalizeMessage("t.x is null"));
+  assertEquals(normalizeMessage("No organizations found"), "No organizations found");
+  // TDZ errors name a minified variable, quoted.
+  assertEquals(normalizeMessage("Cannot access 'Xt' before initialization"), normalizeMessage("Cannot access 'Qa' before initialization"));
+  assertEquals(normalizeMessage("can't access lexical declaration 'Xt' before initialization"), "can't access lexical declaration '<id>' before initialization");
+  // React's numbered production errors are different bugs.
+  const react = (n: number) => `Minified React error #${n}; visit https://react.dev/errors/${n} for the full message`;
+  assertNotEquals(normalizeMessage(react(418)), normalizeMessage(react(310)));
+  assertEquals(normalizeMessage(react(418)), "Minified React error #418; visit <url> for the full message");
+});
+
+Deno.test("fingerprint separates different errors and frames", async () => {
+  const read = (p: string) => `Cannot read properties of undefined (reading '${p}')`;
+  assertNotEquals(await fingerprint("TypeError", read("name"), STACK_A), await fingerprint("TypeError", read("map"), STACK_A));
+  const a = await fingerprint("TypeError", "x is undefined", STACK_A);
+  assertNotEquals(a, await fingerprint("RangeError", "x is undefined", STACK_A));
+  assertNotEquals(a, await fingerprint("TypeError", "x is null", STACK_A));
+  assertNotEquals(a, await fingerprint("TypeError", "x is undefined", STACK_A.replace("OrgSearch-", "FunderPage-")));
+});
+
+Deno.test("fingerprint reads Safari/Firefox frames", () => {
+  assert(fingerprintSource("Error", "boom", "Xt@https://fundermatch.org/assets/index-AbC123xy.js:3:20").endsWith("|/assets/index.js"));
+});
+
+Deno.test("parseCrash validates and scrubs", async () => {
+  assertEquals(await parseCrash({ kind: "nope", message: "x" }, ""), "Invalid kind");
+  assertEquals(await parseCrash({ kind: "error" }, ""), "Empty report");
+  assertEquals(await parseCrash({ kind: "error", message: "", stack: 1 }, ""), "Empty report");
+  const named = await parseCrash({ kind: "error", name: "jane@example.org", message: "x" }, "");
+  if (typeof named === "string") throw new Error(named);
+  assertEquals(named.name, "Error"); // not an error type name, so not kept
+  const row = await parseCrash({
+    kind: "boundary",
+    name: "TypeError",
+    message: "bad a@b.org",
+    stack: STACK_A,
+    componentStack: "at OrgSearch",
+    path: "/recipient/2da01037-c1bc-4106-8c21-40008ead6ca7?q=1",
+    release: "index-BrsvDQt6.js",
+  }, "UA/1.0");
+  if (typeof row === "string") throw new Error(row);
+  assertEquals(row.message, "bad [email]");
+  assertEquals(row.path, "/recipient/:id");
+  assertEquals(row.release, "index-BrsvDQt6.js");
+  assertEquals(row.fingerprint.length, 64);
+  const bad = await parseCrash({ kind: "error", message: "x", release: "<script>" }, "");
+  if (typeof bad === "string") throw new Error(bad);
+  assertEquals(bad.release, "");
+});
+
+Deno.test("parseVitals accepts the three metrics within range only", () => {
+  const id = (n: number) => `v5-1696300000000-${n}234567890123`;
+  const m = (name: string, value: number, rating = "good", i = 1) => ({ id: id(i), name, value, rating, path: "/search/" });
+  const ok = parseVitals({
+    release: "index-a.js",
+    metrics: [m("LCP", 2500), m("CLS", 0.3, "poor", 2)],
+  });
+  if (typeof ok === "string") throw new Error(ok);
+  assertEquals(ok.map((r) => [r.metric_id, r.metric, r.path]), [[id(1), "LCP", "/search"], [id(2), "CLS", "/search"]]);
+  assertEquals(parseVitals({ metrics: [m("FID", 1)] }), "Invalid metric");
+  assertEquals(parseVitals({ metrics: [m("LCP", -1)] }), "Invalid value");
+  assertEquals(parseVitals({ metrics: [m("LCP", Infinity)] }), "Invalid value");
+  assertEquals(parseVitals({ metrics: [m("LCP", 1, "bad")] }), "Invalid rating");
+  // Two page views' metrics in one batch are fine; the same id twice isn't.
+  const twoViews = parseVitals({ metrics: [m("CLS", 0.1), m("CLS", 0.2, "good", 2)] });
+  if (typeof twoViews === "string") throw new Error(twoViews);
+  assertEquals(twoViews.length, 2);
+  // The same id twice: the first is kept. A bad metric is skipped, not the batch.
+  assertEquals((parseVitals({ metrics: [m("LCP", 1), m("LCP", 2)] }) as unknown[]).length, 1);
+  const mixed = parseVitals({ metrics: [m("LCP", 700_000), m("CLS", 0.1, "good", 2)] });
+  if (typeof mixed === "string") throw new Error(mixed);
+  assertEquals(mixed.map((r) => r.metric), ["CLS"]);
+  assertEquals(parseVitals({ metrics: Array.from({ length: 7 }, (_, i) => m("CLS", 0.1, "good", i + 1)) }), "Invalid metrics");
+  assertEquals(parseVitals({ metrics: [{ name: "LCP", value: 1, rating: "good" }] }), "Invalid id");
+  assertEquals(parseVitals({ metrics: [{ ...m("LCP", 1), id: "x'; drop" }] }), "Invalid id");
+  assertEquals(parseVitals({ metrics: [m("toString", 1)] }), "Invalid metric");
+  // Per-metric path wins over the report's (INP/CLS can belong to a later page).
+  const perMetric = parseVitals({ metrics: [{ ...m("INP", 900, "poor"), path: "/search?q=x" }, { ...m("LCP", 1000, "good", 2), path: "/" }] });
+  if (typeof perMetric === "string") throw new Error(perMetric);
+  assertEquals(perMetric.map((r) => [r.metric, r.path]), [["INP", "/search"], ["LCP", "/"]]);
+  assertEquals(parseVitals({ metrics: [{ ...m("LCP", 1), path: undefined }] }), "Invalid path");
+  assertEquals(parseVitals({ metrics: "x" }), "Invalid metrics");
+});
+
+Deno.test("readLimited stops at the byte limit, not the character count", async () => {
+  const body = (s: string) => new Request("http://x", { method: "POST", body: s });
+  assertEquals(await readLimited(body("hello"), 16), "hello");
+  assertEquals(await readLimited(body("é".repeat(10)), 16), null); // 20 bytes
+  assertEquals(await readLimited(new Request("http://x", { method: "POST", body: "x", headers: { "content-length": "99999" } }), 16), null);
+});
+
+Deno.test("scrub strips relative query strings and masks percent-encoded addresses", () => {
+  assertEquals(scrub("Request /search?q=acme+grants failed"), "Request /search failed");
+  assertEquals(scrub("user jane%40example.org not found"), "user [email] not found");
+  assertEquals(scrub("Did you mean x? Try again"), "Did you mean x? Try again");
+});
+
+Deno.test("scrub strips a query string that holds an address, and masks a bare one", () => {
+  assertEquals(
+    scrub("GET https://x.supabase.co/rest/v1/t?email=eq.a@b.org&x=1 failed for c@d.org"),
+    "GET https://x.supabase.co/rest/v1/t failed for [email]",
+  );
+});
+
+Deno.test("an address cut by the length limit is still masked (scrub before cut)", async () => {
+  const row = await parseCrash({ kind: "error", message: "x".repeat(490) + " jane.doe@example.org and more" }, "");
+  if (typeof row === "string") throw new Error(row);
+  assert(!row.message.includes("jane"));
+  assertEquals(row.message.length, 500);
+});
+
+Deno.test("fingerprint takes the file from the top frame, not a URL in Chrome's message line", () => {
+  const msg = "Failed to load https://fundermatch.org/assets/Foo-AbC12345.js";
+  const chrome = `TypeError: ${msg}\n    at load (https://fundermatch.org/assets/Search-Xy_9-abc.js:1:2)`;
+  const firefox = "load@https://fundermatch.org/assets/Search-Xy_9-abc.js:1:2";
+  assertEquals(fingerprintSource("TypeError", msg, chrome), fingerprintSource("TypeError", msg, firefox));
+  assertEquals(fingerprintSource("TypeError", msg, chrome).split("|")[2], "/assets/Search.js");
+});
+
+Deno.test("normalizeMessage folds ids and JSON-parse details into one kind", () => {
+  assertEquals(
+    normalizeMessage("Project not found: a3f2c9b1-1111-4c2d-9e8f-0123456789ab"),
+    normalizeMessage("Project not found: b7e1d2c3-2222-4d3e-8f9a-abcdef012345"),
+  );
+  assertEquals(normalizeMessage("No row 'abcdef1234'"), normalizeMessage("No row 'fedcba4321'"));
+  assertEquals(normalizeMessage("No row 'abcdef1234'"), "No row <str>");
+  // Ordinary words with hex letters stay.
+  assertEquals(normalizeMessage("cafe failed"), "cafe failed");
+  const json = [
+    `Unexpected token 'N', "Not Found" is not valid JSON`,
+    `Unexpected token 'I', "Internal S"... is not valid JSON`,
+    `Unexpected token '<', "<!DOCTYPE "... is not valid JSON`,
+  ].map(normalizeMessage);
+  assertEquals(new Set(json).size, 1);
+  assertEquals(json[0], "Unexpected token <tok>, <str> is not valid JSON");
+  assertEquals(normalizeMessage(`JSON Parse error: Unexpected identifier "Not"`), "JSON Parse error: Unexpected identifier <tok>");
+});
+
+Deno.test("fingerprint ignores an @ in Chrome's message line", () => {
+  const msg = "Failed to resolve module specifier '@scope/pkg/index.js'";
+  const stack = `TypeError: ${msg}\n    at Xt (https://fundermatch.org/assets/Search-BrsvDQt6.js:1:2)`;
+  assertEquals(fingerprintSource("TypeError", msg, stack).split("|")[2], "/assets/Search.js");
+  assertEquals(fingerprintSource("TypeError", msg, "Xt@https://fundermatch.org/assets/Search-BrsvDQt6.js:1:2").split("|")[2], "/assets/Search.js");
+  assertEquals(fingerprintSource("TypeError", msg, "@https://fundermatch.org/assets/Search-BrsvDQt6.js:1:2").split("|")[2], "/assets/Search.js");
+});
+
+Deno.test("parseCrash stores the message without its values and the stack as frames", async () => {
+  const message = 'invalid input syntax for type uuid: "Jane Smith EIN 12-3456789"';
+  const row = await parseCrash({
+    kind: "rejection",
+    name: "PostgrestError",
+    message,
+    stack: `PostgrestError: ${message}\n    at f (https://fundermatch.org/assets/a-AbC12345.js:1:2)\nglobal code@https://fundermatch.org/assets/b.js:3:4`,
+  }, "");
+  if (typeof row === "string") throw new Error(row);
+  assertEquals(row.message, "invalid input syntax for type uuid: <str>");
+  assertEquals(row.stack, "    at f (https://fundermatch.org/assets/a-AbC12345.js:1:2)\nglobal code@https://fundermatch.org/assets/b.js:3:4");
+});
+
+Deno.test("short words and unhashed file names survive normalizing", () => {
+  assertEquals(normalizeMessage("Request timed out after 5000 ms"), "Request timed out after <n> ms");
+  assertEquals(normalizeMessage("Unable to go back"), "Unable to go back");
+  const at = (f: string) => fingerprintSource("Error", "x", `    at f (https://fundermatch.org/assets/${f}:1:2)`).split("|")[2];
+  assertEquals(at("use-debounce.js"), "/assets/use-debounce.js");
+  assertEquals(at("OrgSearch-BrsvDQt6.js"), "/assets/OrgSearch.js");
+  assertEquals(at("LoginPage-DK1D-7OR.js"), "/assets/LoginPage.js");
+});
+
+Deno.test("a minified name that is also a word is still a name", () => {
+  assertEquals(
+    normalizeMessage("undefined is not an object (evaluating 'a.map')"),
+    normalizeMessage("undefined is not an object (evaluating 't.map')"),
+  );
+  assertEquals(normalizeMessage(`can't access property "map", a is undefined`), normalizeMessage(`can't access property "map", t is undefined`));
+  // Property names after the variable keep their names.
+  assertEquals(normalizeMessage("(evaluating 'n.id.to')"), "(evaluating '<id>.id.to')");
+});
+
+Deno.test("only the token itself is taken out of a JSON parse error", () => {
+  assertEquals(
+    normalizeMessage("JSON.parse: unexpected character at line 1 column 1 of the JSON data"),
+    "JSON.parse: unexpected character at line <n> column <n> of the JSON data",
+  );
+  assertEquals(normalizeMessage("Unexpected token < in JSON at position 0"), "Unexpected token <tok> in JSON at position <n>");
+  assertEquals(normalizeMessage("Unexpected token o in JSON at position 1"), "Unexpected token <tok> in JSON at position <n>");
+});
+
+Deno.test("4xx and 5xx codes stay in any wording; a data object's name isn't a type", async () => {
+  assertEquals(normalizeMessage("Request failed: 404"), "Request failed: 404");
+  assertEquals(normalizeMessage("Could not load funder 452"), normalizeMessage("Could not load funder 517"));
+  assertEquals(normalizeMessage("Response 502 from search"), "Response 502 from search");
+  assert(normalizeMessage("Error 401 Unauthorized") !== normalizeMessage("Error 503 Service Unavailable"));
+  assertEquals(normalizeMessage("Expected 200 rows"), "Expected <n> rows");
+  assertEquals(normalizeMessage("took 1.5 ms"), "took <n>.<n> ms");
+  const row = await parseCrash({ kind: "rejection", name: "Jane Doe", message: "x" }, "");
+  if (typeof row === "string") throw new Error(row);
+  assertEquals(row.name, "Error");
+  const typed = await parseCrash({ kind: "rejection", name: "PostgrestError", message: "x" }, "");
+  if (typeof typed === "string") throw new Error(typed);
+  assertEquals(typed.name, "PostgrestError");
+});
+
+Deno.test("a report with no message and no stack frames is empty", async () => {
+  assertEquals(await parseCrash({ kind: "error", message: "", stack: "garbage" }, ""), "Empty report");
+});
+
+Deno.test("HTTP statuses: kept right after an HTTP-ish word, not elsewhere", () => {
+  assert(normalizeMessage("Assistant returned 401") !== normalizeMessage("Assistant returned 503"));
+  assertEquals(normalizeMessage("Funder 452 not found"), normalizeMessage("Funder 517 not found"));
+  assertEquals(normalizeMessage("Error 401 Unauthorized"), "Error 401 Unauthorized");
+});
+
+Deno.test("a multi-line message's \"at …\" line isn't a stack frame", async () => {
+  const message = "Import failed\nat row 12: Jane Doe, phone 5551234";
+  const row = await parseCrash({
+    kind: "error", name: "Error", message,
+    stack: `Error: ${message}\n    at f (https://fundermatch.org/assets/a.js:1:2)`,
+  }, "");
+  if (typeof row === "string") throw new Error(row);
+  assertEquals(row.stack, "    at f (https://fundermatch.org/assets/a.js:1:2)");
+  assertEquals(normalizeMessage("I can't do that"), "I can't do that");
+});
+
+Deno.test("a value Postgres quotes in an input error is a value", () => {
+  assertEquals(normalizeMessage('invalid input syntax for type uuid: "abc"'), "invalid input syntax for type uuid: <str>");
+  assertEquals(normalizeMessage('invalid input syntax for type integer: "hello"'), normalizeMessage('invalid input syntax for type integer: "x"'));
+});
+
+Deno.test("parseVitals passes each metric's seq through, and checks it", () => {
+  const base = { id: "v5-1696300000000-1234567890123", name: "INP", value: 300, rating: "good", path: "/" };
+  const rows = parseVitals({ metrics: [{ ...base, seq: 7 }] });
+  if (typeof rows === "string") throw new Error(rows);
+  assertEquals(rows[0].seq, 7);
+  assertEquals(parseVitals({ metrics: [{ ...base, seq: -1 }] }), "Invalid seq");
+  assertEquals(parseVitals({ metrics: [{ ...base, seq: 1.5 }] }), "Invalid seq");
+});
+
+Deno.test("a quoted minified name is a name", () => {
+  assertEquals(
+    normalizeMessage("Cannot destructure property 'data' of 'e' as it is undefined."),
+    normalizeMessage("Cannot destructure property 'data' of 'Qr' as it is undefined."),
+  );
+  assertEquals(normalizeMessage("Xt is not a function. (In 'Xt(e)', 'Xt' is undefined)"), normalizeMessage("Ab is not a function. (In 'Ab(e)', 'Ab' is undefined)"));
+  assertEquals(normalizeMessage("Cannot read properties of undefined (reading 'name')"), "Cannot read properties of undefined (reading 'name')");
+});
+
+Deno.test("quoted dotted or hyphenated values are values; code paths stay", () => {
+  assertEquals(normalizeMessage("No account found for 'jane.doe'"), "No account found for <str>");
+  assertEquals(normalizeMessage("Project name 'my-secret-project' already exists"), "Project name <str> already exists");
+  assertEquals(normalizeMessage("(evaluating 'n.current.focus')"), "(evaluating '<id>.current.focus')");
+  assertEquals(normalizeMessage("(evaluating 'window.gtag.push')"), "(evaluating 'window.gtag.push')");
+});
+
+Deno.test("unquoted tokens are values", () => {
+  // Token-shaped fixtures built at runtime (not real secrets; kept out of the
+  // source so secret scanners don't flag them).
+  const token = (n: number) => Array.from({ length: n }, (_, i) => "aB3_"[i % 4]).join("");
+  assertEquals(normalizeMessage(`Invalid token: ${token(24)}`), "Invalid token: <tok>");
+  assertEquals(normalizeMessage(`Invalid token: ${token(16)}`), "Invalid token: <tok>");
+  // Ordinary long words and code names stay.
+  assertEquals(normalizeMessage("ResizeObserverEntry is undefined"), "ResizeObserverEntry is undefined");
+});
+
+Deno.test("schema-qualified table names stay: different tables are different bugs", () => {
+  assertEquals(normalizeMessage('relation "public.tracked_grants" does not exist'), 'relation "public.tracked_grants" does not exist');
+  assertEquals(normalizeMessage("No account found for 'jane.doe'"), "No account found for <str>");
+  // A value that only looks schema-qualified is still a value.
+  assertEquals(normalizeMessage("No project named 'net.jane'"), "No project named <str>");
+});

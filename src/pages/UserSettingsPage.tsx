@@ -5,8 +5,8 @@ import { useAuth } from '../contexts/AuthContext';
 import NavBar from '../components/NavBar';
 import ApiKeysSettings from '../components/ApiKeysSettings';
 import type { NotificationPreferences, TeamNotificationPreferences, CalendarFeed } from '../types';
+import { SUPABASE_URL } from '../lib/supabaseProject';
 
-const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const CALENDAR_FEED_URL = `${SUPABASE_URL}/functions/v1/calendar-feed`;
 
 const US_STATES = [
@@ -127,6 +127,7 @@ function UserSettingsContent() {
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [newFeedProjectId, setNewFeedProjectId] = useState<string>('');
   const [newFeedIncludeTasks, setNewFeedIncludeTasks] = useState(true);
+  const [newFeedIncludeCompliance, setNewFeedIncludeCompliance] = useState(true);
   const [copiedFeedId, setCopiedFeedId] = useState<string | null>(null);
 
   // Load profile
@@ -402,6 +403,7 @@ function UserSettingsContent() {
         body: JSON.stringify({
           project_id: newFeedProjectId || null,
           include_tasks: newFeedIncludeTasks,
+          include_compliance: newFeedIncludeCompliance,
         }),
       });
       if (res.ok) {
@@ -413,6 +415,7 @@ function UserSettingsContent() {
         }, ...prev]);
         setNewFeedProjectId('');
         setNewFeedIncludeTasks(true);
+        setNewFeedIncludeCompliance(true);
       }
     } catch (err) {
       console.error('Error creating feed:', err);
@@ -543,8 +546,9 @@ function UserSettingsContent() {
                 <div className="pb-6 border-b border-[#30363d]">
                   <h2 className="text-lg font-semibold text-white mb-4">Account</h2>
                   <div>
-                    <label className={labelClass}>Email address</label>
+                    <label htmlFor="account-email" className={labelClass}>Email address</label>
                     <input
+                      id="account-email"
                       type="email"
                       value={user?.email || ''}
                       disabled
@@ -718,10 +722,10 @@ function UserSettingsContent() {
               {/* Delete confirmation modal */}
               {showDeleteModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
-                  <div className="w-full max-w-md bg-[#161b22] border border-[#30363d] rounded-lg p-6">
+                  <div role="dialog" aria-modal="true" aria-labelledby="delete-account-title" className="w-full max-w-md bg-[#161b22] border border-[#30363d] rounded-lg p-6">
                     <div className="flex items-center gap-2 mb-3">
                       <AlertCircle className="w-5 h-5 text-red-400" />
-                      <h3 className="text-lg font-semibold text-white">Delete account</h3>
+                      <h3 id="delete-account-title" className="text-lg font-semibold text-white">Delete account</h3>
                     </div>
                     <p className="text-sm text-gray-400 mb-4">
                       This permanently deletes your account and all your data. This action cannot
@@ -731,6 +735,7 @@ function UserSettingsContent() {
                       type="text"
                       value={deleteConfirmText}
                       onChange={(e) => setDeleteConfirmText(e.target.value)}
+                      aria-label="Type DELETE to confirm account deletion"
                       placeholder="DELETE"
                       autoFocus
                       className={inputClass}
@@ -834,8 +839,8 @@ function UserSettingsContent() {
                     </div>
                     {weeklyDigest && (
                       <div>
-                        <label className="text-sm text-gray-400 mb-2 block">Send on</label>
-                        <select value={digestDay} onChange={(e) => setDigestDay(Number(e.target.value))} className={inputClass + ' max-w-[200px]'}>
+                        <label htmlFor="digest-day" className="text-sm text-gray-400 mb-2 block">Send on</label>
+                        <select id="digest-day" value={digestDay} onChange={(e) => setDigestDay(Number(e.target.value))} className={inputClass + ' max-w-[200px]'}>
                           {DAY_NAMES.map((name, idx) => (
                             <option key={idx} value={idx}>{name}</option>
                           ))}
@@ -920,8 +925,8 @@ function UserSettingsContent() {
                     <h3 className="text-md font-semibold text-white mb-4">Create new feed</h3>
                     <div className="space-y-4">
                       <div>
-                        <label className="text-sm text-gray-400 mb-2 block">Project (optional — leave blank for all projects)</label>
-                        <select value={newFeedProjectId} onChange={(e) => setNewFeedProjectId(e.target.value)} className={inputClass}>
+                        <label htmlFor="new-feed-project" className="text-sm text-gray-400 mb-2 block">Project (optional — leave blank for all projects)</label>
+                        <select id="new-feed-project" value={newFeedProjectId} onChange={(e) => setNewFeedProjectId(e.target.value)} className={inputClass}>
                           <option value="">All projects</option>
                           {projects.map(p => (
                             <option key={p.id} value={p.id}>{p.name}</option>
@@ -934,6 +939,13 @@ function UserSettingsContent() {
                           onChange={(e) => setNewFeedIncludeTasks(e.target.checked)}
                           className="w-4 h-4 rounded bg-[#0d1117] border border-[#30363d] text-blue-600 cursor-pointer" />
                         <span className="text-sm text-gray-300">Include task due dates</span>
+                      </label>
+
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <input type="checkbox" checked={newFeedIncludeCompliance}
+                          onChange={(e) => setNewFeedIncludeCompliance(e.target.checked)}
+                          className="w-4 h-4 rounded bg-[#0d1117] border border-[#30363d] text-blue-600 cursor-pointer" />
+                        <span className="text-sm text-gray-300">Include post-award report deadlines</span>
                       </label>
 
                       <button onClick={handleCreateFeed}

@@ -9,8 +9,9 @@ import SaveToProjectButton from '../components/SaveToProjectButton';
 import QuickSaveButton from '../components/QuickSaveButton';
 import { getEdgeFunctionHeaders } from '../lib/supabase';
 import { Funder } from '../types';
+import { SUPABASE_URL } from '../lib/supabaseProject';
 
-const EDGE_FUNCTION_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co/functions/v1/filter-funders';
+const EDGE_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/filter-funders`;
 
 interface FunderResult {
   ein: string;

@@ -75,7 +75,16 @@ BEGIN
 END;
 $$;
 
+-- REVOKE FROM PUBLIC is not sufficient on Supabase: default privileges grant
+-- EXECUTE to anon/authenticated EXPLICITLY on new functions in `public`, and a
+-- revoke of the PUBLIC pseudo-role does not remove those grants. Without the
+-- second statement this trigger function is left callable at
+-- /rest/v1/rpc/enforce_partner_permission_scope and trips advisor lints 0028 and
+-- 0029. Matches the ACL the project's other SECURITY DEFINER trigger functions
+-- already carry ({postgres, service_role}): handle_new_user_pipeline,
+-- handle_new_user_notifications, record_grant_status_change.
 REVOKE ALL ON FUNCTION public.enforce_partner_permission_scope() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.enforce_partner_permission_scope() FROM anon, authenticated;
 
 DROP TRIGGER IF EXISTS enforce_partner_permission_scope_trg ON public.project_access;
 CREATE TRIGGER enforce_partner_permission_scope_trg

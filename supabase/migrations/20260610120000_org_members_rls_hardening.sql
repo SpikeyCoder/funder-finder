@@ -29,68 +29,109 @@
 -- the team-invite edge function still works as branch (b) because the new
 -- row's invited_by chains to the caller's org root.
 
+-- ─────────────────────────────────────────────────────────────────────────────
+-- REPLAY GUARD (added 2026-07-28, FM-2026-07-28-01)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Same situation as 20260511180000: this migration is absent from the remote
+-- ledger (it was applied ad-hoc and re-stamped as 20260610135807), so a
+-- `supabase db push` would replay it against production.
+--
+-- The org_members_update / _delete policies below call public.org_admin_id,
+-- which 20260728120000 dropped when it moved the function to the `private`
+-- schema to close advisor lint 0029. Replaying unguarded therefore ABORTS with
+-- "function public.org_admin_id(uuid) does not exist" — after 20260511180000
+-- has already been skipped, leaving a half-applied push.
+--
+-- Guarding on the same predicate makes the replay a clean no-op instead: if
+-- private.org_admin_id(uuid) exists, 20260728120000 has run and the live
+-- policies already carry these rules (repointed at private.org_admin_id), so
+-- there is nothing to do. Behaviour on a database that has not seen
+-- 20260728120000 is unchanged.
+--
+-- This is a stopgap; the real fix is `supabase migration repair` to reconcile
+-- the ledger. See the header of 20260728120000 for the full drift write-up.
+-- ─────────────────────────────────────────────────────────────────────────────
+
 BEGIN;
 
-DROP POLICY IF EXISTS org_members_insert ON public.org_members;
-CREATE POLICY org_members_insert ON public.org_members
-  FOR INSERT
-  TO authenticated
-  WITH CHECK (
-    invited_by = (select auth.uid())
-    AND (
-      (
-        user_id = (select auth.uid())
-        AND NOT EXISTS (
-          SELECT 1 FROM public.org_members om_bootstrap
-          WHERE om_bootstrap.user_id = (select auth.uid())
+DO $guard$
+BEGIN
+
+IF to_regprocedure('private.org_admin_id(uuid)') IS NOT NULL THEN
+  RAISE NOTICE '20260610120000: superseded by 20260728120000 (org_admin_id lives in schema private); skipping.';
+ELSE
+
+  EXECUTE $stmt$ DROP POLICY IF EXISTS org_members_insert ON public.org_members $stmt$;
+  EXECUTE $stmt$
+    CREATE POLICY org_members_insert ON public.org_members
+      FOR INSERT
+      TO authenticated
+      WITH CHECK (
+        invited_by = (select auth.uid())
+        AND (
+          (
+            user_id = (select auth.uid())
+            AND NOT EXISTS (
+              SELECT 1 FROM public.org_members om_bootstrap
+              WHERE om_bootstrap.user_id = (select auth.uid())
+            )
+          )
+          OR
+          (
+            user_id <> (select auth.uid())
+            AND EXISTS (
+              SELECT 1 FROM public.org_members om_admin
+              WHERE om_admin.user_id = (select auth.uid())
+                AND om_admin.role = 'admin'
+                AND om_admin.status = 'active'
+            )
+          )
         )
       )
-      OR
-      (
-        user_id <> (select auth.uid())
-        AND EXISTS (
+  $stmt$;
+
+  EXECUTE $stmt$ DROP POLICY IF EXISTS org_members_update ON public.org_members $stmt$;
+  EXECUTE $stmt$
+    CREATE POLICY org_members_update ON public.org_members
+      FOR UPDATE
+      TO authenticated
+      USING (
+        EXISTS (
           SELECT 1 FROM public.org_members om_admin
           WHERE om_admin.user_id = (select auth.uid())
             AND om_admin.role = 'admin'
             AND om_admin.status = 'active'
         )
+        AND public.org_admin_id(user_id) =
+            (SELECT public.org_admin_id((SELECT auth.uid())))
       )
-    )
-  );
+      WITH CHECK (
+        public.org_admin_id(user_id) =
+            (SELECT public.org_admin_id((SELECT auth.uid())))
+      )
+  $stmt$;
 
-DROP POLICY IF EXISTS org_members_update ON public.org_members;
-CREATE POLICY org_members_update ON public.org_members
-  FOR UPDATE
-  TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.org_members om_admin
-      WHERE om_admin.user_id = (select auth.uid())
-        AND om_admin.role = 'admin'
-        AND om_admin.status = 'active'
-    )
-    AND public.org_admin_id(user_id) =
-        (SELECT public.org_admin_id((SELECT auth.uid())))
-  )
-  WITH CHECK (
-    public.org_admin_id(user_id) =
-        (SELECT public.org_admin_id((SELECT auth.uid())))
-  );
+  EXECUTE $stmt$ DROP POLICY IF EXISTS org_members_delete ON public.org_members $stmt$;
+  EXECUTE $stmt$
+    CREATE POLICY org_members_delete ON public.org_members
+      FOR DELETE
+      TO authenticated
+      USING (
+        EXISTS (
+          SELECT 1 FROM public.org_members om_admin
+          WHERE om_admin.user_id = (select auth.uid())
+            AND om_admin.role = 'admin'
+            AND om_admin.status = 'active'
+        )
+        AND public.org_admin_id(user_id) =
+            (SELECT public.org_admin_id((SELECT auth.uid())))
+        AND user_id <> (select auth.uid())
+      )
+  $stmt$;
 
-DROP POLICY IF EXISTS org_members_delete ON public.org_members;
-CREATE POLICY org_members_delete ON public.org_members
-  FOR DELETE
-  TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.org_members om_admin
-      WHERE om_admin.user_id = (select auth.uid())
-        AND om_admin.role = 'admin'
-        AND om_admin.status = 'active'
-    )
-    AND public.org_admin_id(user_id) =
-        (SELECT public.org_admin_id((SELECT auth.uid())))
-    AND user_id <> (select auth.uid())
-  );
+END IF;
+
+END
+$guard$;
 
 COMMIT;

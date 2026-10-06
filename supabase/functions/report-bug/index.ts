@@ -1,6 +1,7 @@
 import { ipRateLimit } from "../_shared/rate_limit.ts";
 import { corsHeaders as _sharedCorsHeaders } from "../_shared/cors.ts";
 import { sanitiseError } from "../_shared/errors.ts";
+import { attachUrlToTrelloCard, openTrelloCard } from "../_shared/trello.ts";
 
 // FM-2026-05-31-01: replaced the inline ALLOWED_ORIGINS Set + corsHeaders
 // function with the shared `_shared/cors.ts` helper so the report-bug
@@ -153,65 +154,35 @@ Deno.serve(async (req) => {
     const cardName = `${prefix} ${titleText}${payload.description.trim().length > 60 ? '...' : ''}`;
     const cardDesc = buildCardDescription(payload);
 
-    const TRELLO_API_KEY = Deno.env.get('TRELLO_API_KEY');
-    const TRELLO_TOKEN = Deno.env.get('TRELLO_TOKEN');
-    const TRELLO_LIST_ID = Deno.env.get('TRELLO_LIST_ID');
+    // The shared Trello client: credentials in a header (never in a URL that
+    // could be logged), card fields in the body, and a timeout.
+    const card = await openTrelloCard({ name: cardName, desc: cardDesc }, 10_000);
 
-    if (!TRELLO_API_KEY || !TRELLO_TOKEN || !TRELLO_LIST_ID) {
+    if (card === 'unconfigured') {
       console.error('Missing Trello configuration — check edge function secrets');
       return new Response(JSON.stringify({ error: 'Server configuration error' }), {
         status: 500,
         headers: { ...cors, 'Content-Type': 'application/json' },
       });
     }
-
-    // Create the Trello card
-    const cardParams = new URLSearchParams({
-      key: TRELLO_API_KEY,
-      token: TRELLO_TOKEN,
-      idList: TRELLO_LIST_ID,
-      name: cardName,
-      desc: cardDesc,
-      pos: 'top',
-    });
-
-    const cardResp = await fetch(`https://api.trello.com/1/cards?${cardParams.toString()}`, {
-      method: 'POST',
-      headers: { Accept: 'application/json' },
-    });
-
-    if (!cardResp.ok) {
-      const errBody = await cardResp.text();
-      console.error('Trello card creation failed:', cardResp.status, errBody);
+    if (card === 'timeout') {
+      // Trello may still have opened the card: say so, so the visitor
+      // doesn't send a duplicate straight away.
+      return new Response(
+        JSON.stringify({ error: 'This is taking longer than usual. Your report may still have arrived; please wait a minute before sending it again.' }),
+        { status: 504, headers: { ...cors, 'Content-Type': 'application/json' } },
+      );
+    }
+    if (card === null) {
       return new Response(JSON.stringify({ error: 'Failed to create report card' }), {
         status: 502,
         headers: { ...cors, 'Content-Type': 'application/json' },
       });
     }
 
-    const card = await cardResp.json();
-
-    // Attach screenshot if provided
-    if (payload.screenshotUrl) {
-      const attachParams = new URLSearchParams({
-        key: TRELLO_API_KEY,
-        token: TRELLO_TOKEN,
-        url: payload.screenshotUrl,
-        name: 'screenshot.png',
-      });
-
-      const attachResp = await fetch(
-        `https://api.trello.com/1/cards/${card.id}/attachments?${attachParams.toString()}`,
-        {
-          method: 'POST',
-          headers: { Accept: 'application/json' },
-        },
-      );
-
-      if (!attachResp.ok) {
-        console.warn('Screenshot attachment failed:', attachResp.status);
-        // Non-blocking — card was still created
-      }
+    // Attach screenshot if provided. Non-blocking: the card was still created.
+    if (payload.screenshotUrl && card.id) {
+      await attachUrlToTrelloCard(card.id, payload.screenshotUrl, 'screenshot.png');
     }
 
     return new Response(JSON.stringify({ ok: true, cardId: card.id }), {

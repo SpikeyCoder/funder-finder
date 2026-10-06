@@ -81,7 +81,12 @@ export default function LoginModal({ pendingFunder, pendingFunders, onClose }: L
       className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-sm px-4 pt-6"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="relative w-full max-w-sm bg-[#161b22] border border-[#30363d] rounded-2xl p-8 shadow-2xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="login-modal-title"
+        className="relative w-full max-w-sm bg-[#161b22] border border-[#30363d] rounded-2xl p-8 shadow-2xl"
+      >
         {/* Close button */}
         <button
           onClick={onClose}
@@ -101,7 +106,7 @@ export default function LoginModal({ pendingFunder, pendingFunders, onClose }: L
         </div>
 
         {/* Heading */}
-        <h2 className="text-xl font-bold text-white text-center mb-2">
+        <h2 id="login-modal-title" className="text-xl font-bold text-white text-center mb-2">
           {pendingFunders && pendingFunders.length > 1
             ? `Save ${pendingFunders.length} funders to your prospects`
             : 'Save funders for later'}

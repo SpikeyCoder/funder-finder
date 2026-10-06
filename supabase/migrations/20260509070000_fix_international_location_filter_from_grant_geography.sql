@@ -131,6 +131,22 @@ begin
 end;
 $$;
 
+-- ─── hardening (added 2026-07-28, FM-2026-07-28-01) ─────────────────────────
+-- Applying this migration originally raised advisor lint 0013 (ERROR) plus
+-- 0028/0029 (WARN), because:
+--   * the profile table lands in `public` with RLS off, so PostgREST exposes it;
+--   * on Supabase, a newly created function in `public` inherits EXECUTE for
+--     anon/authenticated from default privileges. That made the refresh — a
+--     TRUNCATE + full rebuild over ~7.3M rows — callable by anyone at
+--     /rest/v1/rpc/refresh_foundation_grant_location_profiles. A DoS vector.
+-- Matches the ACL the pre-existing sibling refresh functions already carry
+-- ({postgres, service_role}). RLS is enabled with NO policy: the only consumer
+-- is filter_funders_grant_level, which is SECURITY DEFINER owned by postgres and
+-- so bypasses RLS as table owner. Nothing needs direct read access.
+revoke all on function public.refresh_foundation_grant_location_profiles() from public;
+revoke execute on function public.refresh_foundation_grant_location_profiles() from anon, authenticated;
+alter table public.foundation_grant_location_profiles enable row level security;
+
 -- Backfill profiles for existing grant data.
 select public.refresh_foundation_grant_location_profiles();
 

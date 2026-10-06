@@ -6,41 +6,51 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "lint": "eslint src",
     "preview": "vite preview",
+    "prerender": "node scripts/prerender.mjs",
+    "test": "node --test tests/*.test.mjs",
     "eval:build-cases": "node scripts/build-eval-cases.js",
     "eval:ranker": "node scripts/eval-ranker.js",
     "eval:tune": "node scripts/tune-ranker-weights.js",
     "eval:export-signals": "node scripts/export-search-signal-labels.js"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.108.2",
-    "dompurify": "^3.4.10",
+    "@supabase/supabase-js": "^2.117.2",
+    "dompurify": "^3.4.16",
     "html2canvas": "^1.4.1",
     "lucide-react": "^0.577.0",
-    "papaparse": "^5.5.3",
+    "papaparse": "^5.7.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.30.4",
+    "react-router-dom": "^7.18.4",
+    "web-vitals": "^5.3.0",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
-    "@axe-core/cli": "^4.11.3",
+    "@axe-core/cli": "^4.13.0",
     "@types/papaparse": "^5.5.2",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
-    "@vitejs/plugin-react": "^6.0.2",
-    "autoprefixer": "^10.5.0",
-    "axe-core": "^4.12.1",
+    "@vitejs/plugin-react": "^6.1.1",
+    "autoprefixer": "^10.6.1",
+    "axe-core": "^4.13.0",
+    "eslint": "^10.12.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "jsdom": "^29.1.1",
-    "postcss": "^8.5.15",
+    "postcss": "^8.5.28",
     "puppeteer": "^24.43.1",
     "tailwindcss": "^3.3.6",
     "typescript": "^5.2.2",
-    "vite": "^8.0.16"
+    "typescript-eslint": "^8.71.1",
+    "vite": "^8.3.2"
   },
   "overrides": {
-    "ws": ">=8.20.1",
+    "ws": ">=8.21.0",
     "tmp": ">=0.2.7",
-    "axios": ">=1.15.0"
+    "axios": ">=1.15.0",
+    "form-data": ">=4.0.6",
+    "js-yaml": ">=5.4.2",
+    "undici": ">=7.28.0"
   }
 }

@@ -9,6 +9,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
 import { corsHeaders as _corsHeaders } from "../_shared/cors.ts";
+import { cronAuthorized } from "../_shared/cron_auth.ts";
 
 const CORS_HEADERS_OPTS = { methods: "POST, OPTIONS" } as const;
 function CORS_HEADERS(req: Request | null = null): Record<string, string> {
@@ -22,6 +23,15 @@ function jsonResponse(req: Request, data: unknown, status = 200) {
   });
 }
 
+// FM-2026-06-17-03: defense-in-depth cron-only auth gate. This endpoint is
+// designed to be invoked by pg_cron / the Supabase scheduler -- it uses
+// the service-role key internally and has no per-user authorization.
+// The Supabase gateway already requires a valid project apikey, but
+// that key is also embedded in the public SPA bundle, so the caller must
+// also present CRON_SECRET (`X-Cron-Secret: <value>` or
+// `Authorization: Bearer cron:<value>`). The shared check fails closed:
+// with CRON_SECRET unset, every call is refused (it used to be allowed).
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: CORS_HEADERS(req) });
@@ -30,6 +40,14 @@ Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') {
     return jsonResponse(req, { error: 'Method not allowed' }, 405);
   }
+
+// FM-2026-06-17-03: require CRON_SECRET (fails closed when unset).
+if (!cronAuthorized(req, Deno.env.get('CRON_SECRET') || '')) {
+  return new Response(JSON.stringify({ error: 'forbidden' }), {
+    status: 403,
+    headers: { ...CORS_HEADERS(req), 'Content-Type': 'application/json' },
+  });
+}
 
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);

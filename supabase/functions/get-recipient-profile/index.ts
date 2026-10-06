@@ -1,5 +1,7 @@
 import { corsHeaders } from '../_shared/cors.ts';
 import { sanitiseError } from '../_shared/errors.ts';
+import { ipRateLimit } from "../_shared/rate_limit.ts";
+import { einDigits, einVariants } from '../_shared/ein.ts';
 /**
  * get-recipient-profile — Supabase Edge Function
  *
@@ -8,6 +10,14 @@ import { sanitiseError } from '../_shared/errors.ts';
  *
  * Input:  { recipientId?: string, ein?: string }
  * Output: RecipientProfile (see src/types.ts)
+ *
+ * FM-2026-06-17-02 (pen-test): added a per-IP rate limit. The endpoint
+ * fetches each grantee's latest 990 financials from the ProPublica
+ * Nonprofit Explorer API on every uncached miss, so without an IP cap
+ * a single attacker can both burn ProPublica's per-IP request budget
+ * (which then 429s our shared egress IP for legitimate users) and
+ * spin our own DB. Threshold (30/min) matches `match-funders` and is
+ * far above any plausible legitimate UX (one profile per click).
  */
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -134,6 +144,17 @@ Deno.serve(async (req) => {
     });
   }
 
+  // FM-2026-06-17-02: per-IP rate limit (defense-in-depth) -- protects
+  // both the DB query path and the third-party ProPublica 990 API call
+  // that this endpoint fans out to.
+  const limited = await ipRateLimit(req, {
+    namespace: 'get-recipient-profile',
+    limit: 30,
+    windowMs: 60_000,
+    extraHeaders: headers,
+  });
+  if (!limited.allow && limited.response) return limited.response;
+
   try {
     const body = await req.json();
     const ein = typeof body?.ein === 'string' ? body.ein.trim() : '';
@@ -166,20 +187,61 @@ Deno.serve(async (req) => {
       );
     }
 
+    // EINs aren't consistently zero-padded across tables (peer links may drop
+    // the leading zero), so match either form — for an EIN-shaped id only. A
+    // dashed id is used without its dash from here on (990 lookup, response).
+    const digits = einDigits(lookupEin);
+    if (digits) lookupEin = digits;
+    const einFilter = digits
+      ? `in.(${encodeURIComponent(einVariants(digits).map((v) => `"${v}"`).join(','))})`
+      : `eq.${encodeURIComponent(lookupEin)}`;
+
     // Fetch grants and 990 budget concurrently
     const [grants, budget990] = await Promise.all([
       restQuery(
         'foundation_grants',
-        `grantee_ein=eq.${encodeURIComponent(lookupEin)}&select=foundation_id,grant_year,grant_amount,grantee_name,grantee_ein,grantee_city,grantee_state&order=grant_year.desc&limit=10000`,
+        `grantee_ein=${einFilter}&select=foundation_id,grant_year,grant_amount,grantee_name,grantee_ein,grantee_city,grantee_state&order=grant_year.desc&limit=10000`,
       ) as Promise<GrantRow[]>,
       fetchGrantee990Budget(lookupEin),
     ]);
 
     if (grants.length === 0) {
-      return new Response(
-        JSON.stringify({ error: 'Recipient not found' }),
-        { status: 404, headers: { ...headers, 'Content-Type': 'application/json' } },
-      );
+      // FM-2026-10-02-02: organizations added through the request queue
+      // (process-organization-requests) exist in recipient_organizations
+      // before any grants to them are ingested. Serve an empty-history
+      // profile from that row plus the 990 data instead of a 404.
+      const orgs = (await restQuery(
+        'recipient_organizations',
+        // Only an organization with no grants on record (e.g. queue-added):
+        // one whose stored totals say otherwise but whose grants weren't
+        // found is a data problem, still a 404 as before.
+        `ein=${einFilter}&or=(grant_count.is.null,grant_count.eq.0)` +
+          '&select=ein,name,primary_city,primary_state,ntee_codes&limit=1',
+      )) as Array<{
+          ein: string;
+          name: string;
+          primary_city: string | null;
+          primary_state: string | null;
+          ntee_codes: string[] | null;
+        }>;
+      if (orgs.length === 0) {
+        return new Response(
+          JSON.stringify({ error: 'Recipient not found' }),
+          { status: 404, headers: { ...headers, 'Content-Type': 'application/json' } },
+        );
+      }
+      const org = orgs[0];
+      return new Response(JSON.stringify({
+        id: org.ein,
+        ein: org.ein,
+        name: org.name,
+        location: { city: org.primary_city, state: org.primary_state },
+        fundingSummary: { totalFunding: 0, grantCount: 0, funderCount: 0, firstGrantYear: null, lastGrantYear: null },
+        yearlyTrends: [],
+        topFunders: [],
+        ntee_codes: org.ntee_codes ?? [],
+        budget: budget990,
+      }), { headers: { ...headers, 'Content-Type': 'application/json' } });
     }
 
     // Determine name, location from most recent grant

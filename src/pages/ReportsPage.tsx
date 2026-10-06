@@ -3,8 +3,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
 import { Download, Filter, TrendingUp, DollarSign, Target, Award, Clock, BarChart3, PieChart } from 'lucide-react';
+import { SUPABASE_URL } from '../lib/supabaseProject';
 
-const SUPABASE_URL = 'https://tgtotjvdubhjxzybmdex.supabase.co';
 const REPORTS_URL = `${SUPABASE_URL}/functions/v1/reports-portfolio`;
 const GENERATE_URL = `${SUPABASE_URL}/functions/v1/generate-report`;
 
@@ -108,19 +108,19 @@ export default function ReportsPage() {
             <p className="text-gray-400 text-sm mt-1">Portfolio performance and analytics</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <select value={filterPeriod} onChange={e => setFilterPeriod(e.target.value)}
+            <select value={filterPeriod} onChange={e => setFilterPeriod(e.target.value)} aria-label="Filter by time period"
               className="bg-[#161b22] border border-[#30363d] rounded-lg px-3 py-2 text-sm text-white">
               <option value="all">All Time</option>
               <option value="year">This Year</option>
               <option value="quarter">This Quarter</option>
               <option value="month">This Month</option>
             </select>
-            <select value={filterProject} onChange={e => setFilterProject(e.target.value)}
+            <select value={filterProject} onChange={e => setFilterProject(e.target.value)} aria-label="Filter by project"
               className="bg-[#161b22] border border-[#30363d] rounded-lg px-3 py-2 text-sm text-white">
               <option value="all">All Projects</option>
               {byProject.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
             </select>
-            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} aria-label="Filter by status"
               className="bg-[#161b22] border border-[#30363d] rounded-lg px-3 py-2 text-sm text-white">
               <option value="all">All Statuses</option>
               {pipeline.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
