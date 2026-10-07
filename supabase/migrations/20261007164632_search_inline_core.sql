@@ -26,12 +26,12 @@
 -- search) and org_search_refresh_alt() (which decides whether an IRS name
 -- differs enough to keep as an alias) call it. A copy rather than an
 -- inlinable org_search_core(): inlining needs it to drop its pinned
--- search_path (see 20260614120000), and org_search_refresh_alt() already
--- writes a per-row expression out for the same reason. The DO block below
--- checks the copy against org_search_core() on edge cases and on every stored
--- name and alias before the function is replaced, and a COMMENT on
--- org_search_core() points here: if it changes, change this copy with it (and
--- the check with both), or exact matches stop ranking first.
+-- search_path (see 20260614120000). org_search_refresh_alt() keeps calling
+-- the function, so it follows any change to it; only this copy doesn't.
+-- The DO block below checks the copy against org_search_core() on edge cases
+-- and on every stored name and alias before the function is replaced, and a
+-- COMMENT on org_search_core() points here: if it changes, change this copy
+-- with it, or exact matches stop ranking first.
 --
 -- (Applied to production on 2026-10-07 as version 20261007164632, by the
 -- Supabase MCP, without this file's comments; the COMMENT ON FUNCTION was
