@@ -14,20 +14,30 @@
 -- FIX
 -- ---
 -- The same expression, written out where search_organizations computes _core.
--- Nothing else changes: on 79 queries (named cases and a sample of real names,
--- prefixes and partial words, some with a state) every result list was
--- identical, in the same order; "community foundation" went from 331 to
--- 252 ms warm, "foundation" 150 to 110 ms, "hospital" 88 to 66 ms.
+-- Nothing else changes: on 230 queries (named cases and a sample of stored
+-- names, prefixes and partial words, some with a state) every result list
+-- was identical, in the same order, before and after; "community foundation"
+-- went from 331 to 254 ms warm, "foundation" 150 to 107 ms, "hospital" 88 to
+-- 66 ms.
 -- (Smaller candidate caps were faster still but changed the top result for
 -- 5-7% of those queries, mostly partly typed words, so they're not done.)
 --
--- org_search_core() stays: org_search's stored match columns and the query's
--- own v_core use it. The DO block below checks the written-out copy against
--- it on edge cases and on every stored name (and alias) before the function
--- is replaced, so the two can't silently disagree; if org_search_core()
--- changes, change this copy with it.
+-- org_search_core() stays: search_organizations' own v_core (once per
+-- search) and org_search_refresh_alt() (which decides whether an IRS name
+-- differs enough to keep as an alias) call it. A copy rather than an
+-- inlinable org_search_core(): inlining needs it to drop its pinned
+-- search_path (see 20260614120000), and org_search_refresh_alt() already
+-- writes a per-row expression out for the same reason. The DO block below
+-- checks the copy against org_search_core() on edge cases and on every stored
+-- name and alias before the function is replaced, and a COMMENT on
+-- org_search_core() points here: if it changes, change this copy with it (and
+-- the check with both), or exact matches stop ranking first.
 --
--- Rollback: supabase/rollbacks/20261007120000_search_inline_core.down.sql
+-- (Applied to production on 2026-10-07 as version 20261007164632, by the
+-- Supabase MCP, without this file's comments; the COMMENT ON FUNCTION was
+-- run there separately afterwards.)
+--
+-- Rollback: supabase/rollbacks/20261007164632_search_inline_core.down.sql
 
 DO $$
 DECLARE
@@ -50,6 +60,10 @@ BEGIN
       quote_literal(v_bad);
   END IF;
 END $$;
+
+COMMENT ON FUNCTION public.org_search_core(text) IS
+  'Copied out in search_organizations (_core in its measured CTE, migration '
+  '20261007164632): change both together.';
 
 CREATE OR REPLACE FUNCTION public.search_organizations(
   p_query text, p_limit integer DEFAULT 15, p_state text DEFAULT NULL)

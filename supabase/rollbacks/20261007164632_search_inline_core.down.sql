@@ -1,9 +1,12 @@
--- Rollback for 20261007120000_search_inline_core.sql: search_organizations
--- as of 20261005120000 (calling public.org_search_core() per candidate row).
+-- Rollback for 20261007164632_search_inline_core.sql: search_organizations
+-- as of 20261005120000 (calling public.org_search_core() per candidate row),
+-- and org_search_core() without its COMMENT.
 -- Kept outside supabase/migrations/ so `supabase db push` never applies it.
 --
 -- Apply manually (ON_ERROR_STOP so a failure exits non-zero):
--- psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/rollbacks/20261007120000_search_inline_core.down.sql
+-- psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/rollbacks/20261007164632_search_inline_core.down.sql
+
+COMMENT ON FUNCTION public.org_search_core(text) IS NULL;
 
 CREATE OR REPLACE FUNCTION public.search_organizations(
   p_query text, p_limit integer DEFAULT 15, p_state text DEFAULT NULL)
