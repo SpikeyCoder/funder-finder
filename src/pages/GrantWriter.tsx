@@ -102,7 +102,8 @@ function renderMarkdown(text: string): string {
 export default function GrantWriter() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, userProfile, profileLoaded, saveUserProfile } = useAuth();
+  const { user, loading: authLoading, userProfile, profileLoaded, saveUserProfile } = useAuth();
+  const profileBudget = profileBudgetLabel(userProfile?.budget_range);
   const funder: Funder | null = (location.state as any)?.funder ?? null;
 
   // Page title
@@ -126,7 +127,7 @@ export default function GrantWriter() {
 
   // ── Form state ──────────────────────────────────────────────────────────
 
-  const [keptForm] = useState<{ funderId: string; mission: string; orgDetails: OrgDetails } | null>(() => {
+  console.log('KEPT-RENDER'); const [keptForm] = useState<{ funderId: string; mission: string; orgDetails: OrgDetails } | null>(() => {
     try {
       const saved = JSON.parse(sessionStorage.getItem(FORM_KEY) || 'null');
       return saved && funder && saved.funderId === funder.id ? saved : null;
@@ -134,7 +135,10 @@ export default function GrantWriter() {
       return null;
     }
   });
-  useEffect(() => sessionStorage.removeItem(FORM_KEY), []);
+  // Restored once; another funder's kept form stays for when that one reopens
+  useEffect(() => {
+    console.log('KEPT-EFFECT', !!keptForm); if (keptForm) sessionStorage.removeItem(FORM_KEY);
+  }, [keptForm]);
 
   const [mission, setMission] = useState(
     () => keptForm?.mission ?? (sessionStorage.getItem('ff_mission') || ''),
@@ -152,9 +156,25 @@ export default function GrantWriter() {
     timeline: '',
   });
 
-  /** Keep the form for this funder while the user signs in or edits their profile. */
+  /**
+   * Keep the form for this funder while the user signs in or edits their
+   * profile. Values still as the profile filled them are left out, so on
+   * return they're filled in again from the profile, edits included.
+   */
   const keepForm = () => {
-    if (funder) sessionStorage.setItem(FORM_KEY, JSON.stringify({ funderId: funder.id, mission, orgDetails }));
+    if (!funder) return;
+    const unlessFromProfile = (value: string, fromProfile: string | null | undefined) =>
+      fromProfile && value === fromProfile ? '' : value;
+    sessionStorage.setItem(FORM_KEY, JSON.stringify({
+      funderId: funder.id,
+      mission: unlessFromProfile(mission, userProfile?.mission_statement),
+      orgDetails: {
+        ...orgDetails,
+        orgName: unlessFromProfile(orgDetails.orgName, userProfile?.organization_name),
+        budget: unlessFromProfile(orgDetails.budget, profileBudget),
+        geoFocus: unlessFromProfile(orgDetails.geoFocus, userProfile?.location_served),
+      },
+    }));
   };
 
   const [showOrg, setShowOrg] = useState(false);
@@ -169,7 +189,7 @@ export default function GrantWriter() {
     if (userProfile.mission_statement) setMission(prev => prev || userProfile.mission_statement!);
     const fromProfile: Partial<OrgDetails> = {
       orgName: userProfile.organization_name ?? undefined,
-      budget: profileBudgetLabel(userProfile.budget_range) ?? undefined,
+      budget: profileBudget ?? undefined,
       geoFocus: userProfile.location_served ?? undefined,
     };
     setOrgDetails(prev => ({
@@ -184,7 +204,7 @@ export default function GrantWriter() {
   // Whether Organization Details show the saved org profile
   const orgFromProfile = !!userProfile && (
     (!!userProfile.organization_name && orgDetails.orgName === userProfile.organization_name)
-    || (!!profileBudgetLabel(userProfile.budget_range) && orgDetails.budget === profileBudgetLabel(userProfile.budget_range))
+    || (!!profileBudget && orgDetails.budget === profileBudget)
   );
 
   // ── Upload state ────────────────────────────────────────────────────────
@@ -750,7 +770,7 @@ export default function GrantWriter() {
               {showOrg && (
                 <div className="px-5 pb-5 bg-[#0d1117] grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <p className="sm:col-span-2 pt-4 text-xs text-gray-400">
-                    {!user ? (
+                    {authLoading ? null : !user ? (
                       <>
                         <Link
                           to="/login"

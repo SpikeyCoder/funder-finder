@@ -1,3 +1,5 @@
+import { BudgetBand } from '../types';
+
 // Annual budget ranges as Settings and Signup offer them (user_profiles.budget_range).
 export const BUDGET_RANGES = [
   { value: '0-250k', label: 'Under $250,000' },
@@ -9,7 +11,7 @@ export const BUDGET_RANGES = [
 ];
 
 // Onboarding stores its own bands (BudgetBand) in the same column.
-const BUDGET_BAND_RANGES: Record<string, string> = {
+const BUDGET_BAND_RANGES: Record<Exclude<BudgetBand, 'prefer_not_to_say'>, string> = {
   under_250k: 'Under $250,000',
   '250k_1m': '$250,000 - $1,000,000',
   '1m_5m': '$1,000,000 - $5,000,000',
@@ -19,5 +21,6 @@ const BUDGET_BAND_RANGES: Record<string, string> = {
 /** A user_profiles.budget_range value as text, from either vocabulary; null if unknown. */
 export function profileBudgetLabel(value: string | null | undefined): string | null {
   if (!value) return null;
-  return BUDGET_RANGES.find((range) => range.value === value)?.label ?? BUDGET_BAND_RANGES[value] ?? null;
+  return BUDGET_RANGES.find((range) => range.value === value)?.label
+    ?? (BUDGET_BAND_RANGES as Record<string, string>)[value] ?? null;
 }

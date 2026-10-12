@@ -289,7 +289,7 @@ function UserSettingsContent() {
       }
 
       // Pages that read the profile from context (e.g. the Grant Writer) see the change
-      refreshUserProfile().catch(() => {});
+      await refreshUserProfile().catch(() => {});
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
