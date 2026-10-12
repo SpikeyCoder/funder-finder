@@ -16,6 +16,8 @@ export const DISCOVERY_CONCURRENCY = 8;
 export const DISCOVERY_MISS_RECHECK_MS = 30 * 24 * 60 * 60 * 1000;
 /** A homepage that failed to load is retried after this long. */
 export const DISCOVERY_ERROR_RECHECK_MS = 24 * 60 * 60 * 1000;
+/** A homepage still loading after this long when the budget runs out counts as failed. */
+export const DISCOVERY_HUNG_MS = 5_000;
 
 const MAX_HTML_CHARS = 500_000;
 
@@ -83,7 +85,8 @@ export async function fetchHomepageHtml(
       redirect: 'follow',
     }), signal);
     const ct = res.headers.get('content-type') || '';
-    if (!res.ok || !ct.includes('html') || !res.body) {
+    // A missing Content-Type is read as HTML; servers that omit it usually serve pages
+    if (!res.ok || (ct && !ct.includes('html')) || !res.body) {
       res.body?.cancel().catch(() => {});
       return res.ok || res.status === 404 || res.status === 410 ? { kind: 'miss' } : { kind: 'error' };
     }
@@ -168,13 +171,14 @@ export interface DiscoveryResult {
   found: Map<string, string>;
   /** Funders whose homepage has no grant page: scanned without one, 404/410, or not HTML. */
   missed: string[];
-  /** Funders whose homepage failed to load. */
+  /** Funders whose homepage failed to load, or was still loading after DISCOVERY_HUNG_MS when the budget ran out. */
   failed: string[];
 }
 
 export interface DiscoveryOptions {
   budgetMs?: number;
   concurrency?: number;
+  hungMs?: number;
   fetchFn?: typeof fetch;
 }
 
@@ -182,11 +186,14 @@ export interface DiscoveryOptions {
  * Discover grant page URLs for funders missing apply_url, in the given order,
  * `concurrency` homepages at a time (each website fetched once), returning
  * once all are scanned or `budgetMs` has passed, whichever is first. Funders
- * not reached, or cut off by the budget, are in none of the result's lists.
+ * not reached, or cut off by the budget before DISCOVERY_HUNG_MS, are in none
+ * of the result's lists.
  */
 export async function discoverGrantUrlsInBatch(
   funders: { id: string; website: string }[],
-  { budgetMs = DISCOVERY_BUDGET_MS, concurrency = DISCOVERY_CONCURRENCY, fetchFn = fetch }: DiscoveryOptions = {},
+  {
+    budgetMs = DISCOVERY_BUDGET_MS, concurrency = DISCOVERY_CONCURRENCY, hungMs = DISCOVERY_HUNG_MS, fetchFn = fetch,
+  }: DiscoveryOptions = {},
 ): Promise<DiscoveryResult> {
   const result: DiscoveryResult = { found: new Map(), missed: [], failed: [] };
   if (funders.length === 0 || budgetMs <= 0) return result;
@@ -203,8 +210,13 @@ export async function discoverGrantUrlsInBatch(
   const worker = async () => {
     while (next < sites.length && !deadline.aborted) {
       const [url, ids] = sites[next++];
+      const startedAt = Date.now();
       const page = await fetchHomepageHtml(url, deadline, fetchFn);
-      if (deadline.aborted) return;
+      if (deadline.aborted) {
+        // A site that hangs every time would otherwise hold a slot on every search
+        if (Date.now() - startedAt >= hungMs) result.failed.push(...ids);
+        return;
+      }
       if (page.kind === 'error') {
         result.failed.push(...ids);
         continue;

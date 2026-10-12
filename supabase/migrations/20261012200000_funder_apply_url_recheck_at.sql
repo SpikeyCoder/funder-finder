@@ -11,7 +11,8 @@
 -- after one is scanned without a grant link (or is gone, or not HTML), 1 day
 -- after one fails to load. match-funders skips funders until then. It reads
 -- the column in its own query and ignores errors, so the function works
--- before and after this migration. Changing a funder's website clears it.
+-- before and after this migration. Changing a funder's website clears it,
+-- and the discovered_apply_url found on the old site.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 ALTER TABLE public.funders
@@ -20,22 +21,26 @@ ALTER TABLE public.funders
 COMMENT ON COLUMN public.funders.apply_url_recheck_at IS
   'When match-funders may next scan this funder''s homepage for a grant application link: '
   '30 days after a scan finds none, 1 day after the homepage fails to load; cleared when '
-  'website changes (FM-2026-10-12-01).';
+  'website changes, with discovered_apply_url (FM-2026-10-12-01).';
 
-CREATE OR REPLACE FUNCTION public.funders_clear_apply_url_recheck()
+CREATE OR REPLACE FUNCTION public.funders_reset_apply_url_discovery()
  RETURNS trigger
  LANGUAGE plpgsql
  SET search_path TO 'public'
 AS $function$
 BEGIN
   NEW.apply_url_recheck_at := NULL;
+  -- Unless this update sets it for the new site too
+  IF NEW.discovered_apply_url IS NOT DISTINCT FROM OLD.discovered_apply_url THEN
+    NEW.discovered_apply_url := NULL;
+  END IF;
   RETURN NEW;
 END;
 $function$;
 
-DROP TRIGGER IF EXISTS funders_clear_apply_url_recheck ON public.funders;
-CREATE TRIGGER funders_clear_apply_url_recheck
+DROP TRIGGER IF EXISTS funders_reset_apply_url_discovery ON public.funders;
+CREATE TRIGGER funders_reset_apply_url_discovery
   BEFORE UPDATE OF website ON public.funders
   FOR EACH ROW
   WHEN (NEW.website IS DISTINCT FROM OLD.website)
-  EXECUTE FUNCTION public.funders_clear_apply_url_recheck();
+  EXECUTE FUNCTION public.funders_reset_apply_url_discovery();

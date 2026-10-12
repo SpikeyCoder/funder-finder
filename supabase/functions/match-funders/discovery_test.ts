@@ -27,7 +27,7 @@ function stalledBody(signal?: AbortSignal | null) {
 const never = () => new Promise<Response>(() => {});
 
 type Site =
-  | "apply" | "none" | "stall-body" | "stall-headers" | "404" | "503" | "pdf"
+  | "apply" | "none" | "stall-body" | "stall-headers" | "404" | "503" | "pdf" | "no-type"
   | "redirect" | "redirect-in" | "redirect-sub";
 
 function fakeFetch(sites: Record<string, Site>) {
@@ -42,6 +42,11 @@ function fakeFetch(sites: Record<string, Site>) {
       case "stall-headers": return never();
       case "404": return Promise.resolve(new Response("nope", { status: 404 }));
       case "503": return Promise.resolve(new Response("busy", { status: 503 }));
+      case "no-type": {
+        const res = new Response(APPLY);
+        res.headers.delete("content-type");
+        return Promise.resolve(res);
+      }
       case "redirect-in": {
         // fund.org served from https://www.fund.org/en/ after a redirect
         const res = html(page('<a href="apply">Apply</a>'));
@@ -90,13 +95,15 @@ Deno.test("fetchHomepageHtml: the signal bounds a stalled body, not just the hea
 });
 
 Deno.test("fetchHomepageHtml: definite misses vs failures that may pass", async () => {
-  const { fn } = fakeFetch({ "a.org": "404", "b.org": "pdf", "c.org": "503", "ok.org": "apply" });
+  const { fn } = fakeFetch({ "a.org": "404", "b.org": "pdf", "c.org": "503", "ok.org": "apply", "bare.org": "no-type" });
   const signal = AbortSignal.timeout(1_000);
   assertEquals(await fetchHomepageHtml("https://a.org", signal, fn), { kind: "miss" });
   assertEquals(await fetchHomepageHtml("https://b.org", signal, fn), { kind: "miss" });
   assertEquals(await fetchHomepageHtml("https://c.org", signal, fn), { kind: "error" });
   assertEquals(await fetchHomepageHtml("https://gone.org", signal, fn), { kind: "error" });
   assertEquals(await fetchHomepageHtml("https://ok.org/", signal, fn), { kind: "page", html: APPLY, url: "https://ok.org/" });
+  // No Content-Type at all: read as a page
+  assertEquals((await fetchHomepageHtml("https://bare.org/", signal, fn)).kind, "page");
 });
 
 Deno.test("discoverGrantUrlsInBatch finds links, and tells misses from failures", async () => {
@@ -141,11 +148,23 @@ Deno.test("discoverGrantUrlsInBatch returns at its budget when sites hang", asyn
   const elapsed = Date.now() - started;
   assert(elapsed < 1_000, `returned at the budget (${elapsed} ms)`);
   assertEquals([...found.keys()], ["fast"]);
-  // Hung sites were cut off or not reached: neither missed nor failed, tried again next time
+  // Hung sites were cut off before DISCOVERY_HUNG_MS, or not reached: neither
+  // missed nor failed, tried again next time
   assertEquals(missed, []);
   assertEquals(failed, []);
   // Only `concurrency` hung sites are ever in flight; the rest aren't started
   assert(requested.length <= 5, `requested ${requested.length}`);
+});
+
+Deno.test("discoverGrantUrlsInBatch counts sites still loading after hungMs as failed", async () => {
+  const { fn } = fakeFetch({ "a.org": "stall-headers", "b.org": "stall-body", "c.org": "apply" });
+  const { found, failed } = await discoverGrantUrlsInBatch([
+    { id: "a", website: "a.org" },
+    { id: "b", website: "b.org" },
+    { id: "c", website: "c.org" },
+  ], { fetchFn: fn, budgetMs: 200, hungMs: 100 });
+  assertEquals([...found.keys()], ["c"]);
+  assertEquals(failed.sort(), ["a", "b"]);
 });
 
 Deno.test("discoverGrantUrlsInBatch fetches a website shared by several funders once", async () => {
