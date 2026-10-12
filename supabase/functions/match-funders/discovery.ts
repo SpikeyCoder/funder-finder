@@ -38,6 +38,11 @@ function extractDomain(url: string): string | null {
   } catch { return null; }
 }
 
+/** The same site: equal hosts, or one a subdomain of the other (apply.fund.org, fund.org). */
+function sameSite(a: string, b: string): boolean {
+  return a === b || a.endsWith(`.${b}`) || b.endsWith(`.${a}`);
+}
+
 /** Rejects when `signal` aborts, so a stalled read can't outlive it. */
 function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
   if (signal.aborted) return Promise.reject(signal.reason);
@@ -48,16 +53,23 @@ function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
   });
 }
 
+export type HomepageResult =
+  /** An HTML page; `url` is where it was served from, after redirects. */
+  | { kind: 'page'; html: string; url: string }
+  /** No page to scan, for good: not found, gone, or not HTML. */
+  | { kind: 'miss' }
+  /** Anything that may pass: network errors, 5xx, 429, bot walls, the deadline. */
+  | { kind: 'error' };
+
 /**
  * Fetch a homepage's HTML (at most MAX_HTML_CHARS of it). `signal` covers the
- * whole exchange, headers and body. Returns null on any failure — caller
- * treats as "no discovery".
+ * whole exchange, headers and body.
  */
 export async function fetchHomepageHtml(
   url: string,
   signal: AbortSignal,
   fetchFn: typeof fetch = fetch,
-): Promise<string | null> {
+): Promise<HomepageResult> {
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
   try {
     const res = await abortable(fetchFn(url, {
@@ -71,20 +83,24 @@ export async function fetchHomepageHtml(
     const ct = res.headers.get('content-type') || '';
     if (!res.ok || !ct.includes('html') || !res.body) {
       res.body?.cancel().catch(() => {});
-      return null;
+      return res.ok || res.status === 404 || res.status === 410 ? { kind: 'miss' } : { kind: 'error' };
     }
     // Read only as much of the page as is scanned
     reader = res.body.getReader();
     const decoder = new TextDecoder();
-    let text = '';
-    while (text.length < MAX_HTML_CHARS) {
+    let html = '';
+    for (;;) {
+      if (html.length >= MAX_HTML_CHARS) break;
       const { done, value } = await abortable(reader.read(), signal);
-      if (done) break;
-      text += decoder.decode(value, { stream: true });
+      if (done) {
+        html += decoder.decode();
+        break;
+      }
+      html += decoder.decode(value, { stream: true });
     }
-    return text.slice(0, MAX_HTML_CHARS);
+    return { kind: 'page', html: html.slice(0, MAX_HTML_CHARS), url: res.url || url };
   } catch {
-    return null;
+    return { kind: 'error' };
   } finally {
     reader?.cancel().catch(() => {});
   }
@@ -114,7 +130,7 @@ export function discoverGrantPageUrl(html: string, baseUrl: string): string | nu
     // Must be same domain
     const linkDomain = extractDomain(resolvedUrl);
     if (!linkDomain) continue;
-    if (!linkDomain.includes(funderDomain) && !funderDomain.includes(linkDomain)) continue;
+    if (!sameSite(linkDomain, funderDomain)) continue;
 
     // Skip homepage itself
     try {
@@ -145,7 +161,7 @@ export function discoverGrantPageUrl(html: string, baseUrl: string): string | nu
 export interface DiscoveryResult {
   /** Funder id → discovered grant page URL. */
   found: Map<string, string>;
-  /** Funders whose homepage was fetched (or failed) before the budget ran out, found or not. */
+  /** Funders whose homepage was scanned or is definitely missing, found or not (not temporary failures). */
   checked: string[];
 }
 
@@ -174,11 +190,11 @@ export async function discoverGrantUrlsInBatch(
     while (next < funders.length && !deadline.aborted) {
       const f = funders[next++];
       const url = f.website.startsWith('http') ? f.website : `https://${f.website}`;
-      const html = await fetchHomepageHtml(url, deadline, fetchFn);
-      // Cut off by the budget: not checked, a later request tries again
-      if (deadline.aborted) return;
+      const page = await fetchHomepageHtml(url, deadline, fetchFn);
+      // Cut off by the budget, or a failure that may pass: a later request tries again
+      if (page.kind === 'error') continue;
       checked.push(f.id);
-      const discovered = html ? discoverGrantPageUrl(html, url) : null;
+      const discovered = page.kind === 'page' ? discoverGrantPageUrl(page.html, page.url) : null;
       if (discovered) found.set(f.id, discovered);
     }
   };
