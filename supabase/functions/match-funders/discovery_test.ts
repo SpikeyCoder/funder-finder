@@ -26,7 +26,7 @@ function stalledBody(signal?: AbortSignal | null) {
 // Headers that never arrive (and ignore the abort signal).
 const never = () => new Promise<Response>(() => {});
 
-type Site = "apply" | "none" | "stall-body" | "stall-headers" | "404" | "503" | "pdf" | "redirect";
+type Site = "apply" | "none" | "stall-body" | "stall-headers" | "404" | "503" | "pdf" | "redirect" | "redirect-in";
 
 function fakeFetch(sites: Record<string, Site>) {
   const requested: string[] = [];
@@ -40,6 +40,12 @@ function fakeFetch(sites: Record<string, Site>) {
       case "stall-headers": return never();
       case "404": return Promise.resolve(new Response("nope", { status: 404 }));
       case "503": return Promise.resolve(new Response("busy", { status: 503 }));
+      case "redirect-in": {
+        // fund.org served from https://www.fund.org/en/ after a redirect
+        const res = html(page('<a href="apply">Apply</a>'));
+        Object.defineProperty(res, "url", { value: "https://www.fund.org/en/" });
+        return Promise.resolve(res);
+      }
       case "redirect": {
         // Served from https://www.fundfoundation.org/en/ after a redirect
         const res = html(page('<a href="apply">Apply</a> <a href="https://fund.org/grants">Old site</a>'));
@@ -58,6 +64,8 @@ Deno.test("discoverGrantPageUrl picks a same-domain grant link", () => {
   assertEquals(discoverGrantPageUrl(NO_LINK, "https://fund.org"), null);
   assertEquals(discoverGrantPageUrl(page('<a href="https://other.org/apply">Apply</a>'), "https://fund.org"), null);
   assertEquals(discoverGrantPageUrl(page('<a href="https://apply.fund.org/start">Apply</a>'), "https://fund.org"), "https://apply.fund.org/start");
+  // A foundation on a company subdomain doesn't pick up the company's links
+  assertEquals(discoverGrantPageUrl(page('<a href="https://bigcorp.com/careers/apply">Apply now</a>'), "https://foundation.bigcorp.com"), null);
 });
 
 Deno.test("discoverGrantPageUrl rejects lookalike domains", () => {
@@ -83,9 +91,9 @@ Deno.test("fetchHomepageHtml: definite misses vs failures that may pass", async 
   assertEquals(await fetchHomepageHtml("https://ok.org/", signal, fn), { kind: "page", html: APPLY, url: "https://ok.org/" });
 });
 
-Deno.test("discoverGrantUrlsInBatch finds links; only definite outcomes count as checked", async () => {
+Deno.test("discoverGrantUrlsInBatch finds links, and tells misses from failures", async () => {
   const { fn, requested } = fakeFetch({ "a.org": "apply", "b.org": "none", "c.org": "404", "e.org": "503" });
-  const { found, checked } = await discoverGrantUrlsInBatch([
+  const { found, missed, failed } = await discoverGrantUrlsInBatch([
     { id: "a", website: "a.org" },
     { id: "b", website: "https://b.org" },
     { id: "c", website: "c.org" },
@@ -93,15 +101,21 @@ Deno.test("discoverGrantUrlsInBatch finds links; only definite outcomes count as
     { id: "e", website: "e.org" },
   ], { fetchFn: fn, budgetMs: 1_000 });
   assertEquals([...found], [["a", "https://a.org/how-to-apply"]]);
-  // d (DNS error) and e (503) may recover, so they aren't recorded as checked
-  assertEquals(checked.sort(), ["a", "b", "c"]);
+  assertEquals(missed.sort(), ["b", "c"]);
+  // d (DNS error) and e (503) may recover
+  assertEquals(failed.sort(), ["d", "e"]);
   assertEquals(requested.length, 5);
 });
 
 Deno.test("discoverGrantUrlsInBatch resolves links against the page's URL after redirects", async () => {
-  const { fn } = fakeFetch({ "fund.org": "redirect" });
-  const { found } = await discoverGrantUrlsInBatch([{ id: "f", website: "fund.org" }], { fetchFn: fn, budgetMs: 1_000 });
-  assertEquals(found.get("f"), "https://www.fundfoundation.org/en/apply");
+  const { fn } = fakeFetch({ "fund.org": "redirect-in", "old.org": "redirect" });
+  const { found, missed } = await discoverGrantUrlsInBatch([
+    { id: "in", website: "fund.org" },
+    { id: "off", website: "old.org" },
+  ], { fetchFn: fn, budgetMs: 1_000 });
+  assertEquals(found.get("in"), "https://www.fund.org/en/apply");
+  // Redirected off the funder's site: nothing there is the funder's grant page
+  assertEquals(missed, ["off"]);
 });
 
 Deno.test("discoverGrantUrlsInBatch returns at its budget when sites hang", async () => {
@@ -113,18 +127,22 @@ Deno.test("discoverGrantUrlsInBatch returns at its budget when sites hang", asyn
   }
   const { fn, requested } = fakeFetch(sites);
   const started = Date.now();
-  const { found, checked } = await discoverGrantUrlsInBatch(funders, { fetchFn: fn, budgetMs: 200, concurrency: 4 });
+  const { found, missed, failed } = await discoverGrantUrlsInBatch(funders, { fetchFn: fn, budgetMs: 200, concurrency: 4 });
   const elapsed = Date.now() - started;
   assert(elapsed < 1_000, `returned at the budget (${elapsed} ms)`);
   assertEquals([...found.keys()], ["fast"]);
-  // Hung sites were cut off, not scanned: a later request retries them
-  assertEquals(checked, ["fast"]);
+  // Hung sites in flight were cut off (retried after a day); the rest weren't reached
+  assertEquals(missed, []);
+  assertEquals(failed.length, 4);
   // Only `concurrency` hung sites are ever in flight; the rest aren't started
   assert(requested.length <= 5, `requested ${requested.length}`);
 });
 
-Deno.test("discoverGrantUrlsInBatch with nothing to scan", async () => {
-  const { found, checked } = await discoverGrantUrlsInBatch([]);
-  assertEquals(found.size, 0);
-  assertEquals(checked, []);
+Deno.test("discoverGrantUrlsInBatch with nothing to scan, or no time left", async () => {
+  const empty = { found: new Map(), missed: [], failed: [] };
+  assertEquals(await discoverGrantUrlsInBatch([]), empty);
+  // A spent budget (even negative) returns nothing rather than throwing
+  const { fn, requested } = fakeFetch({ "a.org": "apply" });
+  assertEquals(await discoverGrantUrlsInBatch([{ id: "a", website: "a.org" }], { fetchFn: fn, budgetMs: -5 }), empty);
+  assertEquals(requested, []);
 });

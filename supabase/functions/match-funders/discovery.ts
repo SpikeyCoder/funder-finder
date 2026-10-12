@@ -12,8 +12,10 @@
 export const DISCOVERY_BUDGET_MS = 3_000;
 /** Homepages fetched at once. */
 export const DISCOVERY_CONCURRENCY = 8;
-/** A funder whose homepage was scanned isn't scanned again for this long. */
-export const DISCOVERY_RECHECK_MS = 30 * 24 * 60 * 60 * 1000;
+/** A homepage scanned without finding a grant page isn't scanned again for this long. */
+export const DISCOVERY_MISS_RECHECK_MS = 30 * 24 * 60 * 60 * 1000;
+/** A homepage that failed to load (or was cut off by the budget) is retried after this long. */
+export const DISCOVERY_ERROR_RECHECK_MS = 24 * 60 * 60 * 1000;
 
 const MAX_HTML_CHARS = 500_000;
 
@@ -38,9 +40,9 @@ function extractDomain(url: string): string | null {
   } catch { return null; }
 }
 
-/** The same site: equal hosts, or one a subdomain of the other (apply.fund.org, fund.org). */
-function sameSite(a: string, b: string): boolean {
-  return a === b || a.endsWith(`.${b}`) || b.endsWith(`.${a}`);
+/** `host` is the funder's own site `site` or a subdomain of it (apply.fund.org on fund.org). */
+function onSite(host: string, site: string): boolean {
+  return host === site || host.endsWith(`.${site}`);
 }
 
 /** Rejects when `signal` aborts, so a stalled read can't outlive it. */
@@ -130,7 +132,7 @@ export function discoverGrantPageUrl(html: string, baseUrl: string): string | nu
     // Must be same domain
     const linkDomain = extractDomain(resolvedUrl);
     if (!linkDomain) continue;
-    if (!sameSite(linkDomain, funderDomain)) continue;
+    if (!onSite(linkDomain, funderDomain)) continue;
 
     // Skip homepage itself
     try {
@@ -161,8 +163,10 @@ export function discoverGrantPageUrl(html: string, baseUrl: string): string | nu
 export interface DiscoveryResult {
   /** Funder id → discovered grant page URL. */
   found: Map<string, string>;
-  /** Funders whose homepage was scanned or is definitely missing, found or not (not temporary failures). */
-  checked: string[];
+  /** Funders whose homepage has no grant page: scanned without one, 404/410, not HTML, or redirected off-site. */
+  missed: string[];
+  /** Funders whose homepage failed to load or was cut off by the budget. */
+  failed: string[];
 }
 
 export interface DiscoveryOptions {
@@ -174,30 +178,38 @@ export interface DiscoveryOptions {
 /**
  * Discover grant page URLs for funders missing apply_url, in the given order,
  * `concurrency` homepages at a time, returning once all are scanned or
- * `budgetMs` has passed, whichever is first.
+ * `budgetMs` has passed, whichever is first. Funders not reached are in none
+ * of the result's lists.
  */
 export async function discoverGrantUrlsInBatch(
   funders: { id: string; website: string }[],
   { budgetMs = DISCOVERY_BUDGET_MS, concurrency = DISCOVERY_CONCURRENCY, fetchFn = fetch }: DiscoveryOptions = {},
 ): Promise<DiscoveryResult> {
-  const found = new Map<string, string>();
-  const checked: string[] = [];
-  if (funders.length === 0) return { found, checked };
+  const result: DiscoveryResult = { found: new Map(), missed: [], failed: [] };
+  if (funders.length === 0 || budgetMs <= 0) return result;
 
-  const deadline = AbortSignal.timeout(budgetMs);
+  const deadline = AbortSignal.timeout(Math.ceil(budgetMs));
   let next = 0;
   const worker = async () => {
     while (next < funders.length && !deadline.aborted) {
       const f = funders[next++];
       const url = f.website.startsWith('http') ? f.website : `https://${f.website}`;
       const page = await fetchHomepageHtml(url, deadline, fetchFn);
-      // Cut off by the budget, or a failure that may pass: a later request tries again
-      if (page.kind === 'error') continue;
-      checked.push(f.id);
-      const discovered = page.kind === 'page' ? discoverGrantPageUrl(page.html, page.url) : null;
-      if (discovered) found.set(f.id, discovered);
+      if (page.kind === 'error') {
+        result.failed.push(f.id);
+        continue;
+      }
+      // A homepage that redirects off the funder's site (expired domain, parked
+      // page, a social profile) has no grant page of the funder's
+      const site = extractDomain(url);
+      const servedFrom = page.kind === 'page' ? extractDomain(page.url) : null;
+      const discovered = page.kind === 'page' && site && servedFrom && onSite(servedFrom, site)
+        ? discoverGrantPageUrl(page.html, page.url)
+        : null;
+      if (discovered) result.found.set(f.id, discovered);
+      else result.missed.push(f.id);
     }
   };
   await Promise.all(Array.from({ length: Math.min(concurrency, funders.length) }, worker));
-  return { found, checked };
+  return result;
 }
