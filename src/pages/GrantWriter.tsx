@@ -1,4 +1,4 @@
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft, Check, CheckCircle2, ChevronDown, ChevronUp, Copy,
@@ -23,6 +23,21 @@ const ACCEPTED_TYPES = [
 ];
 const MAX_FILES = 3;
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+
+// user_profiles.budget_range holds the onboarding bands (under_250k, ...)
+// and the Settings page's bands (0-250k, ...); both read back as text here.
+const PROFILE_BUDGET_LABELS: Record<string, string> = {
+  under_250k: 'Under $250,000',
+  '0-250k': 'Under $250,000',
+  '250k_1m': '$250,000 - $1,000,000',
+  '250k-1m': '$250,000 - $1,000,000',
+  '1m_5m': '$1,000,000 - $5,000,000',
+  '1m-5m': '$1,000,000 - $5,000,000',
+  over_5m: 'Over $5,000,000',
+  '5m-10m': '$5,000,000 - $10,000,000',
+  '10m-50m': '$10,000,000 - $50,000,000',
+  '50m+': '$50,000,000+',
+};
 
 const FILE_TYPE_LABELS: Record<string, string> = {
   'application/pdf': 'PDF',
@@ -143,14 +158,24 @@ export default function GrantWriter() {
   const [showPastGrants, setShowPastGrants] = useState(true);
   const profileAppliedRef = useRef(false);
 
-  // Pre-populate mission & location from user profile if not already set via sessionStorage
+  // Whether Organization Details were filled in from the saved org profile
+  const [orgFromProfile, setOrgFromProfile] = useState(false);
+
+  // Pre-populate mission & org details from user profile if not already set via sessionStorage
   useEffect(() => {
     if (profileAppliedRef.current || !profileLoaded || !userProfile) return;
     profileAppliedRef.current = true;
     if (!mission && userProfile.mission_statement) setMission(userProfile.mission_statement);
-    if (!orgDetails.geoFocus && userProfile.location_served) {
-      setOrgDetails(prev => ({ ...prev, geoFocus: userProfile.location_served! }));
+    const fromProfile: Partial<OrgDetails> = {};
+    if (userProfile.organization_name) fromProfile.orgName = userProfile.organization_name;
+    const budgetLabel = userProfile.budget_range && PROFILE_BUDGET_LABELS[userProfile.budget_range];
+    if (budgetLabel) fromProfile.budget = budgetLabel;
+    if (!orgDetails.geoFocus && userProfile.location_served) fromProfile.geoFocus = userProfile.location_served;
+    if (Object.keys(fromProfile).length > 0) {
+      setOrgDetails(prev => ({ ...prev, ...fromProfile }));
     }
+    if (fromProfile.orgName) setOrgFromProfile(true);
+    if (fromProfile.orgName || fromProfile.budget) setShowOrg(true);
   }, [profileLoaded, userProfile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Upload state ────────────────────────────────────────────────────────
@@ -294,9 +319,14 @@ export default function GrantWriter() {
   const generate = async () => {
     if (!funder || !mission.trim() || phase === 'generating' || phase === 'analyzing' || phase === 'researching') return;
 
-    // Save mission to profile for logged-in users (fire-and-forget)
+    // Save mission to profile for logged-in users (fire-and-forget), and the
+    // org name too when the profile has none yet
     if (user && mission.trim()) {
-      saveUserProfile({ mission_statement: mission.trim() }).catch(e => console.warn('Profile save:', e));
+      const orgName = orgDetails.orgName.trim();
+      saveUserProfile({
+        mission_statement: mission.trim(),
+        ...(orgName && !userProfile?.organization_name ? { organization_name: orgName } : {}),
+      }).catch(e => console.warn('Profile save:', e));
     }
 
     setOutput('');
@@ -703,7 +733,7 @@ export default function GrantWriter() {
                 <span className="text-gray-300">
                   Organization Details{' '}
                   <span className="text-gray-400 font-normal">
-                    (optional — improves quality)
+                    {orgFromProfile ? '(from your org profile)' : '(optional — improves quality)'}
                   </span>
                 </span>
                 {showOrg ? (
@@ -715,6 +745,35 @@ export default function GrantWriter() {
 
               {showOrg && (
                 <div className="px-5 pb-5 bg-[#0d1117] grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <p className="sm:col-span-2 pt-4 text-xs text-gray-400">
+                    {!user ? (
+                      <>
+                        <Link
+                          to="/login"
+                          onClick={() => sessionStorage.setItem('authRedirect', '/saved')}
+                          className="text-blue-400 hover:text-blue-300 underline"
+                        >
+                          Sign in
+                        </Link>{' '}
+                        to save your organization profile and have it filled in for every draft.
+                      </>
+                    ) : orgFromProfile ? (
+                      <>
+                        Filled in from your organization profile. Changes here apply to this draft only.{' '}
+                        <Link to="/settings" className="text-blue-400 hover:text-blue-300 underline">
+                          Edit org profile
+                        </Link>
+                      </>
+                    ) : (
+                      <>
+                        Your organization name is saved to your profile when you generate.{' '}
+                        <Link to="/settings" className="text-blue-400 hover:text-blue-300 underline">
+                          Complete your org profile
+                        </Link>{' '}
+                        to have these filled in for every draft.
+                      </>
+                    )}
+                  </p>
                   <div>
                     <label htmlFor="gw-org-name" className={labelClass}>Organization Name</label>
                     <input
