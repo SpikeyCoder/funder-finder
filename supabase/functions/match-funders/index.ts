@@ -475,22 +475,17 @@ function normalizedEin(value: string | null | undefined): string | null {
 
 // ── Real-time grant page discovery (see discovery.ts) ──────────────────────
 
-type ResultRow = FunderRow & { next_step: string; next_step_type: string; next_step_url: string | null };
-
 /**
  * After the response: look for grant application pages for the returned
  * funders that have a website but no apply link, best-ranked first, within
  * DISCOVERY_BUDGET_MS, and record the outcome for later searches. Funders due
  * for a recheck later (apply_url_recheck_at) are skipped; if that lookup fails
- * (e.g. before the migration), none are. On hits, each row's next step is
- * re-derived from its funder (`funderOf`, whose next_step is still the DB's)
- * and `onHits` runs, e.g. to update a cached copy of the results. Errors are
- * logged, never thrown.
+ * (e.g. before the migration), none are. `onHits` gets any grant pages found.
+ * Errors are logged, never thrown.
  */
 async function discoverInBackground(
-  results: ResultRow[],
-  funderOf: (id: string) => FunderRow | undefined,
-  onHits?: () => Promise<unknown>,
+  results: FunderRow[],
+  onHits?: (found: Map<string, string>) => Promise<unknown>,
 ): Promise<void> {
   try {
     let candidates = results.filter((row) => row.website && !row.apply_url && !row.discovered_apply_url);
@@ -508,21 +503,9 @@ async function discoverInBackground(
     const discovery = await discoverGrantUrlsInBatch(
       candidates.map((row) => ({ id: row.id, website: row.website! })),
     );
-    await recordDiscovery(discovery);
-    if (discovery.found.size === 0) return;
-
-    for (const row of results) {
-      const url = discovery.found.get(row.id);
-      const funder = url ? funderOf(row.id) : undefined;
-      if (!url || !funder) continue;
-      funder.discovered_apply_url = url;
-      const next = deriveNextStep(funder);
-      row.discovered_apply_url = url;
-      row.next_step = next.text;
-      row.next_step_type = next.type;
-      row.next_step_url = resolveNextStepUrl(next.type, funder);
-    }
-    await onHits?.();
+    const websiteOf = new Map(candidates.map((row) => [row.id, row.website!]));
+    await recordDiscovery(discovery, websiteOf);
+    if (discovery.found.size > 0) await onHits?.(discovery.found);
   } catch (e) {
     console.warn('grant page discovery failed:', e);
   }
@@ -532,9 +515,12 @@ async function discoverInBackground(
  * Save discovered grant page URLs, and when homepages without one are due a
  * recheck, back to the DB. Errors are logged, never thrown.
  */
-async function recordDiscovery({ found, missed, failed }: DiscoveryResult): Promise<void> {
-  const patch = (ids: string[], body: Record<string, unknown>) =>
-    sbFetchBatched(`funders?id=in.{{IN_FILTER}}`, ids, 60, {
+async function recordDiscovery(
+  { found, missed, failed }: DiscoveryResult,
+  websiteOf: Map<string, string>,
+): Promise<void> {
+  const patch = (filter: string, ids: string[], body: Record<string, unknown>) =>
+    sbFetchBatched(`funders?id=in.{{IN_FILTER}}${filter}`, ids, 60, {
       method: 'PATCH',
       headers: { Prefer: 'return=minimal' },
       body: JSON.stringify(body),
@@ -542,10 +528,12 @@ async function recordDiscovery({ found, missed, failed }: DiscoveryResult): Prom
 
   const at = (ms: number) => new Date(Date.now() + ms).toISOString();
   await Promise.all([
-    // Hits on their own, so they're saved even without the apply_url_recheck_at column
-    ...[...found].map(([id, url]) => patch([id], { discovered_apply_url: url })),
-    patch(missed, { apply_url_recheck_at: at(DISCOVERY_MISS_RECHECK_MS) }),
-    patch(failed, { apply_url_recheck_at: at(DISCOVERY_ERROR_RECHECK_MS) }),
+    // Hits on their own (so they're saved even without the apply_url_recheck_at
+    // column), and only while the funder's website is still the one scanned
+    ...[...found].map(([id, url]) =>
+      patch(`&website=eq.${encodeURIComponent(websiteOf.get(id) ?? '')}`, [id], { discovered_apply_url: url })),
+    patch('', missed, { apply_url_recheck_at: at(DISCOVERY_MISS_RECHECK_MS) }),
+    patch('', failed, { apply_url_recheck_at: at(DISCOVERY_ERROR_RECHECK_MS) }),
   ]);
 }
 
@@ -3020,7 +3008,7 @@ Deno.serve(async (req) => {
       await enrichGranteeEins(results);
 
       // Grant page discovery for the returned funders, after the response
-      inBackground(discoverInBackground(results, (id) => funderById.get(id)));
+      inBackground(discoverInBackground(results));
 
       return new Response(JSON.stringify({
         results,
@@ -3386,6 +3374,7 @@ Deno.serve(async (req) => {
       })
       .filter((row) => (row.fit_score || 0) >= MIN_RESULT_FIT_SCORE);
 
+    const cachedAt = new Date().toISOString();
     await sbFetch('search_cache?on_conflict=mission_hash', {
       method: 'POST',
       headers: { Prefer: 'resolution=merge-duplicates' },
@@ -3393,22 +3382,35 @@ Deno.serve(async (req) => {
         mission_hash: cacheKey,
         mission_text: mission,
         results,
-        created_at: new Date().toISOString(),
+        created_at: cachedAt,
       }),
     });
 
     // Enrich grantee EINs from recipient_organizations where missing
     await enrichGranteeEins(results);
 
-    // Grant page discovery for the returned funders, after the response; hits
-    // also update the cached results
+    // Grant page discovery for the returned funders, after the response. Hits
+    // also update the results cached above, unless a newer search replaced them:
+    // each hit's next step is re-derived from its funder, whose next_step is
+    // still the DB's.
     const funderById = new Map(candidateFunders.map(({ funder }) => [funder.id, funder]));
-    inBackground(discoverInBackground(results, (id) => funderById.get(id), () =>
-      sbFetch(`search_cache?mission_hash=eq.${encodeURIComponent(cacheKey)}`, {
-        method: 'PATCH',
-        headers: { Prefer: 'return=minimal' },
-        body: JSON.stringify({ results }),
-      })));
+    inBackground(discoverInBackground(results, (found) => {
+      for (const row of results) {
+        const url = found.get(row.id);
+        const funder = url ? funderById.get(row.id) : undefined;
+        if (!url || !funder) continue;
+        funder.discovered_apply_url = url;
+        const next = deriveNextStep(funder);
+        row.discovered_apply_url = url;
+        row.next_step = next.text;
+        row.next_step_type = next.type;
+        row.next_step_url = resolveNextStepUrl(next.type, funder);
+      }
+      return sbFetch(
+        `search_cache?mission_hash=eq.${encodeURIComponent(cacheKey)}&created_at=eq.${encodeURIComponent(cachedAt)}`,
+        { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ results }) },
+      );
+    }));
 
     return new Response(JSON.stringify({ results, cached: false }), {
       headers: { ...headers, 'Content-Type': 'application/json' },

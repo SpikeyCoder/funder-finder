@@ -81,6 +81,19 @@ Deno.test("discoverGrantPageUrl picks a same-domain grant link", () => {
   assertEquals(discoverGrantPageUrl(page('<a href="https://bigcorp.com/careers/apply">Apply now</a>'), "https://foundation.bigcorp.com"), null);
 });
 
+Deno.test("discoverGrantPageUrl after a redirect up to a parent domain stays under the landing path", () => {
+  const html = page(
+    '<a href="https://www.bigcorp.com/careers/apply">Apply now</a>' +
+    '<a href="/foundation/grants/apply">Apply for a grant</a>',
+  );
+  assertEquals(
+    discoverGrantPageUrl(html, "https://www.bigcorp.com/foundation/", "https://foundation.bigcorp.com"),
+    "https://www.bigcorp.com/foundation/grants/apply",
+  );
+  // Landing on the parent's homepage: nothing there is the foundation's own
+  assertEquals(discoverGrantPageUrl(html, "https://www.bigcorp.com/", "https://foundation.bigcorp.com"), null);
+});
+
 Deno.test("discoverGrantPageUrl rejects lookalike domains", () => {
   for (const href of ["https://notfund.org/apply", "https://fund.org.example.com/grants"]) {
     assertEquals(discoverGrantPageUrl(page(`<a href="${href}">Apply</a>`), "https://fund.org"), null);
@@ -92,6 +105,13 @@ Deno.test("fetchHomepageHtml: the signal bounds a stalled body, not just the hea
   const started = Date.now();
   assertEquals(await fetchHomepageHtml("https://slow.org", AbortSignal.timeout(100), fn), { kind: "error" });
   assert(Date.now() - started < 1_000, "returned at the deadline");
+});
+
+Deno.test("fetchHomepageHtml with an already-aborted signal leaves no unhandled rejection", async () => {
+  // A fetch that rejects on an aborted signal, like the real one
+  const fn = ((_: string, init?: RequestInit) => Promise.reject(init?.signal?.reason)) as typeof fetch;
+  assertEquals(await fetchHomepageHtml("https://a.org", AbortSignal.abort(), fn), { kind: "error" });
+  await new Promise((resolve) => setTimeout(resolve, 0)); // an unhandled rejection would fail the test here
 });
 
 Deno.test("fetchHomepageHtml: definite misses vs failures that may pass", async () => {

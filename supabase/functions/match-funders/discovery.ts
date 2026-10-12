@@ -49,7 +49,10 @@ function onSite(host: string, site: string): boolean {
 
 /** Rejects when `signal` aborts, so a stalled read can't outlive it. */
 function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
-  if (signal.aborted) return Promise.reject(signal.reason);
+  if (signal.aborted) {
+    promise.catch(() => {}); // its rejection would otherwise go unhandled and end the isolate
+    return Promise.reject(signal.reason);
+  }
   return new Promise<T>((resolve, reject) => {
     const onAbort = () => reject(signal.reason);
     signal.addEventListener('abort', onAbort, { once: true });
@@ -112,14 +115,34 @@ export async function fetchHomepageHtml(
 }
 
 /**
+ * Where a funder's own links can be: on its site `siteUrl` (or a subdomain),
+ * or, when the homepage redirected up to a parent domain (foundation.bigcorp.com
+ * to www.bigcorp.com/foundation/), under the path it landed on. A redirect
+ * anywhere else (an expired domain, a parked page, a social profile, a
+ * rebrand) has none: a third party's link must never be shown as the funder's.
+ */
+function funderScope(pageUrl: string, siteUrl: string): ((link: URL) => boolean) | null {
+  const site = extractDomain(siteUrl);
+  let page: URL;
+  try { page = new URL(pageUrl); } catch { return null; }
+  const served = page.hostname.replace(/^www\./, '');
+  if (!site) return null;
+  if (onSite(served, site)) return (link) => onSite(link.hostname.replace(/^www\./, ''), site);
+  const prefix = page.pathname.endsWith('/') ? page.pathname : `${page.pathname}/`;
+  if (onSite(site, served) && prefix !== '/') {
+    return (link) => link.hostname.replace(/^www\./, '') === served && `${link.pathname}/`.startsWith(prefix);
+  }
+  return null;
+}
+
+/**
  * Scan homepage HTML for grant-related links on the funder's site, return the
  * best URL or null. Relative links resolve against `pageUrl` (where the page
- * was served from, after redirects); links must be on `siteUrl`'s host or a
- * subdomain of it.
+ * was served from, after redirects); see funderScope for which links count.
  */
 export function discoverGrantPageUrl(html: string, pageUrl: string, siteUrl = pageUrl): string | null {
-  const funderDomain = extractDomain(siteUrl);
-  if (!funderDomain) return null;
+  const inScope = funderScope(pageUrl, siteUrl);
+  if (!inScope) return null;
 
   // Extract <a> tags — same regex as enrich-subpages.js
   const tagRe = /<a\b[^>]*href\s*=\s*["']([^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi;
@@ -132,19 +155,13 @@ export function discoverGrantPageUrl(html: string, pageUrl: string, siteUrl = pa
     if (!rawHref || rawHref.startsWith('#') || rawHref.startsWith('mailto:') ||
         rawHref.startsWith('tel:') || rawHref.startsWith('javascript:')) continue;
 
-    let resolvedUrl: string;
-    try { resolvedUrl = new URL(rawHref, pageUrl).href; } catch { continue; }
+    let link: URL;
+    try { link = new URL(rawHref, pageUrl); } catch { continue; }
+    const resolvedUrl = link.href;
 
-    // Must be same domain
-    const linkDomain = extractDomain(resolvedUrl);
-    if (!linkDomain) continue;
-    if (!onSite(linkDomain, funderDomain)) continue;
-
-    // Skip homepage itself
-    try {
-      const parsed = new URL(resolvedUrl);
-      if (parsed.pathname === '/' || parsed.pathname === '') continue;
-    } catch { continue; }
+    // Must be the funder's own web page, not its homepage
+    if ((link.protocol !== 'https:' && link.protocol !== 'http:') || !inScope(link)) continue;
+    if (link.pathname === '/' || link.pathname === '') continue;
 
     // Score against hints
     const urlLower = resolvedUrl.toLowerCase();
