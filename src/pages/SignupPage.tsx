@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, Building2, AlertCircle, ChevronRight, ChevronLeft, Loader, CheckCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { BUDGET_RANGES } from '../lib/budgetRanges';
 import NavBar from '../components/NavBar';
 
 const US_STATES = [
@@ -26,15 +27,6 @@ const NTEE_CATEGORIES = [
   { code: 'J', label: 'Religion Related, Spiritual Development' },
   { code: 'K', label: 'Mutual & Membership Benefit' },
   { code: 'L', label: 'Unknown' },
-];
-
-const BUDGET_RANGES = [
-  { value: '0-250k', label: 'Under $250,000' },
-  { value: '250k-1m', label: '$250,000 - $1,000,000' },
-  { value: '1m-5m', label: '$1,000,000 - $5,000,000' },
-  { value: '5m-10m', label: '$5,000,000 - $10,000,000' },
-  { value: '10m-50m', label: '$10,000,000 - $50,000,000' },
-  { value: '50m+', label: '$50,000,000+' },
 ];
 
 type SignupStep = 'account' | 'profile' | 'review';

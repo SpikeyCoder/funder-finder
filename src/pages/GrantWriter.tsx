@@ -12,6 +12,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { formatGrantRange, formatTotalGiving } from '../utils/matching';
 import NavBar from '../components/NavBar';
 import { SUPABASE_URL } from '../lib/supabaseProject';
+import { profileBudgetLabel } from '../lib/budgetRanges';
 
 const GRANT_WRITER_URL =
   `${SUPABASE_URL}/functions/v1/grant-writer`;
@@ -24,20 +25,8 @@ const ACCEPTED_TYPES = [
 const MAX_FILES = 3;
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
-// user_profiles.budget_range holds the onboarding bands (under_250k, ...)
-// and the Settings page's bands (0-250k, ...); both read back as text here.
-const PROFILE_BUDGET_LABELS: Record<string, string> = {
-  under_250k: 'Under $250,000',
-  '0-250k': 'Under $250,000',
-  '250k_1m': '$250,000 - $1,000,000',
-  '250k-1m': '$250,000 - $1,000,000',
-  '1m_5m': '$1,000,000 - $5,000,000',
-  '1m-5m': '$1,000,000 - $5,000,000',
-  over_5m: 'Over $5,000,000',
-  '5m-10m': '$5,000,000 - $10,000,000',
-  '10m-50m': '$10,000,000 - $50,000,000',
-  '50m+': '$50,000,000+',
-};
+// The form, kept for this funder across a visit to Sign in or Settings
+const FORM_KEY = 'ff_grant_writer_form';
 
 const FILE_TYPE_LABELS: Record<string, string> = {
   'application/pdf': 'PDF',
@@ -137,10 +126,20 @@ export default function GrantWriter() {
 
   // ── Form state ──────────────────────────────────────────────────────────
 
+  const [keptForm] = useState<{ funderId: string; mission: string; orgDetails: OrgDetails } | null>(() => {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(FORM_KEY) || 'null');
+      return saved && funder && saved.funderId === funder.id ? saved : null;
+    } catch {
+      return null;
+    }
+  });
+  useEffect(() => sessionStorage.removeItem(FORM_KEY), []);
+
   const [mission, setMission] = useState(
-    () => sessionStorage.getItem('ff_mission') || '',
+    () => keptForm?.mission ?? (sessionStorage.getItem('ff_mission') || ''),
   );
-  const [orgDetails, setOrgDetails] = useState<OrgDetails>({
+  const [orgDetails, setOrgDetails] = useState<OrgDetails>(() => keptForm?.orgDetails ?? {
     orgName: '',
     orgDesc: '',
     budget: '',
@@ -153,30 +152,40 @@ export default function GrantWriter() {
     timeline: '',
   });
 
+  /** Keep the form for this funder while the user signs in or edits their profile. */
+  const keepForm = () => {
+    if (funder) sessionStorage.setItem(FORM_KEY, JSON.stringify({ funderId: funder.id, mission, orgDetails }));
+  };
+
   const [showOrg, setShowOrg] = useState(false);
   const [showProgram, setShowProgram] = useState(false);
   const [showPastGrants, setShowPastGrants] = useState(true);
   const profileAppliedRef = useRef(false);
 
-  // Whether Organization Details were filled in from the saved org profile
-  const [orgFromProfile, setOrgFromProfile] = useState(false);
-
-  // Pre-populate mission & org details from user profile if not already set via sessionStorage
+  // Pre-populate empty mission & org details from user profile
   useEffect(() => {
     if (profileAppliedRef.current || !profileLoaded || !userProfile) return;
     profileAppliedRef.current = true;
-    if (!mission && userProfile.mission_statement) setMission(userProfile.mission_statement);
-    const fromProfile: Partial<OrgDetails> = {};
-    if (userProfile.organization_name) fromProfile.orgName = userProfile.organization_name;
-    const budgetLabel = userProfile.budget_range && PROFILE_BUDGET_LABELS[userProfile.budget_range];
-    if (budgetLabel) fromProfile.budget = budgetLabel;
-    if (!orgDetails.geoFocus && userProfile.location_served) fromProfile.geoFocus = userProfile.location_served;
-    if (Object.keys(fromProfile).length > 0) {
-      setOrgDetails(prev => ({ ...prev, ...fromProfile }));
-    }
-    if (fromProfile.orgName) setOrgFromProfile(true);
+    if (userProfile.mission_statement) setMission(prev => prev || userProfile.mission_statement!);
+    const fromProfile: Partial<OrgDetails> = {
+      orgName: userProfile.organization_name ?? undefined,
+      budget: profileBudgetLabel(userProfile.budget_range) ?? undefined,
+      geoFocus: userProfile.location_served ?? undefined,
+    };
+    setOrgDetails(prev => ({
+      ...prev,
+      orgName: prev.orgName || fromProfile.orgName || '',
+      budget: prev.budget || fromProfile.budget || '',
+      geoFocus: prev.geoFocus || fromProfile.geoFocus || '',
+    }));
     if (fromProfile.orgName || fromProfile.budget) setShowOrg(true);
   }, [profileLoaded, userProfile]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Whether Organization Details show the saved org profile
+  const orgFromProfile = !!userProfile && (
+    (!!userProfile.organization_name && orgDetails.orgName === userProfile.organization_name)
+    || (!!profileBudgetLabel(userProfile.budget_range) && orgDetails.budget === profileBudgetLabel(userProfile.budget_range))
+  );
 
   // ── Upload state ────────────────────────────────────────────────────────
 
@@ -319,14 +328,9 @@ export default function GrantWriter() {
   const generate = async () => {
     if (!funder || !mission.trim() || phase === 'generating' || phase === 'analyzing' || phase === 'researching') return;
 
-    // Save mission to profile for logged-in users (fire-and-forget), and the
-    // org name too when the profile has none yet
+    // Save mission to profile for logged-in users (fire-and-forget)
     if (user && mission.trim()) {
-      const orgName = orgDetails.orgName.trim();
-      saveUserProfile({
-        mission_statement: mission.trim(),
-        ...(orgName && !userProfile?.organization_name ? { organization_name: orgName } : {}),
-      }).catch(e => console.warn('Profile save:', e));
+      saveUserProfile({ mission_statement: mission.trim() }).catch(e => console.warn('Profile save:', e));
     }
 
     setOutput('');
@@ -750,7 +754,10 @@ export default function GrantWriter() {
                       <>
                         <Link
                           to="/login"
-                          onClick={() => sessionStorage.setItem('authRedirect', '/saved')}
+                          onClick={() => {
+                            keepForm();
+                            sessionStorage.setItem('authRedirect', '/saved');
+                          }}
                           className="text-blue-400 hover:text-blue-300 underline"
                         >
                           Sign in
@@ -760,17 +767,17 @@ export default function GrantWriter() {
                     ) : orgFromProfile ? (
                       <>
                         Filled in from your organization profile. Changes here apply to this draft only.{' '}
-                        <Link to="/settings" className="text-blue-400 hover:text-blue-300 underline">
+                        <Link to="/settings" onClick={keepForm} className="text-blue-400 hover:text-blue-300 underline">
                           Edit org profile
                         </Link>
                       </>
                     ) : (
                       <>
-                        Your organization name is saved to your profile when you generate.{' '}
-                        <Link to="/settings" className="text-blue-400 hover:text-blue-300 underline">
-                          Complete your org profile
+                        Add these to your{' '}
+                        <Link to="/settings" onClick={keepForm} className="text-blue-400 hover:text-blue-300 underline">
+                          org profile
                         </Link>{' '}
-                        to have these filled in for every draft.
+                        to have them filled in for every draft.
                       </>
                     )}
                   </p>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Save, AlertCircle, CheckCircle, Loader, Building2, Bell, Calendar, Copy, Trash2, Plus, ExternalLink } from 'lucide-react';
 import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { BUDGET_RANGES } from '../lib/budgetRanges';
 import NavBar from '../components/NavBar';
 import type { NotificationPreferences, TeamNotificationPreferences, CalendarFeed } from '../types';
 import { SUPABASE_URL } from '../lib/supabaseProject';
@@ -29,15 +30,6 @@ const NTEE_CATEGORIES = [
   { code: 'J', label: 'Religion Related, Spiritual Development' },
   { code: 'K', label: 'Mutual & Membership Benefit' },
   { code: 'L', label: 'Unknown' },
-];
-
-const BUDGET_RANGES = [
-  { value: '0-250k', label: 'Under $250,000' },
-  { value: '250k-1m', label: '$250,000 - $1,000,000' },
-  { value: '1m-5m', label: '$1,000,000 - $5,000,000' },
-  { value: '5m-10m', label: '$5,000,000 - $10,000,000' },
-  { value: '10m-50m', label: '$10,000,000 - $50,000,000' },
-  { value: '50m+', label: '$50,000,000+' },
 ];
 
 const REMINDER_OPTIONS = [
@@ -69,7 +61,7 @@ interface UserProfile {
 type SettingsTab = 'profile' | 'notifications' | 'calendar';
 
 function UserSettingsContent() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, refreshUserProfile } = useAuth();
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
   const [_profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -296,6 +288,8 @@ function UserSettingsContent() {
         return;
       }
 
+      // Pages that read the profile from context (e.g. the Grant Writer) see the change
+      refreshUserProfile().catch(() => {});
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
