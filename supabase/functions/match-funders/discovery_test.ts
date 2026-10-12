@@ -1,6 +1,6 @@
 // Run: deno test supabase/functions/match-funders/discovery_test.ts
 // Grant page discovery against a fake fetch: the batch budget covers slow
-// headers and slow bodies, and only scanned funders are reported as checked.
+// headers and slow bodies; misses, failures and unreached funders are told apart.
 import { assert, assertEquals } from "jsr:@std/assert@1";
 import { discoverGrantPageUrl, discoverGrantUrlsInBatch, fetchHomepageHtml } from "./discovery.ts";
 
@@ -26,7 +26,9 @@ function stalledBody(signal?: AbortSignal | null) {
 // Headers that never arrive (and ignore the abort signal).
 const never = () => new Promise<Response>(() => {});
 
-type Site = "apply" | "none" | "stall-body" | "stall-headers" | "404" | "503" | "pdf" | "redirect" | "redirect-in";
+type Site =
+  | "apply" | "none" | "stall-body" | "stall-headers" | "404" | "503" | "pdf"
+  | "redirect" | "redirect-in" | "redirect-sub";
 
 function fakeFetch(sites: Record<string, Site>) {
   const requested: string[] = [];
@@ -44,6 +46,12 @@ function fakeFetch(sites: Record<string, Site>) {
         // fund.org served from https://www.fund.org/en/ after a redirect
         const res = html(page('<a href="apply">Apply</a>'));
         Object.defineProperty(res, "url", { value: "https://www.fund.org/en/" });
+        return Promise.resolve(res);
+      }
+      case "redirect-sub": {
+        // sub.org served from https://home.sub.org/, linking to the main site
+        const res = html(page('<a href="https://www.sub.org/how-to-apply">How to apply</a>'));
+        Object.defineProperty(res, "url", { value: "https://home.sub.org/" });
         return Promise.resolve(res);
       }
       case "redirect": {
@@ -108,12 +116,14 @@ Deno.test("discoverGrantUrlsInBatch finds links, and tells misses from failures"
 });
 
 Deno.test("discoverGrantUrlsInBatch resolves links against the page's URL after redirects", async () => {
-  const { fn } = fakeFetch({ "fund.org": "redirect-in", "old.org": "redirect" });
+  const { fn } = fakeFetch({ "fund.org": "redirect-in", "sub.org": "redirect-sub", "old.org": "redirect" });
   const { found, missed } = await discoverGrantUrlsInBatch([
     { id: "in", website: "fund.org" },
+    { id: "sub", website: "sub.org" },
     { id: "off", website: "old.org" },
   ], { fetchFn: fn, budgetMs: 1_000 });
   assertEquals(found.get("in"), "https://www.fund.org/en/apply");
+  assertEquals(found.get("sub"), "https://www.sub.org/how-to-apply");
   // Redirected off the funder's site: nothing there is the funder's grant page
   assertEquals(missed, ["off"]);
 });
@@ -131,11 +141,21 @@ Deno.test("discoverGrantUrlsInBatch returns at its budget when sites hang", asyn
   const elapsed = Date.now() - started;
   assert(elapsed < 1_000, `returned at the budget (${elapsed} ms)`);
   assertEquals([...found.keys()], ["fast"]);
-  // Hung sites in flight were cut off (retried after a day); the rest weren't reached
+  // Hung sites were cut off or not reached: neither missed nor failed, tried again next time
   assertEquals(missed, []);
-  assertEquals(failed.length, 4);
+  assertEquals(failed, []);
   // Only `concurrency` hung sites are ever in flight; the rest aren't started
   assert(requested.length <= 5, `requested ${requested.length}`);
+});
+
+Deno.test("discoverGrantUrlsInBatch fetches a website shared by several funders once", async () => {
+  const { fn, requested } = fakeFetch({ "a.org": "apply" });
+  const { found } = await discoverGrantUrlsInBatch([
+    { id: "a1", website: "a.org" },
+    { id: "a2", website: "a.org" },
+  ], { fetchFn: fn, budgetMs: 1_000 });
+  assertEquals(requested, ["https://a.org"]);
+  assertEquals([...found.keys()], ["a1", "a2"]);
 });
 
 Deno.test("discoverGrantUrlsInBatch with nothing to scan, or no time left", async () => {

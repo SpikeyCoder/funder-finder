@@ -2,19 +2,19 @@
 // Adapted from scripts/enrich-subpages.js — lightweight homepage scanner that
 // finds grant application / LOI pages by scoring <a> tag hrefs + anchor text.
 //
-// Discovery runs inside a visitor's /match-funders request, so it gets one
-// wall-clock budget for the whole batch (Trello #285: chunks of 6 sites run
-// one after another, each allowed 3 s for headers and unbounded for the body,
-// added 6-24 s to matching and pushed it past its 20 s SLA). Sites not reached
-// within the budget are left for a later request.
+// Discovery used to run inside a visitor's /match-funders request (Trello
+// #285: chunks of 6 sites one after another, each allowed 3 s for headers and
+// unbounded for the body, added 6-24 s to matching and pushed it past its
+// 20 s SLA). It now runs after the response is sent, within one budget, and
+// its hits are read from funders.discovered_apply_url by later searches.
 
 /** Wall-clock budget for discovering a whole batch of funders' grant pages. */
-export const DISCOVERY_BUDGET_MS = 3_000;
+export const DISCOVERY_BUDGET_MS = 8_000;
 /** Homepages fetched at once. */
 export const DISCOVERY_CONCURRENCY = 8;
 /** A homepage scanned without finding a grant page isn't scanned again for this long. */
 export const DISCOVERY_MISS_RECHECK_MS = 30 * 24 * 60 * 60 * 1000;
-/** A homepage that failed to load (or was cut off by the budget) is retried after this long. */
+/** A homepage that failed to load is retried after this long. */
 export const DISCOVERY_ERROR_RECHECK_MS = 24 * 60 * 60 * 1000;
 
 const MAX_HTML_CHARS = 500_000;
@@ -60,7 +60,7 @@ export type HomepageResult =
   | { kind: 'page'; html: string; url: string }
   /** No page to scan, for good: not found, gone, or not HTML. */
   | { kind: 'miss' }
-  /** Anything that may pass: network errors, 5xx, 429, bot walls, the deadline. */
+  /** Anything that may pass: network errors, 5xx, 429, 403 bot walls, the deadline. */
   | { kind: 'error' };
 
 /**
@@ -109,10 +109,13 @@ export async function fetchHomepageHtml(
 }
 
 /**
- * Scan homepage HTML for grant-related links, return the best URL or null.
+ * Scan homepage HTML for grant-related links on the funder's site, return the
+ * best URL or null. Relative links resolve against `pageUrl` (where the page
+ * was served from, after redirects); links must be on `siteUrl`'s host or a
+ * subdomain of it.
  */
-export function discoverGrantPageUrl(html: string, baseUrl: string): string | null {
-  const funderDomain = extractDomain(baseUrl);
+export function discoverGrantPageUrl(html: string, pageUrl: string, siteUrl = pageUrl): string | null {
+  const funderDomain = extractDomain(siteUrl);
   if (!funderDomain) return null;
 
   // Extract <a> tags — same regex as enrich-subpages.js
@@ -127,7 +130,7 @@ export function discoverGrantPageUrl(html: string, baseUrl: string): string | nu
         rawHref.startsWith('tel:') || rawHref.startsWith('javascript:')) continue;
 
     let resolvedUrl: string;
-    try { resolvedUrl = new URL(rawHref, baseUrl).href; } catch { continue; }
+    try { resolvedUrl = new URL(rawHref, pageUrl).href; } catch { continue; }
 
     // Must be same domain
     const linkDomain = extractDomain(resolvedUrl);
@@ -163,9 +166,9 @@ export function discoverGrantPageUrl(html: string, baseUrl: string): string | nu
 export interface DiscoveryResult {
   /** Funder id → discovered grant page URL. */
   found: Map<string, string>;
-  /** Funders whose homepage has no grant page: scanned without one, 404/410, not HTML, or redirected off-site. */
+  /** Funders whose homepage has no grant page: scanned without one, 404/410, or not HTML. */
   missed: string[];
-  /** Funders whose homepage failed to load or was cut off by the budget. */
+  /** Funders whose homepage failed to load. */
   failed: string[];
 }
 
@@ -177,9 +180,9 @@ export interface DiscoveryOptions {
 
 /**
  * Discover grant page URLs for funders missing apply_url, in the given order,
- * `concurrency` homepages at a time, returning once all are scanned or
- * `budgetMs` has passed, whichever is first. Funders not reached are in none
- * of the result's lists.
+ * `concurrency` homepages at a time (each website fetched once), returning
+ * once all are scanned or `budgetMs` has passed, whichever is first. Funders
+ * not reached, or cut off by the budget, are in none of the result's lists.
  */
 export async function discoverGrantUrlsInBatch(
   funders: { id: string; website: string }[],
@@ -188,28 +191,31 @@ export async function discoverGrantUrlsInBatch(
   const result: DiscoveryResult = { found: new Map(), missed: [], failed: [] };
   if (funders.length === 0 || budgetMs <= 0) return result;
 
+  const idsBySite = new Map<string, string[]>();
+  for (const f of funders) {
+    const url = f.website.startsWith('http') ? f.website : `https://${f.website}`;
+    idsBySite.set(url, [...(idsBySite.get(url) || []), f.id]);
+  }
+  const sites = [...idsBySite];
+
   const deadline = AbortSignal.timeout(Math.ceil(budgetMs));
   let next = 0;
   const worker = async () => {
-    while (next < funders.length && !deadline.aborted) {
-      const f = funders[next++];
-      const url = f.website.startsWith('http') ? f.website : `https://${f.website}`;
+    while (next < sites.length && !deadline.aborted) {
+      const [url, ids] = sites[next++];
       const page = await fetchHomepageHtml(url, deadline, fetchFn);
+      if (deadline.aborted) return;
       if (page.kind === 'error') {
-        result.failed.push(f.id);
+        result.failed.push(...ids);
         continue;
       }
-      // A homepage that redirects off the funder's site (expired domain, parked
-      // page, a social profile) has no grant page of the funder's
-      const site = extractDomain(url);
-      const servedFrom = page.kind === 'page' ? extractDomain(page.url) : null;
-      const discovered = page.kind === 'page' && site && servedFrom && onSite(servedFrom, site)
-        ? discoverGrantPageUrl(page.html, page.url)
-        : null;
-      if (discovered) result.found.set(f.id, discovered);
-      else result.missed.push(f.id);
+      const discovered = page.kind === 'page' ? discoverGrantPageUrl(page.html, page.url, url) : null;
+      for (const id of ids) {
+        if (discovered) result.found.set(id, discovered);
+        else result.missed.push(id);
+      }
     }
   };
-  await Promise.all(Array.from({ length: Math.min(concurrency, funders.length) }, worker));
+  await Promise.all(Array.from({ length: Math.min(concurrency, sites.length) }, worker));
   return result;
 }

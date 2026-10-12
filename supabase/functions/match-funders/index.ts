@@ -17,8 +17,7 @@
 
 import { ipRateLimit } from '../_shared/rate_limit.ts';
 import {
-  DISCOVERY_BUDGET_MS, DISCOVERY_ERROR_RECHECK_MS, DISCOVERY_MISS_RECHECK_MS, type DiscoveryResult,
-  discoverGrantUrlsInBatch,
+  DISCOVERY_ERROR_RECHECK_MS, DISCOVERY_MISS_RECHECK_MS, type DiscoveryResult, discoverGrantUrlsInBatch,
 } from './discovery.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -476,56 +475,33 @@ function normalizedEin(value: string | null | undefined): string | null {
 
 // ── Real-time grant page discovery (see discovery.ts) ──────────────────────
 
-type ResultRow = FunderRow & { next_step: string; next_step_type: string; next_step_url: string | null };
-
 /**
- * Look for grant application pages for the returned funders that have a
- * website but no apply link, best-ranked first, within DISCOVERY_BUDGET_MS or
- * what's left of the request budget. A hit sets the funder's
- * discovered_apply_url and re-derives the row's next step from the funder
- * (`funderOf`), whose next_step is still the DB's. Funders due for a recheck
- * later (apply_url_recheck_at) are skipped; if that lookup fails (e.g. before
- * the migration), none are.
+ * After the response: look for grant application pages for the returned
+ * funders that have a website but no apply link, best-ranked first, within
+ * DISCOVERY_BUDGET_MS, and record the outcome for later searches. Funders due
+ * for a recheck later (apply_url_recheck_at) are skipped; if that lookup fails
+ * (e.g. before the migration), none are. Errors are logged, never thrown.
  */
-async function discoverForResults(
-  results: ResultRow[],
-  funderOf: (id: string) => FunderRow | undefined,
-  requestDeadlineAt: number,
-): Promise<DiscoveryResult> {
-  const deadlineAt = Math.min(Date.now() + DISCOVERY_BUDGET_MS, requestDeadlineAt);
-  const none: DiscoveryResult = { found: new Map(), missed: [], failed: [] };
-  let candidates = results.filter((row) => row.website && !row.apply_url && !row.discovered_apply_url);
-  if (candidates.length === 0 || deadlineAt - Date.now() < 250) return none;
-
+async function discoverInBackground(results: FunderRow[]): Promise<void> {
   try {
-    const notDue = await sbFetchBatched<{ id: string }>(
-      `funders?select=id&id=in.{{IN_FILTER}}&apply_url_recheck_at=gt.${encodeURIComponent(new Date().toISOString())}`,
-      candidates.map((row) => row.id),
-      60,
-      Math.min(1_000, deadlineAt - Date.now()),
-    );
-    const skip = new Set(notDue.map((row) => row.id));
-    candidates = candidates.filter((row) => !skip.has(row.id));
+    let candidates = results.filter((row) => row.website && !row.apply_url && !row.discovered_apply_url);
+    if (candidates.length === 0) return;
+    try {
+      const notDue = await sbFetchBatched<{ id: string }>(
+        `funders?select=id&id=in.{{IN_FILTER}}&apply_url_recheck_at=gt.${encodeURIComponent(new Date().toISOString())}`,
+        candidates.map((row) => row.id),
+      );
+      const skip = new Set(notDue.map((row) => row.id));
+      candidates = candidates.filter((row) => !skip.has(row.id));
+    } catch (e) {
+      console.warn('apply_url_recheck_at lookup failed; scanning all:', e);
+    }
+    await recordDiscovery(await discoverGrantUrlsInBatch(
+      candidates.map((row) => ({ id: row.id, website: row.website! })),
+    ));
   } catch (e) {
-    console.warn('apply_url_recheck_at lookup failed; scanning all:', e);
+    console.warn('grant page discovery failed:', e);
   }
-
-  const discovery = await discoverGrantUrlsInBatch(
-    candidates.map((row) => ({ id: row.id, website: row.website! })),
-    { budgetMs: deadlineAt - Date.now() },
-  );
-  for (const row of results) {
-    const url = discovery.found.get(row.id);
-    const funder = url ? funderOf(row.id) : undefined;
-    if (!url || !funder) continue;
-    funder.discovered_apply_url = url;
-    const next = deriveNextStep(funder);
-    row.discovered_apply_url = url;
-    row.next_step = next.text;
-    row.next_step_type = next.type;
-    row.next_step_url = resolveNextStepUrl(next.type, funder);
-  }
-  return discovery;
 }
 
 /**
@@ -534,7 +510,7 @@ async function discoverForResults(
  */
 async function recordDiscovery({ found, missed, failed }: DiscoveryResult): Promise<void> {
   const patch = (ids: string[], body: Record<string, unknown>) =>
-    sbFetchBatched(`funders?id=in.{{IN_FILTER}}`, ids, 60, undefined, {
+    sbFetchBatched(`funders?id=in.{{IN_FILTER}}`, ids, 60, {
       method: 'PATCH',
       headers: { Prefer: 'return=minimal' },
       body: JSON.stringify(body),
@@ -550,7 +526,7 @@ async function recordDiscovery({ found, missed, failed }: DiscoveryResult): Prom
 }
 
 /** Keep `work` running after the response is sent (Supabase Edge Runtime), where supported. */
-function inBackground(work: Promise<unknown>): void {
+function inBackground(work: Promise<void>): void {
   const runtime = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;
   runtime?.waitUntil?.(work);
 }
@@ -951,12 +927,11 @@ async function sbFetchBatched<T>(
   pathTemplate: string,
   ids: string[],
   batchSize = 60,
-  timeoutMs?: number,
   init: RequestInit = {},
 ): Promise<T[]> {
   if (ids.length === 0) return [];
   const fetchBatch = async (batch: string[]) => {
-    const res = await sbFetch(pathTemplate.replace('{{IN_FILTER}}', buildInFilter(batch)), { ...init, timeoutMs });
+    const res = await sbFetch(pathTemplate.replace('{{IN_FILTER}}', buildInFilter(batch)), init);
     return res.status === 204 ? [] : res.json() as Promise<T[]>;
   };
 
@@ -3017,13 +2992,11 @@ Deno.serve(async (req) => {
           return (b.peer_match_count || 0) - (a.peer_match_count || 0);
         });
 
-      // Grant page discovery for the returned funders, alongside enriching grantee
-      // EINs from recipient_organizations where missing; record discovery after
-      const [discovery] = await Promise.all([
-        discoverForResults(results, (id) => funderById.get(id), requestDeadlineAt),
-        enrichGranteeEins(results),
-      ]);
-      inBackground(recordDiscovery(discovery));
+      // Grant page discovery for the returned funders, after the response
+      inBackground(discoverInBackground(results));
+
+      // Enrich grantee EINs from recipient_organizations where missing
+      await enrichGranteeEins(results);
 
       return new Response(JSON.stringify({
         results,
@@ -3389,14 +3362,6 @@ Deno.serve(async (req) => {
       })
       .filter((row) => (row.fit_score || 0) >= MIN_RESULT_FIT_SCORE);
 
-    // Grant page discovery for the returned funders, alongside enriching grantee
-    // EINs from recipient_organizations where missing, before they're cached
-    const funderById = new Map(candidateFunders.map(({ funder }) => [funder.id, funder]));
-    const [missionDiscovery] = await Promise.all([
-      discoverForResults(results, (id) => funderById.get(id), requestDeadlineAt),
-      enrichGranteeEins(results),
-    ]);
-
     await sbFetch('search_cache?on_conflict=mission_hash', {
       method: 'POST',
       headers: { Prefer: 'resolution=merge-duplicates' },
@@ -3408,7 +3373,11 @@ Deno.serve(async (req) => {
       }),
     });
 
-    inBackground(recordDiscovery(missionDiscovery));
+    // Grant page discovery for the returned funders, after the response
+    inBackground(discoverInBackground(results));
+
+    // Enrich grantee EINs from recipient_organizations where missing
+    await enrichGranteeEins(results);
 
     return new Response(JSON.stringify({ results, cached: false }), {
       headers: { ...headers, 'Content-Type': 'application/json' },
