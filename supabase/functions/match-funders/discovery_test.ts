@@ -129,11 +129,11 @@ Deno.test("fetchHomepageHtml: definite misses vs failures that may pass", async 
 Deno.test("discoverGrantUrlsInBatch finds links, and tells misses from failures", async () => {
   const { fn, requested } = fakeFetch({ "a.org": "apply", "b.org": "none", "c.org": "404", "e.org": "503" });
   const { found, missed, failed } = await discoverGrantUrlsInBatch([
-    { id: "a", website: "a.org" },
+    { id: "a", website: "https://a.org" },
     { id: "b", website: "https://b.org" },
-    { id: "c", website: "c.org" },
-    { id: "d", website: "d.org" },
-    { id: "e", website: "e.org" },
+    { id: "c", website: "https://c.org" },
+    { id: "d", website: "https://d.org" },
+    { id: "e", website: "https://e.org" },
   ], { fetchFn: fn, budgetMs: 1_000 });
   assertEquals([...found], [["a", "https://a.org/how-to-apply"]]);
   assertEquals(missed.sort(), ["b", "c"]);
@@ -145,9 +145,9 @@ Deno.test("discoverGrantUrlsInBatch finds links, and tells misses from failures"
 Deno.test("discoverGrantUrlsInBatch resolves links against the page's URL after redirects", async () => {
   const { fn } = fakeFetch({ "fund.org": "redirect-in", "sub.org": "redirect-sub", "old.org": "redirect" });
   const { found, missed } = await discoverGrantUrlsInBatch([
-    { id: "in", website: "fund.org" },
-    { id: "sub", website: "sub.org" },
-    { id: "off", website: "old.org" },
+    { id: "in", website: "https://fund.org" },
+    { id: "sub", website: "https://sub.org" },
+    { id: "off", website: "https://old.org" },
   ], { fetchFn: fn, budgetMs: 1_000 });
   assertEquals(found.get("in"), "https://www.fund.org/en/apply");
   assertEquals(found.get("sub"), "https://www.sub.org/how-to-apply");
@@ -157,10 +157,10 @@ Deno.test("discoverGrantUrlsInBatch resolves links against the page's URL after 
 
 Deno.test("discoverGrantUrlsInBatch returns at its budget when sites hang", async () => {
   const sites: Record<string, Site> = { "fast.org": "apply" };
-  const funders = [{ id: "fast", website: "fast.org" }];
+  const funders = [{ id: "fast", website: "https://fast.org" }];
   for (let i = 0; i < 30; i++) {
     sites[`s${i}.org`] = i % 2 ? "stall-body" : "stall-headers";
-    funders.push({ id: `s${i}`, website: `s${i}.org` });
+    funders.push({ id: `s${i}`, website: `https://s${i}.org` });
   }
   const { fn, requested } = fakeFetch(sites);
   const started = Date.now();
@@ -179,9 +179,9 @@ Deno.test("discoverGrantUrlsInBatch returns at its budget when sites hang", asyn
 Deno.test("discoverGrantUrlsInBatch counts sites still loading after hungMs as failed", async () => {
   const { fn } = fakeFetch({ "a.org": "stall-headers", "b.org": "stall-body", "c.org": "apply" });
   const { found, failed } = await discoverGrantUrlsInBatch([
-    { id: "a", website: "a.org" },
-    { id: "b", website: "b.org" },
-    { id: "c", website: "c.org" },
+    { id: "a", website: "https://a.org" },
+    { id: "b", website: "https://b.org" },
+    { id: "c", website: "https://c.org" },
   ], { fetchFn: fn, budgetMs: 200, hungMs: 100 });
   assertEquals([...found.keys()], ["c"]);
   assertEquals(failed.sort(), ["a", "b"]);
@@ -190,8 +190,8 @@ Deno.test("discoverGrantUrlsInBatch counts sites still loading after hungMs as f
 Deno.test("discoverGrantUrlsInBatch fetches a website shared by several funders once", async () => {
   const { fn, requested } = fakeFetch({ "a.org": "apply" });
   const { found } = await discoverGrantUrlsInBatch([
-    { id: "a1", website: "a.org" },
-    { id: "a2", website: "a.org" },
+    { id: "a1", website: "https://a.org" },
+    { id: "a2", website: "https://a.org" },
   ], { fetchFn: fn, budgetMs: 1_000 });
   assertEquals(requested, ["https://a.org"]);
   assertEquals([...found.keys()], ["a1", "a2"]);
@@ -202,6 +202,6 @@ Deno.test("discoverGrantUrlsInBatch with nothing to scan, or no time left", asyn
   assertEquals(await discoverGrantUrlsInBatch([]), empty);
   // A spent budget (even negative) returns nothing rather than throwing
   const { fn, requested } = fakeFetch({ "a.org": "apply" });
-  assertEquals(await discoverGrantUrlsInBatch([{ id: "a", website: "a.org" }], { fetchFn: fn, budgetMs: -5 }), empty);
+  assertEquals(await discoverGrantUrlsInBatch([{ id: "a", website: "https://a.org" }], { fetchFn: fn, budgetMs: -5 }), empty);
   assertEquals(requested, []);
 });

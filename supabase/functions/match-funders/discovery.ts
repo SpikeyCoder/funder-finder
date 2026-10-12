@@ -36,9 +36,14 @@ const GRANT_TEXT_HINTS = [
   'grants', 'funding', 'grantmaking',
 ];
 
+/** A URL's host without www. */
+function bareHost(url: URL): string {
+  return url.hostname.replace(/^www\./, '');
+}
+
 function extractDomain(url: string): string | null {
   try {
-    return new URL(url).hostname.replace(/^www\./, '');
+    return bareHost(new URL(url));
   } catch { return null; }
 }
 
@@ -125,12 +130,12 @@ function funderScope(pageUrl: string, siteUrl: string): ((link: URL) => boolean)
   const site = extractDomain(siteUrl);
   let page: URL;
   try { page = new URL(pageUrl); } catch { return null; }
-  const served = page.hostname.replace(/^www\./, '');
+  const served = bareHost(page);
   if (!site) return null;
-  if (onSite(served, site)) return (link) => onSite(link.hostname.replace(/^www\./, ''), site);
+  if (onSite(served, site)) return (link) => onSite(bareHost(link), site);
   const prefix = page.pathname.endsWith('/') ? page.pathname : `${page.pathname}/`;
   if (onSite(site, served) && prefix !== '/') {
-    return (link) => link.hostname.replace(/^www\./, '') === served && `${link.pathname}/`.startsWith(prefix);
+    return (link) => bareHost(link) === served && `${link.pathname}/`.startsWith(prefix);
   }
   return null;
 }
@@ -200,7 +205,8 @@ export interface DiscoveryOptions {
 }
 
 /**
- * Discover grant page URLs for funders missing apply_url, in the given order,
+ * Discover grant page URLs for funders missing apply_url (`website` an
+ * absolute http(s) URL), in the given order,
  * `concurrency` homepages at a time (each website fetched once), returning
  * once all are scanned or `budgetMs` has passed, whichever is first. Funders
  * not reached, or cut off by the budget before DISCOVERY_HUNG_MS, are in none
@@ -216,10 +222,7 @@ export async function discoverGrantUrlsInBatch(
   if (funders.length === 0 || budgetMs <= 0) return result;
 
   const idsBySite = new Map<string, string[]>();
-  for (const f of funders) {
-    const url = f.website.startsWith('http') ? f.website : `https://${f.website}`;
-    idsBySite.set(url, [...(idsBySite.get(url) || []), f.id]);
-  }
+  for (const f of funders) idsBySite.set(f.website, [...(idsBySite.get(f.website) || []), f.id]);
   const sites = [...idsBySite];
 
   const deadline = AbortSignal.timeout(Math.ceil(budgetMs));

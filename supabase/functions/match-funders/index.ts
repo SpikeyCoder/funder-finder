@@ -488,7 +488,11 @@ async function discoverInBackground(
   onHits?: (found: Map<string, string>) => Promise<unknown>,
 ): Promise<void> {
   try {
-    let candidates = results.filter((row) => row.website && !row.apply_url && !row.discovered_apply_url);
+    // Websites as the rest of the function links them (toExternalUrl)
+    let candidates = results
+      .filter((row) => !row.apply_url && !row.discovered_apply_url)
+      .map((row) => ({ id: row.id, stored: row.website, website: toExternalUrl(row.website) }))
+      .filter((c): c is { id: string; stored: string; website: string } => !!c.stored && !!c.website);
     if (candidates.length === 0) return;
     try {
       const notDue = await sbFetchBatched<{ id: string }>(
@@ -500,11 +504,8 @@ async function discoverInBackground(
     } catch (e) {
       console.warn('apply_url_recheck_at lookup failed; scanning all:', e);
     }
-    const discovery = await discoverGrantUrlsInBatch(
-      candidates.map((row) => ({ id: row.id, website: row.website! })),
-    );
-    const websiteOf = new Map(candidates.map((row) => [row.id, row.website!]));
-    await recordDiscovery(discovery, websiteOf);
+    const discovery = await discoverGrantUrlsInBatch(candidates);
+    await recordDiscovery(discovery, new Map(candidates.map((c) => [c.id, c.stored])));
     if (discovery.found.size > 0) await onHits?.(discovery.found);
   } catch (e) {
     console.warn('grant page discovery failed:', e);
@@ -513,27 +514,34 @@ async function discoverInBackground(
 
 /**
  * Save discovered grant page URLs, and when homepages without one are due a
- * recheck, back to the DB. Errors are logged, never thrown.
+ * recheck, back to the DB: each only while the funder's website (`websiteOf`,
+ * as stored) is still the one scanned. Errors are logged, never thrown.
  */
 async function recordDiscovery(
   { found, missed, failed }: DiscoveryResult,
   websiteOf: Map<string, string>,
 ): Promise<void> {
-  const patch = (filter: string, ids: string[], body: Record<string, unknown>) =>
-    sbFetchBatched(`funders?id=in.{{IN_FILTER}}${filter}`, ids, 60, {
-      method: 'PATCH',
-      headers: { Prefer: 'return=minimal' },
-      body: JSON.stringify(body),
-    }).catch((e) => console.warn('record discovery failed:', e));
+  // One PATCH per website (funders sharing one are scanned once)
+  const patch = (ids: string[], body: Record<string, unknown>) => {
+    const byWebsite = new Map<string, string[]>();
+    for (const id of ids) {
+      const website = websiteOf.get(id) ?? '';
+      byWebsite.set(website, [...(byWebsite.get(website) || []), id]);
+    }
+    return [...byWebsite].map(([website, group]) =>
+      sbFetchBatched(`funders?id=in.{{IN_FILTER}}&website=eq.${encodeURIComponent(website)}`, group, 60, {
+        method: 'PATCH',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify(body),
+      }).catch((e) => console.warn('record discovery failed:', e)));
+  };
 
   const at = (ms: number) => new Date(Date.now() + ms).toISOString();
   await Promise.all([
-    // Hits on their own (so they're saved even without the apply_url_recheck_at
-    // column), and only while the funder's website is still the one scanned
-    ...[...found].map(([id, url]) =>
-      patch(`&website=eq.${encodeURIComponent(websiteOf.get(id) ?? '')}`, [id], { discovered_apply_url: url })),
-    patch('', missed, { apply_url_recheck_at: at(DISCOVERY_MISS_RECHECK_MS) }),
-    patch('', failed, { apply_url_recheck_at: at(DISCOVERY_ERROR_RECHECK_MS) }),
+    // Hits on their own, so they're saved even without the apply_url_recheck_at column
+    ...[...found].flatMap(([id, url]) => patch([id], { discovered_apply_url: url })),
+    ...patch(missed, { apply_url_recheck_at: at(DISCOVERY_MISS_RECHECK_MS) }),
+    ...patch(failed, { apply_url_recheck_at: at(DISCOVERY_ERROR_RECHECK_MS) }),
   ]);
 }
 
