@@ -148,6 +148,8 @@ function funderScope(pageUrl: string, siteUrl: string): ((link: URL) => boolean)
 export function discoverGrantPageUrl(html: string, pageUrl: string, siteUrl = pageUrl): string | null {
   const inScope = funderScope(pageUrl, siteUrl);
   if (!inScope) return null;
+  const trimSlash = (path: string) => path.replace(/\/+$/, '');
+  const landingPath = trimSlash(new URL(pageUrl).pathname);
 
   // Extract <a> tags — same regex as enrich-subpages.js
   const tagRe = /<a\b[^>]*href\s*=\s*["']([^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi;
@@ -164,12 +166,13 @@ export function discoverGrantPageUrl(html: string, pageUrl: string, siteUrl = pa
     try { link = new URL(rawHref, pageUrl); } catch { continue; }
     const resolvedUrl = link.href;
 
-    // Must be the funder's own web page, not its homepage
+    // Must be the funder's own web page, not its homepage or the page scanned
     if ((link.protocol !== 'https:' && link.protocol !== 'http:') || !inScope(link)) continue;
-    if (link.pathname === '/' || link.pathname === '') continue;
+    if (trimSlash(link.pathname) === '' || trimSlash(link.pathname) === landingPath) continue;
 
     // Score against hints
-    const urlLower = resolvedUrl.toLowerCase();
+    // The path, not the host: every link on fundingfutures.org isn't a grant page
+    const urlLower = `${link.pathname}${link.search}`.toLowerCase();
     const anchorText = m[2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
     let score = 0;
 

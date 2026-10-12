@@ -94,6 +94,12 @@ Deno.test("discoverGrantPageUrl after a redirect up to a parent domain stays und
   assertEquals(discoverGrantPageUrl(html, "https://www.bigcorp.com/", "https://foundation.bigcorp.com"), null);
 });
 
+Deno.test("discoverGrantPageUrl scores the link's path, not its host, and skips the page scanned", () => {
+  assertEquals(discoverGrantPageUrl(page('<a href="https://fundingfutures.org/privacy">Privacy</a>'), "https://fundingfutures.org"), null);
+  const landing = page('<a href="/foundation/">Foundation grants</a>');
+  assertEquals(discoverGrantPageUrl(landing, "https://www.bigcorp.com/foundation/", "https://foundation.bigcorp.com"), null);
+});
+
 Deno.test("discoverGrantPageUrl rejects lookalike domains", () => {
   for (const href of ["https://notfund.org/apply", "https://fund.org.example.com/grants"]) {
     assertEquals(discoverGrantPageUrl(page(`<a href="${href}">Apply</a>`), "https://fund.org"), null);

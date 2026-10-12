@@ -16,6 +16,7 @@
  */
 
 import { ipRateLimit } from '../_shared/rate_limit.ts';
+import { safeFetch } from '../_shared/safe_fetch.ts';
 import {
   DISCOVERY_ERROR_RECHECK_MS, DISCOVERY_MISS_RECHECK_MS, type DiscoveryResult, discoverGrantUrlsInBatch,
 } from './discovery.ts';
@@ -504,7 +505,8 @@ async function discoverInBackground(
     } catch (e) {
       console.warn('apply_url_recheck_at lookup failed; scanning all:', e);
     }
-    const discovery = await discoverGrantUrlsInBatch(candidates);
+    // safeFetch: no private or metadata hosts, checked again on every redirect
+    const discovery = await discoverGrantUrlsInBatch(candidates, { fetchFn: safeFetch as typeof fetch });
     await recordDiscovery(discovery, new Map(candidates.map((c) => [c.id, c.stored])));
     if (discovery.found.size > 0) await onHits?.(discovery.found);
   } catch (e) {
