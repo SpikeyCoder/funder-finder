@@ -99,7 +99,7 @@ function renderMarkdown(text: string): string {
 export default function GrantWriter() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, userProfile, profileLoaded, saveUserProfile } = useAuth();
+  const { user, userProfile, profileLoaded, saveUserProfile, refreshUserProfile } = useAuth();
   const funder: Funder | null = (location.state as any)?.funder ?? null;
 
   // Page title
@@ -144,11 +144,22 @@ export default function GrantWriter() {
   const [showPastGrants, setShowPastGrants] = useState(true);
   const profileAppliedRef = useRef(false);
 
-  // Pre-populate empty mission & org details from user profile, once, when
-  // it's available. Starting a draft or saving the name counts as applied, so
-  // a profile row those create doesn't refill the form.
+  // The profile as it is now: Settings and onboarding write it without
+  // updating the copy in context
+  const [profileFresh, setProfileFresh] = useState(false);
   useEffect(() => {
-    if (profileAppliedRef.current || !profileLoaded || !userProfile) return;
+    if (!user) return;
+    let current = true;
+    refreshUserProfile().catch(() => {}).finally(() => { if (current) setProfileFresh(true); });
+    return () => { current = false; };
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const profileReady = profileLoaded && profileFresh;
+
+  // Pre-populate empty mission & org details from user profile, once, when
+  // it's available. Starting a draft or saving the name after it's available
+  // counts as applied, so a profile row those create doesn't refill the form.
+  useEffect(() => {
+    if (profileAppliedRef.current || !profileReady || !userProfile) return;
     profileAppliedRef.current = true;
     const budget = profileBudgetLabel(userProfile.budget_range);
     if (userProfile.mission_statement) setMission(prev => prev || userProfile.mission_statement!);
@@ -159,7 +170,7 @@ export default function GrantWriter() {
       geoFocus: prev.geoFocus || userProfile.location_served || '',
     }));
     if (userProfile.organization_name?.trim() || budget) setShowOrg(true);
-  }, [profileLoaded, userProfile]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [profileReady, userProfile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Whether Organization Name is the org profile's
   const orgFromProfile = !!orgDetails.orgName.trim()
@@ -167,23 +178,27 @@ export default function GrantWriter() {
 
   // Save the organization name to the org profile. (Geographic Focus isn't
   // saved: its profile field, location_served, is the funder search's location.)
-  // The outcome is shown only while the name is still the one saved.
-  const [orgProfileSave, setOrgProfileSave] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  const orgNameRef = useRef(orgDetails.orgName);
-  orgNameRef.current = orgDetails.orgName;
+  // `savedName` / `failedName` say which name a save was for, so its outcome
+  // shows only while that name is in the field.
+  const [savingName, setSavingName] = useState(false);
+  const [savedName, setSavedName] = useState<string | null>(null);
+  const [failedName, setFailedName] = useState<string | null>(null);
   const saveOrgProfile = async () => {
     const name = orgDetails.orgName.trim();
     profileAppliedRef.current = true;
-    setOrgProfileSave('saving');
-    let outcome: 'saved' | 'error' = 'saved';
+    setSavingName(true);
+    setFailedName(null);
     try {
       await saveUserProfile({ organization_name: name });
+      setSavedName(name);
     } catch (e) {
       console.warn('Org profile save:', e);
-      outcome = 'error';
+      setFailedName(name);
+    } finally {
+      setSavingName(false);
     }
-    setOrgProfileSave(orgNameRef.current.trim() === name ? outcome : 'idle');
   };
+  const profileName = userProfile?.organization_name?.trim() || null;
 
   // ── Upload state ────────────────────────────────────────────────────────
 
@@ -234,8 +249,6 @@ export default function GrantWriter() {
 
   const updateOrg = (key: keyof OrgDetails, value: string) => {
     setOrgDetails((prev) => ({ ...prev, [key]: value }));
-    // (a save in flight finishes, then shows nothing unless the name is back as saved)
-    if (key === 'orgName') setOrgProfileSave((prev) => (prev === 'saving' ? prev : 'idle'));
   };
 
   // ── File upload handlers ────────────────────────────────────────────────
@@ -328,7 +341,7 @@ export default function GrantWriter() {
   const generate = async () => {
     if (!funder || !mission.trim() || phase === 'generating' || phase === 'analyzing' || phase === 'researching') return;
 
-    profileAppliedRef.current = true;
+    if (profileReady) profileAppliedRef.current = true;
 
     // Save mission to profile for logged-in users (fire-and-forget)
     if (user && mission.trim()) {
@@ -755,23 +768,27 @@ export default function GrantWriter() {
                     <div className="sm:col-span-2 pt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-gray-400">
                       {orgFromProfile ? (
                         <span>
-                          {orgProfileSave === 'saved'
+                          {savedName === orgDetails.orgName.trim()
                             ? 'Organization name saved to your profile.'
                             : 'Organization name matches your profile.'}
                         </span>
                       ) : (
                         <>
-                          <span>Save your organization's name to your profile to fill it in for every draft.</span>
+                          <span>
+                            {profileName
+                              ? `Your profile's organization name is "${profileName}".`
+                              : "Save your organization's name to your profile to fill it in for every draft."}
+                          </span>
                           <button
                             type="button"
                             onClick={saveOrgProfile}
-                            disabled={!profileLoaded || !orgDetails.orgName.trim() || orgProfileSave === 'saving'}
+                            disabled={!profileReady || !orgDetails.orgName.trim() || savingName}
                             className="inline-flex items-center gap-1.5 rounded-lg border border-[#30363d] px-3 py-1.5 text-gray-200 hover:bg-[#161b22] disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            {orgProfileSave === 'saving' ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
-                            Save name to profile
+                            {savingName ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                            {profileName ? 'Replace it with this name' : 'Save name to profile'}
                           </button>
-                          {orgProfileSave === 'error' && (
+                          {failedName === orgDetails.orgName.trim() && (
                             <span className="text-red-400" role="alert">Couldn't save. Try again.</span>
                           )}
                         </>
