@@ -16,6 +16,10 @@
  */
 
 import { ipRateLimit } from '../_shared/rate_limit.ts';
+import { safeFetch } from '../_shared/safe_fetch.ts';
+import {
+  DISCOVERY_ERROR_RECHECK_MS, DISCOVERY_MISS_RECHECK_MS, type DiscoveryResult, discoverGrantUrlsInBatch,
+} from './discovery.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -470,165 +474,151 @@ function normalizedEin(value: string | null | undefined): string | null {
   return digits.length === 9 ? digits : null;
 }
 
-// ── Real-time grant page discovery ──────────────────────────────────────────
-// Adapted from scripts/enrich-subpages.js — lightweight homepage scanner that
-// finds grant application / LOI pages by scoring <a> tag hrefs + anchor text.
+// ── Real-time grant page discovery (see discovery.ts) ──────────────────────
 
-const GRANT_PATH_HINTS = [
-  '/apply', '/grant-guideline', '/how-to-apply', '/loi', '/rfp',
-  '/letter-of-inquiry', '/applicant', '/funding-guideline', '/proposal',
-  '/submit', '/grantseekers', '/prospective', '/grants', '/funding',
-  '/open-grant', '/grant-opportunities', '/grantmaking',
-];
-
-const GRANT_TEXT_HINTS = [
-  'apply', 'how to apply', 'grant guidelines', 'loi', 'letter of inquiry',
-  'rfp', 'submit', 'application', 'grantseekers', 'funding guidelines',
-  'grant opportunities', 'open grants', 'apply for a grant',
-  'application process', 'prospective grantees', 'request for proposals',
-  'grants', 'funding', 'grantmaking',
-];
-
-function extractDomain(url: string): string | null {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '');
-  } catch { return null; }
+/** A result row discovery looks for a grant page for: a website, and no apply link yet. */
+function needsGrantLink(row: FunderRow): boolean {
+  return !!row.website && !row.apply_url && !row.discovered_apply_url;
 }
 
 /**
- * Fetch a homepage's HTML with a tight timeout.
- * Returns null on any failure — caller treats as "no discovery".
+ * After the response: look for grant application pages for the returned
+ * funders that have a website but no apply link, best-ranked first, within
+ * DISCOVERY_BUDGET_MS, and record the outcome for later searches. Funders due
+ * for a recheck later (apply_url_recheck_at) are skipped; if that lookup fails
+ * (e.g. before the migration), none are, except on `fromCache`. Returns how
+ * many grant pages were found. Errors are logged, never thrown.
  */
-async function fetchHomepageHtml(url: string, timeoutMs = 3000): Promise<string | null> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+async function discoverInBackground(
+  results: FunderRow[],
+  { fromCache = false } = {},
+): Promise<number> {
   try {
-    const res = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; FunderFinder/1.0; +https://fundermatch.org)',
-        'Accept': 'text/html,application/xhtml+xml',
-      },
-      redirect: 'follow',
-    });
-    clearTimeout(timer);
-    if (!res.ok) return null;
-    const ct = res.headers.get('content-type') || '';
-    if (!ct.includes('html')) return null;
-    // Limit body read to avoid huge pages
-    const text = await res.text();
-    return text.length > 500_000 ? text.slice(0, 500_000) : text;
-  } catch {
-    clearTimeout(timer);
-    return null;
-  }
-}
-
-/**
- * Scan homepage HTML for grant-related links, return the best URL or null.
- */
-function discoverGrantPageUrl(html: string, baseUrl: string): string | null {
-  const funderDomain = extractDomain(baseUrl);
-  if (!funderDomain) return null;
-
-  // Extract <a> tags — same regex as enrich-subpages.js
-  const tagRe = /<a\b[^>]*href\s*=\s*["']([^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi;
-  let best: { url: string; score: number } | null = null;
-  let m: RegExpExecArray | null;
-
-  while ((m = tagRe.exec(html)) !== null) {
-    const rawHref = m[1].trim();
-    // Skip non-page links
-    if (!rawHref || rawHref.startsWith('#') || rawHref.startsWith('mailto:') ||
-        rawHref.startsWith('tel:') || rawHref.startsWith('javascript:')) continue;
-
-    let resolvedUrl: string;
-    try { resolvedUrl = new URL(rawHref, baseUrl).href; } catch { continue; }
-
-    // Must be same domain
-    const linkDomain = extractDomain(resolvedUrl);
-    if (!linkDomain) continue;
-    if (!linkDomain.includes(funderDomain) && !funderDomain.includes(linkDomain)) continue;
-
-    // Skip homepage itself
+    const ids = results.filter(needsGrantLink).map((row) => row.id);
+    let rows: { id: string; website: string | null }[];
     try {
-      const parsed = new URL(resolvedUrl);
-      if (parsed.pathname === '/' || parsed.pathname === '') continue;
-    } catch { continue; }
-
-    // Score against hints
-    const urlLower = resolvedUrl.toLowerCase();
-    const anchorText = m[2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
-    let score = 0;
-
-    for (const hint of GRANT_PATH_HINTS) {
-      if (urlLower.includes(hint)) score += 3;
+      // The funders still without a link and due a scan, with their website
+      // as it is now (cached results may be days old)
+      const now = encodeURIComponent(new Date().toISOString());
+      rows = await sbFetchBatched<{ id: string; website: string | null }>(
+        `funders?select=id,website&id=in.{{IN_FILTER}}&apply_url=is.null&discovered_apply_url=is.null` +
+          `&or=(apply_url_recheck_at.is.null,apply_url_recheck_at.lte.${now})`,
+        ids,
+      );
+    } catch (e) {
+      // e.g. before the apply_url_recheck_at migration: nothing would be
+      // recorded, so cache hits would rescan every time; only fresh searches scan
+      if (fromCache) return 0;
+      console.warn('apply_url_recheck_at lookup failed; scanning all:', e);
+      rows = results.filter((row) => ids.includes(row.id));
     }
-    for (const hint of GRANT_TEXT_HINTS) {
-      if (anchorText.includes(hint)) score += 3;
-    }
-
-    if (score >= 3 && (!best || score > best.score)) {
-      best = { url: resolvedUrl, score };
-    }
+    // Best-ranked first, with websites as the rest of the function links them (toExternalUrl)
+    const rank = new Map(ids.map((id, i) => [id, i]));
+    const candidates = rows
+      .sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0))
+      .map((row) => ({ id: row.id, stored: row.website, website: toExternalUrl(row.website) }))
+      .filter((c): c is { id: string; stored: string; website: string } => !!c.stored && !!c.website);
+    if (candidates.length === 0) return 0;
+    // safeFetch: no private or metadata hosts, checked again on every redirect
+    const discovery = await discoverGrantUrlsInBatch(candidates, { fetchFn: safeFetch as typeof fetch });
+    await recordDiscovery(discovery, new Map(candidates.map((c) => [c.id, c.stored])));
+    return discovery.found.size;
+  } catch (e) {
+    console.warn('grant page discovery failed:', e);
+    return 0;
   }
-
-  return best?.url ?? null;
 }
 
-/**
- * Batch-discover grant page URLs for funders missing apply_url.
- * Processes in chunks of 6 concurrently, returns Map<funderId, discoveredUrl>.
- */
-async function discoverGrantUrlsInBatch(
-  funders: { id: string; website: string }[],
-): Promise<Map<string, string>> {
-  const results = new Map<string, string>();
-  if (funders.length === 0) return results;
+type CachedRow = FunderRow & { next_step_type?: string; next_step_url?: string | null };
 
-  const CHUNK_SIZE = 6;
-  for (let i = 0; i < funders.length; i += CHUNK_SIZE) {
-    const chunk = funders.slice(i, i + CHUNK_SIZE);
-    const settled = await Promise.allSettled(
-      chunk.map(async (f) => {
-        const url = f.website.startsWith('http') ? f.website : `https://${f.website}`;
-        const html = await fetchHomepageHtml(url);
-        if (!html) return null;
-        const discovered = discoverGrantPageUrl(html, url);
-        return discovered ? { id: f.id, url: discovered } : null;
-      }),
+/**
+ * Give result rows without an apply link any grant page discovery has found
+ * for them (funders.discovered_apply_url), with the next step re-derived from
+ * the funder's DB next_step. Returns whether any row changed. Best effort: on
+ * error or timeout the rows are left as they are.
+ */
+async function withDiscoveredLinks(results: CachedRow[]): Promise<boolean> {
+  try {
+    const ids = results.filter(needsGrantLink).map((row) => row.id);
+    const found = await sbFetchBatched<{ id: string; next_step: string | null; discovered_apply_url: string }>(
+      'funders?select=id,next_step,discovered_apply_url&id=in.{{IN_FILTER}}&discovered_apply_url=not.is.null',
+      ids,
     );
-    for (const result of settled) {
-      if (result.status === 'fulfilled' && result.value) {
-        results.set(result.value.id, result.value.url);
-      }
+    const byId = new Map(found.map((row) => [row.id, row]));
+    for (const row of results) {
+      const hit = byId.get(row.id);
+      if (!hit) continue;
+      const funder = { ...row, next_step: hit.next_step, discovered_apply_url: hit.discovered_apply_url };
+      const next = deriveNextStep(funder);
+      row.discovered_apply_url = hit.discovered_apply_url;
+      row.next_step = next.text;
+      row.next_step_type = next.type;
+      row.next_step_url = resolveNextStepUrl(next.type, funder);
     }
+    return found.length > 0;
+  } catch (e) {
+    console.warn('discovered links for results failed:', e);
+    return false;
   }
-  return results;
 }
 
 /**
- * Fire-and-forget: cache newly discovered grant page URLs back to the DB.
- * Non-blocking — errors are caught and logged, never thrown.
+ * After the response: discovery for cached mission results, then any grant
+ * pages found (by this or any other search) written into the cache entry.
  */
-function cacheDiscoveredUrls(
-  discoveredUrls: Map<string, string>,
-  supabaseUrl: string,
-  supabaseKey: string,
-): void {
-  if (discoveredUrls.size === 0) return;
-  for (const [id, url] of discoveredUrls) {
-    fetch(`${supabaseUrl}/rest/v1/funders?id=eq.${id}`, {
-      method: 'PATCH',
-      headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-        'Content-Type': 'application/json',
-        Prefer: 'return=minimal',
-      },
-      body: JSON.stringify({ discovered_apply_url: url }),
-    }).catch((e) => console.warn(`cache discovered_apply_url failed for ${id}:`, e));
-  }
+async function refreshCachedResults(
+  cacheKey: string,
+  cachedAt: string,
+  results: CachedRow[],
+  { justBuilt = false } = {},
+): Promise<void> {
+  // Rows just built from funders already carry their links
+  const linkedBefore = !justBuilt && await withDiscoveredLinks(results);
+  const found = await discoverInBackground(results, { fromCache: !justBuilt });
+  const linkedAfter = found > 0 && await withDiscoveredLinks(results);
+  if (linkedBefore || linkedAfter) await updateSearchCache(cacheKey, cachedAt, results);
+}
+
+/** Replace the results cached for `cacheKey`, unless a newer search has replaced them. */
+function updateSearchCache(cacheKey: string, cachedAt: string, results: unknown[]): Promise<unknown> {
+  return sbFetch(
+    `search_cache?mission_hash=eq.${encodeURIComponent(cacheKey)}&created_at=eq.${encodeURIComponent(cachedAt)}`,
+    { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ results }) },
+  ).catch((e) => console.warn('search cache update failed:', e));
+}
+
+/**
+ * Save discovered grant page URLs, and when homepages without one are due a
+ * recheck, back to the DB: each only while the funder's website (`websiteOf`,
+ * as stored) is still the one scanned. Errors are logged, never thrown.
+ */
+async function recordDiscovery(
+  { found, missed, failed }: DiscoveryResult,
+  websiteOf: Map<string, string>,
+): Promise<void> {
+  // One PATCH per website (funders sharing one are scanned once)
+  const patch = (ids: string[], body: Record<string, unknown>) =>
+    [...Map.groupBy(ids, (id) => websiteOf.get(id) ?? '')].map(([website, group]) =>
+      sbFetchBatched(`funders?id=in.{{IN_FILTER}}&website=eq.${encodeURIComponent(website)}`, group, 60, {
+        method: 'PATCH',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify(body),
+      }).catch((e) => console.warn('record discovery failed:', e)));
+
+  const at = (ms: number) => new Date(Date.now() + ms).toISOString();
+  await Promise.all([
+    // Hits on their own, so they're saved even without the apply_url_recheck_at column
+    ...[...Map.groupBy(found.keys(), (id) => found.get(id)!)].flatMap(([url, ids]) =>
+      patch(ids, { discovered_apply_url: url })),
+    ...patch(missed, { apply_url_recheck_at: at(DISCOVERY_MISS_RECHECK_MS) }),
+    ...patch(failed, { apply_url_recheck_at: at(DISCOVERY_ERROR_RECHECK_MS) }),
+  ]);
+}
+
+/** Keep `work` running after the response is sent (Supabase Edge Runtime), where supported. */
+function inBackground(work: Promise<unknown>): void {
+  const runtime = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;
+  runtime?.waitUntil?.(work);
 }
 
 function propublicaFoundationUrl(funder: FunderRow): string {
@@ -1023,15 +1013,20 @@ function buildInFilter(ids: string[]): string {
  * @param batchSize     Max IDs per request (default 60, keeps URLs safely under 4KB).
  * @returns             Merged JSON array from all batches.
  */
-async function sbFetchBatched<T>(pathTemplate: string, ids: string[], batchSize = 60): Promise<T[]> {
+async function sbFetchBatched<T>(
+  pathTemplate: string,
+  ids: string[],
+  batchSize = 60,
+  init: SbFetchOptions = {},
+): Promise<T[]> {
   if (ids.length === 0) return [];
+  const fetchBatch = async (batch: string[]) => {
+    const res = await sbFetch(pathTemplate.replace('{{IN_FILTER}}', buildInFilter(batch)), init);
+    return res.status === 204 ? [] : res.json() as Promise<T[]>;
+  };
 
   // If small enough for a single request, just do it
-  if (ids.length <= batchSize) {
-    const path = pathTemplate.replace('{{IN_FILTER}}', buildInFilter(ids));
-    const res = await sbFetch(path);
-    return res.json() as Promise<T[]>;
-  }
+  if (ids.length <= batchSize) return fetchBatch(ids);
 
   // Split into batches and fetch in parallel
   const batches: string[][] = [];
@@ -1039,13 +1034,7 @@ async function sbFetchBatched<T>(pathTemplate: string, ids: string[], batchSize 
     batches.push(ids.slice(i, i + batchSize));
   }
 
-  const results = await Promise.all(
-    batches.map(async (batch) => {
-      const path = pathTemplate.replace('{{IN_FILTER}}', buildInFilter(batch));
-      const res = await sbFetch(path);
-      return res.json() as Promise<T[]>;
-    })
-  );
+  const results = await Promise.all(batches.map(fetchBatch));
 
   return results.flat();
 }
@@ -3007,20 +2996,6 @@ Deno.serve(async (req) => {
         if (!funderById.has(synthetic.id)) funderById.set(synthetic.id, synthetic);
       }
 
-      // ── Real-time grant page discovery ─────────────────────────────────────
-      // For funders with a website but no apply_url or discovered_apply_url,
-      // scan their homepage for grant application links (3s timeout per site).
-      const fundersNeedingDiscovery = [...funderById.values()]
-        .filter((f) => f.website && !f.apply_url && !f.discovered_apply_url)
-        .map((f) => ({ id: f.id, website: f.website! }));
-      const discoveredUrls = await discoverGrantUrlsInBatch(fundersNeedingDiscovery);
-      // Merge discovered URLs into funder objects so deriveNextStep() picks them up
-      for (const [id, url] of discoveredUrls) {
-        const f = funderById.get(id);
-        if (f) f.discovered_apply_url = url;
-      }
-      // ────────────────────────────────────────────────────────────────────────
-
       const results = foundationIds
         .map((foundationId) => funderById.get(foundationId))
         .filter((funder): funder is FunderRow => !!funder)
@@ -3107,11 +3082,11 @@ Deno.serve(async (req) => {
           return (b.peer_match_count || 0) - (a.peer_match_count || 0);
         });
 
-      // Fire-and-forget: cache any newly discovered grant page URLs
-      cacheDiscoveredUrls(discoveredUrls, SUPABASE_URL, SUPABASE_KEY);
-
       // Enrich grantee EINs from recipient_organizations where missing
       await enrichGranteeEins(results);
+
+      // Grant page discovery for the returned funders, after the response
+      inBackground(discoverInBackground(results));
 
       return new Response(JSON.stringify({
         results,
@@ -3134,7 +3109,12 @@ Deno.serve(async (req) => {
       if (cached?.length) {
         const age = Date.now() - new Date(cached[0].created_at).getTime();
         if (age < CACHE_TTL_MS) {
-          return new Response(JSON.stringify({ results: cached[0].results, cached: true }), {
+          const body = JSON.stringify({ results: cached[0].results, cached: true });
+          // Grant pages found since, or by this search's discovery, for later hits
+          if (Array.isArray(cached[0].results)) {
+            inBackground(refreshCachedResults(cacheKey, cached[0].created_at, cached[0].results));
+          }
+          return new Response(body, {
             headers: { ...headers, 'Content-Type': 'application/json' },
           });
         }
@@ -3269,17 +3249,6 @@ Deno.serve(async (req) => {
         }
       }
     }
-
-    // ── Real-time grant page discovery (mission-based path) ──────────────
-    const missionFundersNeedingDiscovery = candidateFunders
-      .filter(({ funder: f }) => f.website && !f.apply_url && !f.discovered_apply_url)
-      .map(({ funder: f }) => ({ id: f.id, website: f.website! }));
-    const missionDiscoveredUrls = await discoverGrantUrlsInBatch(missionFundersNeedingDiscovery);
-    for (const [id, url] of missionDiscoveredUrls) {
-      const entry = candidateFunders.find((c) => c.funder.id === id);
-      if (entry) entry.funder.discovered_apply_url = url;
-    }
-    // ──────────────────────────────────────────────────────────────────────
 
     const results = candidateFunders
       .map(({ funder, baseline, exclusionOverlap: baselineExclusionOverlap }) => {
@@ -3488,6 +3457,10 @@ Deno.serve(async (req) => {
       })
       .filter((row) => (row.fit_score || 0) >= MIN_RESULT_FIT_SCORE);
 
+    // Enrich grantee EINs from recipient_organizations where missing
+    await enrichGranteeEins(results);
+
+    const cachedAt = new Date().toISOString();
     await sbFetch('search_cache?on_conflict=mission_hash', {
       method: 'POST',
       headers: { Prefer: 'resolution=merge-duplicates' },
@@ -3495,15 +3468,13 @@ Deno.serve(async (req) => {
         mission_hash: cacheKey,
         mission_text: mission,
         results,
-        created_at: new Date().toISOString(),
+        created_at: cachedAt,
       }),
     });
 
-    // Fire-and-forget: cache any newly discovered grant page URLs
-    cacheDiscoveredUrls(missionDiscoveredUrls, SUPABASE_URL, SUPABASE_KEY);
-
-    // Enrich grantee EINs from recipient_organizations where missing
-    await enrichGranteeEins(results);
+    // Grant page discovery for the returned funders, after the response; hits
+    // also update the results cached above, unless a newer search replaced them
+    inBackground(refreshCachedResults(cacheKey, cachedAt, results, { justBuilt: true }));
 
     return new Response(JSON.stringify({ results, cached: false }), {
       headers: { ...headers, 'Content-Type': 'application/json' },

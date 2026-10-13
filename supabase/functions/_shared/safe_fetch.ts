@@ -85,27 +85,53 @@ function isPrivateIPv4(ip: string): boolean {
   return false;
 }
 
-function isPrivateIPv6(ip: string): boolean {
-  const lower = ip.toLowerCase();
-  // ::1 loopback
-  if (lower === "::1") return true;
-  // :: unspecified
-  if (lower === "::") return true;
-  // fc00::/7 unique local
-  if (lower.startsWith("fc") || lower.startsWith("fd")) return true;
-  // fe80::/10 link-local
-  if (lower.startsWith("fe80")) return true;
-  // ff00::/8 multicast
-  if (lower.startsWith("ff")) return true;
-  // IPv4-mapped (::ffff:a.b.c.d) — re-check the embedded v4 address
-  if (lower.startsWith("::ffff:") && lower.includes(".")) {
-    const v4 = lower.split(":").pop() || "";
-    return isPrivateIPv4(v4);
+/** An IPv6 address as its 8 16-bit groups, or null if it doesn't parse. */
+function ipv6Groups(ip: string): number[] | null {
+  let text = ip.toLowerCase().split("%")[0];
+  // A dotted IPv4 tail (::ffff:1.2.3.4) as two groups
+  const v4 = text.match(/^(.*:)(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (v4) {
+    const [a, b, c, d] = v4.slice(2).map(Number);
+    if ([a, b, c, d].some((n) => n > 255)) return null;
+    text = `${v4[1]}${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}`;
   }
+  const halves = text.split("::");
+  if (halves.length > 2) return null;
+  const parse = (part: string) => (part ? part.split(":") : []).map((g) => (/^[0-9a-f]{1,4}$/.test(g) ? parseInt(g, 16) : NaN));
+  const head = parse(halves[0]);
+  const tail = halves.length === 2 ? parse(halves[1]) : [];
+  const fill = 8 - head.length - tail.length;
+  if (halves.length === 2 ? fill < 1 : fill !== 0) return null;
+  const groups = [...head, ...new Array(halves.length === 2 ? fill : 0).fill(0), ...tail];
+  return groups.some(Number.isNaN) ? null : groups;
+}
+
+function isPrivateIPv6(ip: string): boolean {
+  const g = ipv6Groups(ip);
+  if (!g) return true; // unparseable: refuse
+  const zeros = (from: number, to: number) => g.slice(from, to).every((x) => x === 0);
+  // :: unspecified, ::1 loopback
+  if (zeros(0, 7) && g[7] <= 1) return true;
+  // fc00::/7 unique local, fe80::/10 link-local, fec0::/10 site-local, ff00::/8 multicast
+  if ((g[0] & 0xfe00) === 0xfc00 || (g[0] & 0xffc0) === 0xfe80 || (g[0] & 0xffc0) === 0xfec0
+    || (g[0] & 0xff00) === 0xff00) return true;
+  // 64:ff9b:1::/48 local-use NAT64 (may translate to anything on the local
+  // network) and Teredo 2001::/32 (tunnelled over IPv4)
+  if ((g[0] === 0x64 && g[1] === 0xff9b && g[2] === 1) || (g[0] === 0x2001 && g[1] === 0)) return true;
+  const v4 = (hi: number, lo: number) => `${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`;
+  // An embedded IPv4 address — IPv4-mapped (::ffff:0:0/96), IPv4-translated
+  // (::ffff:0:0:0/96), IPv4-compatible (::/96) or NAT64 (64:ff9b::/96) — is
+  // checked as IPv4, however it's spelled
+  const embedsV4 = (zeros(0, 5) && (g[5] === 0xffff || g[5] === 0))
+    || (zeros(0, 4) && g[4] === 0xffff && g[5] === 0)
+    || (g[0] === 0x64 && g[1] === 0xff9b && zeros(2, 6));
+  if (embedsV4) return isPrivateIPv4(v4(g[6], g[7]));
+  // 6to4 (2002::/16) carries an IPv4 address in groups 1-2
+  if (g[0] === 0x2002) return isPrivateIPv4(v4(g[1], g[2]));
   return false;
 }
 
-async function assertPublicHostname(hostname: string): Promise<void> {
+async function assertPublicHostname(hostname: string, signal?: AbortSignal | null): Promise<void> {
   const lower = hostname.toLowerCase();
   if (!lower) throw new SSRFBlockedError("Empty hostname");
   if (CLOUD_METADATA_HOSTS.has(lower)) {
@@ -135,18 +161,13 @@ async function assertPublicHostname(hostname: string): Promise<void> {
   // DNS resolution — block if ANY resolved address is non-public.
   // Use both A and AAAA so dual-stack hostnames cannot side-channel via
   // the family we didn't check.
-  let addrs4: string[] = [];
-  let addrs6: string[] = [];
-  try {
-    addrs4 = await Deno.resolveDns(lower, "A");
-  } catch (_e) {
-    /* may not have A record — fine */
-  }
-  try {
-    addrs6 = await Deno.resolveDns(lower, "AAAA");
-  } catch (_e) {
-    /* may not have AAAA record — fine */
-  }
+  // (Looked up together; a host may have only one kind of record.)
+  const [addrs4, addrs6] = await Promise.all([
+    Deno.resolveDns(lower, "A", { signal: signal ?? undefined }).catch((): string[] => []),
+    Deno.resolveDns(lower, "AAAA", { signal: signal ?? undefined }).catch((): string[] => []),
+  ]);
+  // A lookup cut short by the caller's signal is an abort, not a failed lookup
+  signal?.throwIfAborted();
   if (addrs4.length === 0 && addrs6.length === 0) {
     throw new SSRFBlockedError(`Hostname did not resolve: ${hostname}`);
   }
@@ -183,13 +204,15 @@ export async function safeFetch(rawUrl: string, init: SafeFetchOptions = {}): Pr
       throw new SSRFBlockedError(`Disallowed scheme: ${parsed.protocol}`);
     }
     const host = parsed.hostname;
-    await assertPublicHostname(host);
+    await assertPublicHostname(host, rest.signal);
 
     const response = await fetch(parsed.toString(), { ...rest, redirect: "manual" });
 
     if (response.status >= 300 && response.status < 400) {
       const loc = response.headers.get("location");
       if (!loc) return response;
+      // Following the redirect: release this response's unread body
+      await response.body?.cancel().catch(() => {});
       if (++hops > maxRedirects) {
         throw new SSRFBlockedError(`Exceeded max redirects (${maxRedirects}) for ${rawUrl}`);
       }
