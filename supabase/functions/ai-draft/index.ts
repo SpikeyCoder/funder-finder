@@ -109,21 +109,25 @@ Deno.serve(async (req: Request) => {
       // `..`. Read a file only when its path has Project Workspace's upload
       // shape (reference-docs/<user>/<grant>/<ms>.<ext>, nothing to resolve)
       // in the caller's folder, and storage records the caller as its owner,
-      // as grant-writer checks.
-      const REF_PATH_RE = /^reference-docs\/[0-9a-f-]{36}\/[0-9a-f-]{36}\/\d+\.[A-Za-z0-9]{1,10}$/;
+      // as grant-writer checks. <ext> is whatever followed the file name's last
+      // dot (the whole name if it has none), so it may hold spaces or
+      // underscores, but never a dot, slash, backslash, %, ?, # or control character.
+      const REF_PATH_RE = /^reference-docs\/[0-9a-f-]{36}\/[0-9a-f-]{36}\/\d+\.[^./\\%?#\x00-\x1f\x7f]{1,255}$/;
       const candidatePaths = (refDocs || [])
         .map((doc: any) => doc.storage_path)
         .filter((p: unknown): p is string =>
           typeof p === 'string' && REF_PATH_RE.test(p) && p.startsWith(`reference-docs/${userId}/`));
       let ownedPaths = new Set<string>();
       if (candidatePaths.length > 0) {
-        const { data: objs } = await supabase
+        const { data: objs, error: objErr } = await supabase
           .schema('storage')
           .from('objects')
           .select('name')
           .eq('bucket_id', 'grant-uploads')
           .eq('owner_id', userId)
           .in('name', candidatePaths);
+        // Without the lookup no file is read; the draft uses the docs' placeholders
+        if (objErr) console.error('[ai-draft] storage ownership lookup failed:', objErr.message);
         ownedPaths = new Set((objs || []).map((o: any) => o.name));
       }
 
