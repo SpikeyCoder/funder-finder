@@ -12,9 +12,10 @@
 -- auth uid in owner_id, and grant-writer already treats it as the owner, so
 -- the policies check owner_id rather than the path. The grant-writer and
 -- ai-draft functions read files with the service role, which bypasses these
--- policies; grant-writer checks owner_id itself, and ai-draft reads only from
--- the caller's reference-docs/<user>/ folder. No UPDATE policy: nothing
--- overwrites an upload (upsert: false).
+-- policies, so each checks owner_id against storage.objects itself before a
+-- download (ai-draft also requires Project Workspace's path shape in the
+-- caller's folder). No UPDATE policy: nothing overwrites an upload
+-- (upsert: false).
 -- ─────────────────────────────────────────────────────────────────────────────
 
 DROP POLICY IF EXISTS "Allow anon uploads" ON storage.objects;

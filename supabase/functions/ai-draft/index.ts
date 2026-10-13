@@ -103,17 +103,35 @@ Deno.serve(async (req: Request) => {
         // SECURITY: restrict reference documents to those owned by the caller.
         .eq('user_id', userId);
 
+      // SECURITY: storage_path is user-writable, and the downloads below run as
+      // the service role, which bypasses storage RLS. storage-js puts the path
+      // into the request URL unencoded, so `%2e%2e` segments would resolve as
+      // `..`. Read a file only when its path has Project Workspace's upload
+      // shape (reference-docs/<user>/<grant>/<ms>.<ext>, nothing to resolve)
+      // in the caller's folder, and storage records the caller as its owner,
+      // as grant-writer checks.
+      const REF_PATH_RE = /^reference-docs\/[0-9a-f-]{36}\/[0-9a-f-]{36}\/\d+\.[A-Za-z0-9]{1,10}$/;
+      const candidatePaths = (refDocs || [])
+        .map((doc: any) => doc.storage_path)
+        .filter((p: unknown): p is string =>
+          typeof p === 'string' && REF_PATH_RE.test(p) && p.startsWith(`reference-docs/${userId}/`));
+      let ownedPaths = new Set<string>();
+      if (candidatePaths.length > 0) {
+        const { data: objs } = await supabase
+          .schema('storage')
+          .from('objects')
+          .select('name')
+          .eq('bucket_id', 'grant-uploads')
+          .eq('owner_id', userId)
+          .in('name', candidatePaths);
+        ownedPaths = new Set((objs || []).map((o: any) => o.name));
+      }
+
       const docTexts: string[] = [];
       for (const doc of refDocs || []) {
         let text = doc.content || '';
-        // If there's a storage file and content is just a placeholder, try to extract.
-        // SECURITY: storage_path is user-writable and the download runs as the
-        // service role, so only read from the caller's own reference-docs folder
-        // (where Project Workspace uploads them), never another user's file.
-        const ownPath = typeof doc.storage_path === 'string'
-          && doc.storage_path.startsWith(`reference-docs/${userId}/`)
-          && !doc.storage_path.includes('..');
-        if (ownPath && text.startsWith('[Uploaded file:')) {
+        // If there's a storage file and content is just a placeholder, try to extract
+        if (ownedPaths.has(doc.storage_path) && text.startsWith('[Uploaded file:')) {
           const extracted = await extractFileText(supabase, doc.storage_path);
           if (extracted) text = extracted;
         }
