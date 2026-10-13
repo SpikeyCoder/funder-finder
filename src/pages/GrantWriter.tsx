@@ -1,4 +1,4 @@
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft, Check, CheckCircle2, ChevronDown, ChevronUp, Copy,
@@ -24,18 +24,6 @@ const ACCEPTED_TYPES = [
 ];
 const MAX_FILES = 3;
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
-
-// The form, kept for this funder across a visit to Sign in or Settings
-const FORM_KEY = 'ff_grant_writer_form';
-const FORM_KEEP_MS = 30 * 60 * 1000;
-
-interface KeptForm {
-  funderId: string;
-  savedAt: number;
-  mission: string;
-  orgDetails: OrgDetails;
-  uploadedFiles: UploadedGrantFile[];
-}
 
 const FILE_TYPE_LABELS: Record<string, string> = {
   'application/pdf': 'PDF',
@@ -111,7 +99,7 @@ function renderMarkdown(text: string): string {
 export default function GrantWriter() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, loading: authLoading, userProfile, profileLoaded, saveUserProfile } = useAuth();
+  const { user, userProfile, profileLoaded, saveUserProfile } = useAuth();
   const profileBudget = profileBudgetLabel(userProfile?.budget_range);
   const funder: Funder | null = (location.state as any)?.funder ?? null;
 
@@ -136,25 +124,10 @@ export default function GrantWriter() {
 
   // ── Form state ──────────────────────────────────────────────────────────
 
-  const [keptForm] = useState<KeptForm | null>(() => {
-    try {
-      const saved: KeptForm | null = JSON.parse(sessionStorage.getItem(FORM_KEY) || 'null');
-      return saved && funder && saved.funderId === funder.id && Date.now() - saved.savedAt < FORM_KEEP_MS
-        ? saved
-        : null;
-    } catch {
-      return null;
-    }
-  });
-  // Restored once; another funder's kept form stays for when that one reopens
-  useEffect(() => {
-    if (keptForm) sessionStorage.removeItem(FORM_KEY);
-  }, [keptForm]);
-
   const [mission, setMission] = useState(
-    () => keptForm?.mission || sessionStorage.getItem('ff_mission') || '',
+    () => sessionStorage.getItem('ff_mission') || '',
   );
-  const [orgDetails, setOrgDetails] = useState<OrgDetails>(() => keptForm?.orgDetails ?? {
+  const [orgDetails, setOrgDetails] = useState<OrgDetails>({
     orgName: '',
     orgDesc: '',
     budget: '',
@@ -167,34 +140,7 @@ export default function GrantWriter() {
     timeline: '',
   });
 
-  /**
-   * Keep the form for this funder while the user signs in or edits their
-   * profile. Values still as the profile filled them are left out, so on
-   * return they're filled in again from the profile, edits included.
-   */
-  const keepForm = () => {
-    if (!funder) return;
-    const unlessFromProfile = (value: string, fromProfile: string | null | undefined) =>
-      fromProfile && value === fromProfile ? '' : value;
-    sessionStorage.setItem(FORM_KEY, JSON.stringify({
-      funderId: funder.id,
-      savedAt: Date.now(),
-      uploadedFiles,
-      mission: unlessFromProfile(mission, userProfile?.mission_statement),
-      orgDetails: {
-        ...orgDetails,
-        orgName: unlessFromProfile(orgDetails.orgName, userProfile?.organization_name),
-        budget: unlessFromProfile(orgDetails.budget, profileBudget),
-        geoFocus: unlessFromProfile(orgDetails.geoFocus, userProfile?.location_served),
-      },
-    } satisfies KeptForm));
-  };
-
-  // Open when a kept form brings org details back
-  const [showOrg, setShowOrg] = useState(
-    () => !!keptForm && [keptForm.orgDetails.orgName, keptForm.orgDetails.budget, keptForm.orgDetails.orgDesc]
-      .some((value) => value.trim()),
-  );
+  const [showOrg, setShowOrg] = useState(false);
   const [showProgram, setShowProgram] = useState(false);
   const [showPastGrants, setShowPastGrants] = useState(true);
   const profileAppliedRef = useRef(false);
@@ -204,28 +150,39 @@ export default function GrantWriter() {
     if (profileAppliedRef.current || !profileLoaded || !userProfile) return;
     profileAppliedRef.current = true;
     if (userProfile.mission_statement) setMission(prev => prev || userProfile.mission_statement!);
-    const fromProfile: Partial<OrgDetails> = {
-      orgName: userProfile.organization_name ?? undefined,
-      budget: profileBudget ?? undefined,
-      geoFocus: userProfile.location_served ?? undefined,
-    };
     setOrgDetails(prev => ({
       ...prev,
-      orgName: prev.orgName || fromProfile.orgName || '',
-      budget: prev.budget || fromProfile.budget || '',
-      geoFocus: prev.geoFocus || fromProfile.geoFocus || '',
+      orgName: prev.orgName || userProfile.organization_name || '',
+      budget: prev.budget || profileBudget || '',
+      geoFocus: prev.geoFocus || userProfile.location_served || '',
     }));
-    if (fromProfile.orgName || fromProfile.budget) setShowOrg(true);
+    if (userProfile.organization_name || profileBudget) setShowOrg(true);
   }, [profileLoaded, userProfile]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Whether Organization Details show the saved org profile
-  const orgFromProfile = !!userProfile && (!!userProfile.organization_name || !!profileBudget)
-    && (!userProfile.organization_name || orgDetails.orgName === userProfile.organization_name)
-    && (!profileBudget || orgDetails.budget === profileBudget);
+  // Whether Organization Details show the saved org profile's name and location
+  const orgFromProfile = !!userProfile && !!orgDetails.orgName.trim()
+    && orgDetails.orgName.trim() === (userProfile.organization_name ?? '')
+    && orgDetails.geoFocus.trim() === (userProfile.location_served ?? '');
+
+  // Save the organization name and geographic focus to the org profile
+  const [orgProfileSave, setOrgProfileSave] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const saveOrgProfile = async () => {
+    setOrgProfileSave('saving');
+    try {
+      await saveUserProfile({
+        organization_name: orgDetails.orgName.trim() || null,
+        location_served: orgDetails.geoFocus.trim() || null,
+      });
+      setOrgProfileSave('saved');
+    } catch (e) {
+      console.warn('Org profile save:', e);
+      setOrgProfileSave('error');
+    }
+  };
 
   // ── Upload state ────────────────────────────────────────────────────────
 
-  const [uploadedFiles, setUploadedFiles] = useState<UploadedGrantFile[]>(() => keptForm?.uploadedFiles ?? []);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedGrantFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -785,40 +742,33 @@ export default function GrantWriter() {
 
               {showOrg && (
                 <div className="px-5 pb-5 bg-[#0d1117] grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <p className="sm:col-span-2 pt-4 text-xs text-gray-400">
-                    {authLoading ? null : !user ? (
-                      <>
-                        <Link
-                          to="/login"
-                          onClick={() => {
-                            keepForm();
-                            // Back to Saved Funders after signing in, by password or OAuth
-                            sessionStorage.setItem('authRedirect', '/saved');
-                            sessionStorage.setItem('ff_redirect_after_login', '/saved');
-                          }}
-                          className="text-blue-400 hover:text-blue-300 underline"
-                        >
-                          Sign in
-                        </Link>{' '}
-                        to save your organization profile and have it filled in for every draft.
-                      </>
-                    ) : orgFromProfile ? (
-                      <>
-                        Filled in from your organization profile. Changes here apply to this draft only.{' '}
-                        <Link to="/settings" onClick={keepForm} className="text-blue-400 hover:text-blue-300 underline">
-                          Edit org profile
-                        </Link>
-                      </>
-                    ) : (
-                      <>
-                        Add these to your{' '}
-                        <Link to="/settings" onClick={keepForm} className="text-blue-400 hover:text-blue-300 underline">
-                          org profile
-                        </Link>{' '}
-                        to have them filled in for every draft.
-                      </>
-                    )}
-                  </p>
+                  {user && (
+                    <div className="sm:col-span-2 pt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-gray-400">
+                      {orgFromProfile ? (
+                        <span>
+                          {orgProfileSave === 'saved'
+                            ? 'Saved to your organization profile.'
+                            : 'Filled in from your organization profile.'}
+                        </span>
+                      ) : (
+                        <>
+                          <span>Save your organization's name and location to fill them in for every draft.</span>
+                          <button
+                            type="button"
+                            onClick={saveOrgProfile}
+                            disabled={!orgDetails.orgName.trim() || orgProfileSave === 'saving'}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-[#30363d] px-3 py-1.5 text-gray-200 hover:bg-[#161b22] disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {orgProfileSave === 'saving' ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                            Save to org profile
+                          </button>
+                          {orgProfileSave === 'error' && (
+                            <span className="text-red-400" role="alert">Couldn't save. Try again.</span>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
                   <div>
                     <label htmlFor="gw-org-name" className={labelClass}>Organization Name</label>
                     <input

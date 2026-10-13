@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Save, AlertCircle, CheckCircle, Loader, Building2, Bell, Calendar, Copy, Trash2, Plus, ExternalLink } from 'lucide-react';
 import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { BUDGET_RANGES, profileBudgetLabel } from '../lib/budgetRanges';
+import { BUDGET_RANGES } from '../lib/budgetRanges';
 import NavBar from '../components/NavBar';
 import type { NotificationPreferences, TeamNotificationPreferences, CalendarFeed } from '../types';
 import { SUPABASE_URL } from '../lib/supabaseProject';
@@ -61,7 +61,7 @@ interface UserProfile {
 type SettingsTab = 'profile' | 'notifications' | 'calendar';
 
 function UserSettingsContent() {
-  const { user, signOut, refreshUserProfile } = useAuth();
+  const { user, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
   const [_profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -288,8 +288,6 @@ function UserSettingsContent() {
         return;
       }
 
-      // Pages that read the profile from context (e.g. the Grant Writer) see the change
-      await refreshUserProfile().catch(() => {});
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
@@ -623,10 +621,6 @@ function UserSettingsContent() {
                           {BUDGET_RANGES.map((range) => (
                             <option key={range.value} value={range.value}>{range.label}</option>
                           ))}
-                          {/* A band saved during onboarding, which this list doesn't offer */}
-                          {budgetRange && !BUDGET_RANGES.some((range) => range.value === budgetRange) && (
-                            <option value={budgetRange}>{profileBudgetLabel(budgetRange) ?? budgetRange}</option>
-                          )}
                         </select>
                       </div>
                     </div>
