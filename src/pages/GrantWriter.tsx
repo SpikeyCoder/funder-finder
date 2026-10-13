@@ -145,10 +145,10 @@ export default function GrantWriter() {
   const profileAppliedRef = useRef(false);
 
   // Pre-populate empty mission & org details from user profile, once, when
-  // it's available — but not after a draft has been started (a profile row
-  // created by the mission save on generate doesn't refill the form)
+  // it's available. Starting a draft or saving the name counts as applied, so
+  // a profile row those create doesn't refill the form.
   useEffect(() => {
-    if (profileAppliedRef.current || !profileLoaded || !userProfile || phase !== 'idle') return;
+    if (profileAppliedRef.current || !profileLoaded || !userProfile) return;
     profileAppliedRef.current = true;
     const budget = profileBudgetLabel(userProfile.budget_range);
     if (userProfile.mission_statement) setMission(prev => prev || userProfile.mission_statement!);
@@ -161,22 +161,28 @@ export default function GrantWriter() {
     if (userProfile.organization_name?.trim() || budget) setShowOrg(true);
   }, [profileLoaded, userProfile]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Whether Organization Name shows the org profile's
+  // Whether Organization Name is the org profile's
   const orgFromProfile = !!orgDetails.orgName.trim()
     && orgDetails.orgName.trim() === (userProfile?.organization_name?.trim() ?? '');
 
   // Save the organization name to the org profile. (Geographic Focus isn't
   // saved: its profile field, location_served, is the funder search's location.)
+  // The outcome is shown only while the name is still the one saved.
   const [orgProfileSave, setOrgProfileSave] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const orgNameRef = useRef(orgDetails.orgName);
+  orgNameRef.current = orgDetails.orgName;
   const saveOrgProfile = async () => {
+    const name = orgDetails.orgName.trim();
+    profileAppliedRef.current = true;
     setOrgProfileSave('saving');
+    let outcome: 'saved' | 'error' = 'saved';
     try {
-      await saveUserProfile({ organization_name: orgDetails.orgName.trim() });
-      setOrgProfileSave('saved');
+      await saveUserProfile({ organization_name: name });
     } catch (e) {
       console.warn('Org profile save:', e);
-      setOrgProfileSave('error');
+      outcome = 'error';
     }
+    setOrgProfileSave(orgNameRef.current.trim() === name ? outcome : 'idle');
   };
 
   // ── Upload state ────────────────────────────────────────────────────────
@@ -228,6 +234,7 @@ export default function GrantWriter() {
 
   const updateOrg = (key: keyof OrgDetails, value: string) => {
     setOrgDetails((prev) => ({ ...prev, [key]: value }));
+    // (a save in flight finishes, then shows nothing unless the name is back as saved)
     if (key === 'orgName') setOrgProfileSave((prev) => (prev === 'saving' ? prev : 'idle'));
   };
 
@@ -320,6 +327,8 @@ export default function GrantWriter() {
 
   const generate = async () => {
     if (!funder || !mission.trim() || phase === 'generating' || phase === 'analyzing' || phase === 'researching') return;
+
+    profileAppliedRef.current = true;
 
     // Save mission to profile for logged-in users (fire-and-forget)
     if (user && mission.trim()) {
@@ -748,7 +757,7 @@ export default function GrantWriter() {
                         <span>
                           {orgProfileSave === 'saved'
                             ? 'Organization name saved to your profile.'
-                            : 'Organization name filled in from your profile.'}
+                            : 'Organization name matches your profile.'}
                         </span>
                       ) : (
                         <>

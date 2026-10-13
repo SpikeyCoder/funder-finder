@@ -18,11 +18,13 @@ const BUDGET_BAND_RANGES: Record<Exclude<BudgetBand, 'prefer_not_to_say'>, strin
   over_5m: 'Over $5,000,000',
 };
 
+// Every stored value with its label; a Map, so only these keys are found
+const LABELS = new Map<string, string>([
+  ...BUDGET_RANGES.map((range): [string, string] => [range.value, range.label]),
+  ...Object.entries(BUDGET_BAND_RANGES),
+]);
+
 /** A user_profiles.budget_range value as text, from either vocabulary; null if unknown. */
 export function profileBudgetLabel(value: string | null | undefined): string | null {
-  if (!value) return null;
-  const band = Object.prototype.hasOwnProperty.call(BUDGET_BAND_RANGES, value)
-    ? (BUDGET_BAND_RANGES as Record<string, string>)[value]
-    : null;
-  return BUDGET_RANGES.find((range) => range.value === value)?.label ?? band;
+  return (value && LABELS.get(value)) || null;
 }
