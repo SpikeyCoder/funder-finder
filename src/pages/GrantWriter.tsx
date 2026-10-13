@@ -144,12 +144,12 @@ export default function GrantWriter() {
   const [showPastGrants, setShowPastGrants] = useState(true);
   const profileAppliedRef = useRef(false);
 
-  // Pre-populate empty mission & org details from user profile, once it has
-  // loaded (a profile created later in the session doesn't refill the form)
+  // Pre-populate empty mission & org details from user profile, once, when
+  // it's available — but not after a draft has been started (a profile row
+  // created by the mission save on generate doesn't refill the form)
   useEffect(() => {
-    if (profileAppliedRef.current || !profileLoaded) return;
+    if (profileAppliedRef.current || !profileLoaded || !userProfile || phase !== 'idle') return;
     profileAppliedRef.current = true;
-    if (!userProfile) return;
     const budget = profileBudgetLabel(userProfile.budget_range);
     if (userProfile.mission_statement) setMission(prev => prev || userProfile.mission_statement!);
     setOrgDetails(prev => ({
@@ -161,7 +161,7 @@ export default function GrantWriter() {
     if (userProfile.organization_name?.trim() || budget) setShowOrg(true);
   }, [profileLoaded, userProfile]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Whether Organization Details show the org profile's organization name
+  // Whether Organization Name shows the org profile's
   const orgFromProfile = !!orgDetails.orgName.trim()
     && orgDetails.orgName.trim() === (userProfile?.organization_name?.trim() ?? '');
 
@@ -228,7 +228,7 @@ export default function GrantWriter() {
 
   const updateOrg = (key: keyof OrgDetails, value: string) => {
     setOrgDetails((prev) => ({ ...prev, [key]: value }));
-    if (key === 'orgName') setOrgProfileSave('idle');
+    if (key === 'orgName') setOrgProfileSave((prev) => (prev === 'saving' ? prev : 'idle'));
   };
 
   // ── File upload handlers ────────────────────────────────────────────────
@@ -730,7 +730,7 @@ export default function GrantWriter() {
                 <span className="text-gray-300">
                   Organization Details{' '}
                   <span className="text-gray-400 font-normal">
-                    {orgFromProfile ? '(from your org profile)' : '(optional — improves quality)'}
+                    (optional — improves quality)
                   </span>
                 </span>
                 {showOrg ? (
@@ -747,8 +747,8 @@ export default function GrantWriter() {
                       {orgFromProfile ? (
                         <span>
                           {orgProfileSave === 'saved'
-                            ? 'Saved to your organization profile.'
-                            : 'Filled in from your organization profile.'}
+                            ? 'Organization name saved to your profile.'
+                            : 'Organization name filled in from your profile.'}
                         </span>
                       ) : (
                         <>
@@ -756,11 +756,11 @@ export default function GrantWriter() {
                           <button
                             type="button"
                             onClick={saveOrgProfile}
-                            disabled={!orgDetails.orgName.trim() || orgProfileSave === 'saving'}
+                            disabled={!profileLoaded || !orgDetails.orgName.trim() || orgProfileSave === 'saving'}
                             className="inline-flex items-center gap-1.5 rounded-lg border border-[#30363d] px-3 py-1.5 text-gray-200 hover:bg-[#161b22] disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {orgProfileSave === 'saving' ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
-                            Save to org profile
+                            Save name to profile
                           </button>
                           {orgProfileSave === 'error' && (
                             <span className="text-red-400" role="alert">Couldn't save. Try again.</span>

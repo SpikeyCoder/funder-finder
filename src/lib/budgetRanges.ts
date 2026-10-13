@@ -1,4 +1,4 @@
-import { BudgetBand } from '../types';
+import type { BudgetBand } from '../types';
 
 // Annual budget ranges as Settings and Signup offer them (user_profiles.budget_range).
 export const BUDGET_RANGES = [
@@ -21,6 +21,8 @@ const BUDGET_BAND_RANGES: Record<Exclude<BudgetBand, 'prefer_not_to_say'>, strin
 /** A user_profiles.budget_range value as text, from either vocabulary; null if unknown. */
 export function profileBudgetLabel(value: string | null | undefined): string | null {
   if (!value) return null;
-  return BUDGET_RANGES.find((range) => range.value === value)?.label
-    ?? (BUDGET_BAND_RANGES as Record<string, string>)[value] ?? null;
+  const band = Object.prototype.hasOwnProperty.call(BUDGET_BAND_RANGES, value)
+    ? (BUDGET_BAND_RANGES as Record<string, string>)[value]
+    : null;
+  return BUDGET_RANGES.find((range) => range.value === value)?.label ?? band;
 }

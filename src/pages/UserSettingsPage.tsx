@@ -61,7 +61,7 @@ interface UserProfile {
 type SettingsTab = 'profile' | 'notifications' | 'calendar';
 
 function UserSettingsContent() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, refreshUserProfile } = useAuth();
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
   const [_profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -288,6 +288,8 @@ function UserSettingsContent() {
         return;
       }
 
+      // Pages that prefill from the profile in context (e.g. the Grant Writer) see the change
+      await refreshUserProfile().catch(() => {});
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
