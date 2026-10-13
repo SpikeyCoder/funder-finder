@@ -94,7 +94,7 @@ export async function fetchHomepageHtml(
     }), signal);
     const ct = res.headers.get('content-type') || '';
     // A missing Content-Type is read as HTML; servers that omit it usually serve pages
-    if (!res.ok || (ct && !ct.includes('html')) || !res.body) {
+    if (!res.ok || (ct && !ct.toLowerCase().includes('html')) || !res.body) {
       res.body?.cancel().catch(() => {});
       return res.ok || res.status === 404 || res.status === 410 ? { kind: 'miss' } : { kind: 'error' };
     }
@@ -136,18 +136,7 @@ function funderScope(pageUrl: string, siteUrl: string): ((link: URL) => boolean)
   try { page = new URL(pageUrl); } catch { return null; }
   const served = bareHost(page);
   if (!site) return null;
-  if (onSite(served, site)) {
-    // A homepage that is a section of a site (bigcorp.com/foundation): links
-    // under that section. A file (about.html) stands for its folder; a home or
-    // language page (/home, /en/) for the whole site.
-    const segments = page.pathname.split('/').filter(Boolean);
-    if (segments.length && segments[segments.length - 1].includes('.')) segments.pop();
-    const last = segments[segments.length - 1] ?? '';
-    const section = segments.length && !/^(home|welcome|main|[a-z]{2}(-[a-z]{2})?)$/i.test(last)
-      ? `/${segments.join('/')}/`
-      : null;
-    return (link) => onSite(bareHost(link), site) && (!section || `${link.pathname}/`.startsWith(section));
-  }
+  if (onSite(served, site)) return (link) => onSite(bareHost(link), site);
   const prefix = page.pathname.endsWith('/') ? page.pathname : `${page.pathname}/`;
   if (onSite(site, served) && prefix !== '/') {
     return (link) => bareHost(link) === served && `${link.pathname}/`.startsWith(prefix);
@@ -164,7 +153,9 @@ export function discoverGrantPageUrl(html: string, pageUrl: string, siteUrl = pa
   const inScope = funderScope(pageUrl, siteUrl);
   if (!inScope) return null;
   const trimSlash = (path: string) => path.replace(/\/+$/, '');
-  const landingPath = trimSlash(new URL(pageUrl).pathname);
+  const page = new URL(pageUrl);
+  const landingPath = trimSlash(page.pathname);
+  const homeHosts = new Set([bareHost(page), extractDomain(siteUrl)]);
 
   // Extract <a> tags — same regex as enrich-subpages.js
   const tagRe = /<a\b[^>]*href\s*=\s*["']([^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi;
@@ -183,7 +174,9 @@ export function discoverGrantPageUrl(html: string, pageUrl: string, siteUrl = pa
 
     // Must be the funder's own web page, not its homepage or the page scanned
     if ((link.protocol !== 'https:' && link.protocol !== 'http:') || !inScope(link)) continue;
-    if (trimSlash(link.pathname) === '' || trimSlash(link.pathname) === landingPath) continue;
+    // (a grant portal's own root, like https://grants.fund.org/, is fine)
+    const path = trimSlash(link.pathname);
+    if ((path === '' && homeHosts.has(bareHost(link))) || (path === landingPath && bareHost(link) === bareHost(page))) continue;
 
     // Score against hints
     // The path, not the host: every link on fundingfutures.org isn't a grant page

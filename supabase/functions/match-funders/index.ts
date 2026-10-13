@@ -493,7 +493,10 @@ async function discoverInBackground(results: FunderRow[]): Promise<void> {
     if (candidates.length === 0) return;
     try {
       const notDue = await sbFetchBatched<{ id: string }>(
-        `funders?select=id&id=in.{{IN_FILTER}}&apply_url_recheck_at=gt.${encodeURIComponent(new Date().toISOString())}`,
+        // Not due, or given a link since these results were built (e.g. cached ones)
+        `funders?select=id&id=in.{{IN_FILTER}}` +
+          `&or=(apply_url_recheck_at.gt.${encodeURIComponent(new Date().toISOString())},` +
+          `apply_url.not.is.null,discovered_apply_url.not.is.null)`,
         candidates.map((row) => row.id),
       );
       const skip = new Set(notDue.map((row) => row.id));
@@ -547,8 +550,9 @@ async function withDiscoveredLinks(results: CachedRow[]): Promise<boolean> {
  * pages found (by this or any other search) written into the cache entry.
  */
 async function refreshCachedResults(cacheKey: string, cachedAt: string, results: CachedRow[]): Promise<void> {
+  const linkedBefore = await withDiscoveredLinks(results);
   await discoverInBackground(results);
-  if (await withDiscoveredLinks(results)) await updateSearchCache(cacheKey, cachedAt, results);
+  if (await withDiscoveredLinks(results) || linkedBefore) await updateSearchCache(cacheKey, cachedAt, results);
 }
 
 /** Replace the results cached for `cacheKey`, unless a newer search has replaced them. */

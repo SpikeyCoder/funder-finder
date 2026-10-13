@@ -135,18 +135,11 @@ async function assertPublicHostname(hostname: string): Promise<void> {
   // DNS resolution — block if ANY resolved address is non-public.
   // Use both A and AAAA so dual-stack hostnames cannot side-channel via
   // the family we didn't check.
-  let addrs4: string[] = [];
-  let addrs6: string[] = [];
-  try {
-    addrs4 = await Deno.resolveDns(lower, "A");
-  } catch (_e) {
-    /* may not have A record — fine */
-  }
-  try {
-    addrs6 = await Deno.resolveDns(lower, "AAAA");
-  } catch (_e) {
-    /* may not have AAAA record — fine */
-  }
+  // (Looked up together; a host may have only one kind of record.)
+  const [addrs4, addrs6] = await Promise.all([
+    Deno.resolveDns(lower, "A").catch((): string[] => []),
+    Deno.resolveDns(lower, "AAAA").catch((): string[] => []),
+  ]);
   if (addrs4.length === 0 && addrs6.length === 0) {
     throw new SSRFBlockedError(`Hostname did not resolve: ${hostname}`);
   }

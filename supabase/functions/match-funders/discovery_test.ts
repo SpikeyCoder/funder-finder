@@ -27,7 +27,7 @@ function stalledBody(signal?: AbortSignal | null) {
 const never = () => new Promise<Response>(() => {});
 
 type Site =
-  | "apply" | "none" | "stall-body" | "stall-headers" | "404" | "503" | "pdf" | "no-type"
+  | "apply" | "none" | "stall-body" | "stall-headers" | "404" | "503" | "pdf" | "no-type" | "upper-type"
   | "redirect" | "redirect-in" | "redirect-sub";
 
 function fakeFetch(sites: Record<string, Site>) {
@@ -42,6 +42,8 @@ function fakeFetch(sites: Record<string, Site>) {
       case "stall-headers": return never();
       case "404": return Promise.resolve(new Response("nope", { status: 404 }));
       case "503": return Promise.resolve(new Response("busy", { status: 503 }));
+      case "upper-type":
+        return Promise.resolve(new Response(APPLY, { headers: { "content-type": "Text/HTML; charset=UTF-8" } }));
       case "no-type": {
         const res = new Response(APPLY);
         res.headers.delete("content-type");
@@ -121,15 +123,16 @@ Deno.test("fetchHomepageHtml with an already-aborted signal leaves no unhandled 
 });
 
 Deno.test("fetchHomepageHtml: definite misses vs failures that may pass", async () => {
-  const { fn } = fakeFetch({ "a.org": "404", "b.org": "pdf", "c.org": "503", "ok.org": "apply", "bare.org": "no-type" });
+  const { fn } = fakeFetch({ "a.org": "404", "b.org": "pdf", "c.org": "503", "ok.org": "apply", "bare.org": "no-type", "caps.org": "upper-type" });
   const signal = AbortSignal.timeout(1_000);
   assertEquals(await fetchHomepageHtml("https://a.org", signal, fn), { kind: "miss" });
   assertEquals(await fetchHomepageHtml("https://b.org", signal, fn), { kind: "miss" });
   assertEquals(await fetchHomepageHtml("https://c.org", signal, fn), { kind: "error" });
   assertEquals(await fetchHomepageHtml("https://gone.org", signal, fn), { kind: "error" });
   assertEquals(await fetchHomepageHtml("https://ok.org/", signal, fn), { kind: "page", html: APPLY, url: "https://ok.org/" });
-  // No Content-Type at all: read as a page
+  // No Content-Type at all, or in capitals: read as a page
   assertEquals((await fetchHomepageHtml("https://bare.org/", signal, fn)).kind, "page");
+  assertEquals((await fetchHomepageHtml("https://caps.org/", signal, fn)).kind, "page");
 });
 
 Deno.test("discoverGrantUrlsInBatch finds links, and tells misses from failures", async () => {
@@ -213,18 +216,9 @@ Deno.test("fetchHomepageHtml: a private address safeFetch refuses is a miss; a D
   );
 });
 
-Deno.test("discoverGrantPageUrl: a website stored as a site section keeps to that section", () => {
-  const html = page('<a href="/careers/apply">Apply now</a><a href="/foundation/grants">Grants</a>');
-  assertEquals(discoverGrantPageUrl(html, "https://www.bigcorp.com/foundation"), "https://www.bigcorp.com/foundation/grants");
-  // A home or language page, or a file at the top, is the whole site
-  for (const home of ["https://fund.org/en/", "https://fund.org/index.html", "https://fund.org/about.html"]) {
-    assertEquals(discoverGrantPageUrl(page('<a href="/apply">Apply</a>'), home), "https://fund.org/apply");
-  }
-  // The section is where the page was served from, after a redirect within the site
-  assertEquals(
-    discoverGrantPageUrl(page('<a href="/about/foundation/grants">Grants</a>'), "https://bigcorp.com/about/foundation/", "https://bigcorp.com/foundation"),
-    "https://bigcorp.com/about/foundation/grants",
-  );
+Deno.test("discoverGrantPageUrl accepts a grant portal's own root, not the funder's homepage", () => {
+  const html = page('<a href="https://fund.org/">Funding home</a><a href="https://grants.fund.org/">Apply for a grant</a>');
+  assertEquals(discoverGrantPageUrl(html, "https://www.fund.org/"), "https://grants.fund.org/");
 });
 
 Deno.test("discoverGrantUrlsInBatch fetches a website shared by several funders once", async () => {
