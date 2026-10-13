@@ -174,7 +174,7 @@ Deno.test("discoverGrantUrlsInBatch returns at its budget when sites hang", asyn
   const elapsed = Date.now() - started;
   assert(elapsed < 1_000, `returned at the budget (${elapsed} ms)`);
   assertEquals([...found.keys()], ["fast"]);
-  // Hung sites were cut off before DISCOVERY_HUNG_MS, or not reached: neither
+  // Hung sites were cut off by the batch budget, or not reached: neither
   // missed nor failed, tried again next time
   assertEquals(missed, []);
   assertEquals(failed, []);
@@ -194,10 +194,26 @@ Deno.test("discoverGrantUrlsInBatch gives each site siteTimeoutMs, then moves on
   assertEquals(failed.sort(), ["a", "b"]);
 });
 
-Deno.test("fetchHomepageHtml: a host safeFetch refuses is a miss", async () => {
-  const blocked = Object.assign(new Error("Hostname did not resolve"), { name: "SSRFBlockedError" });
-  const fn = (() => Promise.reject(blocked)) as typeof fetch;
-  assertEquals(await fetchHomepageHtml("https://gone.example", AbortSignal.timeout(1_000), fn), { kind: "miss" });
+Deno.test("fetchHomepageHtml: a private address safeFetch refuses is a miss; a DNS failure may pass", async () => {
+  const refused = (message: string) =>
+    (() => Promise.reject(Object.assign(new Error(message), { name: "SSRFBlockedError" }))) as typeof fetch;
+  const signal = AbortSignal.timeout(1_000);
+  assertEquals(
+    await fetchHomepageHtml("https://in.example", signal, refused("Hostname in.example resolves to private IPv4 10.0.0.1")),
+    { kind: "miss" },
+  );
+  assertEquals(
+    await fetchHomepageHtml("https://gone.example", signal, refused("Hostname did not resolve: gone.example")),
+    { kind: "error" },
+  );
+});
+
+Deno.test("discoverGrantPageUrl: a website stored as a site section keeps to that section", () => {
+  const html = page('<a href="/careers/apply">Apply now</a><a href="/foundation/grants">Grants</a>');
+  assertEquals(discoverGrantPageUrl(html, "https://www.bigcorp.com/foundation"), "https://www.bigcorp.com/foundation/grants");
+  // A home or language page is the whole site
+  assertEquals(discoverGrantPageUrl(page('<a href="/apply">Apply</a>'), "https://fund.org/en/"), "https://fund.org/apply");
+  assertEquals(discoverGrantPageUrl(page('<a href="/apply">Apply</a>'), "https://fund.org/index.html"), "https://fund.org/apply");
 });
 
 Deno.test("discoverGrantUrlsInBatch fetches a website shared by several funders once", async () => {

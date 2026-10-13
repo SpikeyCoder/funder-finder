@@ -68,7 +68,7 @@ function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
 export type HomepageResult =
   /** An HTML page; `url` is where it was served from, after redirects. */
   | { kind: 'page'; html: string; url: string }
-  /** No page to scan, for good: not found, gone, not HTML, or a host safeFetch won't fetch. */
+  /** No page to scan, for good: not found, gone, not HTML, or a private address safeFetch won't fetch. */
   | { kind: 'miss' }
   /** Anything that may pass: network errors, 5xx, 429, 403 bot walls, the deadline. */
   | { kind: 'error' };
@@ -113,8 +113,11 @@ export async function fetchHomepageHtml(
     }
     return { kind: 'page', html: html.slice(0, MAX_HTML_CHARS), url: res.url || url };
   } catch (e) {
-    // safeFetch refuses hosts that don't resolve or resolve to private addresses
-    return e instanceof Error && e.name === 'SSRFBlockedError' ? { kind: 'miss' } : { kind: 'error' };
+    // safeFetch refuses private and metadata addresses for good; its other
+    // refusals (DNS failures, redirect loops) may pass
+    const blocked = e instanceof Error && e.name === 'SSRFBlockedError'
+      && /private|reserved|metadata|literal|scheme|invalid url/i.test(e.message);
+    return blocked ? { kind: 'miss' } : { kind: 'error' };
   } finally {
     reader?.cancel().catch(() => {});
   }
@@ -133,7 +136,16 @@ function funderScope(pageUrl: string, siteUrl: string): ((link: URL) => boolean)
   try { page = new URL(pageUrl); } catch { return null; }
   const served = bareHost(page);
   if (!site) return null;
-  if (onSite(served, site)) return (link) => onSite(bareHost(link), site);
+  if (onSite(served, site)) {
+    // A website stored as a section of a site (bigcorp.com/foundation): links
+    // under that section; a home or language page (/home, /index.html, /en/) is the whole site
+    const sitePath = new URL(siteUrl).pathname.replace(/\/+$/, '');
+    const last = sitePath.split('/').pop() ?? '';
+    const section = sitePath && !/^(home|index|default|welcome|main|[a-z]{2}(-[a-z]{2})?)(\.\w+)?$/i.test(last)
+      ? `${sitePath}/`
+      : null;
+    return (link) => onSite(bareHost(link), site) && (!section || `${link.pathname}/`.startsWith(section));
+  }
   const prefix = page.pathname.endsWith('/') ? page.pathname : `${page.pathname}/`;
   if (onSite(site, served) && prefix !== '/') {
     return (link) => bareHost(link) === served && `${link.pathname}/`.startsWith(prefix);
@@ -237,7 +249,7 @@ export async function discoverGrantUrlsInBatch(
       const signal = AbortSignal.any([deadline, AbortSignal.timeout(siteTimeoutMs)]);
       const page = await fetchHomepageHtml(url, signal, fetchFn);
       // Cut off by the batch budget, not the site: tried again next time
-      if (deadline.aborted) return;
+      if (page.kind === 'error' && deadline.aborted) return;
       if (page.kind === 'error') {
         result.failed.push(...ids);
         continue;

@@ -514,15 +514,25 @@ async function discoverInBackground(
   }
 }
 
+type CachedRow = FunderRow & { next_step_type?: string; next_step_url?: string | null };
+
+/** Give a result row a discovered grant page, re-deriving its next step from the funder's DB next_step. */
+function applyDiscoveredLink(row: CachedRow, dbNextStep: string | null, url: string): void {
+  const funder = { ...row, next_step: dbNextStep, discovered_apply_url: url };
+  const next = deriveNextStep(funder);
+  row.discovered_apply_url = url;
+  row.next_step = next.text;
+  row.next_step_type = next.type;
+  row.next_step_url = resolveNextStepUrl(next.type, funder);
+}
+
 /**
  * For cached results: give rows without an apply link any grant page that
- * discovery has found for them since (funders.discovered_apply_url), with the
- * next step re-derived from the funder's DB next_step. Best effort: on error
- * or timeout the rows are left as they are.
+ * discovery has found for them since (funders.discovered_apply_url). Returns
+ * whether any row changed. Best effort: on error or timeout the rows are left
+ * as they are.
  */
-async function withDiscoveredLinks(
-  results: (FunderRow & { next_step_type?: string; next_step_url?: string | null })[],
-): Promise<void> {
+async function withDiscoveredLinks(results: CachedRow[]): Promise<boolean> {
   const ids = results.filter((row) => row.website && !row.apply_url && !row.discovered_apply_url).map((row) => row.id);
   try {
     const found = await sbFetchBatched<{ id: string; next_step: string | null; discovered_apply_url: string }>(
@@ -534,17 +544,21 @@ async function withDiscoveredLinks(
     const byId = new Map(found.map((row) => [row.id, row]));
     for (const row of results) {
       const hit = byId.get(row.id);
-      if (!hit) continue;
-      const funder = { ...row, next_step: hit.next_step, discovered_apply_url: hit.discovered_apply_url };
-      const next = deriveNextStep(funder);
-      row.discovered_apply_url = hit.discovered_apply_url;
-      row.next_step = next.text;
-      row.next_step_type = next.type;
-      row.next_step_url = resolveNextStepUrl(next.type, funder);
+      if (hit) applyDiscoveredLink(row, hit.next_step, hit.discovered_apply_url);
     }
+    return found.length > 0;
   } catch (e) {
     console.warn('discovered links for cached results failed:', e);
+    return false;
   }
+}
+
+/** Replace the results cached for `cacheKey`, unless a newer search has replaced them. */
+function updateSearchCache(cacheKey: string, cachedAt: string, results: unknown[]): Promise<unknown> {
+  return sbFetch(
+    `search_cache?mission_hash=eq.${encodeURIComponent(cacheKey)}&created_at=eq.${encodeURIComponent(cachedAt)}`,
+    { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ results }) },
+  ).catch((e) => console.warn('search cache update failed:', e));
 }
 
 /**
@@ -574,14 +588,15 @@ async function recordDiscovery(
   const at = (ms: number) => new Date(Date.now() + ms).toISOString();
   await Promise.all([
     // Hits on their own, so they're saved even without the apply_url_recheck_at column
-    ...[...found].flatMap(([id, url]) => patch([id], { discovered_apply_url: url })),
+    ...[...Map.groupBy(found.keys(), (id) => found.get(id)!)].flatMap(([url, ids]) =>
+      patch(ids, { discovered_apply_url: url })),
     ...patch(missed, { apply_url_recheck_at: at(DISCOVERY_MISS_RECHECK_MS) }),
     ...patch(failed, { apply_url_recheck_at: at(DISCOVERY_ERROR_RECHECK_MS) }),
   ]);
 }
 
 /** Keep `work` running after the response is sent (Supabase Edge Runtime), where supported. */
-function inBackground(work: Promise<void>): void {
+function inBackground(work: Promise<unknown>): void {
   const runtime = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;
   runtime?.waitUntil?.(work);
 }
@@ -3074,7 +3089,10 @@ Deno.serve(async (req) => {
       if (cached?.length) {
         const age = Date.now() - new Date(cached[0].created_at).getTime();
         if (age < CACHE_TTL_MS) {
-          await withDiscoveredLinks(cached[0].results);
+          // Grant pages found since, saved back so later hits needn't look again
+          if (await withDiscoveredLinks(cached[0].results)) {
+            inBackground(updateSearchCache(cacheKey, cached[0].created_at, cached[0].results));
+          }
           return new Response(JSON.stringify({ results: cached[0].results, cached: true }), {
             headers: { ...headers, 'Content-Type': 'application/json' },
           });
@@ -3434,26 +3452,14 @@ Deno.serve(async (req) => {
     });
 
     // Grant page discovery for the returned funders, after the response. Hits
-    // also update the results cached above, unless a newer search replaced them:
-    // each hit's next step is re-derived from its funder, whose next_step is
-    // still the DB's.
-    const funderById = new Map(candidateFunders.map(({ funder }) => [funder.id, funder]));
+    // also update the results cached above, unless a newer search replaced them.
+    const dbNextStep = new Map(candidateFunders.map(({ funder }) => [funder.id, funder.next_step]));
     inBackground(discoverInBackground(results, (found) => {
       for (const row of results) {
         const url = found.get(row.id);
-        const funder = url ? funderById.get(row.id) : undefined;
-        if (!url || !funder) continue;
-        funder.discovered_apply_url = url;
-        const next = deriveNextStep(funder);
-        row.discovered_apply_url = url;
-        row.next_step = next.text;
-        row.next_step_type = next.type;
-        row.next_step_url = resolveNextStepUrl(next.type, funder);
+        if (url) applyDiscoveredLink(row, dbNextStep.get(row.id) ?? null, url);
       }
-      return sbFetch(
-        `search_cache?mission_hash=eq.${encodeURIComponent(cacheKey)}&created_at=eq.${encodeURIComponent(cachedAt)}`,
-        { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ results }) },
-      );
+      return updateSearchCache(cacheKey, cachedAt, results);
     }));
 
     return new Response(JSON.stringify({ results, cached: false }), {
