@@ -52,8 +52,7 @@ BEGIN
 END;
 $function$;
 
-DROP TRIGGER IF EXISTS funders_reset_apply_url_discovery ON public.funders;
-CREATE TRIGGER funders_reset_apply_url_discovery
+CREATE OR REPLACE TRIGGER funders_reset_apply_url_discovery
   BEFORE UPDATE OF website ON public.funders
   FOR EACH ROW
   WHEN (public.funder_website_key(NEW.website) IS DISTINCT FROM public.funder_website_key(OLD.website))
