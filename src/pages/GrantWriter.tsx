@@ -27,6 +27,15 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
 // The form, kept for this funder across a visit to Sign in or Settings
 const FORM_KEY = 'ff_grant_writer_form';
+const FORM_KEEP_MS = 30 * 60 * 1000;
+
+interface KeptForm {
+  funderId: string;
+  savedAt: number;
+  mission: string;
+  orgDetails: OrgDetails;
+  uploadedFiles: UploadedGrantFile[];
+}
 
 const FILE_TYPE_LABELS: Record<string, string> = {
   'application/pdf': 'PDF',
@@ -127,21 +136,23 @@ export default function GrantWriter() {
 
   // ── Form state ──────────────────────────────────────────────────────────
 
-  console.log('KEPT-RENDER'); const [keptForm] = useState<{ funderId: string; mission: string; orgDetails: OrgDetails } | null>(() => {
+  const [keptForm] = useState<KeptForm | null>(() => {
     try {
-      const saved = JSON.parse(sessionStorage.getItem(FORM_KEY) || 'null');
-      return saved && funder && saved.funderId === funder.id ? saved : null;
+      const saved: KeptForm | null = JSON.parse(sessionStorage.getItem(FORM_KEY) || 'null');
+      return saved && funder && saved.funderId === funder.id && Date.now() - saved.savedAt < FORM_KEEP_MS
+        ? saved
+        : null;
     } catch {
       return null;
     }
   });
   // Restored once; another funder's kept form stays for when that one reopens
   useEffect(() => {
-    console.log('KEPT-EFFECT', !!keptForm); if (keptForm) sessionStorage.removeItem(FORM_KEY);
+    if (keptForm) sessionStorage.removeItem(FORM_KEY);
   }, [keptForm]);
 
   const [mission, setMission] = useState(
-    () => keptForm?.mission ?? (sessionStorage.getItem('ff_mission') || ''),
+    () => keptForm?.mission || sessionStorage.getItem('ff_mission') || '',
   );
   const [orgDetails, setOrgDetails] = useState<OrgDetails>(() => keptForm?.orgDetails ?? {
     orgName: '',
@@ -167,6 +178,8 @@ export default function GrantWriter() {
       fromProfile && value === fromProfile ? '' : value;
     sessionStorage.setItem(FORM_KEY, JSON.stringify({
       funderId: funder.id,
+      savedAt: Date.now(),
+      uploadedFiles,
       mission: unlessFromProfile(mission, userProfile?.mission_statement),
       orgDetails: {
         ...orgDetails,
@@ -174,10 +187,14 @@ export default function GrantWriter() {
         budget: unlessFromProfile(orgDetails.budget, profileBudget),
         geoFocus: unlessFromProfile(orgDetails.geoFocus, userProfile?.location_served),
       },
-    }));
+    } satisfies KeptForm));
   };
 
-  const [showOrg, setShowOrg] = useState(false);
+  // Open when a kept form brings org details back
+  const [showOrg, setShowOrg] = useState(
+    () => !!keptForm && [keptForm.orgDetails.orgName, keptForm.orgDetails.budget, keptForm.orgDetails.orgDesc]
+      .some((value) => value.trim()),
+  );
   const [showProgram, setShowProgram] = useState(false);
   const [showPastGrants, setShowPastGrants] = useState(true);
   const profileAppliedRef = useRef(false);
@@ -202,14 +219,13 @@ export default function GrantWriter() {
   }, [profileLoaded, userProfile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Whether Organization Details show the saved org profile
-  const orgFromProfile = !!userProfile && (
-    (!!userProfile.organization_name && orgDetails.orgName === userProfile.organization_name)
-    || (!!profileBudget && orgDetails.budget === profileBudget)
-  );
+  const orgFromProfile = !!userProfile && (!!userProfile.organization_name || !!profileBudget)
+    && (!userProfile.organization_name || orgDetails.orgName === userProfile.organization_name)
+    && (!profileBudget || orgDetails.budget === profileBudget);
 
   // ── Upload state ────────────────────────────────────────────────────────
 
-  const [uploadedFiles, setUploadedFiles] = useState<UploadedGrantFile[]>([]);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedGrantFile[]>(() => keptForm?.uploadedFiles ?? []);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -776,7 +792,9 @@ export default function GrantWriter() {
                           to="/login"
                           onClick={() => {
                             keepForm();
+                            // Back to Saved Funders after signing in, by password or OAuth
                             sessionStorage.setItem('authRedirect', '/saved');
+                            sessionStorage.setItem('ff_redirect_after_login', '/saved');
                           }}
                           className="text-blue-400 hover:text-blue-300 underline"
                         >
