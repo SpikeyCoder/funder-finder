@@ -507,8 +507,10 @@ async function discoverInBackground(
       console.warn('apply_url_recheck_at lookup failed; scanning all:', e);
       rows = results.filter((row) => ids.includes(row.id));
     }
-    // Websites as the rest of the function links them (toExternalUrl)
+    // Best-ranked first, with websites as the rest of the function links them (toExternalUrl)
+    const rank = new Map(ids.map((id, i) => [id, i]));
     const candidates = rows
+      .sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0))
       .map((row) => ({ id: row.id, stored: row.website, website: toExternalUrl(row.website) }))
       .filter((c): c is { id: string; stored: string; website: string } => !!c.stored && !!c.website);
     if (candidates.length === 0) return 0;

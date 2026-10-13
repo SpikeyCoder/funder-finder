@@ -219,6 +219,8 @@ Deno.test("fetchHomepageHtml: a private address safeFetch refuses is a miss; a D
 Deno.test("discoverGrantPageUrl accepts a grant portal's own root, not the funder's homepage", () => {
   const html = page('<a href="https://fund.org/">Funding home</a><a href="https://grants.fund.org/">Apply for a grant</a>');
   assertEquals(discoverGrantPageUrl(html, "https://www.fund.org/"), "https://grants.fund.org/");
+  // Its name alone is enough: "Portal login" has no grant words
+  assertEquals(discoverGrantPageUrl(page('<a href="https://apply.fund.org/">Portal login</a>'), "https://fund.org/"), "https://apply.fund.org/");
 });
 
 Deno.test("discoverGrantUrlsInBatch fetches a website shared by several funders once", async () => {

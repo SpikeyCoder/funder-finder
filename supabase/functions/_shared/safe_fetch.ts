@@ -165,6 +165,8 @@ async function assertPublicHostname(hostname: string, signal?: AbortSignal | nul
     Deno.resolveDns(lower, "A", { signal: signal ?? undefined }).catch((): string[] => []),
     Deno.resolveDns(lower, "AAAA", { signal: signal ?? undefined }).catch((): string[] => []),
   ]);
+  // A lookup cut short by the caller's signal is an abort, not a failed lookup
+  signal?.throwIfAborted();
   if (addrs4.length === 0 && addrs6.length === 0) {
     throw new SSRFBlockedError(`Hostname did not resolve: ${hostname}`);
   }

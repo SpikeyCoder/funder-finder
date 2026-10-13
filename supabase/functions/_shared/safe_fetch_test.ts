@@ -46,3 +46,10 @@ Deno.test("safeFetch still fetches a public IPv6 literal", async () => {
     globalThis.fetch = realFetch;
   }
 });
+
+Deno.test("safeFetch reports an aborted lookup as an abort, not a blocked host", async () => {
+  const controller = new AbortController();
+  controller.abort(new DOMException("timed out", "TimeoutError"));
+  const error = await assertRejects(() => safeFetch("https://example.com/", { signal: controller.signal }));
+  assert(!(error instanceof SSRFBlockedError), `got ${error}`);
+});

@@ -179,8 +179,12 @@ export function discoverGrantPageUrl(html: string, pageUrl: string, siteUrl = pa
     if ((path === '' && homeHosts.has(bareHost(link))) || (path === landingPath && bareHost(link) === bareHost(page))) continue;
 
     // Score against hints
-    // The path, not the host: every link on fundingfutures.org isn't a grant page
-    const urlLower = `${link.pathname}${link.search}`.toLowerCase();
+    // The path, not the funder's host name (every link on fundingfutures.org
+    // isn't a grant page); a subdomain of its own counts as the first segment
+    // (grants.fund.org/ reads as /grants/)
+    const host = bareHost(link);
+    const subdomain = host !== bareHost(page) && host !== extractDomain(siteUrl) ? `/${host.split('.')[0]}` : '';
+    const urlLower = `${subdomain}${link.pathname}${link.search}`.toLowerCase();
     const anchorText = m[2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
     let score = 0;
 
