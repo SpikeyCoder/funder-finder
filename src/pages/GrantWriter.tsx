@@ -12,6 +12,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { formatGrantRange, formatTotalGiving } from '../utils/matching';
 import NavBar from '../components/NavBar';
 import { SUPABASE_URL } from '../lib/supabaseProject';
+import { profileBudgetLabel } from '../lib/budgetRanges';
 
 const GRANT_WRITER_URL =
   `${SUPABASE_URL}/functions/v1/grant-writer`;
@@ -98,7 +99,7 @@ function renderMarkdown(text: string): string {
 export default function GrantWriter() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, userProfile, profileLoaded, saveUserProfile } = useAuth();
+  const { user, userProfile, profileLoaded, saveUserProfile, refreshUserProfile } = useAuth();
   const funder: Funder | null = (location.state as any)?.funder ?? null;
 
   // Page title
@@ -143,15 +144,64 @@ export default function GrantWriter() {
   const [showPastGrants, setShowPastGrants] = useState(true);
   const profileAppliedRef = useRef(false);
 
-  // Pre-populate mission & location from user profile if not already set via sessionStorage
+  // The profile as it is now: Settings and onboarding write it without
+  // updating the copy in context
+  const [profileFresh, setProfileFresh] = useState(false);
   useEffect(() => {
-    if (profileAppliedRef.current || !profileLoaded || !userProfile) return;
+    // A different account (or none): its profile is not loaded or applied yet
+    setProfileFresh(false);
+    profileAppliedRef.current = false;
+    if (!user) return;
+    let current = true;
+    refreshUserProfile().catch(() => {}).finally(() => { if (current) setProfileFresh(true); });
+    return () => { current = false; };
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const profileReady = profileLoaded && profileFresh;
+
+  // Pre-populate empty mission & org details from user profile, once, when
+  // it's available. Starting a draft or saving the name after it's available
+  // counts as applied, so a profile row those create doesn't refill the form.
+  useEffect(() => {
+    if (profileAppliedRef.current || !profileReady || !userProfile) return;
     profileAppliedRef.current = true;
-    if (!mission && userProfile.mission_statement) setMission(userProfile.mission_statement);
-    if (!orgDetails.geoFocus && userProfile.location_served) {
-      setOrgDetails(prev => ({ ...prev, geoFocus: userProfile.location_served! }));
+    const budget = profileBudgetLabel(userProfile.budget_range);
+    if (userProfile.mission_statement) setMission(prev => prev || userProfile.mission_statement!);
+    setOrgDetails(prev => ({
+      ...prev,
+      orgName: prev.orgName || userProfile.organization_name?.trim() || '',
+      budget: prev.budget || budget || '',
+      geoFocus: prev.geoFocus || userProfile.location_served || '',
+    }));
+    if (userProfile.organization_name?.trim() || budget) setShowOrg(true);
+  }, [profileReady, userProfile]); // eslint-disable-line react-hooks/exhaustive-deps
+
+
+  // Save the organization name to the org profile. (Geographic Focus isn't
+  // saved: its profile field, location_served, is the funder search's location.)
+  // `savedName` / `failedName` say which name a save was for, so its outcome
+  // shows only while that name is in the field.
+  const [savingName, setSavingName] = useState(false);
+  const [savedName, setSavedName] = useState<string | null>(null);
+  const [failedName, setFailedName] = useState<string | null>(null);
+  const saveOrgProfile = async () => {
+    const name = orgDetails.orgName.trim();
+    profileAppliedRef.current = true;
+    setSavingName(true);
+    setFailedName(null);
+    try {
+      await saveUserProfile({ organization_name: name });
+      setSavedName(name);
+    } catch (e) {
+      console.warn('Org profile save:', e);
+      setFailedName(name);
+    } finally {
+      setSavingName(false);
     }
-  }, [profileLoaded, userProfile]); // eslint-disable-line react-hooks/exhaustive-deps
+  };
+  const profileName = userProfile?.organization_name?.trim() || null;
+  const typedName = orgDetails.orgName.trim();
+  // Whether Organization Name is the org profile's
+  const orgFromProfile = !!typedName && typedName === profileName;
 
   // ── Upload state ────────────────────────────────────────────────────────
 
@@ -293,6 +343,8 @@ export default function GrantWriter() {
 
   const generate = async () => {
     if (!funder || !mission.trim() || phase === 'generating' || phase === 'analyzing' || phase === 'researching') return;
+
+    if (profileReady) profileAppliedRef.current = true;
 
     // Save mission to profile for logged-in users (fire-and-forget)
     if (user && mission.trim()) {
@@ -715,6 +767,39 @@ export default function GrantWriter() {
 
               {showOrg && (
                 <div className="px-5 pb-5 bg-[#0d1117] grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  {user && (
+                    <div className="sm:col-span-2 pt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-gray-400">
+                      {orgFromProfile ? (
+                        <span>
+                          {savedName === typedName
+                            ? 'Organization name saved to your profile.'
+                            : 'Organization name matches your profile.'}
+                        </span>
+                      ) : (
+                        <>
+                          <span>
+                            {profileName
+                              ? `Your profile's organization name is "${profileName}".`
+                              : "Save your organization's name to your profile to fill it in for every draft."}
+                          </span>
+                          {typedName && (
+                          <button
+                            type="button"
+                            onClick={saveOrgProfile}
+                            disabled={!profileReady || savingName}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-[#30363d] px-3 py-1.5 text-gray-200 hover:bg-[#161b22] disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {savingName ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                            {profileName ? 'Replace it with this name' : 'Save name to profile'}
+                          </button>
+                          )}
+                          {failedName === typedName && (
+                            <span className="text-red-400" role="alert">Couldn't save. Try again.</span>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
                   <div>
                     <label htmlFor="gw-org-name" className={labelClass}>Organization Name</label>
                     <input
@@ -876,7 +961,7 @@ export default function GrantWriter() {
             {/* Generate button */}
             <button
               onClick={generate}
-              disabled={!mission.trim() || isProcessing}
+              disabled={!mission.trim() || isProcessing || (!!user && !profileReady)}
               className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:bg-[#161b22] disabled:text-gray-600 disabled:cursor-not-allowed text-white font-semibold py-4 rounded-xl transition-colors text-base"
             >
               <Wand2 size={18} />
