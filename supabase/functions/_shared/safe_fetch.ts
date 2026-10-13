@@ -190,6 +190,8 @@ export async function safeFetch(rawUrl: string, init: SafeFetchOptions = {}): Pr
     if (response.status >= 300 && response.status < 400) {
       const loc = response.headers.get("location");
       if (!loc) return response;
+      // Following the redirect: release this response's unread body
+      await response.body?.cancel().catch(() => {});
       if (++hops > maxRedirects) {
         throw new SSRFBlockedError(`Exceeded max redirects (${maxRedirects}) for ${rawUrl}`);
       }

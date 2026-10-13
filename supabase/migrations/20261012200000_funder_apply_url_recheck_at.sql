@@ -41,8 +41,10 @@ CREATE OR REPLACE FUNCTION public.funders_reset_apply_url_discovery()
  SET search_path TO 'public'
 AS $function$
 BEGIN
-  NEW.apply_url_recheck_at := NULL;
-  -- Unless this update sets it for the new site too
+  -- Each unless this update sets it for the new site too
+  IF NEW.apply_url_recheck_at IS NOT DISTINCT FROM OLD.apply_url_recheck_at THEN
+    NEW.apply_url_recheck_at := NULL;
+  END IF;
   IF NEW.discovered_apply_url IS NOT DISTINCT FROM OLD.discovered_apply_url THEN
     NEW.discovered_apply_url := NULL;
   END IF;

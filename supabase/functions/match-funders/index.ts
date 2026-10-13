@@ -515,6 +515,39 @@ async function discoverInBackground(
 }
 
 /**
+ * For cached results: give rows without an apply link any grant page that
+ * discovery has found for them since (funders.discovered_apply_url), with the
+ * next step re-derived from the funder's DB next_step. Best effort: on error
+ * or timeout the rows are left as they are.
+ */
+async function withDiscoveredLinks(
+  results: (FunderRow & { next_step_type?: string; next_step_url?: string | null })[],
+): Promise<void> {
+  const ids = results.filter((row) => row.website && !row.apply_url && !row.discovered_apply_url).map((row) => row.id);
+  try {
+    const found = await sbFetchBatched<{ id: string; next_step: string | null; discovered_apply_url: string }>(
+      'funders?select=id,next_step,discovered_apply_url&id=in.{{IN_FILTER}}&discovered_apply_url=not.is.null',
+      ids,
+      60,
+      { timeoutMs: 1_500 },
+    );
+    const byId = new Map(found.map((row) => [row.id, row]));
+    for (const row of results) {
+      const hit = byId.get(row.id);
+      if (!hit) continue;
+      const funder = { ...row, next_step: hit.next_step, discovered_apply_url: hit.discovered_apply_url };
+      const next = deriveNextStep(funder);
+      row.discovered_apply_url = hit.discovered_apply_url;
+      row.next_step = next.text;
+      row.next_step_type = next.type;
+      row.next_step_url = resolveNextStepUrl(next.type, funder);
+    }
+  } catch (e) {
+    console.warn('discovered links for cached results failed:', e);
+  }
+}
+
+/**
  * Save discovered grant page URLs, and when homepages without one are due a
  * recheck, back to the DB: each only while the funder's website (`websiteOf`,
  * as stored) is still the one scanned. Errors are logged, never thrown.
@@ -949,7 +982,7 @@ async function sbFetchBatched<T>(
   pathTemplate: string,
   ids: string[],
   batchSize = 60,
-  init: RequestInit = {},
+  init: SbFetchOptions = {},
 ): Promise<T[]> {
   if (ids.length === 0) return [];
   const fetchBatch = async (batch: string[]) => {
@@ -3041,6 +3074,7 @@ Deno.serve(async (req) => {
       if (cached?.length) {
         const age = Date.now() - new Date(cached[0].created_at).getTime();
         if (age < CACHE_TTL_MS) {
+          await withDiscoveredLinks(cached[0].results);
           return new Response(JSON.stringify({ results: cached[0].results, cached: true }), {
             headers: { ...headers, 'Content-Type': 'application/json' },
           });
@@ -3384,6 +3418,9 @@ Deno.serve(async (req) => {
       })
       .filter((row) => (row.fit_score || 0) >= MIN_RESULT_FIT_SCORE);
 
+    // Enrich grantee EINs from recipient_organizations where missing
+    await enrichGranteeEins(results);
+
     const cachedAt = new Date().toISOString();
     await sbFetch('search_cache?on_conflict=mission_hash', {
       method: 'POST',
@@ -3395,9 +3432,6 @@ Deno.serve(async (req) => {
         created_at: cachedAt,
       }),
     });
-
-    // Enrich grantee EINs from recipient_organizations where missing
-    await enrichGranteeEins(results);
 
     // Grant page discovery for the returned funders, after the response. Hits
     // also update the results cached above, unless a newer search replaced them:

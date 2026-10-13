@@ -182,15 +182,22 @@ Deno.test("discoverGrantUrlsInBatch returns at its budget when sites hang", asyn
   assert(requested.length <= 5, `requested ${requested.length}`);
 });
 
-Deno.test("discoverGrantUrlsInBatch counts sites still loading after hungMs as failed", async () => {
+Deno.test("discoverGrantUrlsInBatch gives each site siteTimeoutMs, then moves on", async () => {
   const { fn } = fakeFetch({ "a.org": "stall-headers", "b.org": "stall-body", "c.org": "apply" });
   const { found, failed } = await discoverGrantUrlsInBatch([
     { id: "a", website: "https://a.org" },
     { id: "b", website: "https://b.org" },
     { id: "c", website: "https://c.org" },
-  ], { fetchFn: fn, budgetMs: 200, hungMs: 100 });
+  ], { fetchFn: fn, budgetMs: 1_000, siteTimeoutMs: 100, concurrency: 1 });
+  // One worker: a and b each time out (failed, retried in a day), then c is scanned
   assertEquals([...found.keys()], ["c"]);
   assertEquals(failed.sort(), ["a", "b"]);
+});
+
+Deno.test("fetchHomepageHtml: a host safeFetch refuses is a miss", async () => {
+  const blocked = Object.assign(new Error("Hostname did not resolve"), { name: "SSRFBlockedError" });
+  const fn = (() => Promise.reject(blocked)) as typeof fetch;
+  assertEquals(await fetchHomepageHtml("https://gone.example", AbortSignal.timeout(1_000), fn), { kind: "miss" });
 });
 
 Deno.test("discoverGrantUrlsInBatch fetches a website shared by several funders once", async () => {

@@ -16,8 +16,8 @@ export const DISCOVERY_CONCURRENCY = 8;
 export const DISCOVERY_MISS_RECHECK_MS = 30 * 24 * 60 * 60 * 1000;
 /** A homepage that failed to load is retried after this long. */
 export const DISCOVERY_ERROR_RECHECK_MS = 24 * 60 * 60 * 1000;
-/** A homepage still loading after this long when the budget runs out counts as failed. */
-export const DISCOVERY_HUNG_MS = 5_000;
+/** One homepage gets at most this long; one that takes longer counts as failed. */
+export const DISCOVERY_SITE_TIMEOUT_MS = 4_000;
 
 const MAX_HTML_CHARS = 500_000;
 
@@ -68,7 +68,7 @@ function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
 export type HomepageResult =
   /** An HTML page; `url` is where it was served from, after redirects. */
   | { kind: 'page'; html: string; url: string }
-  /** No page to scan, for good: not found, gone, or not HTML. */
+  /** No page to scan, for good: not found, gone, not HTML, or a host safeFetch won't fetch. */
   | { kind: 'miss' }
   /** Anything that may pass: network errors, 5xx, 429, 403 bot walls, the deadline. */
   | { kind: 'error' };
@@ -112,8 +112,9 @@ export async function fetchHomepageHtml(
       html += decoder.decode(value, { stream: true });
     }
     return { kind: 'page', html: html.slice(0, MAX_HTML_CHARS), url: res.url || url };
-  } catch {
-    return { kind: 'error' };
+  } catch (e) {
+    // safeFetch refuses hosts that don't resolve or resolve to private addresses
+    return e instanceof Error && e.name === 'SSRFBlockedError' ? { kind: 'miss' } : { kind: 'error' };
   } finally {
     reader?.cancel().catch(() => {});
   }
@@ -196,14 +197,14 @@ export interface DiscoveryResult {
   found: Map<string, string>;
   /** Funders whose homepage has no grant page: scanned without one, 404/410, or not HTML. */
   missed: string[];
-  /** Funders whose homepage failed to load, or was still loading after DISCOVERY_HUNG_MS when the budget ran out. */
+  /** Funders whose homepage failed to load, or took longer than DISCOVERY_SITE_TIMEOUT_MS. */
   failed: string[];
 }
 
 export interface DiscoveryOptions {
   budgetMs?: number;
   concurrency?: number;
-  hungMs?: number;
+  siteTimeoutMs?: number;
   fetchFn?: typeof fetch;
 }
 
@@ -212,13 +213,13 @@ export interface DiscoveryOptions {
  * absolute http(s) URL), in the given order,
  * `concurrency` homepages at a time (each website fetched once), returning
  * once all are scanned or `budgetMs` has passed, whichever is first. Funders
- * not reached, or cut off by the budget before DISCOVERY_HUNG_MS, are in none
- * of the result's lists.
+ * not reached, or cut off by the budget, are in none of the result's lists.
  */
 export async function discoverGrantUrlsInBatch(
   funders: { id: string; website: string }[],
   {
-    budgetMs = DISCOVERY_BUDGET_MS, concurrency = DISCOVERY_CONCURRENCY, hungMs = DISCOVERY_HUNG_MS, fetchFn = fetch,
+    budgetMs = DISCOVERY_BUDGET_MS, concurrency = DISCOVERY_CONCURRENCY,
+    siteTimeoutMs = DISCOVERY_SITE_TIMEOUT_MS, fetchFn = fetch,
   }: DiscoveryOptions = {},
 ): Promise<DiscoveryResult> {
   const result: DiscoveryResult = { found: new Map(), missed: [], failed: [] };
@@ -233,13 +234,10 @@ export async function discoverGrantUrlsInBatch(
   const worker = async () => {
     while (next < sites.length && !deadline.aborted) {
       const [url, ids] = sites[next++];
-      const startedAt = Date.now();
-      const page = await fetchHomepageHtml(url, deadline, fetchFn);
-      if (deadline.aborted) {
-        // A site that hangs every time would otherwise hold a slot on every search
-        if (Date.now() - startedAt >= hungMs) result.failed.push(...ids);
-        return;
-      }
+      const signal = AbortSignal.any([deadline, AbortSignal.timeout(siteTimeoutMs)]);
+      const page = await fetchHomepageHtml(url, signal, fetchFn);
+      // Cut off by the batch budget, not the site: tried again next time
+      if (deadline.aborted) return;
       if (page.kind === 'error') {
         result.failed.push(...ids);
         continue;
