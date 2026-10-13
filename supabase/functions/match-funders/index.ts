@@ -481,34 +481,44 @@ function normalizedEin(value: string | null | undefined): string | null {
  * funders that have a website but no apply link, best-ranked first, within
  * DISCOVERY_BUDGET_MS, and record the outcome for later searches. Funders due
  * for a recheck later (apply_url_recheck_at) are skipped; if that lookup fails
- * (e.g. before the migration), none are. Errors are logged, never thrown.
+ * (e.g. before the migration), none are, except on `fromCache`. Returns how
+ * many grant pages were found. Errors are logged, never thrown.
  */
-async function discoverInBackground(results: FunderRow[]): Promise<void> {
+async function discoverInBackground(
+  results: FunderRow[],
+  { fromCache = false } = {},
+): Promise<number> {
   try {
+    const ids = results.filter((row) => row.website && !row.apply_url && !row.discovered_apply_url).map((row) => row.id);
+    let rows: { id: string; website: string | null }[];
+    try {
+      // The funders still without a link and due a scan, with their website
+      // as it is now (cached results may be days old)
+      const now = encodeURIComponent(new Date().toISOString());
+      rows = await sbFetchBatched<{ id: string; website: string | null }>(
+        `funders?select=id,website&id=in.{{IN_FILTER}}&apply_url=is.null&discovered_apply_url=is.null` +
+          `&or=(apply_url_recheck_at.is.null,apply_url_recheck_at.lte.${now})`,
+        ids,
+      );
+    } catch (e) {
+      // e.g. before the apply_url_recheck_at migration: nothing would be
+      // recorded, so cache hits would rescan every time; only fresh searches scan
+      if (fromCache) return 0;
+      console.warn('apply_url_recheck_at lookup failed; scanning all:', e);
+      rows = results.filter((row) => ids.includes(row.id));
+    }
     // Websites as the rest of the function links them (toExternalUrl)
-    let candidates = results
-      .filter((row) => !row.apply_url && !row.discovered_apply_url)
+    const candidates = rows
       .map((row) => ({ id: row.id, stored: row.website, website: toExternalUrl(row.website) }))
       .filter((c): c is { id: string; stored: string; website: string } => !!c.stored && !!c.website);
-    if (candidates.length === 0) return;
-    try {
-      const notDue = await sbFetchBatched<{ id: string }>(
-        // Not due, or given a link since these results were built (e.g. cached ones)
-        `funders?select=id&id=in.{{IN_FILTER}}` +
-          `&or=(apply_url_recheck_at.gt.${encodeURIComponent(new Date().toISOString())},` +
-          `apply_url.not.is.null,discovered_apply_url.not.is.null)`,
-        candidates.map((row) => row.id),
-      );
-      const skip = new Set(notDue.map((row) => row.id));
-      candidates = candidates.filter((row) => !skip.has(row.id));
-    } catch (e) {
-      console.warn('apply_url_recheck_at lookup failed; scanning all:', e);
-    }
+    if (candidates.length === 0) return 0;
     // safeFetch: no private or metadata hosts, checked again on every redirect
     const discovery = await discoverGrantUrlsInBatch(candidates, { fetchFn: safeFetch as typeof fetch });
     await recordDiscovery(discovery, new Map(candidates.map((c) => [c.id, c.stored])));
+    return discovery.found.size;
   } catch (e) {
     console.warn('grant page discovery failed:', e);
+    return 0;
   }
 }
 
@@ -557,8 +567,9 @@ async function refreshCachedResults(
 ): Promise<void> {
   // Rows just built from funders already carry their links
   const linkedBefore = !justBuilt && await withDiscoveredLinks(results);
-  await discoverInBackground(results);
-  if (await withDiscoveredLinks(results) || linkedBefore) await updateSearchCache(cacheKey, cachedAt, results);
+  const found = await discoverInBackground(results, { fromCache: !justBuilt });
+  const linkedAfter = found > 0 && await withDiscoveredLinks(results);
+  if (linkedBefore || linkedAfter) await updateSearchCache(cacheKey, cachedAt, results);
 }
 
 /** Replace the results cached for `cacheKey`, unless a newer search has replaced them. */

@@ -20,6 +20,10 @@ Deno.test("safeFetch refuses private IPv4 addresses written as IPv6", async () =
       "http://[0:0:0:0:0:ffff:a00:1]/", // mapped 10.0.0.1, long form
       "http://[::a9fe:a9fe]/", // IPv4-compatible
       "http://[64:ff9b::a9fe:a9fe]/", // NAT64
+      "http://[::ffff:0:a9fe:a9fe]/", // IPv4-translated
+      "http://[64:ff9b:1::a9fe:a9fe]/", // local-use NAT64
+      "http://[2002:a9fe:a9fe::1]/", // 6to4
+      "http://[fec0::1]/", // site-local
       "http://[::1]/",
       "http://[fd00:ec2::254]/",
     ]) {

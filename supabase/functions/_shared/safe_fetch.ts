@@ -112,19 +112,25 @@ function isPrivateIPv6(ip: string): boolean {
   const zeros = (from: number, to: number) => g.slice(from, to).every((x) => x === 0);
   // :: unspecified, ::1 loopback
   if (zeros(0, 7) && g[7] <= 1) return true;
-  // fc00::/7 unique local, fe80::/10 link-local, ff00::/8 multicast
-  if ((g[0] & 0xfe00) === 0xfc00 || (g[0] & 0xffc0) === 0xfe80 || (g[0] & 0xff00) === 0xff00) return true;
-  // An embedded IPv4 address — IPv4-mapped (::ffff:0:0/96), IPv4-compatible
-  // (::/96) or NAT64 (64:ff9b::/96) — is checked as IPv4, however it's spelled
+  // fc00::/7 unique local, fe80::/10 link-local, fec0::/10 site-local, ff00::/8 multicast
+  if ((g[0] & 0xfe00) === 0xfc00 || (g[0] & 0xffc0) === 0xfe80 || (g[0] & 0xffc0) === 0xfec0
+    || (g[0] & 0xff00) === 0xff00) return true;
+  // 64:ff9b:1::/48 local-use NAT64: may translate to anything on the local network
+  if (g[0] === 0x64 && g[1] === 0xff9b && g[2] === 1) return true;
+  const v4 = (hi: number, lo: number) => `${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`;
+  // An embedded IPv4 address — IPv4-mapped (::ffff:0:0/96), IPv4-translated
+  // (::ffff:0:0:0/96), IPv4-compatible (::/96) or NAT64 (64:ff9b::/96) — is
+  // checked as IPv4, however it's spelled
   const embedsV4 = (zeros(0, 5) && (g[5] === 0xffff || g[5] === 0))
+    || (zeros(0, 4) && g[4] === 0xffff && g[5] === 0)
     || (g[0] === 0x64 && g[1] === 0xff9b && zeros(2, 6));
-  if (embedsV4) {
-    return isPrivateIPv4(`${g[6] >> 8}.${g[6] & 0xff}.${g[7] >> 8}.${g[7] & 0xff}`);
-  }
+  if (embedsV4) return isPrivateIPv4(v4(g[6], g[7]));
+  // 6to4 (2002::/16) carries an IPv4 address in groups 1-2
+  if (g[0] === 0x2002) return isPrivateIPv4(v4(g[1], g[2]));
   return false;
 }
 
-async function assertPublicHostname(hostname: string): Promise<void> {
+async function assertPublicHostname(hostname: string, signal?: AbortSignal | null): Promise<void> {
   const lower = hostname.toLowerCase();
   if (!lower) throw new SSRFBlockedError("Empty hostname");
   if (CLOUD_METADATA_HOSTS.has(lower)) {
@@ -156,8 +162,8 @@ async function assertPublicHostname(hostname: string): Promise<void> {
   // the family we didn't check.
   // (Looked up together; a host may have only one kind of record.)
   const [addrs4, addrs6] = await Promise.all([
-    Deno.resolveDns(lower, "A").catch((): string[] => []),
-    Deno.resolveDns(lower, "AAAA").catch((): string[] => []),
+    Deno.resolveDns(lower, "A", { signal: signal ?? undefined }).catch((): string[] => []),
+    Deno.resolveDns(lower, "AAAA", { signal: signal ?? undefined }).catch((): string[] => []),
   ]);
   if (addrs4.length === 0 && addrs6.length === 0) {
     throw new SSRFBlockedError(`Hostname did not resolve: ${hostname}`);
@@ -195,7 +201,7 @@ export async function safeFetch(rawUrl: string, init: SafeFetchOptions = {}): Pr
       throw new SSRFBlockedError(`Disallowed scheme: ${parsed.protocol}`);
     }
     const host = parsed.hostname;
-    await assertPublicHostname(host);
+    await assertPublicHostname(host, rest.signal);
 
     const response = await fetch(parsed.toString(), { ...rest, redirect: "manual" });
 
