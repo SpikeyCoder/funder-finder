@@ -116,7 +116,7 @@ export async function fetchHomepageHtml(
     // safeFetch refuses private and metadata addresses for good; its other
     // refusals (DNS failures, redirect loops) may pass
     const blocked = e instanceof Error && e.name === 'SSRFBlockedError'
-      && /private|reserved|metadata|literal|scheme|invalid url/i.test(e.message);
+      && /^(Blocked |Disallowed scheme|Invalid URL)|^Hostname \S+ resolves to private /.test(e.message);
     return blocked ? { kind: 'miss' } : { kind: 'error' };
   } finally {
     reader?.cancel().catch(() => {});
@@ -137,12 +137,14 @@ function funderScope(pageUrl: string, siteUrl: string): ((link: URL) => boolean)
   const served = bareHost(page);
   if (!site) return null;
   if (onSite(served, site)) {
-    // A website stored as a section of a site (bigcorp.com/foundation): links
-    // under that section; a home or language page (/home, /index.html, /en/) is the whole site
-    const sitePath = new URL(siteUrl).pathname.replace(/\/+$/, '');
-    const last = sitePath.split('/').pop() ?? '';
-    const section = sitePath && !/^(home|index|default|welcome|main|[a-z]{2}(-[a-z]{2})?)(\.\w+)?$/i.test(last)
-      ? `${sitePath}/`
+    // A homepage that is a section of a site (bigcorp.com/foundation): links
+    // under that section. A file (about.html) stands for its folder; a home or
+    // language page (/home, /en/) for the whole site.
+    const segments = page.pathname.split('/').filter(Boolean);
+    if (segments.length && segments[segments.length - 1].includes('.')) segments.pop();
+    const last = segments[segments.length - 1] ?? '';
+    const section = segments.length && !/^(home|welcome|main|[a-z]{2}(-[a-z]{2})?)$/i.test(last)
+      ? `/${segments.join('/')}/`
       : null;
     return (link) => onSite(bareHost(link), site) && (!section || `${link.pathname}/`.startsWith(section));
   }
@@ -237,9 +239,7 @@ export async function discoverGrantUrlsInBatch(
   const result: DiscoveryResult = { found: new Map(), missed: [], failed: [] };
   if (funders.length === 0 || budgetMs <= 0) return result;
 
-  const idsBySite = new Map<string, string[]>();
-  for (const f of funders) idsBySite.set(f.website, [...(idsBySite.get(f.website) || []), f.id]);
-  const sites = [...idsBySite];
+  const sites = [...Map.groupBy(funders, (f) => f.website)].map(([url, group]) => [url, group.map((f) => f.id)] as const);
 
   const deadline = AbortSignal.timeout(Math.ceil(budgetMs));
   let next = 0;

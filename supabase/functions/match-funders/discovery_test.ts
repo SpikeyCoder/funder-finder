@@ -206,14 +206,25 @@ Deno.test("fetchHomepageHtml: a private address safeFetch refuses is a miss; a D
     await fetchHomepageHtml("https://gone.example", signal, refused("Hostname did not resolve: gone.example")),
     { kind: "error" },
   );
+  // A host name that merely contains such a word isn't a refusal for good
+  assertEquals(
+    await fetchHomepageHtml("https://privatefoundation.org", signal, refused("Hostname did not resolve: privatefoundation.org")),
+    { kind: "error" },
+  );
 });
 
 Deno.test("discoverGrantPageUrl: a website stored as a site section keeps to that section", () => {
   const html = page('<a href="/careers/apply">Apply now</a><a href="/foundation/grants">Grants</a>');
   assertEquals(discoverGrantPageUrl(html, "https://www.bigcorp.com/foundation"), "https://www.bigcorp.com/foundation/grants");
-  // A home or language page is the whole site
-  assertEquals(discoverGrantPageUrl(page('<a href="/apply">Apply</a>'), "https://fund.org/en/"), "https://fund.org/apply");
-  assertEquals(discoverGrantPageUrl(page('<a href="/apply">Apply</a>'), "https://fund.org/index.html"), "https://fund.org/apply");
+  // A home or language page, or a file at the top, is the whole site
+  for (const home of ["https://fund.org/en/", "https://fund.org/index.html", "https://fund.org/about.html"]) {
+    assertEquals(discoverGrantPageUrl(page('<a href="/apply">Apply</a>'), home), "https://fund.org/apply");
+  }
+  // The section is where the page was served from, after a redirect within the site
+  assertEquals(
+    discoverGrantPageUrl(page('<a href="/about/foundation/grants">Grants</a>'), "https://bigcorp.com/about/foundation/", "https://bigcorp.com/foundation"),
+    "https://bigcorp.com/about/foundation/grants",
+  );
 });
 
 Deno.test("discoverGrantUrlsInBatch fetches a website shared by several funders once", async () => {
