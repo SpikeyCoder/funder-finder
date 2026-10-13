@@ -100,7 +100,6 @@ export default function GrantWriter() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, userProfile, profileLoaded, saveUserProfile } = useAuth();
-  const profileBudget = profileBudgetLabel(userProfile?.budget_range);
   const funder: Funder | null = (location.state as any)?.funder ?? null;
 
   // Page title
@@ -145,34 +144,34 @@ export default function GrantWriter() {
   const [showPastGrants, setShowPastGrants] = useState(true);
   const profileAppliedRef = useRef(false);
 
-  // Pre-populate empty mission & org details from user profile
+  // Pre-populate empty mission & org details from user profile, once it has
+  // loaded (a profile created later in the session doesn't refill the form)
   useEffect(() => {
-    if (profileAppliedRef.current || !profileLoaded || !userProfile) return;
+    if (profileAppliedRef.current || !profileLoaded) return;
     profileAppliedRef.current = true;
+    if (!userProfile) return;
+    const budget = profileBudgetLabel(userProfile.budget_range);
     if (userProfile.mission_statement) setMission(prev => prev || userProfile.mission_statement!);
     setOrgDetails(prev => ({
       ...prev,
-      orgName: prev.orgName || userProfile.organization_name || '',
-      budget: prev.budget || profileBudget || '',
+      orgName: prev.orgName || userProfile.organization_name?.trim() || '',
+      budget: prev.budget || budget || '',
       geoFocus: prev.geoFocus || userProfile.location_served || '',
     }));
-    if (userProfile.organization_name || profileBudget) setShowOrg(true);
+    if (userProfile.organization_name?.trim() || budget) setShowOrg(true);
   }, [profileLoaded, userProfile]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Whether Organization Details show the saved org profile's name and location
-  const orgFromProfile = !!userProfile && !!orgDetails.orgName.trim()
-    && orgDetails.orgName.trim() === (userProfile.organization_name ?? '')
-    && orgDetails.geoFocus.trim() === (userProfile.location_served ?? '');
+  // Whether Organization Details show the org profile's organization name
+  const orgFromProfile = !!orgDetails.orgName.trim()
+    && orgDetails.orgName.trim() === (userProfile?.organization_name?.trim() ?? '');
 
-  // Save the organization name and geographic focus to the org profile
+  // Save the organization name to the org profile. (Geographic Focus isn't
+  // saved: its profile field, location_served, is the funder search's location.)
   const [orgProfileSave, setOrgProfileSave] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const saveOrgProfile = async () => {
     setOrgProfileSave('saving');
     try {
-      await saveUserProfile({
-        organization_name: orgDetails.orgName.trim() || null,
-        location_served: orgDetails.geoFocus.trim() || null,
-      });
+      await saveUserProfile({ organization_name: orgDetails.orgName.trim() });
       setOrgProfileSave('saved');
     } catch (e) {
       console.warn('Org profile save:', e);
@@ -229,6 +228,7 @@ export default function GrantWriter() {
 
   const updateOrg = (key: keyof OrgDetails, value: string) => {
     setOrgDetails((prev) => ({ ...prev, [key]: value }));
+    if (key === 'orgName') setOrgProfileSave('idle');
   };
 
   // ── File upload handlers ────────────────────────────────────────────────
@@ -752,7 +752,7 @@ export default function GrantWriter() {
                         </span>
                       ) : (
                         <>
-                          <span>Save your organization's name and location to fill them in for every draft.</span>
+                          <span>Save your organization's name to your profile to fill it in for every draft.</span>
                           <button
                             type="button"
                             onClick={saveOrgProfile}

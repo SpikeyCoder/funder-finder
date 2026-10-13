@@ -10,7 +10,7 @@ export const BUDGET_RANGES = [
   { value: '50m+', label: '$50,000,000+' },
 ];
 
-// Onboarding stores its own bands (BudgetBand) in the same column.
+// The funder search (MissionInput) stores its own bands (BudgetBand) in the same column.
 const BUDGET_BAND_RANGES: Record<Exclude<BudgetBand, 'prefer_not_to_say'>, string> = {
   under_250k: 'Under $250,000',
   '250k_1m': '$250,000 - $1,000,000',
