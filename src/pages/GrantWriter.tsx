@@ -148,6 +148,9 @@ export default function GrantWriter() {
   // updating the copy in context
   const [profileFresh, setProfileFresh] = useState(false);
   useEffect(() => {
+    // A different account (or none): its profile is not loaded or applied yet
+    setProfileFresh(false);
+    profileAppliedRef.current = false;
     if (!user) return;
     let current = true;
     refreshUserProfile().catch(() => {}).finally(() => { if (current) setProfileFresh(true); });
@@ -172,9 +175,6 @@ export default function GrantWriter() {
     if (userProfile.organization_name?.trim() || budget) setShowOrg(true);
   }, [profileReady, userProfile]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Whether Organization Name is the org profile's
-  const orgFromProfile = !!orgDetails.orgName.trim()
-    && orgDetails.orgName.trim() === (userProfile?.organization_name?.trim() ?? '');
 
   // Save the organization name to the org profile. (Geographic Focus isn't
   // saved: its profile field, location_served, is the funder search's location.)
@@ -199,6 +199,9 @@ export default function GrantWriter() {
     }
   };
   const profileName = userProfile?.organization_name?.trim() || null;
+  const typedName = orgDetails.orgName.trim();
+  // Whether Organization Name is the org profile's
+  const orgFromProfile = !!typedName && typedName === profileName;
 
   // ── Upload state ────────────────────────────────────────────────────────
 
@@ -768,7 +771,7 @@ export default function GrantWriter() {
                     <div className="sm:col-span-2 pt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-gray-400">
                       {orgFromProfile ? (
                         <span>
-                          {savedName === orgDetails.orgName.trim()
+                          {savedName === typedName
                             ? 'Organization name saved to your profile.'
                             : 'Organization name matches your profile.'}
                         </span>
@@ -779,16 +782,18 @@ export default function GrantWriter() {
                               ? `Your profile's organization name is "${profileName}".`
                               : "Save your organization's name to your profile to fill it in for every draft."}
                           </span>
+                          {typedName && (
                           <button
                             type="button"
                             onClick={saveOrgProfile}
-                            disabled={!profileReady || !orgDetails.orgName.trim() || savingName}
+                            disabled={!profileReady || savingName}
                             className="inline-flex items-center gap-1.5 rounded-lg border border-[#30363d] px-3 py-1.5 text-gray-200 hover:bg-[#161b22] disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {savingName ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
                             {profileName ? 'Replace it with this name' : 'Save name to profile'}
                           </button>
-                          {failedName === orgDetails.orgName.trim() && (
+                          )}
+                          {failedName === typedName && (
                             <span className="text-red-400" role="alert">Couldn't save. Try again.</span>
                           )}
                         </>
@@ -956,7 +961,7 @@ export default function GrantWriter() {
             {/* Generate button */}
             <button
               onClick={generate}
-              disabled={!mission.trim() || isProcessing}
+              disabled={!mission.trim() || isProcessing || (!!user && !profileReady)}
               className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:bg-[#161b22] disabled:text-gray-600 disabled:cursor-not-allowed text-white font-semibold py-4 rounded-xl transition-colors text-base"
             >
               <Wand2 size={18} />
