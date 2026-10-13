@@ -1,4 +1,4 @@
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft, Check, CheckCircle2, ChevronDown, ChevronUp, Copy,
@@ -99,7 +99,7 @@ function renderMarkdown(text: string): string {
 export default function GrantWriter() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, userProfile, profileLoaded, saveUserProfile, refreshUserProfile } = useAuth();
+  const { user, loading: authLoading, userProfile, profileLoaded, saveUserProfile, refreshUserProfile } = useAuth();
   const funder: Funder | null = (location.state as any)?.funder ?? null;
 
   // Page title
@@ -258,6 +258,11 @@ export default function GrantWriter() {
 
   const uploadFile = useCallback(
     async (file: File) => {
+      // Uploads are stored under the signed-in user's account
+      if (!user) {
+        setUploadError('Sign in to upload past grants.');
+        return;
+      }
       if (!ACCEPTED_TYPES.includes(file.type)) {
         setUploadError(`Unsupported file type. Please use PDF, DOCX, or TXT.`);
         return;
@@ -304,7 +309,7 @@ export default function GrantWriter() {
         setUploading(false);
       }
     },
-    [uploadedFiles],
+    [uploadedFiles, user],
   );
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -642,7 +647,22 @@ export default function GrantWriter() {
                     automatically deleted.
                   </p>
 
+                  {/* Uploads belong to the signed-in user's account */}
+                  {!user && !authLoading && (
+                    <p className="text-sm text-gray-300 border border-[#30363d] rounded-xl p-4 text-center">
+                      <Link
+                        to="/login"
+                        onClick={() => sessionStorage.setItem('authRedirect', '/saved')}
+                        className="text-blue-400 underline"
+                      >
+                        Sign in
+                      </Link>{' '}
+                      to upload past grants.
+                    </p>
+                  )}
+
                   {/* Drag-drop zone */}
+                  {user && (<>
                   <div
                     className={`border-2 border-dashed rounded-xl p-6 text-center transition-colors cursor-pointer ${
                       dragOver
@@ -697,6 +717,7 @@ export default function GrantWriter() {
                     multiple
                     onChange={handleFileSelect}
                   />
+                  </>)}
 
                   {/* Upload error */}
                   {uploadError && (
