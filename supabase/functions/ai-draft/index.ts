@@ -106,8 +106,14 @@ Deno.serve(async (req: Request) => {
       const docTexts: string[] = [];
       for (const doc of refDocs || []) {
         let text = doc.content || '';
-        // If there's a storage file and content is just a placeholder, try to extract
-        if (doc.storage_path && text.startsWith('[Uploaded file:')) {
+        // If there's a storage file and content is just a placeholder, try to extract.
+        // SECURITY: storage_path is user-writable and the download runs as the
+        // service role, so only read from the caller's own reference-docs folder
+        // (where Project Workspace uploads them), never another user's file.
+        const ownPath = typeof doc.storage_path === 'string'
+          && doc.storage_path.startsWith(`reference-docs/${userId}/`)
+          && !doc.storage_path.includes('..');
+        if (ownPath && text.startsWith('[Uploaded file:')) {
           const extracted = await extractFileText(supabase, doc.storage_path);
           if (extracted) text = extracted;
         }

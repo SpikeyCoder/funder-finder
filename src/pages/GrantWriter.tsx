@@ -258,6 +258,11 @@ export default function GrantWriter() {
 
   const uploadFile = useCallback(
     async (file: File) => {
+      // Uploads are stored under the signed-in user's account
+      if (!user) {
+        setUploadError('Sign in to upload past grants.');
+        return;
+      }
       if (!ACCEPTED_TYPES.includes(file.type)) {
         setUploadError(`Unsupported file type. Please use PDF, DOCX, or TXT.`);
         return;
@@ -304,7 +309,7 @@ export default function GrantWriter() {
         setUploading(false);
       }
     },
-    [uploadedFiles],
+    [uploadedFiles, user],
   );
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
