@@ -85,22 +85,41 @@ function isPrivateIPv4(ip: string): boolean {
   return false;
 }
 
+/** An IPv6 address as its 8 16-bit groups, or null if it doesn't parse. */
+function ipv6Groups(ip: string): number[] | null {
+  let text = ip.toLowerCase().split("%")[0];
+  // A dotted IPv4 tail (::ffff:1.2.3.4) as two groups
+  const v4 = text.match(/^(.*:)(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (v4) {
+    const [a, b, c, d] = v4.slice(2).map(Number);
+    if ([a, b, c, d].some((n) => n > 255)) return null;
+    text = `${v4[1]}${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}`;
+  }
+  const halves = text.split("::");
+  if (halves.length > 2) return null;
+  const parse = (part: string) => (part ? part.split(":") : []).map((g) => (/^[0-9a-f]{1,4}$/.test(g) ? parseInt(g, 16) : NaN));
+  const head = parse(halves[0]);
+  const tail = halves.length === 2 ? parse(halves[1]) : [];
+  const fill = 8 - head.length - tail.length;
+  if (halves.length === 2 ? fill < 1 : fill !== 0) return null;
+  const groups = [...head, ...new Array(halves.length === 2 ? fill : 0).fill(0), ...tail];
+  return groups.some(Number.isNaN) ? null : groups;
+}
+
 function isPrivateIPv6(ip: string): boolean {
-  const lower = ip.toLowerCase();
-  // ::1 loopback
-  if (lower === "::1") return true;
-  // :: unspecified
-  if (lower === "::") return true;
-  // fc00::/7 unique local
-  if (lower.startsWith("fc") || lower.startsWith("fd")) return true;
-  // fe80::/10 link-local
-  if (lower.startsWith("fe80")) return true;
-  // ff00::/8 multicast
-  if (lower.startsWith("ff")) return true;
-  // IPv4-mapped (::ffff:a.b.c.d) — re-check the embedded v4 address
-  if (lower.startsWith("::ffff:") && lower.includes(".")) {
-    const v4 = lower.split(":").pop() || "";
-    return isPrivateIPv4(v4);
+  const g = ipv6Groups(ip);
+  if (!g) return true; // unparseable: refuse
+  const zeros = (from: number, to: number) => g.slice(from, to).every((x) => x === 0);
+  // :: unspecified, ::1 loopback
+  if (zeros(0, 7) && g[7] <= 1) return true;
+  // fc00::/7 unique local, fe80::/10 link-local, ff00::/8 multicast
+  if ((g[0] & 0xfe00) === 0xfc00 || (g[0] & 0xffc0) === 0xfe80 || (g[0] & 0xff00) === 0xff00) return true;
+  // An embedded IPv4 address — IPv4-mapped (::ffff:0:0/96), IPv4-compatible
+  // (::/96) or NAT64 (64:ff9b::/96) — is checked as IPv4, however it's spelled
+  const embedsV4 = (zeros(0, 5) && (g[5] === 0xffff || g[5] === 0))
+    || (g[0] === 0x64 && g[1] === 0xff9b && zeros(2, 6));
+  if (embedsV4) {
+    return isPrivateIPv4(`${g[6] >> 8}.${g[6] & 0xff}.${g[7] >> 8}.${g[7] & 0xff}`);
   }
   return false;
 }

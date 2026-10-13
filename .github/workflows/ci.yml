@@ -41,4 +41,4 @@ jobs:
           supabase/functions/process-organization-requests supabase/functions/request-organization
           supabase/functions/_shared/cron_auth_test.ts supabase/functions/_shared/trello_test.ts
           supabase/functions/_shared/rest_test.ts supabase/functions/_shared/rate_limit_test.ts
-          supabase/functions/match-funders/discovery_test.ts
+          supabase/functions/match-funders/discovery_test.ts supabase/functions/_shared/safe_fetch_test.ts

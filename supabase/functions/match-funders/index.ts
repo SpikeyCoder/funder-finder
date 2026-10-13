@@ -549,8 +549,14 @@ async function withDiscoveredLinks(results: CachedRow[]): Promise<boolean> {
  * After the response: discovery for cached mission results, then any grant
  * pages found (by this or any other search) written into the cache entry.
  */
-async function refreshCachedResults(cacheKey: string, cachedAt: string, results: CachedRow[]): Promise<void> {
-  const linkedBefore = await withDiscoveredLinks(results);
+async function refreshCachedResults(
+  cacheKey: string,
+  cachedAt: string,
+  results: CachedRow[],
+  { justBuilt = false } = {},
+): Promise<void> {
+  // Rows just built from funders already carry their links
+  const linkedBefore = !justBuilt && await withDiscoveredLinks(results);
   await discoverInBackground(results);
   if (await withDiscoveredLinks(results) || linkedBefore) await updateSearchCache(cacheKey, cachedAt, results);
 }
@@ -3450,7 +3456,7 @@ Deno.serve(async (req) => {
 
     // Grant page discovery for the returned funders, after the response; hits
     // also update the results cached above, unless a newer search replaced them
-    inBackground(refreshCachedResults(cacheKey, cachedAt, results));
+    inBackground(refreshCachedResults(cacheKey, cachedAt, results, { justBuilt: true }));
 
     return new Response(JSON.stringify({ results, cached: false }), {
       headers: { ...headers, 'Content-Type': 'application/json' },
