@@ -54,14 +54,21 @@ function onSite(host: string, site: string): boolean {
 
 /** Rejects when `signal` aborts, so a stalled read can't outlive it. */
 function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  // A response that arrives after the abort is let go, body included; a
+  // rejection then would otherwise go unhandled and end the isolate
+  const discard = (value: T) => {
+    if (value instanceof Response) value.body?.cancel().catch(() => {});
+  };
   if (signal.aborted) {
-    promise.catch(() => {}); // its rejection would otherwise go unhandled and end the isolate
+    promise.then(discard, () => {});
     return Promise.reject(signal.reason);
   }
   return new Promise<T>((resolve, reject) => {
     const onAbort = () => reject(signal.reason);
     signal.addEventListener('abort', onAbort, { once: true });
-    promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort));
+    promise
+      .then((value) => (signal.aborted ? discard(value) : resolve(value)), reject)
+      .finally(() => signal.removeEventListener('abort', onAbort));
   });
 }
 
@@ -158,7 +165,8 @@ export function discoverGrantPageUrl(html: string, pageUrl: string, siteUrl = pa
   const homeHosts = new Set([bareHost(page), extractDomain(siteUrl)]);
 
   // Extract <a> tags — same regex as enrich-subpages.js
-  const tagRe = /<a\b[^>]*href\s*=\s*["']([^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  // (Anchor text capped, so unclosed <a> tags can't make the scan quadratic)
+  const tagRe = /<a\b[^>]*href\s*=\s*["']([^"']*)["'][^>]*>([\s\S]{0,2000}?)<\/a>/gi;
   let best: { url: string; score: number } | null = null;
   let m: RegExpExecArray | null;
 

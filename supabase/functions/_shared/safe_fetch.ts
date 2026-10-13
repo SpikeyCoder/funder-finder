@@ -115,8 +115,9 @@ function isPrivateIPv6(ip: string): boolean {
   // fc00::/7 unique local, fe80::/10 link-local, fec0::/10 site-local, ff00::/8 multicast
   if ((g[0] & 0xfe00) === 0xfc00 || (g[0] & 0xffc0) === 0xfe80 || (g[0] & 0xffc0) === 0xfec0
     || (g[0] & 0xff00) === 0xff00) return true;
-  // 64:ff9b:1::/48 local-use NAT64: may translate to anything on the local network
-  if (g[0] === 0x64 && g[1] === 0xff9b && g[2] === 1) return true;
+  // 64:ff9b:1::/48 local-use NAT64 (may translate to anything on the local
+  // network) and Teredo 2001::/32 (tunnelled over IPv4)
+  if ((g[0] === 0x64 && g[1] === 0xff9b && g[2] === 1) || (g[0] === 0x2001 && g[1] === 0)) return true;
   const v4 = (hi: number, lo: number) => `${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`;
   // An embedded IPv4 address — IPv4-mapped (::ffff:0:0/96), IPv4-translated
   // (::ffff:0:0:0/96), IPv4-compatible (::/96) or NAT64 (64:ff9b::/96) — is

@@ -241,3 +241,20 @@ Deno.test("discoverGrantUrlsInBatch with nothing to scan, or no time left", asyn
   assertEquals(await discoverGrantUrlsInBatch([{ id: "a", website: "https://a.org" }], { fetchFn: fn, budgetMs: -5 }), empty);
   assertEquals(requested, []);
 });
+
+Deno.test("fetchHomepageHtml lets go of a response that arrives after the deadline", async () => {
+  let cancelled = false;
+  const body = new ReadableStream({ cancel() { cancelled = true; } });
+  const late = (() => new Promise<Response>((resolve) =>
+    setTimeout(() => resolve(new Response(body, { headers: { "content-type": "text/html" } })), 50))) as typeof fetch;
+  assertEquals(await fetchHomepageHtml("https://late.org", AbortSignal.timeout(10), late), { kind: "error" });
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assert(cancelled, "late response body cancelled");
+});
+
+Deno.test("discoverGrantPageUrl copes with unclosed anchors quickly", () => {
+  const html = page('<a href="/x">'.repeat(5_000) + " ".repeat(2_100) + '<a href="/apply">Apply</a>');
+  const started = Date.now();
+  assertEquals(discoverGrantPageUrl(html, "https://fund.org"), "https://fund.org/apply");
+  assert(Date.now() - started < 2_000, `took ${Date.now() - started} ms`);
+});

@@ -476,6 +476,11 @@ function normalizedEin(value: string | null | undefined): string | null {
 
 // ── Real-time grant page discovery (see discovery.ts) ──────────────────────
 
+/** A result row discovery looks for a grant page for: a website, and no apply link yet. */
+function needsGrantLink(row: FunderRow): boolean {
+  return !!row.website && !row.apply_url && !row.discovered_apply_url;
+}
+
 /**
  * After the response: look for grant application pages for the returned
  * funders that have a website but no apply link, best-ranked first, within
@@ -489,7 +494,7 @@ async function discoverInBackground(
   { fromCache = false } = {},
 ): Promise<number> {
   try {
-    const ids = results.filter((row) => row.website && !row.apply_url && !row.discovered_apply_url).map((row) => row.id);
+    const ids = results.filter(needsGrantLink).map((row) => row.id);
     let rows: { id: string; website: string | null }[];
     try {
       // The funders still without a link and due a scan, with their website
@@ -534,7 +539,7 @@ type CachedRow = FunderRow & { next_step_type?: string; next_step_url?: string |
  */
 async function withDiscoveredLinks(results: CachedRow[]): Promise<boolean> {
   try {
-    const ids = results.filter((row) => row.website && !row.apply_url && !row.discovered_apply_url).map((row) => row.id);
+    const ids = results.filter(needsGrantLink).map((row) => row.id);
     const found = await sbFetchBatched<{ id: string; next_step: string | null; discovered_apply_url: string }>(
       'funders?select=id,next_step,discovered_apply_url&id=in.{{IN_FILTER}}&discovered_apply_url=not.is.null',
       ids,
