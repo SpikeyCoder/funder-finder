@@ -10,16 +10,16 @@ const source = readFileSync(new URL('../src/lib/arrayAt.ts', import.meta.url), '
 const { outputText } = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 },
 });
-const { installArrayAt } = await import(
-  `data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`
-);
+const moduleUrl = (tag = '') =>
+  `data:text/javascript;base64,${Buffer.from(`${outputText}\n// ${tag}`).toString('base64')}`;
+const { installArrayAt } = await import(moduleUrl());
 
 // Runs fn with Array.prototype.at removed, then puts the native one back.
-function withoutNativeAt(fn) {
+async function withoutNativeAt(fn) {
   const native = Object.getOwnPropertyDescriptor(Array.prototype, 'at');
   delete Array.prototype.at;
   try {
-    fn();
+    await fn();
   } finally {
     Object.defineProperty(Array.prototype, 'at', native);
   }
@@ -31,11 +31,11 @@ test('leaves a native Array.prototype.at alone', () => {
   assert.equal(Array.prototype.at, native);
 });
 
-test('adds an at() that matches the native one', () => {
+test('adds an at() that matches the native one', async () => {
   const native = Array.prototype.at;
   const arrays = [[], [1], [1, 2, 3], [, 'hole']];
   const indexes = [0, 1, 2, 3, -1, -2, -3, -4, 1.7, -1.7, NaN, '1', undefined, Infinity, -Infinity];
-  withoutNativeAt(() => {
+  await withoutNativeAt(() => {
     installArrayAt();
     assert.notEqual(Array.prototype.at, native);
     for (const a of arrays) {
@@ -46,8 +46,15 @@ test('adds an at() that matches the native one', () => {
   });
 });
 
-test("isn't enumerable, so for…in over an array doesn't see it", () => {
-  withoutNativeAt(() => {
+test('importing the module patches .at (as monitoringSetup.ts does)', async () => {
+  await withoutNativeAt(async () => {
+    await import(moduleUrl('fresh copy, not the cached module'));
+    assert.equal([1, 2].at(-1), 2);
+  });
+});
+
+test("isn't enumerable, so for…in over an array doesn't see it", async () => {
+  await withoutNativeAt(() => {
     installArrayAt();
     const keys = [];
     for (const k in [1, 2]) keys.push(k);
