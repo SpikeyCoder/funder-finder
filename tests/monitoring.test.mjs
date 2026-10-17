@@ -29,7 +29,7 @@ writeFileSync(
     .replace(/from ['"][./]+supabase\/functions\/_shared\/monitor_scrub\.ts['"]/, "from './monitor_scrub.mjs'")
     .replace(/from ['"]web-vitals['"]/, `from '${webVitals}'`),
 );
-const { isNoise, describe, buildCrashReport, canTrackInteractionsAndShifts } = await import(pathToFileURL(join(dir, 'monitoring.mjs')).href);
+const { isNoise, describe, buildCrashReport } = await import(pathToFileURL(join(dir, 'monitoring.mjs')).href);
 const { scrub, normalizePath, ROUTES } = await import(pathToFileURL(join(dir, 'monitor_scrub.mjs')).href);
 
 test('scrub masks email addresses and strips query strings and fragments', () => {
@@ -198,17 +198,4 @@ test('buildCrashReport drops noise and keeps odd throws', () => {
   // about; an empty rejection elsewhere says nothing.
   assert.equal(buildCrashReport('boundary', null, '/', 'b').name, 'NonError');
   assert.equal(buildCrashReport('rejection', null, '/', 'b'), null);
-});
-
-test('INP and CLS tracking is skipped where Array.prototype.at is missing', () => {
-  // web-vitals' trackers call .at() (Trello "this.o.at is not a function",
-  // from a Chrome 79 visitor).
-  assert.equal(canTrackInteractionsAndShifts(), true);
-  const at = Object.getOwnPropertyDescriptor(Array.prototype, 'at');
-  delete Array.prototype.at;
-  try {
-    assert.equal(canTrackInteractionsAndShifts(), false);
-  } finally {
-    Object.defineProperty(Array.prototype, 'at', at);
-  }
 });

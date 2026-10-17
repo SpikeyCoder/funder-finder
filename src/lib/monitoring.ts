@@ -26,11 +26,6 @@ const ENDPOINT = `${SUPABASE_URL}/functions/v1/monitor-report`;
 // tab.
 const MAX_CRASHES_PER_PAGE = 5;
 
-// Whether web-vitals' onINP and onCLS can run here (see installMonitoring).
-export function canTrackInteractionsAndShifts(): boolean {
-  return typeof (Array.prototype as { at?: unknown }).at === 'function';
-}
-
 export type CrashKind = 'boundary' | 'error' | 'rejection';
 
 export interface CrashReport {
@@ -301,14 +296,8 @@ export function installMonitoring(): void {
   // gives up on a slow load before a separate chunk arrived would send no
   // LCP, and those are the poor loads the p75 is meant to catch.
   onLCP(record, { reportAllChanges: true });
-  // web-vitals' INP and CLS trackers call Array.prototype.at (Chrome 92+,
-  // Safari 15.4+) in their PerformanceObserver callbacks; in an engine
-  // without it each layout shift threw "this.o.at is not a function", an
-  // uncaught error reported as a crash. Skip those two there.
-  if (canTrackInteractionsAndShifts()) {
-    onINP(record, { reportAllChanges: true });
-    onCLS(record, { reportAllChanges: true });
-  }
+  onINP(record, { reportAllChanges: true });
+  onCLS(record, { reportAllChanges: true });
   const flush = () => {
     if (pending.size === 0) return;
     const metrics = [...pending.values()];
