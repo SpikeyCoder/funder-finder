@@ -1,4 +1,6 @@
-// First: patches Array.prototype.at before anything else loads.
+// First: patches Array.prototype.at before the other modules here run. (In a
+// build, chunks this entry imports statically run before it, so they mustn't
+// call .at while loading; web-vitals only calls it in observer callbacks.)
 import './lib/arrayAt.ts'
 import './monitoringSetup.ts'
 import { StrictMode } from 'react'
