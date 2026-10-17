@@ -1,6 +1,6 @@
 // Unit tests for src/lib/arrayAt.ts — the Array.prototype.at polyfill that
-// stops web-vitals' INP and CLS trackers throwing "this.o.at is not a
-// function" in engines without it (Trello XzwkYl7L).
+// stops web-vitals' CLS tracker throwing "this.o.at is not a function" in
+// engines without it (Trello XzwkYl7L).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
