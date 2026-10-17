@@ -1,3 +1,5 @@
+// First: patches Array.prototype.at before anything else loads.
+import './lib/arrayAt.ts'
 import './monitoringSetup.ts'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'

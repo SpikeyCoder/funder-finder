@@ -46,18 +46,18 @@ test('adds an at() that matches the native one', async () => {
   });
 });
 
-test('importing the module patches .at (as monitoringSetup.ts does)', async () => {
+test('importing the module patches .at (as main.tsx does)', async () => {
   await withoutNativeAt(async () => {
     await import(moduleUrl('fresh copy, not the cached module'));
     assert.equal([1, 2].at(-1), 2);
   });
 });
 
-test("isn't enumerable, so for…in over an array doesn't see it", async () => {
+test('defines .at with the native flags (not enumerable, so for…in skips it)', async () => {
+  const flags = ({ writable, enumerable, configurable }) => ({ writable, enumerable, configurable });
+  const native = flags(Object.getOwnPropertyDescriptor(Array.prototype, 'at'));
   await withoutNativeAt(() => {
     installArrayAt();
-    const keys = [];
-    for (const k in [1, 2]) keys.push(k);
-    assert.deepEqual(keys, ['0', '1']);
+    assert.deepEqual(flags(Object.getOwnPropertyDescriptor(Array.prototype, 'at')), native);
   });
 });

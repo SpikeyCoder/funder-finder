@@ -21,6 +21,6 @@ export function installArrayAt(): void {
   });
 }
 
-// Installed on import, so importing this module first (monitoringSetup.ts)
+// Installed on import, so importing this module first (main.tsx)
 // patches .at before any later import's module body runs.
 installArrayAt();
