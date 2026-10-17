@@ -9,7 +9,8 @@ export function installArrayAt(): void {
   Object.defineProperty(Array.prototype, 'at', {
     value: function at<T>(this: ArrayLike<T>, index: number): T | undefined {
       const len = this.length >>> 0;
-      let i = Math.trunc(Number(index)) || 0;
+      // Unary + is ToNumber: it throws on a BigInt, as the native at() does.
+      let i = Math.trunc(+index) || 0;
       if (i < 0) i += len;
       return i < 0 || i >= len ? undefined : this[i];
     },
@@ -17,3 +18,7 @@ export function installArrayAt(): void {
     configurable: true,
   });
 }
+
+// Installed on import, so importing this module first (monitoringSetup.ts)
+// patches .at before any later import's module body runs.
+installArrayAt();

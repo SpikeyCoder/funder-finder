@@ -41,6 +41,8 @@ test('adds an at() that matches the native one', () => {
     for (const a of arrays) {
       for (const i of indexes) assert.equal(a.at(i), native.call(a, i), `[${a}].at(${String(i)})`);
     }
+    // ToNumber throws on a BigInt, natively too.
+    assert.throws(() => [1, 2].at(1n), TypeError);
   });
 });
 
