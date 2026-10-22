@@ -21,7 +21,7 @@ was reachable.
 | Advisory | Package | Locked | Reach | Fix |
 |----------|---------|--------|-------|-----|
 | GHSA-7pqw-9j4j-h8q3, GHSA-jmr9-qjv8-65gv (high) | `extract-zip` (no patched release exists) | 2.0.1 | `puppeteer@24` → `@puppeteer/browsers@2` | `puppeteer` 24.43.1 → 25.16.0; `@puppeteer/browsers@3` drops `extract-zip` and `proxy-agent` |
-| GHSA-c475-qrg2-pj4r (high) | `basic-ftp` | 5.3.1 | `@axe-core/cli` → `chromedriver` → `proxy-agent` → `pac-proxy-agent` → `get-uri` | new override `basic-ftp: >=6.2.3` |
+| GHSA-c475-qrg2-pj4r (high) | `basic-ftp` | 5.3.1 | `@axe-core/cli` → `chromedriver` → `proxy-agent` → `pac-proxy-agent` → `get-uri` | new override `basic-ftp: ^6.2.3` |
 | GHSA-rxp7-6hxx-x8q5 (moderate) | `ip-address` | 10.7.2 | `chromedriver` → `socks-proxy-agent` → `socks` | `npm audit fix` → 10.7.4 |
 
 ## Why an override for `@axe-core/cli`
@@ -31,7 +31,13 @@ was reachable.
 rejected. Switching to `@axe-core/puppeteer` would mean writing a new a11y
 script, which is more than this fix needs. `get-uri@8` uses only
 `Client.access/lastMod/list/downloadTo/close`. Those signatures are
-identical in `basic-ftp` 5.3.1 and 6.2.3, so the override is safe.
+identical in `basic-ftp` 5.3.1 and 6.2.3, so the override is safe. One
+behaviour changes: basic-ftp 6.0 turned off separate transfer hosts by
+default (`allowSeparateTransferHost: false`, against FTP bounce attacks),
+so an FTP URL fetched during proxy auto-config resolution now refuses a
+PASV reply pointing at another host. That is a hardening, and it only
+matters on the manual axe path. The override is capped at `^6` so a
+future basic-ftp 7 is not pulled in unreviewed.
 
 ## Puppeteer 25 breaking changes
 
@@ -39,6 +45,11 @@ identical in `basic-ftp` 5.3.1 and 6.2.3, so the override is safe.
 - `executablePath()` / `defaultArgs()` now return Promises: not used.
 - Minimum Node is 22.12: `ci.yml` uses Node 22. `supply-chain-audit.yml` is
   bumped from Node 20 to 22 to match.
+- `@puppeteer/browsers` 3 loads `proxy-agent` and `yauzl` only if they are
+  installed (optional peers). They are not, so the postinstall Chrome
+  download uses plain Node HTTP agents (it ignores `HTTPS_PROXY`) and the
+  system `unzip`. CI is unaffected; a developer behind a proxy would need to
+  add `proxy-agent`.
 
 ## Verification
 
