@@ -37,6 +37,10 @@
         production bundle, so the previous cdn.jsdelivr.net /
         cdnjs.cloudflare.com allowances have been dropped to keep CSP tight.
 
+        Note: crash reporting (src/lib/monitoring.ts, isNoise) drops errors
+        thrown from inline code in a page, relying on there being none of
+        ours. Allowing an inline script here means revisiting that rule.
+
       style-src:
         'self'             – Tailwind CSS bundle
         'unsafe-inline'    – Tailwind utility classes applied as inline styles by React

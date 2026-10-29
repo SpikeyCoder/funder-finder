@@ -135,6 +135,16 @@ test('noise: code injected inline into our page by the browser or an extension',
   assert.equal(isNoise(new TypeError(msg), msg, '    at f (https://maps.googleapis.com/maps/api/js?key=k:1:1)'), false);
   // Nor is a look-alike host.
   assert.equal(isNoise(new TypeError(msg), msg, 'global code@https://fundermatch.org.evil.test/results:1:1'), false);
+  // A crash that brought up the error screen is still worth a card.
+  assert.equal(isNoise(new TypeError(msg), msg, 'global code@https://fundermatch.org/results:1:16', false, true), false);
+  const shown = new TypeError(msg);
+  shown.stack = 'global code@https://fundermatch.org/results:1:16';
+  assert.equal(buildCrashReport('boundary', shown, '/results', 'b').name, 'TypeError');
+  // Safari's failed entry/chunk import, pinned on the document: still a
+  // chunk-load error, reported once the automatic reload didn't help.
+  const load = { name: 'TypeError', message: 'Importing a module script failed.', stack: '    at https://fundermatch.org/results:0:0' };
+  assert.equal(buildCrashReport('error', load, '/results', 'b'), null);
+  assert.equal(buildCrashReport('error', load, '/results', 'b', '', true).name, 'TypeError');
 });
 
 test('noise: the Outlook Safe Links crawler\'s string rejections', () => {
