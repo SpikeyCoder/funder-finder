@@ -56,12 +56,12 @@ export interface VitalsReport {
 // timings on the real board and in the real p75s.
 const PRODUCTION_HOST = /^(?:www\.)?fundermatch\.org$/;
 
-/** A URL on the live site that is a page, not a script (ours are in /assets/). */
+/** A URL on the live site that is a page, not a script (a frame's :line:col may follow). */
 function isOurPage(url: string | undefined): boolean {
   if (!url) return false;
   try {
     const { hostname, pathname } = new URL(url);
-    return PRODUCTION_HOST.test(hostname) && !pathname.startsWith('/assets/') && !/\.[cm]?js(?::\d+)*$/i.test(pathname);
+    return PRODUCTION_HOST.test(hostname) && !/\.[cm]?js(?::\d+)*$/i.test(pathname);
   } catch {
     return false;
   }

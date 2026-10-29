@@ -112,13 +112,6 @@ test('noise: extensions, opaque cross-origin errors, ResizeObserver', () => {
   assert.equal(isNoise(new TypeError('x is undefined'), 'x is undefined', '    at f (https://fundermatch.org/assets/a.js:1:1)'), false);
 });
 
-// The page check above relies on Vite serving our bundle from /assets/.
-test("the bundle is served from /assets/, as isNoise's page check assumes", () => {
-  const config = readFileSync(new URL('../vite.config.ts', import.meta.url), 'utf8');
-  assert.match(config, /base: '\/'/);
-  assert.doesNotMatch(config, /assetsDir/);
-});
-
 const shownLike = (msg) => {
   const e = new TypeError(msg);
   e.stack = 'global code@https://fundermatch.org/results:1:16';
