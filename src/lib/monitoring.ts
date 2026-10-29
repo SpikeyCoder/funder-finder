@@ -51,6 +51,22 @@ export interface VitalsReport {
 
 // ── Pure helpers (unit-tested) ──────────────────────────────────────────────
 
+// Only the live site reports: a production build served anywhere else (a
+// preview deploy, `vite preview`, a QA machine) would put its crashes and
+// timings on the real board and in the real p75s.
+const PRODUCTION_HOST = /^(?:www\.)?fundermatch\.org$/;
+
+/** A URL on the live site that is a page, not a script (a frame's :line:col may follow). */
+function isOurPage(url: string | undefined): boolean {
+  if (!url) return false;
+  try {
+    const { hostname, pathname } = new URL(url);
+    return PRODUCTION_HOST.test(hostname) && !/\.[cm]?js(?::\d+)*$/i.test(pathname);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Errors that aren't ours to fix: browser extensions, the opaque
  * cross-origin "Script error.", ResizeObserver's benign loop warning, the
@@ -76,6 +92,12 @@ export function isNoise(error: unknown, message: string, stack: string, chunkGav
   // addEventListener appears below our own frames in real app crashes.
   const topFrame = stack.split('\n').find((line) => FRAME.test(line) && /\w+:\/\//.test(line)) ?? '';
   if (/(?:chrome|moz|safari(?:-web)?)-extension:\/\//i.test(topFrame)) return true;
+  // Injected into the page itself (a browser's or extension's user script,
+  // e.g. "global code@https://fundermatch.org/results:1:16"): its top frame
+  // is one of our pages, not a script. Our CSP allows no inline scripts
+  // (index.html, public/_headers, public/_worker.js). Unless the error
+  // screen showed: what the visitor saw is worth a card.
+  if (!screenShown && isOurPage(/https?:\/\/[^\s()]+/i.exec(topFrame)?.[0])) return true;
   // Lost connections and cancelled requests, in each browser's wording: the
   // network, not our code. Unless the error screen showed: a page that breaks
   // when a request fails is a bug worth a card.
@@ -141,11 +163,6 @@ export function buildCrashReport(
 }
 
 // ── Sending ─────────────────────────────────────────────────────────────────
-
-// Only the live site reports: a production build served anywhere else (a
-// preview deploy, `vite preview`, a QA machine) would put its crashes and
-// timings on the real board and in the real p75s.
-const PRODUCTION_HOST = /^(?:www\.)?fundermatch\.org$/;
 
 function enabled(): boolean {
   return !import.meta.env.DEV && typeof window !== 'undefined' && PRODUCTION_HOST.test(window.location.hostname);

@@ -28,6 +28,8 @@
 # detaches it (mirrored by headers.delete() in _worker.js for
 # worker-served routes).
 
+# CSP: no inline scripts. Crash reporting (src/lib/monitoring.ts, isNoise)
+# drops errors thrown from inline code in a page as injected.
 /*
   ! Access-Control-Allow-Origin
   Strict-Transport-Security: max-age=63072000; includeSubDomains; preload

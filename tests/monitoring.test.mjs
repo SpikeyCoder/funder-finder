@@ -112,6 +112,49 @@ test('noise: extensions, opaque cross-origin errors, ResizeObserver', () => {
   assert.equal(isNoise(new TypeError('x is undefined'), 'x is undefined', '    at f (https://fundermatch.org/assets/a.js:1:1)'), false);
 });
 
+const shownLike = (msg) => {
+  const e = new TypeError(msg);
+  e.stack = 'global code@https://fundermatch.org/results:1:16';
+  return e;
+};
+
+test('noise: code injected inline into our page by the browser or an extension', () => {
+  // The bug board's /results crash (Brave on macOS): the only frame is
+  // inline code in the page itself. Our CSP allows no inline scripts, so
+  // nothing of ours runs there.
+  const msg = "undefined is not an object (evaluating 'window.webkit.messageHandlers')";
+  assert.equal(isNoise(new TypeError(msg), msg, 'global code@https://fundermatch.org/results:1:16'), true);
+  assert.equal(buildCrashReport('error', new TypeError(msg), '/results', 'b', '', false, { name: 'TypeError', message: msg, stack: 'global code@https://fundermatch.org/results:1:16' }), null);
+  // Chrome's frame wording, the home page, www, and a page with a trailing slash.
+  assert.equal(isNoise(new TypeError(msg), msg, `TypeError: ${msg}\n    at https://fundermatch.org/results:1:16`), true);
+  assert.equal(isNoise(new TypeError(msg), msg, 'global code@https://fundermatch.org/:3:7'), true);
+  assert.equal(isNoise(new TypeError(msg), msg, '    at f (https://www.fundermatch.org/search/:1:1)'), true);
+  // An error event with no error object, as installMonitoring builds it.
+  assert.equal(buildCrashReport('error', { name: 'TypeError', message: msg, stack: '    at https://fundermatch.org/results:1:16' }, '/results', 'b'), null);
+  // Our bundle's frames are ours, even with an inline frame further down.
+  assert.equal(isNoise(new TypeError(msg), msg, 'f@https://fundermatch.org/assets/index-jLhmJpd-.js:1:2'), false);
+  assert.equal(isNoise(new TypeError(msg), msg, 'f@https://fundermatch.org/assets/a.mjs:1:2\nglobal code@https://fundermatch.org/results:1:16'), false);
+  // An explicit default port is still our bundle, or still our page.
+  assert.equal(isNoise(new TypeError(msg), msg, 'f@https://fundermatch.org:443/assets/index-x.js:1:2'), false);
+  assert.equal(isNoise(new TypeError(msg), msg, 'global code@https://fundermatch.org:443/results:1:16'), true);
+  // Another site's extensionless script URL isn't our page.
+  assert.equal(isNoise(new TypeError(msg), msg, '    at f (https://maps.googleapis.com/maps/api/js?key=k:1:1)'), false);
+  // Nor is a look-alike host.
+  assert.equal(isNoise(new TypeError(msg), msg, 'global code@https://fundermatch.org.evil.test/results:1:1'), false);
+  // A same-origin script file outside /assets/ (a CDN-injected one) isn't a page.
+  assert.equal(isNoise(new TypeError(msg), msg, 'f@https://fundermatch.org/cdn-cgi/scripts/main.js:3:1'), false);
+  // An unhandled rejection from injected code is noise too.
+  assert.equal(buildCrashReport('rejection', shownLike(msg), '/results', 'b'), null);
+  // A crash that brought up the error screen is still worth a card.
+  assert.equal(isNoise(new TypeError(msg), msg, 'global code@https://fundermatch.org/results:1:16', false, true), false);
+  assert.equal(buildCrashReport('boundary', shownLike(msg), '/results', 'b').name, 'TypeError');
+  // Safari's failed entry/chunk import, pinned on the document: still a
+  // chunk-load error, reported once the automatic reload didn't help.
+  const load = { name: 'TypeError', message: 'Importing a module script failed.', stack: '    at https://fundermatch.org/results:0:0' };
+  assert.equal(buildCrashReport('error', load, '/results', 'b'), null);
+  assert.equal(buildCrashReport('error', load, '/results', 'b', '', true).name, 'TypeError');
+});
+
 test('noise: the Outlook Safe Links crawler\'s string rejections', () => {
   for (const msg of ['Object Not Found Matching Id:3, MethodName:update, ParamCount:4', 'Object Not Found Matching Id:12, MethodName:simulateEvent, ParamCount:1']) {
     assert.equal(isNoise(msg, msg, ''), true, msg);
