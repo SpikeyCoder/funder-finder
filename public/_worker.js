@@ -36,6 +36,8 @@ const SECURITY_HEADERS = {
     'storage-access=()', 'usb=()', 'web-share=(self)', 'window-management=()',
     'xr-spatial-tracking=()',
   ].join(', '),
+  // No inline scripts: crash reporting (src/lib/monitoring.ts, isNoise)
+  // drops errors thrown from inline code in a page as injected.
   'Content-Security-Policy': [
     "default-src 'none'",
     "script-src 'self' https://gc.zgo.at",

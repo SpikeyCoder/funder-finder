@@ -112,6 +112,19 @@ test('noise: extensions, opaque cross-origin errors, ResizeObserver', () => {
   assert.equal(isNoise(new TypeError('x is undefined'), 'x is undefined', '    at f (https://fundermatch.org/assets/a.js:1:1)'), false);
 });
 
+// The page check above relies on Vite serving our bundle from /assets/.
+test("the bundle is served from /assets/, as isNoise's page check assumes", () => {
+  const config = readFileSync(new URL('../vite.config.ts', import.meta.url), 'utf8');
+  assert.match(config, /base: '\/'/);
+  assert.doesNotMatch(config, /assetsDir/);
+});
+
+const shownLike = (msg) => {
+  const e = new TypeError(msg);
+  e.stack = 'global code@https://fundermatch.org/results:1:16';
+  return e;
+};
+
 test('noise: code injected inline into our page by the browser or an extension', () => {
   // The bug board's /results crash (Brave on macOS): the only frame is
   // inline code in the page itself. Our CSP allows no inline scripts, so
@@ -135,11 +148,13 @@ test('noise: code injected inline into our page by the browser or an extension',
   assert.equal(isNoise(new TypeError(msg), msg, '    at f (https://maps.googleapis.com/maps/api/js?key=k:1:1)'), false);
   // Nor is a look-alike host.
   assert.equal(isNoise(new TypeError(msg), msg, 'global code@https://fundermatch.org.evil.test/results:1:1'), false);
+  // A same-origin script file outside /assets/ (a CDN-injected one) isn't a page.
+  assert.equal(isNoise(new TypeError(msg), msg, 'f@https://fundermatch.org/cdn-cgi/scripts/main.js:3:1'), false);
+  // An unhandled rejection from injected code is noise too.
+  assert.equal(buildCrashReport('rejection', shownLike(msg), '/results', 'b'), null);
   // A crash that brought up the error screen is still worth a card.
   assert.equal(isNoise(new TypeError(msg), msg, 'global code@https://fundermatch.org/results:1:16', false, true), false);
-  const shown = new TypeError(msg);
-  shown.stack = 'global code@https://fundermatch.org/results:1:16';
-  assert.equal(buildCrashReport('boundary', shown, '/results', 'b').name, 'TypeError');
+  assert.equal(buildCrashReport('boundary', shownLike(msg), '/results', 'b').name, 'TypeError');
   // Safari's failed entry/chunk import, pinned on the document: still a
   // chunk-load error, reported once the automatic reload didn't help.
   const load = { name: 'TypeError', message: 'Importing a module script failed.', stack: '    at https://fundermatch.org/results:0:0' };

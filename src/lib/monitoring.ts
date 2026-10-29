@@ -56,12 +56,12 @@ export interface VitalsReport {
 // timings on the real board and in the real p75s.
 const PRODUCTION_HOST = /^(?:www\.)?fundermatch\.org$/;
 
-/** A URL on the live site outside /assets/: a page, not our bundle. */
+/** A URL on the live site that is a page, not a script (ours are in /assets/). */
 function isOurPage(url: string | undefined): boolean {
   if (!url) return false;
   try {
     const { hostname, pathname } = new URL(url);
-    return PRODUCTION_HOST.test(hostname) && !pathname.startsWith('/assets/');
+    return PRODUCTION_HOST.test(hostname) && !pathname.startsWith('/assets/') && !/\.[cm]?js(?::\d+)*$/i.test(pathname);
   } catch {
     return false;
   }
@@ -92,16 +92,16 @@ export function isNoise(error: unknown, message: string, stack: string, chunkGav
   // addEventListener appears below our own frames in real app crashes.
   const topFrame = stack.split('\n').find((line) => FRAME.test(line) && /\w+:\/\//.test(line)) ?? '';
   if (/(?:chrome|moz|safari(?:-web)?)-extension:\/\//i.test(topFrame)) return true;
+  // Injected into the page itself (a browser's or extension's user script,
+  // e.g. "global code@https://fundermatch.org/results:1:16"): its top frame
+  // is one of our pages, not a script. Our CSP allows no inline scripts
+  // (index.html, public/_headers, public/_worker.js). Unless the error
+  // screen showed: what the visitor saw is worth a card.
+  if (!screenShown && isOurPage(/https?:\/\/[^\s()]+/i.exec(topFrame)?.[0])) return true;
   // Lost connections and cancelled requests, in each browser's wording: the
   // network, not our code. Unless the error screen showed: a page that breaks
   // when a request fails is a bug worth a card.
   if (screenShown) return false;
-  // Injected into the page itself (a browser's or extension's user script,
-  // e.g. "global code@https://fundermatch.org/results:1:16"): its top frame
-  // is one of our pages, not our bundle. Our CSP allows no inline scripts
-  // (index.html, public/_headers, public/_worker.js), and all our code is
-  // served from /assets/. Unless the error screen showed, as above.
-  if (isOurPage(/https?:\/\/[^\s()]+/i.exec(topFrame)?.[0])) return true;
   // Some versions add the host: "Failed to fetch (api.example.org)". Safari
   // also says why ("The network connection was lost."), and supabase-js
   // wraps a failed Edge Function request in its own wording.
