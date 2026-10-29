@@ -49,11 +49,6 @@ export interface VitalsReport {
   metrics: { id: string; name: string; value: number; rating: string; path: string; seq: number }[];
 }
 
-// Only the live site reports: a production build served anywhere else (a
-// preview deploy, `vite preview`, a QA machine) would put its crashes and
-// timings on the real board and in the real p75s.
-const PRODUCTION_HOST = /^(?:www\.)?fundermatch\.org$/;
-
 // ── Pure helpers (unit-tested) ──────────────────────────────────────────────
 
 /**
@@ -83,10 +78,9 @@ export function isNoise(error: unknown, message: string, stack: string, chunkGav
   if (/(?:chrome|moz|safari(?:-web)?)-extension:\/\//i.test(topFrame)) return true;
   // Injected into the page itself (a browser's or extension's user script,
   // e.g. "global code@https://fundermatch.org/results:1:16"): its top frame
-  // is one of our pages, not a script file. Our CSP allows no inline
-  // scripts, and all our code is served as /assets/*.js.
-  const topUrl = /https?:\/\/([^/\s():]+)(\/[^\s():?#]*)?/i.exec(topFrame);
-  if (topUrl && PRODUCTION_HOST.test(topUrl[1]) && !/\.[cm]?js$/i.test(topUrl[2] ?? '')) return true;
+  // is one of our pages, not our bundle. Our CSP allows no inline scripts,
+  // and all our code is served from /assets/.
+  if (/^https?:\/\/(?:www\.)?fundermatch\.org(?::443)?\/(?!assets\/)/i.test(/https?:\/\/\S+/i.exec(topFrame)?.[0] ?? '')) return true;
   // Lost connections and cancelled requests, in each browser's wording: the
   // network, not our code. Unless the error screen showed: a page that breaks
   // when a request fails is a bug worth a card.
@@ -152,6 +146,11 @@ export function buildCrashReport(
 }
 
 // ── Sending ─────────────────────────────────────────────────────────────────
+
+// Only the live site reports: a production build served anywhere else (a
+// preview deploy, `vite preview`, a QA machine) would put its crashes and
+// timings on the real board and in the real p75s.
+const PRODUCTION_HOST = /^(?:www\.)?fundermatch\.org$/;
 
 function enabled(): boolean {
   return !import.meta.env.DEV && typeof window !== 'undefined' && PRODUCTION_HOST.test(window.location.hostname);

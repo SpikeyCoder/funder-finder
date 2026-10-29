@@ -128,6 +128,9 @@ test('noise: code injected inline into our page by the browser or an extension',
   // Our bundle's frames are ours, even with an inline frame further down.
   assert.equal(isNoise(new TypeError(msg), msg, 'f@https://fundermatch.org/assets/index-jLhmJpd-.js:1:2'), false);
   assert.equal(isNoise(new TypeError(msg), msg, 'f@https://fundermatch.org/assets/a.mjs:1:2\nglobal code@https://fundermatch.org/results:1:16'), false);
+  // An explicit default port is still our bundle, or still our page.
+  assert.equal(isNoise(new TypeError(msg), msg, 'f@https://fundermatch.org:443/assets/index-x.js:1:2'), false);
+  assert.equal(isNoise(new TypeError(msg), msg, 'global code@https://fundermatch.org:443/results:1:16'), true);
   // Another site's extensionless script URL isn't our page.
   assert.equal(isNoise(new TypeError(msg), msg, '    at f (https://maps.googleapis.com/maps/api/js?key=k:1:1)'), false);
   // Nor is a look-alike host.
