@@ -112,6 +112,28 @@ test('noise: extensions, opaque cross-origin errors, ResizeObserver', () => {
   assert.equal(isNoise(new TypeError('x is undefined'), 'x is undefined', '    at f (https://fundermatch.org/assets/a.js:1:1)'), false);
 });
 
+test('noise: code injected inline into our page by the browser or an extension', () => {
+  // The bug board's /results crash (Brave on macOS): the only frame is
+  // inline code in the page itself. Our CSP allows no inline scripts, so
+  // nothing of ours runs there.
+  const msg = "undefined is not an object (evaluating 'window.webkit.messageHandlers')";
+  assert.equal(isNoise(new TypeError(msg), msg, 'global code@https://fundermatch.org/results:1:16'), true);
+  assert.equal(buildCrashReport('error', new TypeError(msg), '/results', 'b', '', false, { name: 'TypeError', message: msg, stack: 'global code@https://fundermatch.org/results:1:16' }), null);
+  // Chrome's frame wording, the home page, www, and a page with a trailing slash.
+  assert.equal(isNoise(new TypeError(msg), msg, `TypeError: ${msg}\n    at https://fundermatch.org/results:1:16`), true);
+  assert.equal(isNoise(new TypeError(msg), msg, 'global code@https://fundermatch.org/:3:7'), true);
+  assert.equal(isNoise(new TypeError(msg), msg, '    at f (https://www.fundermatch.org/search/:1:1)'), true);
+  // An error event with no error object, as installMonitoring builds it.
+  assert.equal(buildCrashReport('error', { name: 'TypeError', message: msg, stack: '    at https://fundermatch.org/results:1:16' }, '/results', 'b'), null);
+  // Our bundle's frames are ours, even with an inline frame further down.
+  assert.equal(isNoise(new TypeError(msg), msg, 'f@https://fundermatch.org/assets/index-jLhmJpd-.js:1:2'), false);
+  assert.equal(isNoise(new TypeError(msg), msg, 'f@https://fundermatch.org/assets/a.mjs:1:2\nglobal code@https://fundermatch.org/results:1:16'), false);
+  // Another site's extensionless script URL isn't our page.
+  assert.equal(isNoise(new TypeError(msg), msg, '    at f (https://maps.googleapis.com/maps/api/js?key=k:1:1)'), false);
+  // Nor is a look-alike host.
+  assert.equal(isNoise(new TypeError(msg), msg, 'global code@https://fundermatch.org.evil.test/results:1:1'), false);
+});
+
 test('noise: the Outlook Safe Links crawler\'s string rejections', () => {
   for (const msg of ['Object Not Found Matching Id:3, MethodName:update, ParamCount:4', 'Object Not Found Matching Id:12, MethodName:simulateEvent, ParamCount:1']) {
     assert.equal(isNoise(msg, msg, ''), true, msg);
