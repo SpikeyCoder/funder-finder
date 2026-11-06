@@ -164,23 +164,29 @@ export function buildCrashReport(
 
 // ── Sending ─────────────────────────────────────────────────────────────────
 
-// Search-engine and other crawlers render pages with a limited fetch budget
-// and routinely drop sub-resources (lazy route chunks included), which
-// surfaces as a "crash" nobody saw and nothing in our code can fix
-// (Trello #320: Googlebot, /contact, "Failed to fetch dynamically imported
-// module"). Their crashes and vitals would only pollute the board and the p75s.
-const CRAWLER_UA = /googlebot|bingbot|adsbot|mediapartners|duckduckbot|baiduspider|yandex(?:bot)?|slurp|applebot|facebookexternalhit|linkedinbot|twitterbot|ahrefsbot|semrushbot|headlesschrome|lighthouse|\bbot\b|crawler|spider/i;
+// Search-engine and SEO crawlers render pages with a limited fetch budget and
+// routinely drop sub-resources (lazy route chunks included), which surfaces as
+// a "crash" nobody saw and nothing in our code can fix (Trello #320:
+// Googlebot, /contact, "Failed to fetch dynamically imported module"). Their
+// crashes and vitals would only pollute the board and the p75s. Named bots
+// only: a generic "bot"/"spider" pattern or HeadlessChrome could also match
+// real visitors behind automation or in-app webviews.
+const CRAWLER_UA = /googlebot|adsbot-google|mediapartners-google|bingbot|duckduckbot|baiduspider|yandexbot|applebot|facebookexternalhit|linkedinbot|twitterbot|ahrefsbot|semrushbot|chrome-lighthouse/i;
 
-function isCrawler(): boolean {
-  return typeof navigator !== 'undefined' && CRAWLER_UA.test(navigator.userAgent || '');
+/** Whether a user-agent string belongs to a known crawler. */
+export function isCrawlerUserAgent(userAgent: string | undefined): boolean {
+  return CRAWLER_UA.test(userAgent || '');
 }
+
+// The user agent never changes within a page, so decide once.
+const crawler = typeof navigator !== 'undefined' && isCrawlerUserAgent(navigator.userAgent);
 
 function enabled(): boolean {
   return (
     !import.meta.env.DEV &&
     typeof window !== 'undefined' &&
     PRODUCTION_HOST.test(window.location.hostname) &&
-    !isCrawler()
+    !crawler
   );
 }
 
