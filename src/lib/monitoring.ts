@@ -164,8 +164,24 @@ export function buildCrashReport(
 
 // ── Sending ─────────────────────────────────────────────────────────────────
 
+// Search-engine and other crawlers render pages with a limited fetch budget
+// and routinely drop sub-resources (lazy route chunks included), which
+// surfaces as a "crash" nobody saw and nothing in our code can fix
+// (Trello #320: Googlebot, /contact, "Failed to fetch dynamically imported
+// module"). Their crashes and vitals would only pollute the board and the p75s.
+const CRAWLER_UA = /googlebot|bingbot|adsbot|mediapartners|duckduckbot|baiduspider|yandex(?:bot)?|slurp|applebot|facebookexternalhit|linkedinbot|twitterbot|ahrefsbot|semrushbot|headlesschrome|lighthouse|\bbot\b|crawler|spider/i;
+
+function isCrawler(): boolean {
+  return typeof navigator !== 'undefined' && CRAWLER_UA.test(navigator.userAgent || '');
+}
+
 function enabled(): boolean {
-  return !import.meta.env.DEV && typeof window !== 'undefined' && PRODUCTION_HOST.test(window.location.hostname);
+  return (
+    !import.meta.env.DEV &&
+    typeof window !== 'undefined' &&
+    PRODUCTION_HOST.test(window.location.hostname) &&
+    !isCrawler()
+  );
 }
 
 // text/plain keeps this a CORS "simple" request (no preflight), so it can be
