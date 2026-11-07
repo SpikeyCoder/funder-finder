@@ -29,7 +29,7 @@ writeFileSync(
     .replace(/from ['"][./]+supabase\/functions\/_shared\/monitor_scrub\.ts['"]/, "from './monitor_scrub.mjs'")
     .replace(/from ['"]web-vitals['"]/, `from '${webVitals}'`),
 );
-const { isNoise, describe, buildCrashReport } = await import(pathToFileURL(join(dir, 'monitoring.mjs')).href);
+const { isNoise, describe, buildCrashReport, isCrawlerUserAgent } = await import(pathToFileURL(join(dir, 'monitoring.mjs')).href);
 const { scrub, normalizePath, ROUTES } = await import(pathToFileURL(join(dir, 'monitor_scrub.mjs')).href);
 
 test('scrub masks email addresses and strips query strings and fragments', () => {
@@ -241,4 +241,14 @@ test('buildCrashReport drops noise and keeps odd throws', () => {
   // about; an empty rejection elsewhere says nothing.
   assert.equal(buildCrashReport('boundary', null, '/', 'b').name, 'NonError');
   assert.equal(buildCrashReport('rejection', null, '/', 'b'), null);
+});
+
+test('isCrawlerUserAgent matches known crawlers but not real browsers (Trello #320)', () => {
+  const googlebot =
+    'Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.52 Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
+  assert.equal(isCrawlerUserAgent(googlebot), true);
+  assert.equal(isCrawlerUserAgent('Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)'), true);
+  assert.equal(isCrawlerUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15'), false);
+  assert.equal(isCrawlerUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/120.0 Safari/537.36'), false);
+  assert.equal(isCrawlerUserAgent(undefined), false);
 });
