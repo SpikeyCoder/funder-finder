@@ -16,7 +16,8 @@ export const safeSession = {
   getItem(key: string): string | null {
     try {
       const s = store();
-      if (s) return s.getItem(key);
+      const v = s ? s.getItem(key) : null;
+      if (v !== null) return v;
     } catch { /* fall through to memory */ }
     return memory.has(key) ? memory.get(key)! : null;
   },

@@ -1,4 +1,3 @@
-import { safeSession } from '../lib/safeStorage';
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, Building2, AlertCircle, ChevronRight, ChevronLeft, Loader, CheckCircle } from 'lucide-react';
@@ -6,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { BUDGET_RANGES } from '../lib/budgetRanges';
 import NavBar from '../components/NavBar';
+import { safeSession } from '../lib/safeStorage';
 
 const US_STATES = [
   'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',

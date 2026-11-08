@@ -1,4 +1,3 @@
-import { safeSession } from '../lib/safeStorage';
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowRight, Sparkles, MapPin } from 'lucide-react';
@@ -7,6 +6,7 @@ import LocationAutocomplete from '../components/LocationAutocomplete';
 import NavBar from '../components/NavBar';
 import Footer from '../components/Footer';
 import { useAuth } from '../contexts/AuthContext';
+import { safeSession } from '../lib/safeStorage';
 
 const EXAMPLES = [
   'We empower underserved youth through accessible education programs and mentorship opportunities that build skills for future success.',

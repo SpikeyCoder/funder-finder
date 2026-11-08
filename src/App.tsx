@@ -1,4 +1,3 @@
-import { safeSession } from './lib/safeStorage';
 import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { Suspense, lazy, useEffect, useRef } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -10,6 +9,7 @@ import ProductTour from './components/ProductTour';
 import BugReportButton from './components/BugReportButton';
 import ThemeToggle from './components/ThemeToggle';
 import ErrorBoundary from './components/ErrorBoundary';
+import { safeSession } from './lib/safeStorage';
 
 // Must match the key used in AuthContext.storePendingFunder
 const REDIRECT_AFTER_LOGIN_KEY = 'ff_redirect_after_login';

@@ -1,4 +1,3 @@
-import { safeSession } from '../lib/safeStorage';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -14,6 +13,7 @@ import { formatGrantRange, formatTotalGiving } from '../utils/matching';
 import NavBar from '../components/NavBar';
 import { SUPABASE_URL } from '../lib/supabaseProject';
 import { profileBudgetLabel } from '../lib/budgetRanges';
+import { safeSession } from '../lib/safeStorage';
 
 const GRANT_WRITER_URL =
   `${SUPABASE_URL}/functions/v1/grant-writer`;

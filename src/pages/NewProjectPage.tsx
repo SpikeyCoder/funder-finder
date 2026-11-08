@@ -1,4 +1,3 @@
-import { safeSession } from '../lib/safeStorage';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, ChevronLeft, X, Sparkles } from 'lucide-react';
@@ -6,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
 import { SUPABASE_URL } from '../lib/supabaseProject';
+import { safeSession } from '../lib/safeStorage';
 
 const MATCH_FUNDERS_URL = `${SUPABASE_URL}/functions/v1/match-funders`;
 

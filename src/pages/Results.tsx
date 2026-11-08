@@ -1,4 +1,3 @@
-import { safeSession } from '../lib/safeStorage';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Bookmark, BookmarkCheck, ChevronRight, Copy, Download, RefreshCw, Loader2 } from 'lucide-react';
@@ -17,6 +16,7 @@ import {
   randomId,
   SearchSignalEventType,
 } from '../lib/searchSignals';
+import { safeSession } from '../lib/safeStorage';
 
 const BUDGET_BAND_LABEL: Record<BudgetBand, string> = {
   under_250k: 'Under $250K',
@@ -66,7 +66,12 @@ export default function Results() {
   const state = location.state || {};
   const mission: string = state.mission || safeSession.getItem('ff_mission') || '';
   const locationServed: string = state.locationServed || safeSession.getItem('ff_location') || '';
-  const keywords: string[] = state.keywords ?? JSON.parse(safeSession.getItem('ff_keywords') || '[]');
+  const keywords: string[] = state.keywords ?? (() => {
+    try {
+      const parsed = JSON.parse(safeSession.getItem('ff_keywords') || '[]');
+      return Array.isArray(parsed) ? parsed : [];
+    } catch { return []; }
+  })();
   const budgetBandFromState = state.budgetBand;
   const budgetBandFromStorage = safeSession.getItem('ff_budget_band');
   const budgetBand: BudgetBand = isBudgetBand(budgetBandFromState)

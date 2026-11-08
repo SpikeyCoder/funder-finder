@@ -1,9 +1,9 @@
-import { safeSession } from '../lib/safeStorage';
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase, SUPABASE_CUSTOM_DOMAIN } from '../lib/supabase';
 import { BudgetBand, Funder, FunderStatus, SavedFunderEntry } from '../types';
 import { SUPABASE_URL } from '../lib/supabaseProject';
+import { safeSession } from '../lib/safeStorage';
 
 // The OAuth redirect URL must match what is registered in Supabase dashboard
 // and in each OAuth provider's allowed redirect URIs.

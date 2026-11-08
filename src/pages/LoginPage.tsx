@@ -1,10 +1,10 @@
-import { safeSession } from '../lib/safeStorage';
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, LogIn, Loader } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import NavBar from '../components/NavBar';
+import { safeSession } from '../lib/safeStorage';
 
 // OAuth provider button definitions (shared with LoginModal)
 const PROVIDERS = [
