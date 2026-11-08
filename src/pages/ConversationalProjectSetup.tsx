@@ -15,6 +15,7 @@
  * insert + match-funders pipeline as NewProjectPage.
  */
 
+import { safeSession } from '../lib/safeStorage';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -310,7 +311,7 @@ export default function ConversationalProjectSetup() {
     // Carry partial state via sessionStorage so the structured form
     // can pre-fill known fields without a router round-trip.
     try {
-      sessionStorage.setItem('fundermatch.project_draft', JSON.stringify(draft));
+      safeSession.setItem('fundermatch.project_draft', JSON.stringify(draft));
     } catch { /* ignore quota / privacy errors */ }
     navigate('/projects/new');
   };

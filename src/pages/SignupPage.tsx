@@ -1,3 +1,4 @@
+import { safeSession } from '../lib/safeStorage';
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, Building2, AlertCircle, ChevronRight, ChevronLeft, Loader, CheckCircle } from 'lucide-react';
@@ -188,8 +189,8 @@ export default function SignupPage() {
       }
 
       // Session established (email confirmation disabled): go straight in.
-      const redirectUrl = sessionStorage.getItem('authRedirect') || '/portfolio';
-      sessionStorage.removeItem('authRedirect');
+      const redirectUrl = safeSession.getItem('authRedirect') || '/portfolio';
+      safeSession.removeItem('authRedirect');
       navigate(redirectUrl);
     } catch (err) {
       setError('An unexpected error occurred during signup');

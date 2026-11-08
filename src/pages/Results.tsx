@@ -1,3 +1,4 @@
+import { safeSession } from '../lib/safeStorage';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Bookmark, BookmarkCheck, ChevronRight, Copy, Download, RefreshCw, Loader2 } from 'lucide-react';
@@ -63,11 +64,11 @@ export default function Results() {
 
   // Use router state if available, fall back to sessionStorage (survives page reloads)
   const state = location.state || {};
-  const mission: string = state.mission || sessionStorage.getItem('ff_mission') || '';
-  const locationServed: string = state.locationServed || sessionStorage.getItem('ff_location') || '';
-  const keywords: string[] = state.keywords ?? JSON.parse(sessionStorage.getItem('ff_keywords') || '[]');
+  const mission: string = state.mission || safeSession.getItem('ff_mission') || '';
+  const locationServed: string = state.locationServed || safeSession.getItem('ff_location') || '';
+  const keywords: string[] = state.keywords ?? JSON.parse(safeSession.getItem('ff_keywords') || '[]');
   const budgetBandFromState = state.budgetBand;
-  const budgetBandFromStorage = sessionStorage.getItem('ff_budget_band');
+  const budgetBandFromStorage = safeSession.getItem('ff_budget_band');
   const budgetBand: BudgetBand = isBudgetBand(budgetBandFromState)
     ? budgetBandFromState
     : (isBudgetBand(budgetBandFromStorage) ? budgetBandFromStorage : 'prefer_not_to_say');
@@ -79,7 +80,7 @@ export default function Results() {
   const RESULTS_CACHE_KEY = 'ff_results_cache_v2';
   const cachedResultsOnMount = (() => {
     try {
-      const raw = sessionStorage.getItem(RESULTS_CACHE_KEY);
+      const raw = safeSession.getItem(RESULTS_CACHE_KEY);
       if (!raw) return null;
       const parsed = JSON.parse(raw);
       // Only use cache if the search params match
@@ -219,7 +220,7 @@ export default function Results() {
 
       // Cache results so back-navigation doesn't trigger a re-fetch
       try {
-        sessionStorage.setItem(RESULTS_CACHE_KEY, JSON.stringify({
+        safeSession.setItem(RESULTS_CACHE_KEY, JSON.stringify({
           mission, locationServed, results: rankedResults,
         }));
       } catch { /* sessionStorage full or unavailable — ignore */ }

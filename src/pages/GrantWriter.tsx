@@ -1,3 +1,4 @@
+import { safeSession } from '../lib/safeStorage';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -124,14 +125,14 @@ export default function GrantWriter() {
   // ── Form state ──────────────────────────────────────────────────────────
 
   const [mission, setMission] = useState(
-    () => sessionStorage.getItem('ff_mission') || '',
+    () => safeSession.getItem('ff_mission') || '',
   );
   const [orgDetails, setOrgDetails] = useState<OrgDetails>({
     orgName: '',
     orgDesc: '',
     budget: '',
     targetPop: '',
-    geoFocus: sessionStorage.getItem('ff_location') || '',
+    geoFocus: safeSession.getItem('ff_location') || '',
     programName: '',
     programDesc: '',
     programBudget: '',
@@ -211,10 +212,10 @@ export default function GrantWriter() {
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sessionId = useRef(
-    sessionStorage.getItem('ff_grant_session') ||
+    safeSession.getItem('ff_grant_session') ||
       (() => {
         const id = crypto.randomUUID();
-        sessionStorage.setItem('ff_grant_session', id);
+        safeSession.setItem('ff_grant_session', id);
         return id;
       })(),
   );
@@ -652,7 +653,7 @@ export default function GrantWriter() {
                     <p className="text-sm text-gray-300 border border-[#30363d] rounded-xl p-4 text-center">
                       <Link
                         to="/login"
-                        onClick={() => sessionStorage.setItem('authRedirect', '/saved')}
+                        onClick={() => safeSession.setItem('authRedirect', '/saved')}
                         className="text-blue-400 underline"
                       >
                         Sign in

@@ -1,3 +1,4 @@
+import { safeSession } from '../lib/safeStorage';
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Loader } from 'lucide-react';
@@ -44,7 +45,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
         // Save the current location for redirect after login. Sanitised at the
         // point of entry — this is the only place a user-influenced value
         // reaches the redirect store (the other writer is a hardcoded '/saved').
-        sessionStorage.setItem('authRedirect', safeRedirectPath(location.pathname));
+        safeSession.setItem('authRedirect', safeRedirectPath(location.pathname));
         navigate('/login', { replace: true });
       } else {
         // Only redirect truly new users to onboarding (not existing users)

@@ -1,3 +1,4 @@
+import { safeSession } from '../lib/safeStorage';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, ChevronLeft, X, Sparkles } from 'lucide-react';
@@ -108,10 +109,10 @@ export default function NewProjectPage() {
   // to sessionStorage; we consume it here and clear so reloads start fresh.
   useEffect(() => {
     try {
-      const raw = sessionStorage.getItem('fundermatch.project_draft');
+      const raw = safeSession.getItem('fundermatch.project_draft');
       if (!raw) return;
       const draft = JSON.parse(raw);
-      sessionStorage.removeItem('fundermatch.project_draft');
+      safeSession.removeItem('fundermatch.project_draft');
       setForm(prev => ({
         ...prev,
         name: draft?.name || prev.name,

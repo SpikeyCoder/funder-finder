@@ -1,3 +1,4 @@
+import { safeSession } from './safeStorage';
 import { BudgetBand } from '../types';
 import { getEdgeFunctionHeaders } from './supabase';
 import { SUPABASE_URL } from './supabaseProject';
@@ -41,10 +42,10 @@ export function randomId(): string {
 }
 
 export function getOrCreateSearchSessionId(): string {
-  const existing = sessionStorage.getItem(SEARCH_SESSION_ID_KEY);
+  const existing = safeSession.getItem(SEARCH_SESSION_ID_KEY);
   if (existing) return existing;
   const created = randomId();
-  sessionStorage.setItem(SEARCH_SESSION_ID_KEY, created);
+  safeSession.setItem(SEARCH_SESSION_ID_KEY, created);
   return created;
 }
 

@@ -1,3 +1,4 @@
+import { safeSession } from '../lib/safeStorage';
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, LogIn, Loader } from 'lucide-react';
@@ -54,8 +55,8 @@ export default function LoginPage() {
   // Redirect if already authenticated
   useEffect(() => {
     if (user) {
-      const redirectUrl = sessionStorage.getItem('authRedirect') || '/portfolio';
-      sessionStorage.removeItem('authRedirect');
+      const redirectUrl = safeSession.getItem('authRedirect') || '/portfolio';
+      safeSession.removeItem('authRedirect');
       navigate(redirectUrl);
     }
   }, [user, navigate]);
@@ -84,8 +85,8 @@ export default function LoginPage() {
         setLoading(false);
         return;
       }
-      const redirectUrl = sessionStorage.getItem('authRedirect') || '/portfolio';
-      sessionStorage.removeItem('authRedirect');
+      const redirectUrl = safeSession.getItem('authRedirect') || '/portfolio';
+      safeSession.removeItem('authRedirect');
       navigate(redirectUrl);
     } catch {
       setError('An unexpected error occurred');
