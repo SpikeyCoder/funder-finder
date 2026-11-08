@@ -24,6 +24,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase, getEdgeFunctionHeaders } from '../lib/supabase';
 import NavBar from '../components/NavBar';
 import { SUPABASE_URL } from '../lib/supabaseProject';
+import { safeSession } from '../lib/safeStorage';
 
 const ASSISTANT_URL = `${SUPABASE_URL}/functions/v1/project-assistant`;
 const MATCH_FUNDERS_URL = `${SUPABASE_URL}/functions/v1/match-funders`;
@@ -310,7 +311,7 @@ export default function ConversationalProjectSetup() {
     // Carry partial state via sessionStorage so the structured form
     // can pre-fill known fields without a router round-trip.
     try {
-      sessionStorage.setItem('fundermatch.project_draft', JSON.stringify(draft));
+      safeSession.setItem('fundermatch.project_draft', JSON.stringify(draft));
     } catch { /* ignore quota / privacy errors */ }
     navigate('/projects/new');
   };

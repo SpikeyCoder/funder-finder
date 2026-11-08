@@ -3,6 +3,7 @@ import type { Session, User } from '@supabase/supabase-js';
 import { supabase, SUPABASE_CUSTOM_DOMAIN } from '../lib/supabase';
 import { BudgetBand, Funder, FunderStatus, SavedFunderEntry } from '../types';
 import { SUPABASE_URL } from '../lib/supabaseProject';
+import { safeSession } from '../lib/safeStorage';
 
 // The OAuth redirect URL must match what is registered in Supabase dashboard
 // and in each OAuth provider's allowed redirect URIs.
@@ -100,22 +101,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const storePendingFunder = (funder?: Funder, funders?: Funder[]) => {
     if (!funder && (!funders || funders.length === 0)) return;
     if (funder) {
-      sessionStorage.setItem(PENDING_FUNDER_KEY, JSON.stringify(funder));
+      safeSession.setItem(PENDING_FUNDER_KEY, JSON.stringify(funder));
       setPendingFunder(funder);
       pendingFunderRef.current = funder;
     }
     if (funders && funders.length > 0) {
-      sessionStorage.setItem(PENDING_FUNDERS_BULK_KEY, JSON.stringify(funders));
+      safeSession.setItem(PENDING_FUNDERS_BULK_KEY, JSON.stringify(funders));
     }
     // Also write the redirect target so AnimatedRoutes can read it directly
     // from sessionStorage on mount — this survives the OAuth page reload even
     // if the SIGNED_IN event fires before any React subscriber is registered.
-    sessionStorage.setItem(REDIRECT_AFTER_LOGIN_KEY, '/saved');
+    safeSession.setItem(REDIRECT_AFTER_LOGIN_KEY, '/saved');
   };
 
   const loadPendingFunder = (): Funder | null => {
     try {
-      const raw = sessionStorage.getItem(PENDING_FUNDER_KEY);
+      const raw = safeSession.getItem(PENDING_FUNDER_KEY);
       return raw ? JSON.parse(raw) : null;
     } catch {
       return null;
@@ -124,7 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loadPendingFundersBulk = (): Funder[] => {
     try {
-      const raw = sessionStorage.getItem(PENDING_FUNDERS_BULK_KEY);
+      const raw = safeSession.getItem(PENDING_FUNDERS_BULK_KEY);
       return raw ? JSON.parse(raw) : [];
     } catch {
       return [];
@@ -132,11 +133,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const clearPendingFundersBulk = () => {
-    sessionStorage.removeItem(PENDING_FUNDERS_BULK_KEY);
+    safeSession.removeItem(PENDING_FUNDERS_BULK_KEY);
   };
 
   const clearPendingFunder = useCallback(() => {
-    sessionStorage.removeItem(PENDING_FUNDER_KEY);
+    safeSession.removeItem(PENDING_FUNDER_KEY);
     setPendingFunder(null);
     pendingFunderRef.current = null;
   }, []);

@@ -6,6 +6,7 @@ import LocationAutocomplete from '../components/LocationAutocomplete';
 import NavBar from '../components/NavBar';
 import Footer from '../components/Footer';
 import { useAuth } from '../contexts/AuthContext';
+import { safeSession } from '../lib/safeStorage';
 
 const EXAMPLES = [
   'We empower underserved youth through accessible education programs and mentorship opportunities that build skills for future success.',
@@ -32,10 +33,10 @@ export default function MissionInput() {
   // so the form starts fresh. Only preserve pre-fill when returnState is present.
   useEffect(() => {
     if (!returnState) {
-      sessionStorage.removeItem('ff_mission');
-      sessionStorage.removeItem('ff_location');
-      sessionStorage.removeItem('ff_budget_band');
-      sessionStorage.removeItem('ff_keywords');
+      safeSession.removeItem('ff_mission');
+      safeSession.removeItem('ff_location');
+      safeSession.removeItem('ff_budget_band');
+      safeSession.removeItem('ff_keywords');
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -70,10 +71,10 @@ export default function MissionInput() {
         ? userProfile.budget_range as BudgetBand
         : 'prefer_not_to_say';
       // Also populate sessionStorage so /results can survive reloads
-      sessionStorage.setItem('ff_mission', userProfile.mission_statement);
-      sessionStorage.setItem('ff_location', userProfile.location_served);
-      sessionStorage.setItem('ff_budget_band', savedBudget);
-      sessionStorage.setItem('ff_keywords', JSON.stringify([]));
+      safeSession.setItem('ff_mission', userProfile.mission_statement);
+      safeSession.setItem('ff_location', userProfile.location_served);
+      safeSession.setItem('ff_budget_band', savedBudget);
+      safeSession.setItem('ff_keywords', JSON.stringify([]));
       navigate('/results', {
         state: {
           mission: userProfile.mission_statement,
@@ -102,10 +103,10 @@ export default function MissionInput() {
     if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
 
     // Persist to sessionStorage so Results page survives reloads
-    sessionStorage.setItem('ff_mission', mission.trim());
-    sessionStorage.setItem('ff_location', locationServed.trim());
-    sessionStorage.setItem('ff_budget_band', budgetBand);
-    sessionStorage.setItem('ff_keywords', JSON.stringify(keywords));
+    safeSession.setItem('ff_mission', mission.trim());
+    safeSession.setItem('ff_location', locationServed.trim());
+    safeSession.setItem('ff_budget_band', budgetBand);
+    safeSession.setItem('ff_keywords', JSON.stringify(keywords));
 
     // Save to user profile for logged-in users (fire-and-forget)
     if (user) {

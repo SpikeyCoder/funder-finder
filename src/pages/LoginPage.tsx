@@ -4,6 +4,7 @@ import { Mail, Lock, LogIn, Loader } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import NavBar from '../components/NavBar';
+import { safeSession } from '../lib/safeStorage';
 
 // OAuth provider button definitions (shared with LoginModal)
 const PROVIDERS = [
@@ -54,8 +55,8 @@ export default function LoginPage() {
   // Redirect if already authenticated
   useEffect(() => {
     if (user) {
-      const redirectUrl = sessionStorage.getItem('authRedirect') || '/portfolio';
-      sessionStorage.removeItem('authRedirect');
+      const redirectUrl = safeSession.getItem('authRedirect') || '/portfolio';
+      safeSession.removeItem('authRedirect');
       navigate(redirectUrl);
     }
   }, [user, navigate]);
@@ -84,8 +85,8 @@ export default function LoginPage() {
         setLoading(false);
         return;
       }
-      const redirectUrl = sessionStorage.getItem('authRedirect') || '/portfolio';
-      sessionStorage.removeItem('authRedirect');
+      const redirectUrl = safeSession.getItem('authRedirect') || '/portfolio';
+      safeSession.removeItem('authRedirect');
       navigate(redirectUrl);
     } catch {
       setError('An unexpected error occurred');

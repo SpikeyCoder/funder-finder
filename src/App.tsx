@@ -9,6 +9,7 @@ import ProductTour from './components/ProductTour';
 import BugReportButton from './components/BugReportButton';
 import ThemeToggle from './components/ThemeToggle';
 import ErrorBoundary from './components/ErrorBoundary';
+import { safeSession } from './lib/safeStorage';
 
 // Must match the key used in AuthContext.storePendingFunder
 const REDIRECT_AFTER_LOGIN_KEY = 'ff_redirect_after_login';
@@ -60,7 +61,7 @@ function AnimatedRoutes() {
   // Primary path: AuthContext sets postLoginRedirect after the DB save.
   useEffect(() => {
     if (postLoginRedirect) {
-      sessionStorage.removeItem(REDIRECT_AFTER_LOGIN_KEY); // keep in sync with backup
+      safeSession.removeItem(REDIRECT_AFTER_LOGIN_KEY); // keep in sync with backup
       clearPostLoginRedirect();
       // pathname guard prevents a double push if the backup path already navigated here.
       if (location.pathname !== postLoginRedirect) {
@@ -79,9 +80,9 @@ function AnimatedRoutes() {
     prevUserRef.current = user;
 
     if (wasSignedOut && isNowSignedIn) {
-      const redirectPath = sessionStorage.getItem(REDIRECT_AFTER_LOGIN_KEY);
+      const redirectPath = safeSession.getItem(REDIRECT_AFTER_LOGIN_KEY);
       if (redirectPath) {
-        sessionStorage.removeItem(REDIRECT_AFTER_LOGIN_KEY);
+        safeSession.removeItem(REDIRECT_AFTER_LOGIN_KEY);
         // Push so the user can press Back and return to the landing page.
         if (location.pathname !== redirectPath) {
           navigate(redirectPath);

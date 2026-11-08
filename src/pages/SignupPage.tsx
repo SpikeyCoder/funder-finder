@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { BUDGET_RANGES } from '../lib/budgetRanges';
 import NavBar from '../components/NavBar';
+import { safeSession } from '../lib/safeStorage';
 
 const US_STATES = [
   'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
@@ -188,8 +189,8 @@ export default function SignupPage() {
       }
 
       // Session established (email confirmation disabled): go straight in.
-      const redirectUrl = sessionStorage.getItem('authRedirect') || '/portfolio';
-      sessionStorage.removeItem('authRedirect');
+      const redirectUrl = safeSession.getItem('authRedirect') || '/portfolio';
+      safeSession.removeItem('authRedirect');
       navigate(redirectUrl);
     } catch (err) {
       setError('An unexpected error occurred during signup');

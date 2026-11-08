@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { SUPABASE_URL } from './supabaseProject';
+import { safeSession } from './safeStorage';
 
 // Custom domain used only for OAuth branding (browser redirects).
 // API calls still go through the default Supabase domain for reliability.
@@ -12,7 +13,9 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     // Use sessionStorage so the session is cleared when the browser is closed.
     // Users must log in again each new browser session — localStorage is NOT used.
-    storage: window.sessionStorage,
+    // safeSession never throws when the browser denies storage access
+    // (Trello prnL3oCE); it falls back to memory for that page view.
+    storage: safeSession,
     // Pin the storage key to the project ref so it stays consistent regardless of
     // whether the client URL is the Supabase default or a custom domain.
     storageKey: 'sb-tgtotjvdubhjxzybmdex-auth-token',
