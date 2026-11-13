@@ -56,12 +56,20 @@ export interface VitalsReport {
 // timings on the real board and in the real p75s.
 const PRODUCTION_HOST = /^(?:www\.)?fundermatch\.org$/;
 
+/** A URL on the live site (any path). */
+function isOurHost(url: string | undefined): boolean {
+  try {
+    return !!url && PRODUCTION_HOST.test(new URL(url).hostname);
+  } catch {
+    return false;
+  }
+}
+
 /** A URL on the live site that is a page, not a script (a frame's :line:col may follow). */
 function isOurPage(url: string | undefined): boolean {
-  if (!url) return false;
+  if (!url || !isOurHost(url)) return false;
   try {
-    const { hostname, pathname } = new URL(url);
-    return PRODUCTION_HOST.test(hostname) && !/\.[cm]?js(?::\d+)*$/i.test(pathname);
+    return !/\.[cm]?js(?::\d+)*$/i.test(new URL(url).pathname);
   } catch {
     return false;
   }
@@ -91,13 +99,25 @@ export function isNoise(error: unknown, message: string, stack: string, chunkGav
   // extension's. Not just any frame: an extension that wraps fetch or
   // addEventListener appears below our own frames in real app crashes.
   const topFrame = stack.split('\n').find((line) => FRAME.test(line) && /\w+:\/\//.test(line)) ?? '';
+  const topUrl = /https?:\/\/[^\s()]+/i.exec(topFrame)?.[0];
+  // The browser's own extension-messaging API, called by an extension's
+  // injected script ("Invalid call to runtime.sendMessage(). Tab not found.",
+  // Trello #332: iOS Safari, /results). Matched on the message, since such
+  // errors often carry no stack, but not when our own bundle's frame is on
+  // top: that would be our code (or a dependency of it) calling it wrongly.
+  // Unless the error screen showed: what the visitor saw is worth a card.
+  if (
+    !screenShown &&
+    /\bInvalid call to (?:(?:browser|chrome)\.)?runtime\.\w+\(\)/i.test(message.trim()) &&
+    !isOurHost(topUrl)
+  ) return true;
   if (/(?:chrome|moz|safari(?:-web)?)-extension:\/\//i.test(topFrame)) return true;
   // Injected into the page itself (a browser's or extension's user script,
   // e.g. "global code@https://fundermatch.org/results:1:16"): its top frame
   // is one of our pages, not a script. Our CSP allows no inline scripts
   // (index.html, public/_headers, public/_worker.js). Unless the error
   // screen showed: what the visitor saw is worth a card.
-  if (!screenShown && isOurPage(/https?:\/\/[^\s()]+/i.exec(topFrame)?.[0])) return true;
+  if (!screenShown && isOurPage(topUrl)) return true;
   // Lost connections and cancelled requests, in each browser's wording: the
   // network, not our code. Unless the error screen showed: a page that breaks
   // when a request fails is a bug worth a card.

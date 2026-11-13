@@ -107,6 +107,23 @@ test('noise: extensions, opaque cross-origin errors, ResizeObserver', () => {
   // A URL in V8's message line isn't a frame; Firefox-style frames count.
   assert.equal(isNoise(new Error('y'), 'y', 'Error: see chrome-extension://abc/x\n    at f (https://fundermatch.org/assets/a.js:1:1)'), false);
   assert.equal(isNoise(new Error('y'), 'y', 'f@moz-extension://abc/content.js:1:1'), true);
+  assert.equal(isNoise(new Error('Invalid call to runtime.sendMessage(). Tab not found.'), 'Invalid call to runtime.sendMessage(). Tab not found.', ''), true);
+  for (const m of [
+    'Invalid call to chrome.runtime.sendMessage(). Tab not found.',
+    'Invalid call to browser.runtime.sendMessage(). Tab not found.',
+    'Uncaught Error: Invalid call to runtime.sendMessage(). Tab not found.',
+    'Uncaught (in promise) Error: Invalid call to runtime.sendMessage(). Tab not found.',
+  ]) assert.equal(isNoise(new Error(m), m, ''), true, m);
+  // Thrown from our own bundle: ours to fix.
+  const own = 'Invalid call to runtime.sendMessage(). Tab not found.';
+  assert.equal(isNoise(new Error(own), own, `Error: ${own}\n    at f (https://fundermatch.org/assets/a.js:1:1)`), false);
+  assert.equal(isNoise(new Error(own), `Unhandled Promise Rejection: ${own}`, ''), true);
+  assert.equal(isNoise(new Error(own), own, `Error: ${own}\n    at f (safari-extension://abc/content.js:1:1)`), true);
+  assert.equal(isNoise(new Error(own), own, `Error: ${own}\n    at f (https://www.fundermatch.org/assets/a.js:1:1)`), false);
+  // Error screen shown: worth a card.
+  assert.equal(isNoise(new Error(own), own, '', false, true), false);
+  // Other "Invalid call" errors are not extension noise.
+  assert.equal(isNoise(new Error('Invalid call to fetch()'), 'Invalid call to fetch()', ''), false);
   assert.equal(isNoise(null, 'Script error.', ''), true);
   assert.equal(isNoise(null, 'ResizeObserver loop completed with undelivered notifications.', ''), true);
   assert.equal(isNoise(new TypeError('x is undefined'), 'x is undefined', '    at f (https://fundermatch.org/assets/a.js:1:1)'), false);
