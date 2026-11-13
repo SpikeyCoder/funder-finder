@@ -87,14 +87,19 @@ export function isNoise(error: unknown, message: string, stack: string, chunkGav
   // this, in any form; matched on the message so it's dropped however it
   // arrives (a bare string, or an error event with no error object).
   if (/^Object Not Found Matching Id:\d+, MethodName:\w+, ParamCount:\d+$/.test(message.trim())) return true;
-  // The browser's own extension-messaging API, called by an extension's
-  // injected script ("Invalid call to runtime.sendMessage(). Tab not found.",
-  // Trello #332: iOS Safari, /results). We never use `runtime.*`.
-  if (/^(?:uncaught )?(?:\w*(?:Error|Exception): )?Invalid call to (?:(?:browser|chrome)\.)?runtime\.\w+\(\)/i.test(message.trim())) return true;
   // Thrown from an extension: its top frame (the first with a URL) is the
   // extension's. Not just any frame: an extension that wraps fetch or
   // addEventListener appears below our own frames in real app crashes.
   const topFrame = stack.split('\n').find((line) => FRAME.test(line) && /\w+:\/\//.test(line)) ?? '';
+  // The browser's own extension-messaging API, called by an extension's
+  // injected script ("Invalid call to runtime.sendMessage(). Tab not found.",
+  // Trello #332: iOS Safari, /results). Matched on the message, since such
+  // errors often carry no stack, but not when our own bundle's frame is on
+  // top: that would be our code (or a dependency of it) calling it wrongly.
+  if (
+    /^(?:uncaught(?: \(in promise\))? )?(?:\w*(?:Error|Exception): )?Invalid call to (?:(?:browser|chrome)\.)?runtime\.\w+\(\)/i.test(message.trim()) &&
+    !/https?:\/\/[^\s()/]*(?:fundermatch\.org)/i.test(topFrame)
+  ) return true;
   if (/(?:chrome|moz|safari(?:-web)?)-extension:\/\//i.test(topFrame)) return true;
   // Injected into the page itself (a browser's or extension's user script,
   // e.g. "global code@https://fundermatch.org/results:1:16"): its top frame
