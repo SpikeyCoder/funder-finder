@@ -99,6 +99,7 @@ export function isNoise(error: unknown, message: string, stack: string, chunkGav
   // extension's. Not just any frame: an extension that wraps fetch or
   // addEventListener appears below our own frames in real app crashes.
   const topFrame = stack.split('\n').find((line) => FRAME.test(line) && /\w+:\/\//.test(line)) ?? '';
+  const topUrl = /https?:\/\/[^\s()]+/i.exec(topFrame)?.[0];
   // The browser's own extension-messaging API, called by an extension's
   // injected script ("Invalid call to runtime.sendMessage(). Tab not found.",
   // Trello #332: iOS Safari, /results). Matched on the message, since such
@@ -108,7 +109,7 @@ export function isNoise(error: unknown, message: string, stack: string, chunkGav
   if (
     !screenShown &&
     /\bInvalid call to (?:(?:browser|chrome)\.)?runtime\.\w+\(\)/i.test(message.trim()) &&
-    !isOurHost(/https?:\/\/[^\s()]+/i.exec(topFrame)?.[0])
+    !isOurHost(topUrl)
   ) return true;
   if (/(?:chrome|moz|safari(?:-web)?)-extension:\/\//i.test(topFrame)) return true;
   // Injected into the page itself (a browser's or extension's user script,
@@ -116,7 +117,7 @@ export function isNoise(error: unknown, message: string, stack: string, chunkGav
   // is one of our pages, not a script. Our CSP allows no inline scripts
   // (index.html, public/_headers, public/_worker.js). Unless the error
   // screen showed: what the visitor saw is worth a card.
-  if (!screenShown && isOurPage(/https?:\/\/[^\s()]+/i.exec(topFrame)?.[0])) return true;
+  if (!screenShown && isOurPage(topUrl)) return true;
   // Lost connections and cancelled requests, in each browser's wording: the
   // network, not our code. Unless the error screen showed: a page that breaks
   // when a request fails is a bug worth a card.
