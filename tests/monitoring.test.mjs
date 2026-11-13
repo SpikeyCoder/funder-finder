@@ -117,6 +117,8 @@ test('noise: extensions, opaque cross-origin errors, ResizeObserver', () => {
   // Thrown from our own bundle: ours to fix.
   const own = 'Invalid call to runtime.sendMessage(). Tab not found.';
   assert.equal(isNoise(new Error(own), own, `Error: ${own}\n    at f (https://fundermatch.org/assets/a.js:1:1)`), false);
+  // Error screen shown: worth a card.
+  assert.equal(isNoise(new Error(own), own, '', false, true), false);
   // Other "Invalid call" errors are not extension noise.
   assert.equal(isNoise(new Error('Invalid call to fetch()'), 'Invalid call to fetch()', ''), false);
   assert.equal(isNoise(null, 'Script error.', ''), true);
