@@ -107,6 +107,7 @@ test('noise: extensions, opaque cross-origin errors, ResizeObserver', () => {
   // A URL in V8's message line isn't a frame; Firefox-style frames count.
   assert.equal(isNoise(new Error('y'), 'y', 'Error: see chrome-extension://abc/x\n    at f (https://fundermatch.org/assets/a.js:1:1)'), false);
   assert.equal(isNoise(new Error('y'), 'y', 'f@moz-extension://abc/content.js:1:1'), true);
+  assert.equal(isNoise(new Error('Invalid call to runtime.sendMessage(). Tab not found.'), 'Invalid call to runtime.sendMessage(). Tab not found.', ''), true);
   assert.equal(isNoise(null, 'Script error.', ''), true);
   assert.equal(isNoise(null, 'ResizeObserver loop completed with undelivered notifications.', ''), true);
   assert.equal(isNoise(new TypeError('x is undefined'), 'x is undefined', '    at f (https://fundermatch.org/assets/a.js:1:1)'), false);
