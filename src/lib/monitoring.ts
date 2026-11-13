@@ -67,10 +67,9 @@ function isOurHost(url: string | undefined): boolean {
 
 /** A URL on the live site that is a page, not a script (a frame's :line:col may follow). */
 function isOurPage(url: string | undefined): boolean {
-  if (!url) return false;
+  if (!url || !isOurHost(url)) return false;
   try {
-    const { hostname, pathname } = new URL(url);
-    return PRODUCTION_HOST.test(hostname) && !/\.[cm]?js(?::\d+)*$/i.test(pathname);
+    return !/\.[cm]?js(?::\d+)*$/i.test(new URL(url).pathname);
   } catch {
     return false;
   }
@@ -108,7 +107,7 @@ export function isNoise(error: unknown, message: string, stack: string, chunkGav
   // Unless the error screen showed: what the visitor saw is worth a card.
   if (
     !screenShown &&
-    /^(?:uncaught(?: \(in promise\))? )?(?:\w*(?:Error|Exception): )?Invalid call to (?:(?:browser|chrome)\.)?runtime\.\w+\(\)/i.test(message.trim()) &&
+    /\bInvalid call to (?:(?:browser|chrome)\.)?runtime\.\w+\(\)/i.test(message.trim()) &&
     !isOurHost(/https?:\/\/[^\s()]+/i.exec(topFrame)?.[0])
   ) return true;
   if (/(?:chrome|moz|safari(?:-web)?)-extension:\/\//i.test(topFrame)) return true;

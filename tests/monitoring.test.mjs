@@ -117,6 +117,9 @@ test('noise: extensions, opaque cross-origin errors, ResizeObserver', () => {
   // Thrown from our own bundle: ours to fix.
   const own = 'Invalid call to runtime.sendMessage(). Tab not found.';
   assert.equal(isNoise(new Error(own), own, `Error: ${own}\n    at f (https://fundermatch.org/assets/a.js:1:1)`), false);
+  assert.equal(isNoise(new Error(own), `Unhandled Promise Rejection: ${own}`, ''), true);
+  assert.equal(isNoise(new Error(own), own, `Error: ${own}\n    at f (safari-extension://abc/content.js:1:1)`), true);
+  assert.equal(isNoise(new Error(own), own, `Error: ${own}\n    at f (https://www.fundermatch.org/assets/a.js:1:1)`), false);
   // Error screen shown: worth a card.
   assert.equal(isNoise(new Error(own), own, '', false, true), false);
   // Other "Invalid call" errors are not extension noise.
